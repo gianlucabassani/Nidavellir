@@ -66,7 +66,7 @@ numbering in §3.
 | 8 | 🟠 | **Bare `except:`** swallows errors (incl. JSON parse + output read). | `api.py:44-47,99-103`, `orchestrator.py:212` | Fixed ✅ (typed exceptions + logging everywhere; `ruff` + `bandit -ll` now fully green and bandit is a blocking CI gate) |
 | 9 | 🟠 | **No lab TTL / reaper.** Labs live until manually destroyed → cloud cost + quota leak. | orchestrator/worker | Phase 3 |
 | 10| 🟠 | **`random_vulnhub` not wired** to the importer (scenario advertised, `_load_scenario` has no catalog source). | `services/vulnhub-importer/*`, orchestrator | Phase 4 |
-| 11| 🟠 | **CSRF** absent on WebUI POST routes. | `webui/app.py` | Phase 1 |
+| 11| 🟠 | **CSRF** absent on WebUI POST routes. | `webui/app.py` | Fixed ✅ (Flask-WTF CSRFProtect; rate limiting on the API shipped alongside — SECURITY #7) |
 | 12| 🟡 | **CLI is dead code** — `orch.deploy(scenario)` / `destroy()` / `_get_outputs()` are called with the wrong signatures. | `cli.py` | Fixed ✅ (deleted; referenced nowhere — operations go through the API, key management via `auth.py` CLI) |
 | 13| 🟡 | **`update_deployment` truthiness bug** — `if status:` means an empty-string status is silently ignored; no DB migrations. | `database.py:58-77` | Phase 3 |
 | 14| 🟡 | **Secrets in plaintext** in DB `outputs` and logs. | `database.py`, `orchestrator.py` | Phase 3 |
@@ -102,9 +102,14 @@ done), and a rough **effort** (S ≈ days, M ≈ 1–2 weeks, L ≈ 3–5 weeks 
 
 **Acceptance:** `make check` is green; CI runs on every PR.
 
-### 🔴 Phase 1 — Correctness & security hardening · **M**
+### ✅ Phase 1 — Correctness & security hardening · **M** *(code complete 2026-06-10)*
 
 **Goal:** real-mode Docker deploys work, and the platform is safe on a trusted LAN.
+
+> **Status:** all six work items shipped (see punch list). The one open
+> acceptance criterion is the real-OpenStack end-to-end deploy from the
+> container stack — it needs cloud credentials and will be validated on the
+> next OpenStack-connected run.
 
 Key work:
 1. **Fix path resolution** (#1): make `orchestrator.py` consume `config.py`

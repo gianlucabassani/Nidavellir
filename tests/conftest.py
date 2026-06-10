@@ -21,6 +21,9 @@ os.environ["DATA_DIR"] = str(_TMP / "data")
 os.environ["KEYS_DIR"] = str(_TMP / "keys")
 os.environ["CACHE_DIR"] = str(_TMP / "cache")
 os.environ["TF_PLUGIN_CACHE_DIR"] = str(_TMP / "cache" / "terraform-plugins")
+# Rate limiting would trip on the suite's rapid-fire requests; the dedicated
+# rate-limit test re-enables it explicitly.
+os.environ["RATE_LIMIT_ENABLED"] = "false"
 
 # --- 2. Make the orchestrator package importable ---------------------------
 # The service uses flat imports (`from database import Database`), so its

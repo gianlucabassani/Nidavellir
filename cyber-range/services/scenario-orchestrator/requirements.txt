@@ -17,3 +17,6 @@ bootstrap-flask
 celery>=5.3.0
 redis>=5.0.0
 
+
+# API rate limiting (Phase 1 hardening)
+slowapi>=0.1.9

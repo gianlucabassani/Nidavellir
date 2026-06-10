@@ -184,8 +184,12 @@ function copyToClipboard(elementId) {
 
 function destroyInstance(instanceId) {
     if(!confirm("Destroy " + instanceId + "? This action is irreversible.")) return;
-    
-    fetch(`/api/destroy/${instanceId}`, {method: 'POST'})
+
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    fetch(`/api/destroy/${instanceId}`, {
+        method: 'POST',
+        headers: csrfMeta ? {'X-CSRFToken': csrfMeta.content} : {}
+    })
     .then(() => {
         alert("Destroy started. Redirecting to lobby...");
         window.location.href = "/";

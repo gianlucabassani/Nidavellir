@@ -3,6 +3,7 @@
 # (also installs the runtime deps the tests import)
 
 -r cyber-range/services/scenario-orchestrator/requirements.txt
+-r cyber-range/webui/requirements.txt
 
 # Test runner
 pytest>=8.0

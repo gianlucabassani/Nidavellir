@@ -352,8 +352,10 @@ curl -X DELETE http://localhost:8000/destroy/lab-prod-001
 - **API Response:** < 100ms (async task dispatch)
 
 ### Rate Limits
-- No enforced limits currently
-- **Recommended:** Poll `/status` no faster than every 3 seconds
+- `POST /deploy`: **10/minute** per client (`RATE_LIMIT_DEPLOY`)
+- `DELETE /destroy/...`: **30/minute** per client (`RATE_LIMIT_DESTROY`)
+- Exceeding a limit returns `429 Too Many Requests`
+- Reads are unlimited; still, poll `/status` no faster than every 3 seconds
 
 ### Concurrency
 - **Default:** 3 concurrent deployments

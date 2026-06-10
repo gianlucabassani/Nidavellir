@@ -12,11 +12,15 @@ from flask import (
     session,
     url_for,
 )
+from flask_wtf import CSRFProtect
 
 app = Flask(__name__)
 # Never hardcode the secret: it signs session cookies/flash messages.
 # Set SECRET_KEY in the environment for any non-local deployment.
 app.secret_key = os.getenv("SECRET_KEY", "dev-insecure-change-me")
+# CSRF on every state-changing route (SECURITY #3). Forms embed the token via
+# {{ csrf_token() }}; JS fetches send it as the X-CSRFToken header.
+csrf = CSRFProtect(app)
 API_URL = os.getenv("ORCHESTRATOR_URL", "http://localhost:8000")
 
 # Key the WebUI uses to authenticate against the orchestrator API (ADR-0002).

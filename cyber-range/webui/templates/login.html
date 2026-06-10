@@ -9,6 +9,7 @@
                     <i class="fa-solid fa-lock text-warning me-2"></i>OPERATOR LOGIN
                 </h4>
                 <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label class="form-label text-muted small text-uppercase">Username</label>
                         <input type="text" class="form-control" name="username" autofocus required>

@@ -1,10 +1,14 @@
 """
 FastAPI REST Layer - Production Architecture (Redis/Celery)
 """
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 import logging
 import json
+import os
 import uuid
 import sys
 
@@ -30,6 +34,19 @@ except ValueError as e:
 app = FastAPI(title="Cyber Range Orchestrator")
 db = Database()
 ensure_bootstrap_key(db)
+
+# Rate limiting (SECURITY #7): caps how fast one client can burn worker slots
+# and cloud quota. Keyed by remote address until per-user quotas land (Phase 3).
+# Tests disable it via RATE_LIMIT_ENABLED=false.
+limiter = Limiter(
+    key_func=get_remote_address,
+    enabled=os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true",
+)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+RATE_LIMIT_DEPLOY = os.getenv("RATE_LIMIT_DEPLOY", "10/minute")
+RATE_LIMIT_DESTROY = os.getenv("RATE_LIMIT_DESTROY", "30/minute")
 
 
 @app.get("/health")
@@ -84,7 +101,12 @@ def list_deployments(principal: Principal = Depends(require_principal)):
     return results
 
 @app.post("/deploy")
-async def deploy(req: DeployRequest, principal: Principal = Depends(require_principal)):
+@limiter.limit(RATE_LIMIT_DEPLOY)
+async def deploy(
+    request: Request,
+    req: DeployRequest,
+    principal: Principal = Depends(require_principal),
+):
     """Queue deployment via Celery with Unique UUID"""
 
     # 1. Generate a Unique ID for the System (Primary Key)
@@ -114,7 +136,12 @@ async def deploy(req: DeployRequest, principal: Principal = Depends(require_prin
     return {"status": "accepted", "instance_id": system_id}
 
 @app.delete("/destroy/{instance_id}")
-async def destroy(instance_id: str, principal: Principal = Depends(require_principal)):
+@limiter.limit(RATE_LIMIT_DESTROY)
+async def destroy(
+    request: Request,
+    instance_id: str,
+    principal: Principal = Depends(require_principal),
+):
     """Queue destruction via Celery"""
     if not db.get_deployment(instance_id):
         raise HTTPException(status_code=404, detail="Instance not found")

@@ -6,6 +6,7 @@
             <div class="card-body">
                 <h3 class="font-tech text-success mb-4">NEW DEPLOYMENT</h3>
                 <form action="/create" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label class="form-label text-muted">INSTANCE NAME (Unique)</label>
                         <input type="text" name="instance_id" class="form-control font-mono"

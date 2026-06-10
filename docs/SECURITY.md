@@ -22,11 +22,11 @@ the most security-sensitive part of the system.
 |---|----------|-----|----------|-----------|
 | 1 | **High** | No authentication or authorization. Any caller can deploy, list, or destroy **any** lab. | `api.py` (all routes) | **Fixed** — API-key auth on all data routes + WebUI session login ([ADR-0002](adr/0002-api-authentication.md)). Note: per-lab *ownership* enforcement still arrives with multi-tenancy (Phase 3); demo defaults (`dev-insecure-key`, `admin`/`cyberguard`) must be overridden per the checklist below. |
 | 2 | **High** | Hardcoded Flask `secret_key` and `debug=True` in source. | `webui/app.py` | **Fixed** — now env-driven (`SECRET_KEY`, `FLASK_DEBUG`) |
-| 3 | **High** | No CSRF protection on state-changing WebUI routes (`/create`, `/api/destroy`). | `webui/app.py` | Phase 1 |
+| 3 | **High** | No CSRF protection on state-changing WebUI routes (`/create`, `/api/destroy`). | `webui/app.py` | **Fixed** — Flask-WTF `CSRFProtect` on all POSTs (forms + `X-CSRFToken` header for JS) |
 | 4 | **Med**  | Unvalidated user input (`scenario`, `instance_id`) flows toward Terraform `-var` args and workspace paths. Server-generated UUID mitigates the deploy path today, but the validation boundary is missing. | `api.py`, `orchestrator.py` | Phase 1 |
 | 5 | **Med**  | Bare `except:` clauses swallow errors and can mask failures (incl. security-relevant ones). | `api.py:43-47,99-103`, `orchestrator.py:212` | Phase 1 |
 | 6 | **Med**  | Secrets (OpenStack creds, SOC passwords) logged/echoed and stored in plaintext in the DB `outputs` column. | `database.py`, `orchestrator.py` | Phase 2 |
-| 7 | **Med**  | No rate limiting; a single client can exhaust the worker pool / cloud quota. | `api.py` | Phase 1 |
+| 7 | **Med**  | No rate limiting; a single client can exhaust the worker pool / cloud quota. | `api.py` | **Fixed** — slowapi per-client limits on `/deploy` (10/min) and `/destroy` (30/min), tunable via `RATE_LIMIT_*` env; per-user quotas follow in Phase 3 |
 | 8 | **Low**  | No network isolation guarantees between concurrent tenant labs are documented/enforced. | `infra/terraform/network.tf` | Phase 2 |
 
 ## Reporting a vulnerability
@@ -42,6 +42,6 @@ credentials in reports.
 - [ ] `SECRET_KEY` set to a strong random value; `FLASK_DEBUG` unset
 - [ ] Reverse proxy with TLS in front of both services
 - [ ] API not bound to `0.0.0.0` on an untrusted interface
-- [ ] Rate limiting enabled
+- [x] Rate limiting enabled (on by default; `RATE_LIMIT_ENABLED=false` only for tests)
 - [ ] OpenStack credentials supplied via secrets manager, not `.env` on disk
 - [ ] Per-tenant network isolation verified
