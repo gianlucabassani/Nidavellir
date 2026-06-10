@@ -1,11 +1,11 @@
 """
 Integration test for the provisioning path (ROADMAP Phase 1, audit #1).
 
-Runs a real `tofu init` inside a workspace prepared by the Orchestrator,
-against a throwaway provider-free template — proving the workspace layout
-(template copy + local-backend override) is something OpenTofu actually
-accepts, without touching any cloud. Skipped when tofu/terraform is not
-installed (CI installs OpenTofu).
+Runs a real `tofu init` inside a workspace prepared by the OpenStack
+provider, against a throwaway provider-free template — proving the workspace
+layout (template copy + local-backend override) is something OpenTofu
+actually accepts, without touching any cloud. Skipped when tofu/terraform is
+not installed (CI installs OpenTofu).
 """
 import os
 import shutil
@@ -14,7 +14,8 @@ from pathlib import Path
 
 import pytest
 
-import orchestrator
+import providers.openstack as openstack_provider
+from providers.openstack import OpenStackProvider
 
 TOFU = shutil.which("tofu") or shutil.which("terraform")
 
@@ -26,13 +27,13 @@ def test_tofu_init_succeeds_in_prepared_workspace(tmp_path, monkeypatch):
     template.mkdir()
     (template / "main.tf").write_text('output "ok" { value = "ok" }\n')
 
-    monkeypatch.setattr(orchestrator, "BASE_TERRAFORM_TEMPLATE", template)
-    monkeypatch.setattr(orchestrator, "RUNS_DIR", tmp_path / "runs")
+    monkeypatch.setattr(openstack_provider, "BASE_TERRAFORM_TEMPLATE", template)
+    monkeypatch.setattr(openstack_provider, "RUNS_DIR", tmp_path / "runs")
     # conftest points the plugin cache at a temp path; tofu errors if the
     # configured cache dir does not exist.
     Path(os.environ["TF_PLUGIN_CACHE_DIR"]).mkdir(parents=True, exist_ok=True)
 
-    work_dir = orchestrator.Orchestrator()._prepare_workspace("tofu-itest")
+    work_dir = OpenStackProvider()._prepare_workspace("tofu-itest")
 
     result = subprocess.run(
         [TOFU, "init", "-no-color", "-input=false"],

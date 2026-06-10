@@ -129,10 +129,14 @@ Key work:
 stack; unauthenticated API calls are rejected; `bandit -ll` is clean; integration
 test for the provisioning path passes in CI.
 
-### 🔴 Phase 2 — Provider abstraction & local runner · **M** *(new)*
+### 🔴 Phase 2 — Provider abstraction & local runner · **M** *(new — in progress)*
 
 **Goal:** the same scenario deploys on a laptop, on OpenStack, or (later) on AWS;
 the orchestrator stops being OpenStack-specific.
+
+> **Status (2026-06-11):** driver interface + `mock`/`openstack` extraction
+> shipped (ADR-0003); remaining: the `docker-local` driver, the generic
+> `nodes[]` OpenStack module, and the docker-local e2e test in CI.
 
 Key work:
 - Define the **`RangeProvider` driver interface** (`validate / deploy / destroy /

@@ -56,3 +56,25 @@ def list_scenarios() -> list[dict]:
 
 def scenario_ids() -> set[str]:
     return {s["id"] for s in list_scenarios()}
+
+
+def load_scenario(scenario_id: str) -> dict | None:
+    """Load a scenario's full YAML config, or None if invalid/missing.
+
+    The id check doubles as the path-traversal guard: this function is the
+    single place a scenario id becomes a filesystem path.
+    """
+    if not is_valid_scenario_id(scenario_id):
+        logger.error("Rejected invalid scenario id: %r", scenario_id)
+        return None
+
+    scenario_file = TEMPLATES_DIR / f"{scenario_id}.yaml"
+    if not scenario_file.exists():
+        logger.error("Scenario file not found: %s", scenario_file)
+        return None
+
+    try:
+        return yaml.safe_load(scenario_file.read_text())
+    except yaml.YAMLError as e:
+        logger.error("Failed to load scenario %s: %s", scenario_id, e)
+        return None

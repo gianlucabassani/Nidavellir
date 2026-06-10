@@ -1,30 +1,29 @@
 """
 Regression tests for ROADMAP audit issue #1 (Docker production path bug).
 
-orchestrator.py used to recompute TF_SOURCE_DIR / RUNS_DIR from __file__,
-shadowing the values imported from config.py and ignoring the RUNS_DIR env
-var. In the container (WORKDIR=/app) that resolved to paths nothing mounts,
-so real-mode deploys failed while mock mode hid it. These tests pin the fix:
-the orchestrator must consume config.py, and config.py's Docker branch must
-match the actual image layout (templates at /app/templates, terraform at
-/app/terraform).
+The provisioning code used to recompute TF_SOURCE_DIR / RUNS_DIR from
+__file__, shadowing config.py and ignoring the RUNS_DIR env var — in the
+container that resolved to unmounted paths. These tests pin the fix at its
+post-ADR-0003 home: the OpenStack provider must consume config.py, and
+config.py's Docker branch must match the actual image layout.
 """
 import importlib
 import os
 from pathlib import Path
 
 import config
-import orchestrator
+import providers.openstack as openstack_provider
+from orchestrator import Orchestrator
+from providers.openstack import OpenStackProvider
 
 
-def test_orchestrator_consumes_config_paths():
-    """The module-level paths must be the config ones (incl. env overrides)."""
-    assert orchestrator.BASE_TERRAFORM_TEMPLATE == config.BASE_TERRAFORM_TEMPLATE
-    assert orchestrator.RUNS_DIR == config.RUNS_DIR
-    assert orchestrator.TEMPLATES_DIR == config.TEMPLATES_DIR
+def test_provider_consumes_config_paths():
+    """The provider's paths must be the config ones (incl. env overrides)."""
+    assert openstack_provider.BASE_TERRAFORM_TEMPLATE == config.BASE_TERRAFORM_TEMPLATE
+    assert openstack_provider.RUNS_DIR == config.RUNS_DIR
     # conftest.py points RUNS_DIR at a temp dir via the env var; the old code
     # ignored it and wrote to <repo>/runs.
-    assert str(orchestrator.RUNS_DIR) == os.environ["RUNS_DIR"]
+    assert str(openstack_provider.RUNS_DIR) == os.environ["RUNS_DIR"]
 
 
 def test_prepare_workspace_copies_configured_template(tmp_path, monkeypatch):
@@ -34,10 +33,10 @@ def test_prepare_workspace_copies_configured_template(tmp_path, monkeypatch):
     (template / "main.tf").write_text('output "ok" { value = "ok" }\n')
     runs = tmp_path / "runs"
 
-    monkeypatch.setattr(orchestrator, "BASE_TERRAFORM_TEMPLATE", template)
-    monkeypatch.setattr(orchestrator, "RUNS_DIR", runs)
+    monkeypatch.setattr(openstack_provider, "BASE_TERRAFORM_TEMPLATE", template)
+    monkeypatch.setattr(openstack_provider, "RUNS_DIR", runs)
 
-    work_dir = orchestrator.Orchestrator()._prepare_workspace("path-test")
+    work_dir = OpenStackProvider()._prepare_workspace("path-test")
 
     assert work_dir == runs / "path-test"
     assert (work_dir / "main.tf").exists()
@@ -46,12 +45,12 @@ def test_prepare_workspace_copies_configured_template(tmp_path, monkeypatch):
 
 
 def test_load_scenario_resolves_via_templates_dir():
-    """_load_scenario must read from config.TEMPLATES_DIR (not __file__ math)."""
-    scenario = orchestrator.Orchestrator()._load_scenario("basic_pentest")
+    """Scenario loading must go through config.TEMPLATES_DIR (not __file__ math)."""
+    scenario = Orchestrator()._load_scenario("basic_pentest")
     assert scenario is not None
     assert scenario["vms"], "expected the Mr. Robot scenario to define VMs"
 
-    assert orchestrator.Orchestrator()._load_scenario("no-such-scenario") is None
+    assert Orchestrator()._load_scenario("no-such-scenario") is None
 
 
 def test_docker_branch_paths_match_image_layout(monkeypatch):
