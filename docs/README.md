@@ -430,12 +430,21 @@ Key variables:
 
 ## 🚧 Roadmap
 
-- [ ] Docker Compose deployment
-- [ ] Better UI/UX
-- [ ] User authentication & multi-tenancy
-- [ ] Scenario auto-importer (marketplace)
-- [ ] Automated scoring system (gamefication)
-- [ ] Snapshot & restore functionality
-- [ ] Azure/AWS provider support?
+The full phased plan — with a code-audit punch list, acceptance criteria, and
+sequencing — lives in **[ROADMAP.md](../ROADMAP.md)**. Highlights:
+
+- [x] Docker Compose deployment
+- [x] Test suite + CI + dev tooling *(Phase 0)*
+- [ ] Correctness & security hardening: Docker path fix, auth, input validation *(Phase 1)*
+- [ ] User authentication & multi-tenancy + lab TTL/auto-reaper *(Phase 2)*
+- [ ] Scenario platform: schema validation + VulnHub auto-importer *(Phase 3)*
+- [ ] Automated scoring system (gamification) *(Phase 4)*
+- [ ] Observability & scale *(Phase 5)*
+- [ ] WebSocket UI, bulk provisioning, Azure/AWS support *(Phase 6)*
+
+> **Security note:** despite the "Production Ready" badge above (feature
+> completeness), the current build has **no authentication** — see
+> [docs/SECURITY.md](SECURITY.md). Do not expose it to an untrusted network until
+> Phase 1 lands.
 
 

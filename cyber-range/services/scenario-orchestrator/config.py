@@ -9,10 +9,12 @@ load_dotenv()
 IN_DOCKER = os.path.exists('/.dockerenv')
 
 if IN_DOCKER:
-    # Docker paths (absolute)
+    # Docker paths (absolute). The Dockerfile copies the service code to /app
+    # (so scenario templates land at /app/templates) and docker-compose mounts
+    # the Terraform templates read-only at /app/terraform.
     BASE_DIR = Path("/app")
     CYBER_RANGE_DIR = BASE_DIR
-    TEMPLATES_DIR = BASE_DIR / "orchestrator" / "templates"
+    TEMPLATES_DIR = BASE_DIR / "templates"
     BASE_TERRAFORM_TEMPLATE = BASE_DIR / "terraform"
 else:
     # Local development paths (relative)
@@ -114,7 +116,7 @@ def validate_config():
     for warning in warnings:
         print(f"⚠️  WARNING: {warning}")
     
-    print(f"✅ Configuration validated successfully")
+    print("✅ Configuration validated successfully")
     print(f"   BASE_DIR: {BASE_DIR}")
     print(f"   CYBER_RANGE_DIR: {CYBER_RANGE_DIR}")
     print(f"   TEMPLATES_DIR: {TEMPLATES_DIR}")

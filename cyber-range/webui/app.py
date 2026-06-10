@@ -3,7 +3,9 @@ import requests
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 
 app = Flask(__name__)
-app.secret_key = "cyber-range-secret"
+# Never hardcode the secret: it signs session cookies/flash messages.
+# Set SECRET_KEY in the environment for any non-local deployment.
+app.secret_key = os.getenv("SECRET_KEY", "dev-insecure-change-me")
 API_URL = os.getenv("ORCHESTRATOR_URL", "http://localhost:8000")
 
 @app.route('/')
@@ -71,4 +73,6 @@ def poll_status(instance_id):
         return jsonify({"status": "offline"})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # debug=True exposes the Werkzeug interactive debugger (RCE) — gate it behind an env flag.
+    debug = os.getenv("FLASK_DEBUG", "false").lower() == "true"
+    app.run(host='0.0.0.0', port=5000, debug=debug)

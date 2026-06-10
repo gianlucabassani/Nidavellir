@@ -4,14 +4,8 @@ import shutil
 import json
 import os
 import time
-import random
 from pathlib import Path
-from config import BASE_TERRAFORM_TEMPLATE, RUNS_DIR
-
-
-BASE_DIR = Path(__file__).resolve().parent
-TF_SOURCE_DIR = BASE_DIR.parent.parent / "infra" / "terraform"
-RUNS_DIR = BASE_DIR.parent.parent / "runs"
+from config import BASE_TERRAFORM_TEMPLATE, RUNS_DIR, TEMPLATES_DIR
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -25,16 +19,16 @@ class Orchestrator:
         work_dir = RUNS_DIR / instance_id
         if work_dir.exists(): 
             shutil.rmtree(work_dir)
-        shutil.copytree(TF_SOURCE_DIR, work_dir)
+        shutil.copytree(BASE_TERRAFORM_TEMPLATE, work_dir)
         
         # Backend ovveride ensures each lab has its own terraform.tfstate file
         backend_override = work_dir / "backend_override.tf"
-        backend_override.write_text(f'''
-    terraform {{
-    backend "local" {{
+        backend_override.write_text('''
+    terraform {
+    backend "local" {
         path = "terraform.tfstate"
-    }}
-    }}
+    }
+    }
     ''')
     
         logger.info(f"[{instance_id}] Workspace prepared at {work_dir}")
@@ -51,11 +45,11 @@ class Orchestrator:
             fake_outputs = {
                 "soc_dashboard_url": "https://192.168.1.50:443",
                 "soc_credentials": {"username": "admin", "password": "SecretPassword!"},
-                "log_vm_ssh_command": f"ssh ubuntu@192.168.1.50",
+                "log_vm_ssh_command": "ssh ubuntu@192.168.1.50",
                 "log_vm_private_ip": "192.168.0.5",
                 "log_vm_floating_ip": "192.168.1.50",
                 
-                "attack_vm_ssh_command": f"ssh kali@192.168.1.80",
+                "attack_vm_ssh_command": "ssh kali@192.168.1.80",
                 "attack_vm_private_ip": "192.168.50.10",
                 "attack_vm_floating_ip": "192.168.1.80",
                 
@@ -216,7 +210,7 @@ class Orchestrator:
         """Load scenario YAML configuration"""
         import yaml
         
-        scenario_file = BASE_DIR.parent.parent / "services" / "scenario-orchestrator" / "templates" / f"{scenario_name}.yaml"
+        scenario_file = TEMPLATES_DIR / f"{scenario_name}.yaml"
         
         if not scenario_file.exists():
             logger.error(f"Scenario file not found: {scenario_file}")

@@ -180,4 +180,4 @@ function destroyInstance(instanceId) {
         window.location.href = "/";
     })
     .catch(err => alert("Error: " + err));
-}p
+}

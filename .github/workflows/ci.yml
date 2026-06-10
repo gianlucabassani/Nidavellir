@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  quality:
+    name: Lint, security scan & tests
+    runs-on: ubuntu-latest
+    env:
+      MOCK_MODE: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Install OpenTofu (for the provisioning integration test)
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: "1.6.0"
+          tofu_wrapper: false
+
+      - name: Lint (ruff)
+        run: ruff check cyber-range tests
+
+      - name: Security scan (bandit)
+        # -ll = report medium+ severity only; non-blocking until Phase 1 hardening lands.
+        run: bandit -r cyber-range -ll || true
+
+      - name: Run tests with coverage
+        run: pytest --cov=cyber-range/services/scenario-orchestrator --cov-report=term-missing
+
+  docker-build:
+    name: Build container images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build orchestrator image
+        run: docker build -t cyberguard-orchestrator ./cyber-range/services/scenario-orchestrator
+
+      - name: Build webui image
+        run: docker build -t cyberguard-webui ./cyber-range/webui
+
+      - name: Validate docker-compose config
+        run: docker compose config -q
