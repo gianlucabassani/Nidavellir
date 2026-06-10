@@ -20,7 +20,7 @@ the most security-sensitive part of the system.
 
 | # | Severity | Gap | Location | Closed by |
 |---|----------|-----|----------|-----------|
-| 1 | **High** | No authentication or authorization. Any caller can deploy, list, or destroy **any** lab. | `api.py` (all routes) | Phase 1 |
+| 1 | **High** | No authentication or authorization. Any caller can deploy, list, or destroy **any** lab. | `api.py` (all routes) | **Fixed** — API-key auth on all data routes + WebUI session login ([ADR-0002](adr/0002-api-authentication.md)). Note: per-lab *ownership* enforcement still arrives with multi-tenancy (Phase 3); demo defaults (`dev-insecure-key`, `admin`/`cyberguard`) must be overridden per the checklist below. |
 | 2 | **High** | Hardcoded Flask `secret_key` and `debug=True` in source. | `webui/app.py` | **Fixed** — now env-driven (`SECRET_KEY`, `FLASK_DEBUG`) |
 | 3 | **High** | No CSRF protection on state-changing WebUI routes (`/create`, `/api/destroy`). | `webui/app.py` | Phase 1 |
 | 4 | **Med**  | Unvalidated user input (`scenario`, `instance_id`) flows toward Terraform `-var` args and workspace paths. Server-generated UUID mitigates the deploy path today, but the validation boundary is missing. | `api.py`, `orchestrator.py` | Phase 1 |
@@ -37,7 +37,8 @@ credentials in reports.
 
 ## Hardening checklist before any internet-facing deployment
 
-- [ ] Authentication on the API and WebUI (Phase 1)
+- [x] Authentication on the API and WebUI (Phase 1 — ADR-0002)
+- [ ] `CYBERGUARD_API_KEY`, `WEBUI_USERNAME`/`WEBUI_PASSWORD` overridden (no demo defaults)
 - [ ] `SECRET_KEY` set to a strong random value; `FLASK_DEBUG` unset
 - [ ] Reverse proxy with TLS in front of both services
 - [ ] API not bound to `0.0.0.0` on an untrusted interface

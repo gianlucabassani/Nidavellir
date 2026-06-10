@@ -44,6 +44,16 @@ class Database:
                     error TEXT
                 )
             ''')
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS api_keys (
+                    key_hash TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    created_at TIMESTAMP,
+                    last_used_at TIMESTAMP,
+                    revoked INTEGER NOT NULL DEFAULT 0
+                )
+            ''')
             conn.commit()
 
     def create_deployment(self, deployment_id, user_id, scenario):
@@ -93,3 +103,49 @@ class Database:
         with self._get_connection() as conn:
             conn.execute("DELETE FROM deployments WHERE id = ?", (deployment_id,))
             conn.commit()
+
+    # --- API keys (ADR-0002) -------------------------------------------------
+    # Only SHA-256 digests are stored; plaintext keys never touch the DB.
+
+    def create_api_key(self, key_hash, name, role):
+        with self._get_connection() as conn:
+            conn.execute(
+                "INSERT INTO api_keys (key_hash, name, role, created_at) "
+                "VALUES (?, ?, ?, ?)",
+                (key_hash, name, role, datetime.now()),
+            )
+            conn.commit()
+
+    def get_api_key(self, key_hash):
+        """Return the active (non-revoked) key record, updating last_used_at."""
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT * FROM api_keys WHERE key_hash = ? AND revoked = 0",
+                (key_hash,),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            conn.execute(
+                "UPDATE api_keys SET last_used_at = ? WHERE key_hash = ?",
+                (datetime.now(), key_hash),
+            )
+            conn.commit()
+            return dict(row)
+
+    def count_api_keys(self):
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT COUNT(*) AS n FROM api_keys WHERE revoked = 0"
+            )
+            return cursor.fetchone()["n"]
+
+    def revoke_api_keys_by_name(self, name):
+        """Revoke (not delete: keep the audit trail) all keys with this name."""
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "UPDATE api_keys SET revoked = 1 WHERE name = ? AND revoked = 0",
+                (name,),
+            )
+            conn.commit()
+            return cursor.rowcount

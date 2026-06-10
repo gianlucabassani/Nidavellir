@@ -1,16 +1,17 @@
 """
 FastAPI REST Layer - Production Architecture (Redis/Celery)
 """
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 import logging
 import json
-import uuid 
+import uuid
 import sys
 
+from auth import Principal, ensure_bootstrap_key, require_principal
 from database import Database
 from tasks import deploy_lab, destroy_lab
-from config import validate_config 
+from config import validate_config
 
 
 
@@ -27,13 +28,20 @@ except ValueError as e:
 
 app = FastAPI(title="Cyber Range Orchestrator")
 db = Database()
+ensure_bootstrap_key(db)
+
+
+@app.get("/health")
+def health():
+    """Unauthenticated liveness probe (used by the container healthcheck)."""
+    return {"status": "ok"}
 
 class DeployRequest(BaseModel):
     scenario: str       # Frontend sends "scenario"
     instance_id: str    # Frontend sends "instance_id" (User's Friendly Name)
 
 @app.get("/deployments")
-def list_deployments():
+def list_deployments(principal: Principal = Depends(require_principal)):
     """List all labs from SQLite"""
     deployments_list = db.list_deployments()
     results = {}
@@ -48,17 +56,20 @@ def list_deployments():
     return results
 
 @app.post("/deploy")
-async def deploy(req: DeployRequest):
+async def deploy(req: DeployRequest, principal: Principal = Depends(require_principal)):
     """Queue deployment via Celery with Unique UUID"""
-    
+
     # 1. Generate a Unique ID for the System (Primary Key)
     # (prevents collisions for same instanec name)
     system_id = str(uuid.uuid4())
-    
+
     # 2. Treat User Input as a Friendly Name
     friendly_name = req.instance_id
 
-    logger.info(f"Queuing deploy for {friendly_name} (System ID: {system_id})")
+    logger.info(
+        f"Queuing deploy for {friendly_name} (System ID: {system_id}) "
+        f"requested by '{principal.name}' ({principal.role})"
+    )
 
     # 3. Create 'Pending' record in DB
     # id = UUID, user_id = Friendly Name
@@ -75,12 +86,15 @@ async def deploy(req: DeployRequest):
     return {"status": "accepted", "instance_id": system_id}
 
 @app.delete("/destroy/{instance_id}")
-async def destroy(instance_id: str):
+async def destroy(instance_id: str, principal: Principal = Depends(require_principal)):
     """Queue destruction via Celery"""
     if not db.get_deployment(instance_id):
         raise HTTPException(status_code=404, detail="Instance not found")
-    
-    logger.info(f"Queuing destroy for {instance_id}")
+
+    logger.info(
+        f"Queuing destroy for {instance_id} "
+        f"requested by '{principal.name}' ({principal.role})"
+    )
     
     db.update_deployment(instance_id, status="destroying")
     destroy_lab.delay(instance_id)
@@ -88,7 +102,7 @@ async def destroy(instance_id: str):
     return {"status": "accepted"}
 
 @app.get("/status/{instance_id}")
-def get_status(instance_id: str):
+def get_status(instance_id: str, principal: Principal = Depends(require_principal)):
     """Get status from SQLite"""
     data = db.get_deployment(instance_id)
     if not data:

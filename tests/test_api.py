@@ -28,11 +28,20 @@ class _FakeTask:
 
 @pytest.fixture()
 def client(monkeypatch):
+    """Authenticated test client (a fresh API key per test, ADR-0002)."""
     import api
+    import auth
+    from database import Database
 
     monkeypatch.setattr(api, "deploy_lab", _FakeTask())
     monkeypatch.setattr(api, "destroy_lab", _FakeTask())
-    return TestClient(api.app)
+
+    key = auth.generate_api_key()
+    Database().create_api_key(auth.hash_api_key(key), name="tests", role="admin")
+
+    test_client = TestClient(api.app)
+    test_client.headers["X-API-Key"] = key
+    return test_client
 
 
 def test_list_deployments_ok(client):

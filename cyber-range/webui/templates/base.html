@@ -28,6 +28,13 @@
                     <i class="fa-solid fa-circle-notch fa-spin me-1 d-none" id="status-spinner"></i>
                     <span id="status-text">OFFLINE</span>
                 </span>
+                {% if session.get('logged_in') %}
+                <form method="POST" action="{{ url_for('logout') }}" class="ms-3 mb-0">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary" title="Log out {{ session.get('username', '') }}">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                    </button>
+                </form>
+                {% endif %}
             </div>
         </div>
     </nav>

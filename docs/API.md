@@ -11,7 +11,26 @@ The CyberGuard API provides RESTful endpoints for managing cyber range deploymen
 
 ### Authentication
 
-Currently, the API does not require authentication. **Do not expose to the public internet.**
+All endpoints except `GET /health` require an API key in the `X-API-Key`
+header (see [ADR-0002](adr/0002-api-authentication.md)):
+
+```bash
+export CYBERGUARD_API_KEY=cg_...   # create one: python auth.py create-key <name> <role>
+curl -H "X-API-Key: $CYBERGUARD_API_KEY" http://localhost:8000/deployments
+```
+
+Roles: `admin`, `instructor`, `student`, `agent` (recorded for auditing;
+fine-grained enforcement arrives with multi-tenancy). Missing or invalid keys
+get `401`. The docker-compose stack bootstraps the key from the
+`CYBERGUARD_API_KEY` value in `.env` — the default `dev-insecure-key` is for
+the local mock demo only.
+
+> All examples below assume `-H "X-API-Key: $CYBERGUARD_API_KEY"` is added.
+
+### Health Check
+
+`GET /health` — unauthenticated liveness probe, returns `{"status": "ok"}`.
+Used by the container healthcheck.
 
 ### Response Format
 

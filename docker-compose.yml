@@ -1,4 +1,4 @@
-version: '3.8'
+
 
 services:
   # Redis - Message Broker
@@ -34,12 +34,18 @@ services:
     environment:
       # Mock Mode (set to false for production)
       MOCK_MODE: ${MOCK_MODE:-true}
+
+      # API authentication (ADR-0002). The default is a well-known dev key for
+      # the local mock demo — ALWAYS override CYBERGUARD_API_KEY in .env for
+      # any reachable deployment.
+      BOOTSTRAP_API_KEY: ${CYBERGUARD_API_KEY:-dev-insecure-key}
+      BOOTSTRAP_API_KEY_ROLE: admin
       
       # OpenStack Credentials
-      OS_AUTH_URL: ${OS_AUTH_URL}
-      OS_USERNAME: ${OS_USERNAME}
-      OS_PASSWORD: ${OS_PASSWORD}
-      OS_PROJECT_ID: ${OS_PROJECT_ID}
+      OS_AUTH_URL: ${OS_AUTH_URL:-}
+      OS_USERNAME: ${OS_USERNAME:-}
+      OS_PASSWORD: ${OS_PASSWORD:-}
+      OS_PROJECT_ID: ${OS_PROJECT_ID:-}
       OS_REGION_NAME: ${OS_REGION_NAME:-RegionOne}
       OS_USER_DOMAIN_NAME: ${OS_USER_DOMAIN_NAME:-Default}
       OS_PROJECT_DOMAIN_NAME: ${OS_PROJECT_DOMAIN_NAME:-Default}
@@ -78,7 +84,8 @@ services:
     networks:
       - cyberguard-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/deployments"]
+      # /health is unauthenticated by design; /deployments now requires a key.
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -100,10 +107,10 @@ services:
     environment:
       # Same environment as orchestrator
       MOCK_MODE: ${MOCK_MODE:-true}
-      OS_AUTH_URL: ${OS_AUTH_URL}
-      OS_USERNAME: ${OS_USERNAME}
-      OS_PASSWORD: ${OS_PASSWORD}
-      OS_PROJECT_ID: ${OS_PROJECT_ID}
+      OS_AUTH_URL: ${OS_AUTH_URL:-}
+      OS_USERNAME: ${OS_USERNAME:-}
+      OS_PASSWORD: ${OS_PASSWORD:-}
+      OS_PROJECT_ID: ${OS_PROJECT_ID:-}
       OS_REGION_NAME: ${OS_REGION_NAME:-RegionOne}
       OS_USER_DOMAIN_NAME: ${OS_USER_DOMAIN_NAME:-Default}
       OS_PROJECT_DOMAIN_NAME: ${OS_PROJECT_DOMAIN_NAME:-Default}
@@ -141,12 +148,17 @@ services:
       - "5000:5000"
     environment:
       ORCHESTRATOR_URL: http://orchestrator:8000
+      ORCHESTRATOR_API_KEY: ${CYBERGUARD_API_KEY:-dev-insecure-key}
       FLASK_ENV: ${FLASK_ENV:-production}
       SECRET_KEY: ${SECRET_KEY:-change-me}
+      WEBUI_USERNAME: ${WEBUI_USERNAME:-admin}
+      WEBUI_PASSWORD: ${WEBUI_PASSWORD:-cyberguard}
     networks:
       - cyberguard-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      # Probe the (unauthenticated) login page. Uses python because the slim
+      # webui image ships no curl.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/login', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3

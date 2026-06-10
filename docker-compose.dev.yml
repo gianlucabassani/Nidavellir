@@ -1,0 +1,46 @@
+# Development override — full stack in MOCK mode with live code reload.
+# No .env required: mock mode and the demo credentials are pinned here.
+#
+# Usage:
+#   make dev            # == docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#   make dev-down
+#
+# Then open http://localhost:5000  (login: admin / cyberguard)
+# API:      http://localhost:8000  (header: X-API-Key: dev-insecure-key)
+#
+# DEV ONLY: this enables the Flask/Werkzeug debugger (interactive console =
+# code execution) and well-known credentials. Never use this file on a host
+# reachable by anyone you don't trust.
+
+services:
+  orchestrator:
+    # --reload restarts uvicorn when the mounted source changes
+    command: uvicorn api:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      MOCK_MODE: "true"
+      BOOTSTRAP_API_KEY: dev-insecure-key
+      BOOTSTRAP_API_KEY_ROLE: admin
+    volumes:
+      # Live-mount the service source over the baked-in copy.
+      # The base file's nested mounts (/app/terraform, /app/runs, ...) still apply.
+      - ./cyber-range/services/scenario-orchestrator:/app
+
+  worker:
+    environment:
+      MOCK_MODE: "true"
+    volumes:
+      # Celery has no auto-reload: after editing tasks/orchestrator code run
+      #   docker compose restart worker
+      - ./cyber-range/services/scenario-orchestrator:/app
+
+  webui:
+    environment:
+      MOCK_MODE: "true"
+      ORCHESTRATOR_API_KEY: dev-insecure-key
+      WEBUI_USERNAME: admin
+      WEBUI_PASSWORD: cyberguard
+      # Enables the Werkzeug reloader + debugger (see warning above)
+      FLASK_DEBUG: "true"
+    volumes:
+      # Image runs the app from /app/webui (see webui/Dockerfile)
+      - ./cyber-range/webui:/app/webui

@@ -24,6 +24,21 @@ tests run in `MOCK_MODE=true` and stub the task queue.
 
 ## Running the app locally
 
+**Dev loop (recommended):** mock mode pinned, live code reload, no `.env` needed:
+
+```bash
+make dev              # compose + docker-compose.dev.yml override
+# WebUI:  http://localhost:5000   (login: admin / cyberguard)
+# API:    http://localhost:8000   (header: X-API-Key: dev-insecure-key)
+make dev-logs         # tail everything
+make dev-down
+```
+
+API and WebUI hot-reload when you edit source. The Celery worker doesn't —
+after changing task/orchestrator code: `docker compose restart worker`.
+
+**Plain stack** (what production runs, configured via `.env`):
+
 ```bash
 cp .env.example .env  # MOCK_MODE=true is the default
 make up               # docker-compose: redis + orchestrator + worker + webui

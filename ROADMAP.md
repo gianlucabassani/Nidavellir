@@ -57,7 +57,7 @@ numbering in §3.
 | # | Sev | Issue | Where | Status |
 |---|-----|-------|-------|--------|
 | 1 | 🔴 | **Docker production path bug.** `orchestrator.py` recomputes `TF_SOURCE_DIR`/`RUNS_DIR` from `__file__` (`BASE_DIR.parent.parent`), ignoring `config.py` and the `RUNS_DIR` env var. In the container (`WORKDIR=/app`) this resolves to `/infra/terraform` and `/runs` — neither is where the compose file mounts templates (`/app/terraform`) or state (`/app/runs`). Real-mode deploys in Docker fail / write to non-persisted paths. Mock mode hides it. | `orchestrator.py`, `config.py`, `_load_scenario` | Fixed ✅ (orchestrator consumes `config.py`; Docker `TEMPLATES_DIR` corrected; regression + `tofu init` integration tests, CI installs OpenTofu) |
-| 2 | 🔴 | **No authn/authz.** Any caller can deploy/list/destroy any lab. | `api.py` (all routes) | Phase 1 |
+| 2 | 🔴 | **No authn/authz.** Any caller can deploy/list/destroy any lab. | `api.py` (all routes) | Fixed ✅ (API keys w/ roles incl. `agent` + WebUI session login — ADR-0002; ownership enforcement follows in Phase 3) |
 | 3 | 🔴 | **Hardcoded Flask secret + `debug=True`** (Werkzeug debugger = RCE). | `webui/app.py` | Fixed ✅ (env-driven) |
 | 4 | 🟠 | **No input validation** on `scenario`/`instance_id` before they reach `tofu -var` and workspace paths. | `api.py`, `orchestrator.py` | Phase 1 |
 | 5 | 🟠 | **JS syntax error** (`}p`) at end of file broke *all* dashboard JS (polling, topology, destroy). | `webui/static/js/dashboard.js` | Fixed ✅ |
