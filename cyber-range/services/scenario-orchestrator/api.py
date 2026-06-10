@@ -77,7 +77,8 @@ def list_deployments(principal: Principal = Depends(require_principal)):
         if isinstance(d['outputs'], str):
             try:
                 d['outputs'] = json.loads(d['outputs'])
-            except:
+            except json.JSONDecodeError:
+                logger.warning(f"Corrupt outputs JSON for deployment {d['id']}")
                 d['outputs'] = {}
         results[d['id']] = d
     return results
@@ -139,11 +140,14 @@ def get_status(instance_id: str, principal: Principal = Depends(require_principa
     if isinstance(outputs, str):
         try:
             data["outputs"] = json.loads(outputs)
-        except:
+        except json.JSONDecodeError:
+            logger.warning(f"Corrupt outputs JSON for deployment {instance_id}")
             data["outputs"] = {}
-            
+
     return data
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Containerized service: must bind all interfaces; exposure is governed
+    # by the compose port mapping / firewall, not the bind address.
+    uvicorn.run(app, host="0.0.0.0", port=8000)  # nosec B104

@@ -63,6 +63,19 @@ function updateStatusUI(data) {
 }
 
 // --- TOPOLOGY VISUALIZATION (CYTOSCAPE) ---
+
+// Outputs are flat ({name: value}) since the orchestrator unwraps terraform's
+// {value, type} envelope; tolerate the wrapped shape anyway for old records.
+function outputValue(outputs, key) {
+    const entry = outputs ? outputs[key] : undefined;
+    if (entry && typeof entry === 'object' && 'value' in entry) return entry.value;
+    return entry;
+}
+
+function nodeIp(outputs, floatingKey, privateKey) {
+    return outputValue(outputs, floatingKey) || outputValue(outputs, privateKey) || 'Provisioning...';
+}
+
 function renderTopology(data) {
     if(!document.getElementById('cy')) return;
     console.log("Rendering Topology...", data);
@@ -70,49 +83,47 @@ function renderTopology(data) {
     const elements = [];
 
     // 1. INFRASTRUCTURE NODES (Static)
+    const cidr = outputValue(data, 'private_network_cidr') || '192.168.0.0/24';
     elements.push({ data: { id: 'internet', label: 'Internet', color: '#6c757d', shape: 'cloud' } });
     elements.push({ data: { id: 'router', label: 'Gateway', color: '#198754', shape: 'rectangle' } });
-    elements.push({ data: { id: 'subnet', label: 'Internal Net\n192.168.0.0/24', color: '#ffc107', shape: 'ellipse' } });
+    elements.push({ data: { id: 'subnet', label: 'Internal Net\n' + cidr, color: '#ffc107', shape: 'ellipse' } });
 
     // 2. INFRA EDGES
     elements.push({ data: { source: 'internet', target: 'router' } });
     elements.push({ data: { source: 'router', target: 'subnet' } });
 
-    // 3. VM NODES
-    
+    // 3. VM NODES (keys match infra/terraform/outputs.tf and the mock outputs)
+
     // Attacker
-    let attackIp = data.attacker_ip && data.attacker_ip.value ? data.attacker_ip.value : 'Provisioning...';
-    elements.push({ 
-        data: { 
-            id: 'attacker', 
-            label: 'Red Team\n' + attackIp, 
-            color: '#dc3545', 
-            shape: 'round-rectangle' 
-        } 
+    elements.push({
+        data: {
+            id: 'attacker',
+            label: 'Red Team\n' + nodeIp(data, 'attack_vm_floating_ip', 'attack_vm_private_ip'),
+            color: '#dc3545',
+            shape: 'round-rectangle'
+        }
     });
     elements.push({ data: { source: 'subnet', target: 'attacker' } });
 
     // Monitor / SOC
-    let socIp = data.soc_ip && data.soc_ip.value ? data.soc_ip.value : 'Provisioning...';
-    elements.push({ 
-        data: { 
-            id: 'soc', 
-            label: 'Blue Team\n' + socIp, 
-            color: '#0dcaf0', 
-            shape: 'round-rectangle' 
-        } 
+    elements.push({
+        data: {
+            id: 'soc',
+            label: 'Blue Team\n' + nodeIp(data, 'log_vm_floating_ip', 'log_vm_private_ip'),
+            color: '#0dcaf0',
+            shape: 'round-rectangle'
+        }
     });
     elements.push({ data: { source: 'subnet', target: 'soc' } });
 
     // Victim
-    let victimIp = data.victim_ip && data.victim_ip.value ? data.victim_ip.value : 'Provisioning...';
-    elements.push({ 
-        data: { 
-            id: 'victim', 
-            label: 'Target VM\n' + victimIp, 
-            color: '#ffc107', 
-            shape: 'round-rectangle' 
-        } 
+    elements.push({
+        data: {
+            id: 'victim',
+            label: 'Target VM\n' + nodeIp(data, 'victim_vm_floating_ip', 'victim_vm_private_ip'),
+            color: '#ffc107',
+            shape: 'round-rectangle'
+        }
     });
     elements.push({ data: { source: 'subnet', target: 'victim' } });
 

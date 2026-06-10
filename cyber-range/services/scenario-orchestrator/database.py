@@ -80,7 +80,9 @@ class Database:
             params.append(error)
 
         params.append(deployment_id)
-        query = f"UPDATE deployments SET {', '.join(updates)} WHERE id = ?"
+        # The dynamic part is a fixed allowlist of column assignments above;
+        # every value goes through a ? placeholder — no injection surface.
+        query = f"UPDATE deployments SET {', '.join(updates)} WHERE id = ?"  # nosec B608
 
         with self._get_connection() as conn:
             conn.execute(query, params)

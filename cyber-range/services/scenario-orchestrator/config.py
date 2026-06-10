@@ -63,7 +63,7 @@ DATABASE_PATH = os.getenv("DATABASE_PATH", str(DATA_DIR / "deployments.db"))
 TF_PLUGIN_CACHE_DIR = os.getenv("TF_PLUGIN_CACHE_DIR", str(CACHE_DIR / "terraform-plugins"))
 
 # API CONFIGURATION
-API_HOST = os.getenv("API_HOST", "0.0.0.0")
+API_HOST = os.getenv("API_HOST", "0.0.0.0")  # nosec B104 - container default, mapped by compose
 API_PORT = int(os.getenv("API_PORT", "8000"))
 DEBUG_MODE = os.getenv("DEBUG_MODE", "False").lower() == "true"
 

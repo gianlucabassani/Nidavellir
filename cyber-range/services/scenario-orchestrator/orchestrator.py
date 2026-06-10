@@ -200,10 +200,29 @@ class Orchestrator:
     
 
     def _get_outputs(self, work_dir: Path):
+        """Read terraform outputs, flattened to {name: value}.
+
+        `tofu output -json` wraps every output in {"value": ..., "type": ...};
+        we unwrap here so DB/UI/consumers see one shape — the same one the
+        mock outputs use.
+        """
         try:
-            res = subprocess.run(["tofu", "output", "-json"], cwd=work_dir, capture_output=True, text=True)
-            return json.loads(res.stdout)
-        except: return {}
+            res = subprocess.run(
+                ["tofu", "output", "-json"],
+                cwd=work_dir,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=60,
+            )
+            raw = json.loads(res.stdout)
+            return {
+                key: (entry.get("value") if isinstance(entry, dict) and "value" in entry else entry)
+                for key, entry in raw.items()
+            }
+        except (subprocess.SubprocessError, OSError, json.JSONDecodeError) as e:
+            logger.error(f"Failed to read terraform outputs in {work_dir}: {e}")
+            return {}
 
 
     def _load_scenario(self, scenario_name: str) -> dict:

@@ -32,8 +32,9 @@ jobs:
         run: ruff check cyber-range tests
 
       - name: Security scan (bandit)
-        # -ll = report medium+ severity only; non-blocking until Phase 1 hardening lands.
-        run: bandit -r cyber-range -ll || true
+        # -ll = medium+ severity. Blocking since the Phase-1 hardening pass
+        # (2026-06-10) brought the tree to zero findings.
+        run: bandit -r cyber-range -ll
 
       - name: Run tests with coverage
         run: pytest --cov=cyber-range/services/scenario-orchestrator --cov-report=term-missing

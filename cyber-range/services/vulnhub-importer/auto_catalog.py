@@ -46,7 +46,7 @@ def main():
 
     if result['success']:
         logger.info(f"✅ Image added to Catalog! ID: {result.get('openstack_image_id')}")
-        logger.info(f"   Run 'tofu apply' with this difficulty to test.")
+        logger.info("   Run 'tofu apply' with this difficulty to test.")
     else:
         logger.error(f"❌ Import failed: {result.get('error')}")
         sys.exit(1)

@@ -165,4 +165,5 @@ def poll_status(instance_id):
 if __name__ == '__main__':
     # debug=True exposes the Werkzeug interactive debugger (RCE) — gate it behind an env flag.
     debug = os.getenv("FLASK_DEBUG", "false").lower() == "true"
-    app.run(host='0.0.0.0', port=5000, debug=debug)
+    # Containerized service: bind-all is intentional; compose maps the port.
+    app.run(host='0.0.0.0', port=5000, debug=debug)  # nosec B104

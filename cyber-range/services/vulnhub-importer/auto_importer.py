@@ -9,10 +9,10 @@ import json
 import subprocess
 import hashlib
 import logging
+import tempfile
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from dataclasses import dataclass
-from datetime import datetime
 import tarfile
 import zipfile
 
@@ -54,8 +54,13 @@ class VulnHubDownloader:
     """Download VulnHub images with retry and validation"""
 
     def __init__(self, temp_dir: Optional[str] = None):
-        self.temp_dir = Path(temp_dir or '/tmp/vulnhub')
-        self.temp_dir.mkdir(parents=True, exist_ok=True)
+        if temp_dir:
+            self.temp_dir = Path(temp_dir)
+            self.temp_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            # mkdtemp = private mode-0700 dir; avoids the predictable,
+            # world-shared /tmp/vulnhub path (bandit B108).
+            self.temp_dir = Path(tempfile.mkdtemp(prefix="vulnhub-"))
 
     def download(self, url: str, expected_sha256: str, max_retries: int = 3) -> Path:
         """Download file with checksum validation"""
@@ -105,10 +110,19 @@ class VulnHubDownloader:
         try:
             if archive_path.suffix == '.gz' or archive_path.name.endswith('.tar.gz'):
                 with tarfile.open(archive_path, 'r:gz') as tar:
-                    tar.extractall(path=extract_dir)
+                    # VulnHub archives are untrusted downloads: the 'data'
+                    # filter (PEP 706) rejects path traversal, links and
+                    # device nodes — bandit just doesn't recognize it yet.
+                    tar.extractall(path=extract_dir, filter='data')  # nosec B202
             elif archive_path.suffix == '.zip':
                 with zipfile.ZipFile(archive_path, 'r') as zip_ref:
-                    zip_ref.extractall(path=extract_dir)
+                    # ZipFile.extractall sanitizes member paths itself, but
+                    # reject absolute/parent paths explicitly anyway.
+                    for member in zip_ref.namelist():
+                        if member.startswith(('/', '..')) or '..' in Path(member).parts:
+                            raise ValueError(f"Unsafe path in archive: {member}")
+                    # Members validated above + ZipFile sanitizes paths itself.
+                    zip_ref.extractall(path=extract_dir)  # nosec B202
             else:
                 raise ValueError(f"Unsupported archive format: {archive_path.suffix}")
 
@@ -168,15 +182,15 @@ class OpenStackUploader:
         """Upload image to Glance"""
         try:
             logger.info(f"Uploading {image_name} to Glance...")
-            with open(image_path, 'rb') as f:
-                image = self.conn.image.create_image(
-                    name=image_name,
-                    filename=str(image_path),
-                    disk_format='qcow2',
-                    container_format='bare',
-                    is_public=False,
-                    **metadata or {}
-                )
+            # The SDK reads the file itself via filename= — no open handle needed.
+            image = self.conn.image.create_image(
+                name=image_name,
+                filename=str(image_path),
+                disk_format='qcow2',
+                container_format='bare',
+                is_public=False,
+                **metadata or {}
+            )
             logger.info(f"✓ Upload complete: {image.id}")
             return image.id
         except Exception as e:

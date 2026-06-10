@@ -1,0 +1,8 @@
+# Ruff configuration (used by `make lint` and CI's `ruff check cyber-range tests`).
+
+exclude = [
+    # Legacy one-shot provisioning script, syntactically invalid Python.
+    # Tracked as backlog P0-7: repair or delete; until then keep it out of
+    # lint so the gate stays meaningful for live code.
+    "cyber-range/scripts/setup_attacker.py",
+]

@@ -61,13 +61,13 @@ numbering in §3.
 | 3 | 🔴 | **Hardcoded Flask secret + `debug=True`** (Werkzeug debugger = RCE). | `webui/app.py` | Fixed ✅ (env-driven) |
 | 4 | 🟠 | **No input validation** on `scenario`/`instance_id` before they reach `tofu -var` and workspace paths. | `api.py`, `orchestrator.py` | Fixed ✅ (Pydantic validators + scenario registry `GET /scenarios`; traversal guard repeated in the worker) |
 | 5 | 🟠 | **JS syntax error** (`}p`) at end of file broke *all* dashboard JS (polling, topology, destroy). | `webui/static/js/dashboard.js` | Fixed ✅ |
-| 6 | 🟠 | **Topology IPs never render.** `dashboard.js` reads `data.attacker_ip.value` etc., but outputs use `attack_vm_floating_ip` (mock) / the `outputs.tf` names. Always shows "Provisioning…". | `dashboard.js:84-116` vs `infra/terraform/outputs.tf` | Phase 1 |
+| 6 | 🟠 | **Topology IPs never render.** `dashboard.js` reads `data.attacker_ip.value` etc., but outputs use `attack_vm_floating_ip` (mock) / the `outputs.tf` names. Always shows "Provisioning…". | `dashboard.js:84-116` vs `infra/terraform/outputs.tf` | Fixed ✅ (keys aligned to `outputs.tf`; `_get_outputs` now flattens terraform's `{value}` envelope so mock & real share one shape) |
 | 7 | 🟠 | **No tests, no CI** at baseline. | repo-wide | Fixed ✅ (suite + CI added) |
-| 8 | 🟠 | **Bare `except:`** swallows errors (incl. JSON parse + output read). | `api.py:44-47,99-103`, `orchestrator.py:212` | Phase 1 |
+| 8 | 🟠 | **Bare `except:`** swallows errors (incl. JSON parse + output read). | `api.py:44-47,99-103`, `orchestrator.py:212` | Fixed ✅ (typed exceptions + logging everywhere; `ruff` + `bandit -ll` now fully green and bandit is a blocking CI gate) |
 | 9 | 🟠 | **No lab TTL / reaper.** Labs live until manually destroyed → cloud cost + quota leak. | orchestrator/worker | Phase 3 |
 | 10| 🟠 | **`random_vulnhub` not wired** to the importer (scenario advertised, `_load_scenario` has no catalog source). | `services/vulnhub-importer/*`, orchestrator | Phase 4 |
 | 11| 🟠 | **CSRF** absent on WebUI POST routes. | `webui/app.py` | Phase 1 |
-| 12| 🟡 | **CLI is dead code** — `orch.deploy(scenario)` / `destroy()` / `_get_outputs()` are called with the wrong signatures. | `cli.py` | Phase 1 (fix or delete) |
+| 12| 🟡 | **CLI is dead code** — `orch.deploy(scenario)` / `destroy()` / `_get_outputs()` are called with the wrong signatures. | `cli.py` | Fixed ✅ (deleted; referenced nowhere — operations go through the API, key management via `auth.py` CLI) |
 | 13| 🟡 | **`update_deployment` truthiness bug** — `if status:` means an empty-string status is silently ignored; no DB migrations. | `database.py:58-77` | Phase 3 |
 | 14| 🟡 | **Secrets in plaintext** in DB `outputs` and logs. | `database.py`, `orchestrator.py` | Phase 3 |
 
