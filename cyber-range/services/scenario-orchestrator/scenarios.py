@@ -49,6 +49,9 @@ def list_scenarios() -> list[dict]:
                 "description": " ".join(str(data.get("description", "")).split()),
                 "difficulty": data.get("difficulty", "unknown"),
                 "tags": metadata.get("tags", []),
+                # What kind of infrastructure the scenario needs: vm |
+                # container | any. Providers check this before deploying.
+                "provider_class": (data.get("requires") or {}).get("provider_class", "any"),
             }
         )
     return scenarios

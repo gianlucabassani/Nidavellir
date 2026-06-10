@@ -29,6 +29,16 @@ the most security-sensitive part of the system.
 | 7 | **Med**  | No rate limiting; a single client can exhaust the worker pool / cloud quota. | `api.py` | **Fixed** — slowapi per-client limits on `/deploy` (10/min) and `/destroy` (30/min), tunable via `RATE_LIMIT_*` env; per-user quotas follow in Phase 3 |
 | 8 | **Low**  | No network isolation guarantees between concurrent tenant labs are documented/enforced. | `infra/terraform/network.tf` | Phase 2 |
 
+## docker-local provider: Docker socket implications
+
+The `docker-local` provider (ADR-0003) talks to the host Docker daemon. A
+worker that can reach `/var/run/docker.sock` is **root-equivalent on that
+host** — only enable it (the socket mount + `RANGE_PROVIDER=docker-local`)
+on machines where the operator already owns the host, i.e. laptops and
+dedicated lab hosts, never on a shared control-plane node. Lab containers
+get a dedicated bridge network per lab; full egress lockdown for agent
+training is tracked separately (roadmap Phase 5 guardrails).
+
 ## Reporting a vulnerability
 
 This is an educational project. If you find a security issue, open a private

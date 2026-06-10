@@ -28,10 +28,16 @@ services:
   worker:
     environment:
       MOCK_MODE: "true"
+      # Opt-in: run real container labs (e.g. container_web_pentest) through
+      # the full stack. Uncomment this AND the socket mount below, then
+      # `make dev` again. NOTE: mounting the Docker socket gives the worker
+      # root-equivalent control of this host — trusted dev machines only.
+      # RANGE_PROVIDER: docker-local
     volumes:
       # Celery has no auto-reload: after editing tasks/orchestrator code run
       #   docker compose restart worker
       - ./cyber-range/services/scenario-orchestrator:/app
+      # - /var/run/docker.sock:/var/run/docker.sock
 
   webui:
     environment:

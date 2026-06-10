@@ -3,6 +3,9 @@ version: "1.0"
 difficulty: medium
 description: Random VulnHub scenario with dynamically selected vulnerable images
 
+requires:
+  provider_class: vm   # VulnHub images are full VM disks
+
 network:
   cidr: "10.0.2.0/24"
   name: vulnhub_network

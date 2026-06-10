@@ -10,13 +10,15 @@ Selection precedence:
 import os
 
 from providers.base import RangeProvider
+from providers.docker_local import DockerLocalProvider
 from providers.mock import MockProvider
 from providers.openstack import OpenStackProvider
 
 _REGISTRY: dict[str, type[RangeProvider]] = {
     MockProvider.name: MockProvider,
     OpenStackProvider.name: OpenStackProvider,
-    # "docker-local" and "aws" land here (roadmap Phases 2 and 7)
+    DockerLocalProvider.name: DockerLocalProvider,
+    # "aws" lands here (roadmap Phase 7)
 }
 
 

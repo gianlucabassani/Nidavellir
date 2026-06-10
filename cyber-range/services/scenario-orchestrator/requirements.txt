@@ -20,3 +20,6 @@ redis>=5.0.0
 
 # API rate limiting (Phase 1 hardening)
 slowapi>=0.1.9
+
+# docker-local provider (ADR-0003)
+docker>=7.0.0

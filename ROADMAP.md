@@ -135,8 +135,11 @@ test for the provisioning path passes in CI.
 the orchestrator stops being OpenStack-specific.
 
 > **Status (2026-06-11):** driver interface + `mock`/`openstack` extraction
-> shipped (ADR-0003); remaining: the `docker-local` driver, the generic
-> `nodes[]` OpenStack module, and the docker-local e2e test in CI.
+> shipped (ADR-0003); **`docker-local` driver shipped** (docker SDK, per-lab
+> labeled bridge networks, stateless label-based destroy, `provider_class`
+> scenario gate, first container scenario `container_web_pentest` = DVWA +
+> Kali) with a real-container e2e test in CI. Remaining: the generic
+> `nodes[]` OpenStack module (P1-5) and per-request provider selection.
 
 Key work:
 - Define the **`RangeProvider` driver interface** (`validate / deploy / destroy /
