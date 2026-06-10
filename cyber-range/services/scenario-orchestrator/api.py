@@ -2,12 +2,13 @@
 FastAPI REST Layer - Production Architecture (Redis/Celery)
 """
 from fastapi import Depends, FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 import logging
 import json
 import uuid
 import sys
 
+import scenarios
 from auth import Principal, ensure_bootstrap_key, require_principal
 from database import Database
 from tasks import deploy_lab, destroy_lab
@@ -36,9 +37,35 @@ def health():
     """Unauthenticated liveness probe (used by the container healthcheck)."""
     return {"status": "ok"}
 
+# Friendly names end up in logs, the UI, and (truncated) in cloud resource
+# names — keep them to a safe slug. Scenario ids are additionally checked
+# against the registry, which is also the path-traversal boundary.
+INSTANCE_NAME_PATTERN = r"^[a-z0-9][a-z0-9-]{0,39}$"
+
+
 class DeployRequest(BaseModel):
-    scenario: str       # Frontend sends "scenario"
-    instance_id: str    # Frontend sends "instance_id" (User's Friendly Name)
+    scenario: str = Field(min_length=1, max_length=64)
+    instance_id: str = Field(  # the user's friendly name, not the system UUID
+        pattern=INSTANCE_NAME_PATTERN,
+        description="Lowercase letters, digits and hyphens; max 40 chars",
+    )
+
+    @field_validator("scenario")
+    @classmethod
+    def scenario_must_be_registered(cls, value: str) -> str:
+        if not scenarios.is_valid_scenario_id(value):
+            raise ValueError(
+                "invalid scenario id (lowercase letters, digits, '-' and '_' only)"
+            )
+        if value not in scenarios.scenario_ids():
+            raise ValueError(f"unknown scenario '{value}' — see GET /scenarios")
+        return value
+
+
+@app.get("/scenarios")
+def list_scenarios(principal: Principal = Depends(require_principal)):
+    """Registry of deployable scenarios (id + display metadata)."""
+    return {"scenarios": scenarios.list_scenarios()}
 
 @app.get("/deployments")
 def list_deployments(principal: Principal = Depends(require_principal)):

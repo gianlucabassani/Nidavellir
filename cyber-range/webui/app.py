@@ -74,17 +74,22 @@ def logout():
 @app.route('/')
 def lobby():
     """Lobby: List all active scenarios"""
+    deployments, scenarios = {}, []
     try:
         # Calls the Correct Endpoint /deployments
         resp = requests.get(f"{API_URL}/deployments", headers=API_HEADERS, timeout=5)
         deployments = resp.json() if resp.status_code == 200 else {}
         if resp.status_code == 401:
             flash("Backend rejected the WebUI API key (check ORCHESTRATOR_API_KEY)", "danger")
+
+        # Scenario registry drives the launch dropdown (no hardcoded list)
+        reg = requests.get(f"{API_URL}/scenarios", headers=API_HEADERS, timeout=5)
+        if reg.status_code == 200:
+            scenarios = reg.json().get("scenarios", [])
     except requests.RequestException:
-        deployments = {}
         flash("Backend Offline", "danger")
 
-    return render_template('lobby.html', deployments=deployments)
+    return render_template('lobby.html', deployments=deployments, scenarios=scenarios)
 
 
 @app.route('/dashboard/<instance_id>')
@@ -119,10 +124,19 @@ def create_lab():
 
     # Calls Correct Endpoint /deploy with Correct Keys
     try:
-        requests.post(f"{API_URL}/deploy", json={
+        resp = requests.post(f"{API_URL}/deploy", json={
             "scenario": scenario,
             "instance_id": instance_id
         }, headers=API_HEADERS, timeout=5)
+        if resp.status_code == 422:
+            # Surface the API's validation message (e.g. bad name, unknown scenario)
+            try:
+                detail = resp.json()["detail"][0]["msg"]
+            except (ValueError, LookupError):
+                detail = "invalid input"
+            flash(f"Launch rejected: {detail}", "warning")
+        elif resp.status_code != 200:
+            flash(f"Deploy failed (HTTP {resp.status_code})", "danger")
     except requests.RequestException as e:
         flash(f"Deploy failed: {e}", "danger")
 

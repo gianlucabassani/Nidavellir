@@ -209,7 +209,15 @@ class Orchestrator:
     def _load_scenario(self, scenario_name: str) -> dict:
         """Load scenario YAML configuration"""
         import yaml
-        
+
+        from scenarios import is_valid_scenario_id
+
+        # Defense in depth: the API already validates against the registry,
+        # but this name becomes a filesystem path — never trust it here either.
+        if not is_valid_scenario_id(scenario_name):
+            logger.error(f"Rejected invalid scenario id: {scenario_name!r}")
+            return None
+
         scenario_file = TEMPLATES_DIR / f"{scenario_name}.yaml"
         
         if not scenario_file.exists():

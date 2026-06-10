@@ -8,13 +8,21 @@
                 <form action="/create" method="POST">
                     <div class="mb-3">
                         <label class="form-label text-muted">INSTANCE NAME (Unique)</label>
-                        <input type="text" name="instance_id" class="form-control font-mono" placeholder="lab-team-1" required>
+                        <input type="text" name="instance_id" class="form-control font-mono"
+                               placeholder="lab-team-1" required
+                               pattern="[a-z0-9][a-z0-9-]{0,39}"
+                               title="Lowercase letters, digits and hyphens (max 40 chars)">
                     </div>
                     <div class="mb-4">
                         <label class="form-label text-muted">SCENARIO</label>
                         <select name="scenario" class="form-select bg-dark text-light border-secondary">
+                            {% for s in scenarios %}
+                            <option value="{{ s.id }}" title="{{ s.description }}">{{ s.name }} — {{ s.difficulty }}</option>
+                            {% else %}
+                            {# Fallback when the registry is unreachable #}
                             <option value="basic_pentest">Mr. Robot CTF</option>
                             <option value="random_vulnhub">Random Roulette</option>
+                            {% endfor %}
                         </select>
                     </div>
                     <button type="submit" class="btn btn-success w-100 font-tech">LAUNCH <i class="fa-solid fa-rocket ms-2"></i></button>

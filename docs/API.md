@@ -32,6 +32,35 @@ the local mock demo only.
 `GET /health` — unauthenticated liveness probe, returns `{"status": "ok"}`.
 Used by the container healthcheck.
 
+### Input validation
+
+Deploy requests are validated before anything is queued (`422` on failure):
+
+- `instance_id` (friendly name): `^[a-z0-9][a-z0-9-]{0,39}$` — lowercase
+  letters, digits, hyphens; max 40 chars.
+- `scenario`: must match `^[a-z0-9][a-z0-9_-]{0,63}$` **and** exist in the
+  registry (`GET /scenarios`). Names that look like paths are rejected here
+  and again inside the worker (defense in depth).
+
+### Scenario Registry
+
+`GET /scenarios` — the deployable scenarios with display metadata. Clients
+should drive their scenario pickers from this (the WebUI does):
+
+```json
+{
+  "scenarios": [
+    {
+      "id": "basic_pentest",
+      "name": "Mr. Robot CTF Scenario",
+      "description": "…",
+      "difficulty": "medium",
+      "tags": []
+    }
+  ]
+}
+```
+
 ### Response Format
 
 All responses are JSON with the following structure:
