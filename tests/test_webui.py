@@ -88,6 +88,41 @@ def test_logout_rejects_missing_csrf_token(client):
     assert client.get("/").status_code == 200  # still logged in
 
 
+def test_lobby_separates_destroyed_labs(client, monkeypatch):
+    """Destroyed labs must leave the mission list and land in the archive."""
+    import app as webui_module
+
+    class _FakeResp:
+        status_code = 200
+
+        def __init__(self, payload):
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    def fake_get(url, **kwargs):
+        if url.endswith("/deployments"):
+            return _FakeResp({
+                "id-1": {"user_id": "lab-alive", "scenario": "basic_pentest",
+                         "status": "active", "outputs": {}},
+                "id-2": {"user_id": "lab-gone", "scenario": "basic_pentest",
+                         "status": "destroyed", "outputs": {}},
+            })
+        return _FakeResp({"scenarios": []})
+
+    monkeypatch.setattr(webui_module.requests, "get", fake_get)
+    _login(client)
+    html = client.get("/").data.decode()
+
+    assert "lab-alive" in html
+    assert "ARCHIVE" in html and "lab-gone" in html
+    # The destroyed lab must not render as a mission card (those carry the
+    # status badge layout); it appears only inside the archive collapse.
+    archive_idx = html.index("id=\"archive\"")
+    assert html.index("lab-gone") > archive_idx
+
+
 def test_external_redirect_target_is_ignored(client):
     token = _csrf_token(client)
     resp = client.post(

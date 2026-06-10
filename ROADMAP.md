@@ -255,18 +255,40 @@ Key work:
 and auth; destroying it leaves zero tagged resources; the orphan sweep and
 budget alarm are verified in a game-day test.
 
-### ⚪ Phase 8 — UX & product polish · **M**
+### ⚪ Phase 8 — UI/UX redesign · **L**
 
-**Goal:** the experience matches the capability.
+**Goal:** rebuild the user experience **from scratch** — the current Flask +
+Bootstrap dashboard was prototype scaffolding, not a design. (Direction set by
+the 2026-06-11 UX review; interim fixes for its findings shipped immediately —
+see below.)
 
 Key work:
+- **Ground-up redesign** taking inspiration from modern dashboards/design
+  systems (e.g. shadcn/ui-style component languages, Grafana/Portainer-grade
+  operational views, dark SOC-console aesthetics). Decide stack in an ADR:
+  server-rendered + htmx vs. SPA (React/Svelte) — weigh against who maintains it.
+- Information architecture before pixels: lobby = fleet overview (state-grouped,
+  filterable, archive/history out of the way); lab view = mission control
+  (topology, credentials, objectives/score once Phase 5 lands); instructor
+  views; agent-run trace replay.
 - Replace 5s polling with SSE live updates from the `events` table.
-- Instructor and student views; bulk class provisioning ("spin up 20 labs");
-  agent-run review UI (trace replay).
+- Bulk class provisioning ("spin up 20 labs"); leaderboards UI.
 - Browser-based lab access (Guacamole/noVNC) — evaluate.
+- **Evaluate the SOC/Wazuh component end-to-end** (2026-06-11 finding: the
+  "Open Wazuh" button pointed at unreachable mock data): is a always-on heavy
+  Wazuh node per lab worth its boot time/resources for every scenario, or
+  should the monitor node be optional per scenario (it becomes a scenario-
+  package flag in Phase 4) with reachability checked before the UI offers a
+  link? Blue-team scoring (Phase 5) depends on the answer.
 
-**Acceptance:** lab status updates without page reload; an instructor provisions a
-whole class in one action.
+Interim fixes already shipped (2026-06-11): destroyed labs moved out of the
+mission list into a collapsed archive; failed labs visually distinct; mock-mode
+clearly badged and the Wazuh button disabled (instead of a dead link) when the
+deployment is simulated.
+
+**Acceptance:** the UI is rebuilt on the chosen stack; lab status updates
+without page reload; an instructor provisions a whole class in one action;
+no control in the UI ever points at something unreachable.
 
 ---
 

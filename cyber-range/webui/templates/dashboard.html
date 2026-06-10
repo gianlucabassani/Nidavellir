@@ -33,10 +33,15 @@
             </div>
             <div class="card-body">
                 
-                {% if status.soc_dashboard_url %}
+                {% if status.soc_dashboard_url and not mock_mode %}
                 <a href="{{ status.soc_dashboard_url }}" target="_blank" class="btn btn-info w-100 mb-3 fw-bold font-tech">
                     <i class="fa-solid fa-chart-line me-2"></i> OPEN WAZUH
                 </a>
+                {% elif status.soc_dashboard_url and mock_mode %}
+                {# Mock outputs are simulated — the URL points nowhere. Don't ship a dead button. #}
+                <button disabled class="btn btn-outline-info w-100 mb-3 fw-bold font-tech" title="Simulated deployment: the SOC dashboard does not exist in mock mode">
+                    <i class="fa-solid fa-chart-line me-2"></i> WAZUH (MOCK — NOT REACHABLE)
+                </button>
                 {% else %}
                 <button disabled class="btn btn-secondary w-100 mb-3">PROVISIONING...</button>
                 {% endif %}

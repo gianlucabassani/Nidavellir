@@ -149,6 +149,8 @@ services:
     environment:
       ORCHESTRATOR_URL: http://orchestrator:8000
       ORCHESTRATOR_API_KEY: ${CYBERGUARD_API_KEY:-dev-insecure-key}
+      # Lets the UI label simulated data (mock badge, disabled dead links)
+      MOCK_MODE: ${MOCK_MODE:-true}
       FLASK_ENV: ${FLASK_ENV:-production}
       SECRET_KEY: ${SECRET_KEY:-change-me}
       WEBUI_USERNAME: ${WEBUI_USERNAME:-admin}

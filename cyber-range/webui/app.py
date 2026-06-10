@@ -23,6 +23,9 @@ app.secret_key = os.getenv("SECRET_KEY", "dev-insecure-change-me")
 csrf = CSRFProtect(app)
 API_URL = os.getenv("ORCHESTRATOR_URL", "http://localhost:8000")
 
+# Surfaced in the UI so users know lab links/credentials are simulated.
+MOCK_MODE = os.getenv("MOCK_MODE", "false").lower() == "true"
+
 # Key the WebUI uses to authenticate against the orchestrator API (ADR-0002).
 # The default matches the compose-stack bootstrap key for the mock demo only.
 API_KEY = os.getenv("ORCHESTRATOR_API_KEY", "dev-insecure-key")
@@ -93,7 +96,18 @@ def lobby():
     except requests.RequestException:
         flash("Backend Offline", "danger")
 
-    return render_template('lobby.html', deployments=deployments, scenarios=scenarios)
+    # Destroyed labs are history, not missions: keep the main view clean and
+    # park them in a collapsed archive section.
+    current = {k: v for k, v in deployments.items() if v.get('status') != 'destroyed'}
+    archived = {k: v for k, v in deployments.items() if v.get('status') == 'destroyed'}
+
+    return render_template(
+        'lobby.html',
+        deployments=current,
+        archived=archived,
+        scenarios=scenarios,
+        mock_mode=MOCK_MODE,
+    )
 
 
 @app.route('/dashboard/<instance_id>')
@@ -115,7 +129,8 @@ def dashboard(instance_id):
                              instance_id=instance_id,
                              instance_name=data.get('user_id', 'Unknown'),
                              status=data.get('outputs', {}),
-                             state=data.get('status', 'unknown'))
+                             state=data.get('status', 'unknown'),
+                             mock_mode=MOCK_MODE)
     except requests.RequestException as e:
         app.logger.error(f"Dashboard error for {instance_id}: {e}")
         return redirect(url_for('lobby'))

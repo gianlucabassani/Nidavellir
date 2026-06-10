@@ -33,7 +33,10 @@
     </div>
 
     <div class="col-md-8">
-        <h3 class="font-tech text-white mb-3">ACTIVE MISSIONS</h3>
+        <h3 class="font-tech text-white mb-3">
+            ACTIVE MISSIONS
+            {% if mock_mode %}<span class="badge bg-warning text-dark ms-2" style="font-size:0.6em; vertical-align:middle;">MOCK MODE</span>{% endif %}
+        </h3>
         <div class="row g-3">
             {% for id, info in deployments.items() %}
             <div class="col-12">
@@ -41,14 +44,18 @@
                     <div class="card-body d-flex justify-content-between align-items-center">
                         <div>
                             <h4 class="font-mono text-info mb-0">{{ info.user_id }}</h4>
-                            <span class="badge {{ 'bg-success' if info.status=='active' else 'bg-warning' }}">
+                            <span class="badge {{ 'bg-success' if info.status=='active'
+                                                else 'bg-danger' if info.status in ('failed', 'error_destroying')
+                                                else 'bg-warning' }}">
                                 {{ info.status | upper }}
                             </span>
                             <small class="text-muted ms-2">{{ info.scenario }}</small>
                         </div>
-                        
+
                         {% if info.status == 'active' %}
                         <a href="/dashboard/{{ id }}" class="btn btn-outline-light font-tech">ENTER CONTROL <i class="fa-solid fa-arrow-right ms-2"></i></a>
+                        {% elif info.status in ('failed', 'error_destroying') %}
+                        <span class="text-danger small font-mono" title="{{ info.error or 'unknown error' }}">FAILED</span>
                         {% else %}
                         <button class="btn btn-secondary" disabled>PROCESSING...</button>
                         {% endif %}
@@ -62,6 +69,23 @@
             </div>
             {% endfor %}
         </div>
+
+        {% if archived %}
+        <div class="mt-4">
+            <a class="text-muted small font-mono text-decoration-none" data-bs-toggle="collapse" href="#archive" role="button" aria-expanded="false" aria-controls="archive">
+                <i class="fa-solid fa-box-archive me-1"></i> ARCHIVE — {{ archived|length }} destroyed lab{{ 's' if archived|length != 1 }} <i class="fa-solid fa-chevron-down ms-1"></i>
+            </a>
+            <div class="collapse mt-2" id="archive">
+                {% for id, info in archived.items() %}
+                <div class="d-flex justify-content-between align-items-center border-bottom border-secondary py-2 opacity-50">
+                    <span class="font-mono small">{{ info.user_id }}</span>
+                    <span class="text-muted small">{{ info.scenario }}</span>
+                    <span class="badge bg-secondary">DESTROYED</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
