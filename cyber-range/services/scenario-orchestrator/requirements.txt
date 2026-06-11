@@ -23,3 +23,10 @@ slowapi>=0.1.9
 
 # docker-local provider (ADR-0003)
 docker>=7.0.0
+
+# Persistence layer (ADR-0004): SQLAlchemy ORM + Alembic migrations.
+# SQLite (stdlib) stays the zero-dependency default; psycopg is only
+# exercised when DATABASE_URL points at PostgreSQL.
+sqlalchemy>=2.0
+alembic>=1.13
+psycopg[binary]>=3.1

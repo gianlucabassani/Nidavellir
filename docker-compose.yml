@@ -1,6 +1,33 @@
 
 
 services:
+  # PostgreSQL (ADR-0004) — opt-in via the "postgres" profile:
+  #   docker compose --profile postgres up -d
+  # and point the services at it by setting in .env:
+  #   DATABASE_URL=postgresql+psycopg://cyberguard:${POSTGRES_PASSWORD}@postgres:5432/cyberguard
+  # Without the profile / DATABASE_URL, the stack stays on the SQLite file
+  # (zero extra services — the default for the local mock demo).
+  postgres:
+    image: postgres:16-alpine
+    container_name: cyberguard-postgres
+    restart: unless-stopped
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_DB: cyberguard
+      POSTGRES_USER: cyberguard
+      # Well-known default for the local demo only — ALWAYS set
+      # POSTGRES_PASSWORD in .env before exposing this profile anywhere.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cyberguard-dev-only}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cyberguard"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - cyberguard-network
+
   # Redis - Message Broker
   redis:
     image: redis:7-alpine
@@ -51,12 +78,15 @@ services:
       OS_PROJECT_DOMAIN_NAME: ${OS_PROJECT_DOMAIN_NAME:-Default}
       
       # Application Configuration
+      # DATABASE_URL (if set) wins over DATABASE_PATH — see ADR-0004 and the
+      # postgres service above.
+      DATABASE_URL: ${DATABASE_URL:-}
       DATABASE_PATH: /app/data/deployments.db
       RUNS_DIR: /app/runs
       CACHE_DIR: /app/cache
       KEYS_DIR: /app/keys
       TF_PLUGIN_CACHE_DIR: /app/cache/terraform-plugins
-      
+
       # Celery Configuration
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
@@ -114,6 +144,7 @@ services:
       OS_REGION_NAME: ${OS_REGION_NAME:-RegionOne}
       OS_USER_DOMAIN_NAME: ${OS_USER_DOMAIN_NAME:-Default}
       OS_PROJECT_DOMAIN_NAME: ${OS_PROJECT_DOMAIN_NAME:-Default}
+      DATABASE_URL: ${DATABASE_URL:-}
       DATABASE_PATH: /app/data/deployments.db
       RUNS_DIR: /app/runs
       CACHE_DIR: /app/cache
@@ -173,4 +204,6 @@ volumes:
   redis-data:
     driver: local
   tf-cache:
+    driver: local
+  postgres-data:
     driver: local

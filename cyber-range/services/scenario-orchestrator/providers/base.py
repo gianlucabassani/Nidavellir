@@ -23,6 +23,11 @@ class RangeProvider(ABC):
     #: registry key, e.g. "mock", "openstack", "docker-local", "aws"
     name: str = "abstract"
 
+    #: what kind of infrastructure this backend provides: "vm", "container",
+    #: or "any" (simulation). Matched against a scenario's
+    #: `requires.provider_class` when a caller picks a provider explicitly.
+    infra_class: str = "any"
+
     @abstractmethod
     def deploy(
         self,

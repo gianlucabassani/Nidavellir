@@ -18,6 +18,7 @@ MOCK_DEPLOY_DELAY = 2
 
 class MockProvider(RangeProvider):
     name = "mock"
+    infra_class = "any"  # simulates whatever the scenario asks for
 
     def deploy(self, scenario_config, instance_id, user_vars=None):
         logger.info(f"[{instance_id}] 🎭 SIMULATING DEPLOY...")

@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 class OpenStackProvider(RangeProvider):
     name = "openstack"
+    infra_class = "vm"
 
     def __init__(self):
         RUNS_DIR.mkdir(parents=True, exist_ok=True)

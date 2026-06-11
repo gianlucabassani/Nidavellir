@@ -21,3 +21,6 @@ contributors understand the reasoning instead of re-litigating it.
 | ADR | Title | Status |
 |-----|-------|--------|
 | [0001](0001-record-current-architecture.md) | Record the current architecture as a baseline | Accepted |
+| [0002](0002-api-authentication.md) | API-key authentication and WebUI operator login | Accepted |
+| [0003](0003-provider-driver-interface.md) | Pluggable deployment providers behind a RangeProvider interface | Accepted |
+| [0004](0004-postgres-persistence.md) | PostgreSQL persistence via SQLAlchemy + Alembic | Accepted |

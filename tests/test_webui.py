@@ -130,3 +130,72 @@ def test_external_redirect_target_is_ignored(client):
         data={"username": "admin", "password": "cyberguard", "csrf_token": token},
     )
     assert resp.headers["Location"] in ("/", "http://localhost/")
+
+
+def test_archive_routes_reject_missing_csrf_token(client):
+    _login(client)
+    assert client.post("/archive/delete/some-id").status_code == 400
+    assert client.post("/archive/clear").status_code == 400
+    assert client.post("/destroy/some-id").status_code == 400
+
+
+def test_health_proxy_reports_offline_backend(client):
+    # No login needed: the badge polls this from the login page too.
+    resp = client.get("/api/health")
+    assert resp.status_code == 200
+    assert resp.get_json() == {"status": "offline"}  # ORCHESTRATOR_URL is a closed port
+
+
+def test_health_proxy_reports_online_backend(client, monkeypatch):
+    import app as webui_module
+
+    class _FakeResp:
+        status_code = 200
+
+    monkeypatch.setattr(webui_module.requests, "get", lambda *a, **kw: _FakeResp())
+    resp = client.get("/api/health")
+    assert resp.get_json() == {"status": "ok"}
+
+
+def test_api_destroy_relays_backend_failure(client):
+    """The JSON destroy proxy must not claim success when the backend is down."""
+    _login(client)
+    token = _csrf_token(client, "/")
+    resp = client.post("/api/destroy/some-id", headers={"X-CSRFToken": token})
+    assert resp.status_code == 502
+    assert "error" in resp.get_json()
+
+
+def test_destroy_form_route_redirects_with_flash(client):
+    _login(client)
+    token = _csrf_token(client, "/")
+    resp = client.post("/destroy/some-id", data={"csrf_token": token})
+    assert resp.status_code == 302  # back to the lobby with a flash, not a 500
+
+
+def test_lobby_archive_offers_cleanup_controls(client, monkeypatch):
+    import app as webui_module
+
+    class _FakeResp:
+        status_code = 200
+
+        def __init__(self, payload):
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    def fake_get(url, **kwargs):
+        if url.endswith("/deployments"):
+            return _FakeResp({
+                "id-2": {"user_id": "lab-gone", "scenario": "basic_pentest",
+                         "status": "destroyed", "outputs": {}},
+            })
+        return _FakeResp({"scenarios": []})
+
+    monkeypatch.setattr(webui_module.requests, "get", fake_get)
+    _login(client)
+    html = client.get("/").data.decode()
+
+    assert "/archive/clear" in html
+    assert "/archive/delete/id-2" in html

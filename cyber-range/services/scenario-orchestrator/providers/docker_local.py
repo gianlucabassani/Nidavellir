@@ -31,6 +31,7 @@ DEFAULT_ATTACKER_COMMAND = "sleep infinity"
 
 class DockerLocalProvider(RangeProvider):
     name = "docker-local"
+    infra_class = "container"
 
     def __init__(self, client=None):
         # Injectable for tests; lazily resolved so importing this module

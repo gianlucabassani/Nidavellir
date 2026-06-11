@@ -25,9 +25,9 @@
             
             <div class="d-flex align-items-center">
                 <span class="text-muted small me-2 text-uppercase">Orchestrator Status</span>
-                <span class="badge rounded-pill bg-danger border border-danger shadow-sm" id="nav-status-badge">
-                    <i class="fa-solid fa-circle-notch fa-spin me-1 d-none" id="status-spinner"></i>
-                    <span id="status-text">OFFLINE</span>
+                {# Updated by the /api/health poller in static/js/dashboard.js #}
+                <span class="badge rounded-pill bg-secondary border border-secondary shadow-sm" id="nav-status-badge">
+                    <span id="status-text">…</span>
                 </span>
                 {% if session.get('logged_in') %}
                 <form method="POST" action="{{ url_for('logout') }}" class="ms-3 mb-0">

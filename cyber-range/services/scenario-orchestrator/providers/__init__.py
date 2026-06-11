@@ -26,6 +26,11 @@ def available_providers() -> list[str]:
     return sorted(_REGISTRY)
 
 
+def infra_class_of(name: str) -> str:
+    """The infrastructure class ("vm" | "container" | "any") a provider serves."""
+    return _REGISTRY[name].infra_class
+
+
 def get_provider(name: str | None = None) -> RangeProvider:
     if name is None:
         name = os.getenv("RANGE_PROVIDER")

@@ -45,8 +45,12 @@ if WEBUI_PASSWORD == "cyberguard":  # noqa: S105 - detecting the default, not se
 
 @app.before_request
 def require_login():
-    """Every route except the login page and static assets needs a session."""
-    if request.endpoint in ("login", "static"):
+    """Every route except the login page and static assets needs a session.
+
+    /api/health is also open: it only mirrors the orchestrator's own
+    unauthenticated liveness probe, and the nav badge needs it pre-login.
+    """
+    if request.endpoint in ("login", "static", "orchestrator_health"):
         return None
     if not session.get("logged_in"):
         return redirect(url_for("login", next=request.path))
@@ -162,12 +166,84 @@ def create_lab():
     return redirect(url_for('lobby'))
 
 
+def _request_destroy(instance_id):
+    """Ask the orchestrator to destroy a lab. Returns (ok, message)."""
+    try:
+        resp = requests.delete(
+            f"{API_URL}/destroy/{instance_id}", headers=API_HEADERS, timeout=10
+        )
+    except requests.RequestException:
+        return False, "Backend offline"
+    if resp.status_code != 200:
+        try:
+            detail = resp.json().get("detail", "")
+        except ValueError:
+            detail = ""
+        return False, detail or f"Destroy rejected (HTTP {resp.status_code})"
+    return True, "Destroy started"
+
+
 @app.route('/api/destroy/<instance_id>', methods=['POST'])
 def destroy_lab(instance_id):
-    requests.delete(
-        f"{API_URL}/destroy/{instance_id}", headers=API_HEADERS, timeout=10
-    )
+    """JSON destroy (dashboard JS). Relays the orchestrator's verdict."""
+    ok, message = _request_destroy(instance_id)
+    if not ok:
+        return jsonify({"error": message}), 502
     return jsonify({"status": "ok"})
+
+
+@app.route('/destroy/<instance_id>', methods=['POST'])
+def destroy_lab_form(instance_id):
+    """Form destroy (lobby buttons): flash the outcome and return to lobby."""
+    ok, message = _request_destroy(instance_id)
+    flash(message, "info" if ok else "danger")
+    return redirect(url_for('lobby'))
+
+
+@app.route('/archive/delete/<instance_id>', methods=['POST'])
+def archive_delete(instance_id):
+    """Remove one destroyed/failed lab record from the archive."""
+    try:
+        resp = requests.delete(
+            f"{API_URL}/deployments/{instance_id}", headers=API_HEADERS, timeout=10
+        )
+        if resp.status_code != 200:
+            try:
+                detail = resp.json().get("detail", "")
+            except ValueError:
+                detail = ""
+            flash(detail or f"Delete failed (HTTP {resp.status_code})", "danger")
+    except requests.RequestException:
+        flash("Backend offline", "danger")
+    return redirect(url_for('lobby'))
+
+
+@app.route('/archive/clear', methods=['POST'])
+def archive_clear():
+    """Remove every destroyed/failed lab record from the archive."""
+    try:
+        resp = requests.delete(
+            f"{API_URL}/deployments", headers=API_HEADERS, timeout=10
+        )
+        if resp.status_code == 200:
+            deleted = resp.json().get("deleted", 0)
+            flash(f"Archive cleared ({deleted} record(s) removed)", "info")
+        else:
+            flash(f"Clear failed (HTTP {resp.status_code})", "danger")
+    except requests.RequestException:
+        flash("Backend offline", "danger")
+    return redirect(url_for('lobby'))
+
+
+@app.route('/api/health')
+def orchestrator_health():
+    """Backend reachability for the nav-bar status badge (no auth state)."""
+    try:
+        resp = requests.get(f"{API_URL}/health", timeout=3)
+        ok = resp.status_code == 200
+    except requests.RequestException:
+        ok = False
+    return jsonify({"status": "ok" if ok else "offline"})
 
 
 @app.route('/api/poll/<instance_id>')

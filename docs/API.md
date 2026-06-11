@@ -55,11 +55,35 @@ should drive their scenario pickers from this (the WebUI does):
       "name": "Mr. Robot CTF Scenario",
       "description": "…",
       "difficulty": "medium",
-      "tags": []
+      "tags": [],
+      "provider_class": "vm"
     }
   ]
 }
 ```
+
+`provider_class` (`vm` | `container`) is the infrastructure class the scenario
+needs — it must match the `infra_class` of the provider that deploys it (see
+below).
+
+### Provider Registry
+
+`GET /providers` — the deployment backends available in this install and the
+infrastructure class each one provides:
+
+```json
+{
+  "providers": [
+    { "name": "docker-local", "infra_class": "container" },
+    { "name": "mock", "infra_class": "any" },
+    { "name": "openstack", "infra_class": "vm" }
+  ]
+}
+```
+
+A provider with `infra_class: any` (mock) accepts every scenario; otherwise
+the scenario's `provider_class` must equal the provider's `infra_class` or
+the deploy is rejected with `422`.
 
 ### Response Format
 
@@ -97,7 +121,8 @@ Content-Type: application/json
 ```json
 {
   "scenario": "basic_pentest",
-  "instance_id": "lab-team-1"
+  "instance_id": "lab-team-1",
+  "provider": "openstack"
 }
 ```
 
@@ -106,6 +131,7 @@ Content-Type: application/json
 |-------|------|----------|-------------|
 | `scenario` | string | Yes | Scenario name (e.g., `basic_pentest`, `random_vulnhub`) |
 | `instance_id` | string | Yes | Unique identifier for this lab (alphanumeric + hyphens) |
+| `provider` | string | No | Deployment backend (see `GET /providers`). Omitted → the install default (worker's `RANGE_PROVIDER` / `MOCK_MODE`). The chosen provider is recorded with the deployment, and destroy always runs on the provider the lab was deployed with. |
 
 **Response:** `202 Accepted`
 ```json
@@ -117,6 +143,9 @@ Content-Type: application/json
 
 **Error Responses:**
 - `400 Bad Request`: Instance ID already exists or invalid format
+- `422 Unprocessable Entity`: unknown `provider`, or the scenario's
+  `provider_class` doesn't match the provider's `infra_class`
+  (e.g. a `vm` scenario on `docker-local`)
 - `500 Internal Server Error`: Worker unavailable
 
 **Example:**
@@ -191,6 +220,7 @@ GET /status/{instance_id}
 {
   "status": "active",
   "scenario": "basic_pentest",
+  "provider": "openstack",
   "created_at": "2025-01-24T14:30:00",
   "updated_at": "2025-01-24T14:45:00",
   "outputs": {
@@ -215,14 +245,16 @@ GET /status/{instance_id}
 }
 ```
 
-**Status Values:**
+**Status Values** (transitions are enforced by a state machine — ADR-0004):
 | Status | Description |
 |--------|-------------|
 | `pending` | Task queued, waiting for worker |
-| `deploying` | Terraform provisioning in progress |
+| `deploying` | Provisioning in progress |
 | `active` | Infrastructure ready, outputs available |
 | `destroying` | Cleanup in progress |
+| `destroyed` | Terminal: infrastructure gone (record deletable) |
 | `failed` | Deployment failed (check `error` field) |
+| `error_destroying` | Cleanup failed (check `error`; destroy again to retry) |
 
 **Error Response:** `404 Not Found`
 ```json
@@ -263,16 +295,58 @@ DELETE /destroy/{instance_id}
 }
 ```
 
-**Error Response:** `404 Not Found`
-```json
-{
-  "detail": "Instance not found"
-}
-```
+**Error Responses:**
+- `404 Not Found`: unknown instance
+- `409 Conflict`: the lab is already destroyed (lifecycle state machine,
+  ADR-0004) — delete its record instead if you want it gone from history
 
 **Example:**
 ```bash
 curl -X DELETE http://localhost:8000/destroy/lab-team-1
+```
+
+---
+
+### 5. Delete Lab Record
+
+Remove one lab's record from history. Only terminal-state labs
+(`destroyed`, `failed`, `error_destroying`) can be deleted — a live lab
+must be destroyed first.
+
+**Request:**
+```http
+DELETE /deployments/{instance_id}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "status": "deleted"
+}
+```
+
+**Error Responses:**
+- `404 Not Found`: unknown instance
+- `409 Conflict`: the lab is still live (destroy it first)
+
+---
+
+### 6. Purge Archived Records
+
+Remove **all** terminal-state (`destroyed`/`failed`/`error_destroying`)
+lab records at once. Live labs are untouched.
+
+**Request:**
+```http
+DELETE /deployments
+```
+
+**Response:** `200 OK`
+```json
+{
+  "status": "purged",
+  "deleted": 7
+}
 ```
 
 

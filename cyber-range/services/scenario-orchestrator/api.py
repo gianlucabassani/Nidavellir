@@ -15,6 +15,8 @@ import sys
 import scenarios
 from auth import Principal, ensure_bootstrap_key, require_principal
 from database import Database
+from providers import available_providers, infra_class_of
+from states import IllegalTransition, LabStatus
 from tasks import deploy_lab, destroy_lab
 from config import validate_config
 
@@ -66,6 +68,9 @@ class DeployRequest(BaseModel):
         pattern=INSTANCE_NAME_PATTERN,
         description="Lowercase letters, digits and hyphens; max 40 chars",
     )
+    # Optional per-request deployment backend; None -> the install default
+    # (RANGE_PROVIDER / MOCK_MODE on the worker).
+    provider: str | None = Field(default=None, max_length=32)
 
     @field_validator("scenario")
     @classmethod
@@ -78,11 +83,49 @@ class DeployRequest(BaseModel):
             raise ValueError(f"unknown scenario '{value}' — see GET /scenarios")
         return value
 
+    @field_validator("provider")
+    @classmethod
+    def provider_must_exist(cls, value: str | None) -> str | None:
+        if value is not None and value not in available_providers():
+            raise ValueError(
+                f"unknown provider '{value}' — see GET /providers"
+            )
+        return value
+
+
+def _check_provider_compatibility(scenario_id: str, provider_name: str | None):
+    """Reject vm-scenarios on container backends (and vice versa) up front."""
+    if provider_name is None:
+        return
+    meta = next(s for s in scenarios.list_scenarios() if s["id"] == scenario_id)
+    needed = meta["provider_class"]
+    offered = infra_class_of(provider_name)
+    if needed != "any" and offered not in ("any", needed):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Scenario '{scenario_id}' requires {needed}-class "
+                f"infrastructure but provider '{provider_name}' "
+                f"provides {offered}"
+            ),
+        )
+
 
 @app.get("/scenarios")
 def list_scenarios(principal: Principal = Depends(require_principal)):
     """Registry of deployable scenarios (id + display metadata)."""
     return {"scenarios": scenarios.list_scenarios()}
+
+
+@app.get("/providers")
+def list_providers(principal: Principal = Depends(require_principal)):
+    """Available deployment backends and the infrastructure class they serve."""
+    return {
+        "providers": [
+            {"name": name, "infra_class": infra_class_of(name)}
+            for name in available_providers()
+        ]
+    }
 
 @app.get("/deployments")
 def list_deployments(principal: Principal = Depends(require_principal)):
@@ -109,6 +152,8 @@ async def deploy(
 ):
     """Queue deployment via Celery with Unique UUID"""
 
+    _check_provider_compatibility(req.scenario, req.provider)
+
     # 1. Generate a Unique ID for the System (Primary Key)
     # (prevents collisions for same instanec name)
     system_id = str(uuid.uuid4())
@@ -118,21 +163,30 @@ async def deploy(
 
     logger.info(
         f"Queuing deploy for {friendly_name} (System ID: {system_id}) "
+        f"provider={req.provider or 'default'} "
         f"requested by '{principal.name}' ({principal.role})"
     )
 
     # 3. Create 'Pending' record in DB
-    # id = UUID, user_id = Friendly Name
-    db.create_deployment(system_id, friendly_name, req.scenario)
+    # id = UUID, user_id = Friendly Name; provider recorded so destroy
+    # later runs on the same backend.
+    db.create_deployment(
+        system_id,
+        friendly_name,
+        req.scenario,
+        provider=req.provider,
+        actor=principal.name,
+    )
 
     # 4. Dispatch Async Task using the UUID
     deploy_lab.delay(
-        instance_id=system_id, 
-        scenario_name=req.scenario, 
+        instance_id=system_id,
+        scenario_name=req.scenario,
         user_id=friendly_name,
-        variables={}
+        variables={},
+        provider=req.provider,
     )
-    
+
     return {"status": "accepted", "instance_id": system_id}
 
 @app.delete("/destroy/{instance_id}")
@@ -146,15 +200,70 @@ async def destroy(
     if not db.get_deployment(instance_id):
         raise HTTPException(status_code=404, detail="Instance not found")
 
+    try:
+        db.update_deployment(
+            instance_id, status=LabStatus.DESTROYING, actor=principal.name
+        )
+    except IllegalTransition as e:
+        # e.g. the lab is already destroyed — nothing to tear down
+        raise HTTPException(status_code=409, detail=str(e)) from e
+
     logger.info(
         f"Queuing destroy for {instance_id} "
         f"requested by '{principal.name}' ({principal.role})"
     )
-    
-    db.update_deployment(instance_id, status="destroying")
     destroy_lab.delay(instance_id)
-    
+
     return {"status": "accepted"}
+
+# Records in these states describe infrastructure that no longer exists (or
+# never came up) — only they may be deleted from history. Live labs must go
+# through DELETE /destroy first.
+DELETABLE_STATES = ("destroyed", "failed", "error_destroying")
+
+
+@app.delete("/deployments/{instance_id}")
+@limiter.limit(RATE_LIMIT_DESTROY)
+async def delete_deployment_record(
+    request: Request,
+    instance_id: str,
+    principal: Principal = Depends(require_principal),
+):
+    """Remove a terminal (destroyed/failed) lab record from history."""
+    data = db.get_deployment(instance_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="Instance not found")
+    if data["status"] not in DELETABLE_STATES:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Cannot delete a lab in status '{data['status']}' — "
+                f"destroy it first (deletable states: {', '.join(DELETABLE_STATES)})"
+            ),
+        )
+
+    db.delete_deployment(instance_id, actor=principal.name)
+    logger.info(
+        f"Deleted deployment record {instance_id} "
+        f"requested by '{principal.name}' ({principal.role})"
+    )
+    return {"status": "deleted"}
+
+
+@app.delete("/deployments")
+@limiter.limit(RATE_LIMIT_DESTROY)
+async def purge_deployment_records(
+    request: Request,
+    principal: Principal = Depends(require_principal),
+):
+    """Remove ALL terminal (destroyed/failed) lab records from history."""
+    deleted = db.purge_deployments(DELETABLE_STATES, actor=principal.name)
+    logger.info(
+        f"Purged {deleted} archived deployment record(s) "
+        f"requested by '{principal.name}' ({principal.role})"
+    )
+    return {"status": "purged", "deleted": deleted}
+
 
 @app.get("/status/{instance_id}")
 def get_status(instance_id: str, principal: Principal = Depends(require_principal)):

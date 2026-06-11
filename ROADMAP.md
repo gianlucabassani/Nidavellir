@@ -138,8 +138,11 @@ the orchestrator stops being OpenStack-specific.
 > shipped (ADR-0003); **`docker-local` driver shipped** (docker SDK, per-lab
 > labeled bridge networks, stateless label-based destroy, `provider_class`
 > scenario gate, first container scenario `container_web_pentest` = DVWA +
-> Kali) with a real-container e2e test in CI. Remaining: the generic
-> `nodes[]` OpenStack module (P1-5) and per-request provider selection.
+> Kali) with a real-container e2e test in CI. **Per-request provider
+> selection shipped** (optional `provider` on `/deploy` validated against the
+> scenario's `provider_class`, `GET /providers`, provider recorded per
+> deployment and reused on destroy). Remaining: the generic `nodes[]`
+> OpenStack module (P1-5).
 
 Key work:
 - Define the **`RangeProvider` driver interface** (`validate / deploy / destroy /
@@ -159,9 +162,18 @@ Key work:
 under a minute with no cloud credentials; the OpenStack path passes the same
 regression suite as before the refactor; provider chosen per request/config.
 
-### 🟠 Phase 3 — Multi-tenancy & lab lifecycle · **L**
+### 🟠 Phase 3 — Multi-tenancy & lab lifecycle · **L** *(in progress)*
 
 **Goal:** multiple users/classes share one platform safely and economically.
+
+> **Status (2026-06-11):** datastore work shipped (ADR-0004 accepted):
+> SQLAlchemy 2.x behind the existing `Database` facade, Alembic baseline
+> migration, lifecycle **state machine** (illegal transitions raise → API
+> 409s), append-only **`events` audit table** (actor + payload per
+> transition/admin action), #13 fixed, PostgreSQL via `DATABASE_URL`
+> (compose `postgres` profile; CI runs the suite against both backends —
+> SQLite stays the zero-dep default). Remaining: users/orgs/RBAC, TTL
+> reaper + quotas, secrets handling, per-tenant network isolation review.
 
 Key work:
 - Users/orgs + RBAC (instructor vs. student vs. **agent**); labs owned by a

@@ -39,6 +39,42 @@ jobs:
       - name: Run tests with coverage
         run: pytest --cov=cyber-range/services/scenario-orchestrator --cov-report=term-missing
 
+  postgres-compat:
+    # ADR-0004: SQLite is the default test backend (job above); this job
+    # proves the same suite passes against the deployed-environment backend.
+    name: Tests on PostgreSQL
+    runs-on: ubuntu-latest
+    env:
+      MOCK_MODE: "true"
+      DATABASE_URL: postgresql+psycopg://cyberguard:ci-only-pw@localhost:5432/cyberguard
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: cyberguard
+          POSTGRES_PASSWORD: ci-only-pw
+          POSTGRES_DB: cyberguard
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U cyberguard"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests against PostgreSQL
+        run: pytest
+
   docker-build:
     name: Build container images
     runs-on: ubuntu-latest

@@ -5,7 +5,13 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h6 class="text-muted text-uppercase mb-1">Mission Control</h6>
-        <h2 class="font-tech text-white mb-0">{{ instance_name }}</h2>
+        <h2 class="font-tech text-white mb-0">
+            {{ instance_name }}
+            <span class="badge rounded-pill bg-secondary border border-secondary shadow-sm align-middle" id="lab-status-badge" style="font-size: 0.4em;">
+                <i class="fa-solid fa-circle-notch fa-spin me-1 d-none" id="lab-status-spinner"></i>
+                <span id="lab-status-text">{{ state | upper }}</span>
+            </span>
+        </h2>
         <small class="text-muted font-mono">UUID: {{ instance_id }}</small>
     </div>
         <p class="text-muted small text-monospace mb-0">
@@ -237,10 +243,12 @@
     }
 
     // === UPDATE STATUS BADGES ===
+    // Targets the per-lab badge next to the lab name. The nav-bar badge is
+    // the ORCHESTRATOR's health and is owned by static/js/dashboard.js.
     function updateStatusUI(data) {
-        const badge = document.getElementById('nav-status-badge');
-        const text = document.getElementById('status-text');
-        const spinner = document.getElementById('status-spinner');
+        const badge = document.getElementById('lab-status-badge');
+        const text = document.getElementById('lab-status-text');
+        const spinner = document.getElementById('lab-status-spinner');
 
         if (!badge || !text || !spinner) {
             console.warn("Status UI elements not found");
@@ -249,26 +257,26 @@
 
         switch(data.status) {
             case 'active':
-                badge.className = "badge rounded-pill bg-success border border-success shadow-sm";
+                badge.className = "badge rounded-pill bg-success border border-success shadow-sm align-middle";
                 text.innerText = "ONLINE";
                 spinner.classList.add('d-none');
                 break;
                 
             case 'deploying':
             case 'pending':
-                badge.className = "badge rounded-pill bg-warning text-dark border border-warning shadow-sm";
+                badge.className = "badge rounded-pill bg-warning text-dark border border-warning shadow-sm align-middle";
                 text.innerText = data.status.toUpperCase();
                 spinner.classList.remove('d-none');
                 break;
                 
             case 'destroying':
-                badge.className = "badge rounded-pill bg-danger border border-danger shadow-sm";
+                badge.className = "badge rounded-pill bg-danger border border-danger shadow-sm align-middle";
                 text.innerText = "DESTROYING";
                 spinner.classList.remove('d-none');
                 break;
                 
             case 'failed':
-                badge.className = "badge rounded-pill bg-danger border border-danger shadow-sm";
+                badge.className = "badge rounded-pill bg-danger border border-danger shadow-sm align-middle";
                 text.innerText = "FAILED";
                 spinner.classList.add('d-none');
                 
@@ -279,7 +287,7 @@
                 break;
                 
             default:
-                badge.className = "badge rounded-pill bg-secondary border border-secondary shadow-sm";
+                badge.className = "badge rounded-pill bg-secondary border border-secondary shadow-sm align-middle";
                 text.innerText = data.status ? data.status.toUpperCase() : "UNKNOWN";
                 spinner.classList.add('d-none');
         }
@@ -496,20 +504,30 @@
         if (!confirm("Destroy lab? This action is irreversible.")) {
             return;
         }
-        
+
         // Stop polling
         if (pollTimeout) {
             clearTimeout(pollTimeout);
         }
-        
-        fetch(`/api/destroy/${id}`, { method: 'POST' })
+
+        // Flask-WTF rejects state-changing requests without the CSRF token (400)
+        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        fetch(`/api/destroy/${id}`, {
+            method: 'POST',
+            headers: csrfMeta ? { 'X-CSRFToken': csrfMeta.content } : {}
+        })
             .then(response => {
                 if (response.ok) {
                     alert("Destroy started. Redirecting to lobby...");
                     window.location.href = "/";
-                } else {
-                    throw new Error('Destroy request failed');
+                    return;
                 }
+                // Surface the backend's reason instead of a generic failure
+                return response.json()
+                    .catch(() => ({}))
+                    .then(body => {
+                        throw new Error(body.error || `Destroy request failed (HTTP ${response.status})`);
+                    });
             })
             .catch(err => {
                 console.error('Destroy error:', err);
