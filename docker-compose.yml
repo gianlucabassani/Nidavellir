@@ -166,6 +166,35 @@ services:
     networks:
       - cyberguard-network
 
+  # Celery Beat — ticks the lifecycle reaper (audit #9). One replica only:
+  # multiple beats would double-fire the schedule. The worker runs the work.
+  beat:
+    build:
+      context: ./cyber-range/services/scenario-orchestrator
+      dockerfile: Dockerfile
+    container_name: cyberguard-beat
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: celery -A tasks beat --loglevel=info --schedule /tmp/celerybeat-schedule
+    environment:
+      MOCK_MODE: ${MOCK_MODE:-true}
+      DATABASE_URL: ${DATABASE_URL:-}
+      DATABASE_PATH: /app/data/deployments.db
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      LAB_TTL_MINUTES: ${LAB_TTL_MINUTES:-180}
+      REAPER_INTERVAL_SECONDS: ${REAPER_INTERVAL_SECONDS:-300}
+      LAB_STUCK_MINUTES: ${LAB_STUCK_MINUTES:-30}
+      PYTHONPATH: /app
+    volumes:
+      # Needs the source + the same data volume (beat reads config; the
+      # reaper task reads the DB). Beat itself stores its schedule in-image.
+      - ./data:/app/data
+    networks:
+      - cyberguard-network
+
   # Web UI
   webui:
     build:

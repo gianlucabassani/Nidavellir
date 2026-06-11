@@ -28,6 +28,7 @@ class Deployment(Base):
     outputs: Mapped[str | None] = mapped_column(Text)  # JSON text, flat {name: value}
     error: Mapped[str | None] = mapped_column(Text)
     provider: Mapped[str | None] = mapped_column(Text)  # backend recorded at deploy
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime)  # TTL; NULL = no expiry
 
 
 class ApiKey(Base):

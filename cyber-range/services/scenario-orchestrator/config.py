@@ -71,6 +71,16 @@ DEBUG_MODE = os.getenv("DEBUG_MODE", "False").lower() == "true"
 WORKER_CONCURRENCY = int(os.getenv("WORKER_CONCURRENCY", "3"))
 WORKER_LOG_LEVEL = os.getenv("WORKER_LOG_LEVEL", "INFO")
 
+# LAB LIFECYCLE / REAPER (audit #9)
+# Every lab gets an expiry (created_at + LAB_TTL_MINUTES); a Celery-beat reaper
+# destroys expired labs and reconciles labs stuck in a transient state (e.g. a
+# worker that died mid-deploy leaving a lab 'pending' forever).
+LAB_TTL_MINUTES = int(os.getenv("LAB_TTL_MINUTES", "180"))
+REAPER_INTERVAL_SECONDS = int(os.getenv("REAPER_INTERVAL_SECONDS", "300"))
+# A lab in pending/deploying/destroying that hasn't been touched in this long is
+# considered orphaned (no live worker) and reconciled by the reaper.
+LAB_STUCK_MINUTES = int(os.getenv("LAB_STUCK_MINUTES", "30"))
+
 # VALIDATION
 def validate_config():
     """Validate required configuration on startup"""

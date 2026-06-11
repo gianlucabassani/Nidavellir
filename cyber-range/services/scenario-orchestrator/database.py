@@ -17,11 +17,23 @@ from datetime import datetime
 from pathlib import Path
 from threading import Lock
 
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, or_, select
 from sqlalchemy.orm import sessionmaker
 
 from models import ApiKey, Base, Deployment, Event
 from states import LabStatus, validate_transition
+
+# Labs in these states are still "live" (have or may have real infrastructure)
+# and are candidates for TTL expiry.
+LIVE_STATES = (
+    LabStatus.PENDING,
+    LabStatus.DEPLOYING,
+    LabStatus.ACTIVE,
+    LabStatus.ERROR_DESTROYING,
+)
+# Transient states a healthy worker moves through quickly; if a lab sits here
+# untouched it means the worker driving it is gone (the "stuck pending" bug).
+STUCK_STATES = (LabStatus.PENDING, LabStatus.DEPLOYING, LabStatus.DESTROYING)
 
 # Legacy SQLite location (kept for compose stacks that set DATABASE_PATH)
 DB_PATH = os.getenv(
@@ -84,6 +96,7 @@ class Database:
             "outputs": dep.outputs,
             "error": dep.error,
             "provider": dep.provider,
+            "expires_at": _stringify(dep.expires_at),
         }
 
     @staticmethod
@@ -101,7 +114,8 @@ class Database:
     # --- deployments ---------------------------------------------------------
 
     def create_deployment(
-        self, deployment_id, user_id, scenario, provider=None, actor="system"
+        self, deployment_id, user_id, scenario, provider=None, actor="system",
+        expires_at=None,
     ):
         with self._session() as session:
             session.add(
@@ -114,6 +128,7 @@ class Database:
                     updated_at=datetime.now(),
                     outputs="{}",
                     provider=provider,
+                    expires_at=expires_at,
                 )
             )
             self._append_event(
@@ -196,7 +211,53 @@ class Database:
             session.commit()
             return len(rows)
 
+    # --- reaper (TTL + stuck reconciliation, audit #9) -----------------------
+
+    def find_reapable(self, now, stuck_before):
+        """Labs the reaper should drive toward destruction.
+
+        Two independent reasons (a lab can match either):
+        - `expired`: a live lab past its `expires_at` (TTL elapsed). NULL
+          `expires_at` is skipped — those opted out of TTL.
+        - `stuck`: a lab sitting in a transient state (pending/deploying/
+          destroying) with `updated_at` older than `stuck_before`, i.e. no
+          live worker is driving it (the "stuck pending forever" failure).
+
+        Returns `[{"id": ..., "status": ..., "reason": "expired"|"stuck"}]`.
+        `expired` wins when a lab matches both (TTL is the deliberate signal).
+        """
+        with self._session() as session:
+            rows = session.scalars(
+                select(Deployment).where(
+                    or_(
+                        Deployment.status.in_(list(STUCK_STATES)),
+                        Deployment.status.in_(list(LIVE_STATES)),
+                    )
+                )
+            ).all()
+            reapable = []
+            for dep in rows:
+                if (
+                    dep.status in LIVE_STATES
+                    and dep.expires_at is not None
+                    and dep.expires_at <= now
+                ):
+                    reapable.append({"id": dep.id, "status": dep.status, "reason": "expired"})
+                elif (
+                    dep.status in STUCK_STATES
+                    and dep.updated_at is not None
+                    and dep.updated_at <= stuck_before
+                ):
+                    reapable.append({"id": dep.id, "status": dep.status, "reason": "stuck"})
+            return reapable
+
     # --- events (audit stream, ADR-0004) -------------------------------------
+
+    def record_event(self, lab_id, type, payload=None, actor="system"):
+        """Append an audit event directly (e.g. reaper actions)."""
+        with self._session() as session:
+            self._append_event(session, lab_id, actor, type, payload)
+            session.commit()
 
     def list_events(self, lab_id=None, limit=100):
         with self._session() as session:

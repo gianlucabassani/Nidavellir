@@ -1,8 +1,13 @@
 import os
 import logging
+from datetime import datetime, timedelta
+
 from celery import Celery
+
+import config
 from database import Database
 from orchestrator import Orchestrator
+from states import IllegalTransition, LabStatus
 
 # Broker Configuration
 # Connects to Redis running on localhost by default
@@ -19,6 +24,15 @@ app.conf.update(
     task_track_started=True, # Allows tracking "started" state in addition to "pending/success"
     worker_concurrency=4,    # Number of concurrent worker threads (CPU)
 )
+
+# Celery-beat schedule: the lifecycle reaper (audit #9). The `beat` service
+# (see docker-compose) ticks this; the worker runs the enqueued task.
+app.conf.beat_schedule = {
+    "reap-labs": {
+        "task": "reap_labs",
+        "schedule": float(config.REAPER_INTERVAL_SECONDS),
+    },
+}
 
 logger = logging.getLogger(__name__)
 
@@ -80,5 +94,51 @@ def destroy_lab(instance_id):
         db.update_deployment(
             instance_id, status="error_destroying", error=result["error"], actor="worker"
         )
-        
+
     return result
+
+
+@app.task(name="reap_labs")
+def reap_labs():
+    """Lifecycle reaper (audit #9), ticked by Celery beat.
+
+    Drives toward destruction any lab that should no longer be live:
+    - **expired**: TTL (`expires_at`) elapsed;
+    - **stuck**: sitting in a transient state with no live worker (the
+      "stuck pending forever" failure — e.g. a worker lost on restart).
+
+    Each reaped lab is transitioned to `destroying` (through the state
+    machine, so illegal transitions are skipped, not forced), gets a
+    `reaped` audit event recording the reason, and is handed to the normal
+    `destroy_lab` task — which is idempotent and runs on the lab's recorded
+    provider, so partial infrastructure is cleaned up too.
+    """
+    db = Database()
+    now = datetime.now()
+    stuck_before = now - timedelta(minutes=config.LAB_STUCK_MINUTES)
+
+    candidates = db.find_reapable(now, stuck_before)
+    reaped, skipped = 0, 0
+    for lab in candidates:
+        lab_id, reason, from_status = lab["id"], lab["reason"], lab["status"]
+        try:
+            # destroying->destroying is a legal no-op (a stuck destroy just
+            # gets retried); pending/deploying/active->destroying are legal.
+            db.update_deployment(lab_id, status=LabStatus.DESTROYING, actor="reaper")
+            db.record_event(
+                lab_id, "reaped", {"reason": reason, "from": from_status}, actor="reaper"
+            )
+            destroy_lab.delay(lab_id)
+            reaped += 1
+            logger.info(f"[{lab_id}] Reaped ({reason}, was {from_status}) -> destroying")
+        except IllegalTransition as e:
+            # Lab moved to a terminal state between query and action; leave it.
+            skipped += 1
+            logger.warning(f"[{lab_id}] Reap skipped: {e}")
+        except Exception:  # noqa: BLE001 - one bad lab must not abort the sweep
+            skipped += 1
+            logger.exception(f"[{lab_id}] Reap failed")
+
+    if reaped or skipped:
+        logger.info(f"Reaper run: {reaped} reaped, {skipped} skipped")
+    return {"reaped": reaped, "skipped": skipped}

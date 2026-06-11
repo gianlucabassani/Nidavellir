@@ -256,6 +256,21 @@ GET /status/{instance_id}
 | `failed` | Deployment failed (check `error` field) |
 | `error_destroying` | Cleanup failed (check `error`; destroy again to retry) |
 
+### Lab TTL & the reaper
+
+Every deployment gets an expiry (`expires_at` in the status response),
+`created_at + LAB_TTL_MINUTES` (default 180). A Celery-beat **reaper** runs
+every `REAPER_INTERVAL_SECONDS` (default 300) and:
+
+- **destroys expired labs** (TTL elapsed) — guards against cost/quota leak;
+- **reconciles stuck labs** — a lab sitting in `pending`/`deploying`/
+  `destroying` with no progress for `LAB_STUCK_MINUTES` (default 30) is
+  treated as orphaned (its worker is gone) and driven to destruction.
+
+Reaper actions are recorded as `reaped` events (with the reason) in the audit
+stream. A lab with no `expires_at` (e.g. legacy rows) is never auto-expired,
+but is still covered by the stuck-reconciliation path.
+
 **Error Response:** `404 Not Found`
 ```json
 {

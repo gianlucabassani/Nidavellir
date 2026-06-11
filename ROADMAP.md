@@ -180,6 +180,8 @@ Key work:
   user — you can only see/destroy your own (or your class's).
 - **Lab TTL + auto-reaper** (#9): every lab gets an expiry; a periodic Celery beat
   task destroys expired labs. Per-user **quotas** (active labs, vCPU).
+  *(TTL + reaper shipped 2026-06-11 — `expires_at`, the `beat` reaper service,
+  and stuck-lab reconciliation; quotas still pending with multi-tenancy.)*
 - Datastore: SQLite → **PostgreSQL** + SQLAlchemy + **Alembic** migrations
   (ADR-0004); explicit lab state machine; fix `update_deployment` semantics
   (#13); append-only `events` table (lifecycle, submissions, agent commands).
@@ -238,6 +240,19 @@ Key work:
 sees a class leaderboard; an AI agent connected via MCP completes a container
 scenario end-to-end with every command audited, and a containment test proves
 the attacker node cannot reach the internet.
+
+> **Expanded AI scope (planned 2026-06-11):** beyond the attacker-agent gateway
+> above, the platform integrates AI as a first-class participant — AI
+> **defenders** and **purple-team** (red agent vs. blue agent on one lab),
+> **LLM apps as targets** (prompt-injection / agent-abuse scenarios, a new
+> package category), **bring-your-own-key lab generation** (your AI emits a
+> lab spec → we validate + compile it to OpenTofu/Docker → spawn), and an MCP
+> server *fabric* (red + defender + authoring). **CyberGuard provides the
+> integration surfaces and the safe substrate only — it does not build an AI
+> pentester, defender, or generator; the AI is always bring-your-own (existing
+> products or custom), under the user's key and model.** Full vision and the
+> embedded-LLM threat model: `.agent/proposals/AI-INTEGRATION.md`. Working
+> items: P3-5/6, P4-8/9/10, P5-4.
 
 ### 🔵 Phase 6 — Observability & scale · **M**
 

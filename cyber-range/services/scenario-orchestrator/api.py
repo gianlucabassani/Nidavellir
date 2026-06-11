@@ -11,7 +11,9 @@ import json
 import os
 import uuid
 import sys
+from datetime import datetime, timedelta
 
+import config
 import scenarios
 from auth import Principal, ensure_bootstrap_key, require_principal
 from database import Database
@@ -169,13 +171,15 @@ async def deploy(
 
     # 3. Create 'Pending' record in DB
     # id = UUID, user_id = Friendly Name; provider recorded so destroy
-    # later runs on the same backend.
+    # later runs on the same backend; expires_at gives the reaper a TTL.
+    expires_at = datetime.now() + timedelta(minutes=config.LAB_TTL_MINUTES)
     db.create_deployment(
         system_id,
         friendly_name,
         req.scenario,
         provider=req.provider,
         actor=principal.name,
+        expires_at=expires_at,
     )
 
     # 4. Dispatch Async Task using the UUID
