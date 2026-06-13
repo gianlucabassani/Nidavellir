@@ -20,6 +20,7 @@ from threading import Lock
 from sqlalchemy import create_engine, or_, select
 from sqlalchemy.orm import sessionmaker
 
+from crypto import decrypt_secret, encrypt_secret
 from models import ApiKey, Base, Deployment, Event
 from states import LabStatus, validate_transition
 
@@ -54,6 +55,20 @@ def _stringify(value):
     # sqlite3.Row used to hand timestamps back as plain strings; keep that
     # contract so API responses and templates don't change shape.
     return str(value) if isinstance(value, datetime) else value
+
+
+def _read_outputs(stored):
+    """Decrypt the stored outputs blob back to JSON text (audit #14).
+
+    `decrypt_secret` returns the value unchanged for legacy plaintext rows and
+    when encryption is disabled. It returns None only when an encrypted value
+    can't be recovered (key missing/rotated) — fall back to empty JSON so the
+    status endpoint degrades to "no outputs" instead of erroring.
+    """
+    if stored is None:
+        return stored
+    plaintext = decrypt_secret(stored)
+    return plaintext if plaintext is not None else "{}"
 
 
 class Database:
@@ -93,7 +108,7 @@ class Database:
             "status": dep.status,
             "created_at": _stringify(dep.created_at),
             "updated_at": _stringify(dep.updated_at),
-            "outputs": dep.outputs,
+            "outputs": _read_outputs(dep.outputs),
             "error": dep.error,
             "provider": dep.provider,
             "expires_at": _stringify(dep.expires_at),
@@ -163,7 +178,9 @@ class Database:
                     )
                 dep.status = status
             if outputs is not None:
-                dep.outputs = json.dumps(outputs)
+                # Encrypted at rest when SECRETS_ENCRYPTION_KEY is set;
+                # plaintext passthrough otherwise (audit #14).
+                dep.outputs = encrypt_secret(json.dumps(outputs))
             if error is not None:
                 dep.error = error
             dep.updated_at = datetime.now()

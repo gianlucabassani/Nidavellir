@@ -19,6 +19,7 @@ Notes:
 import logging
 
 from providers.base import RangeProvider
+from redaction import redact_mapping
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,10 @@ class DockerLocalProvider(RangeProvider):
                 ),
             }
         if user_vars:
-            logger.warning(f"[{instance_id}] docker-local ignores user_vars: {user_vars}")
+            logger.warning(
+                f"[{instance_id}] docker-local ignores user_vars: "
+                f"{redact_mapping(user_vars)}"
+            )
 
         labels = {LABEL_LAB_ID: instance_id}
         net_name = self._network_name(instance_id)

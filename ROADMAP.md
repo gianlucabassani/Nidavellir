@@ -69,7 +69,7 @@ numbering in §3.
 | 11| 🟠 | **CSRF** absent on WebUI POST routes. | `webui/app.py` | Fixed ✅ (Flask-WTF CSRFProtect; rate limiting on the API shipped alongside — SECURITY #7) |
 | 12| 🟡 | **CLI is dead code** — `orch.deploy(scenario)` / `destroy()` / `_get_outputs()` are called with the wrong signatures. | `cli.py` | Fixed ✅ (deleted; referenced nowhere — operations go through the API, key management via `auth.py` CLI) |
 | 13| 🟡 | **`update_deployment` truthiness bug** — `if status:` means an empty-string status is silently ignored; no DB migrations. | `database.py:58-77` | Phase 3 |
-| 14| 🟡 | **Secrets in plaintext** in DB `outputs` and logs. | `database.py`, `orchestrator.py` | Phase 3 |
+| 14| 🟡 | **Secrets in plaintext** in DB `outputs` and logs. | `database.py`, `orchestrator.py` | Fixed ✅ (log redaction via `redaction.py`; Fernet encryption of `outputs` at rest via `crypto.py`, behind `SECRETS_ENCRYPTION_KEY`) |
 
 See [`docs/SECURITY.md`](docs/SECURITY.md) for the threat model behind the
 security items.
@@ -172,8 +172,10 @@ regression suite as before the refactor; provider chosen per request/config.
 > 409s), append-only **`events` audit table** (actor + payload per
 > transition/admin action), #13 fixed, PostgreSQL via `DATABASE_URL`
 > (compose `postgres` profile; CI runs the suite against both backends —
-> SQLite stays the zero-dep default). Remaining: users/orgs/RBAC, TTL
-> reaper + quotas, secrets handling, per-tenant network isolation review.
+> SQLite stays the zero-dep default). TTL **reaper** shipped (#9); **secrets
+> handling** shipped (#14 — log redaction + Fernet encryption of lab outputs at
+> rest behind `SECRETS_ENCRYPTION_KEY`). Remaining: users/orgs/RBAC + per-user
+> quotas, per-tenant network isolation review.
 
 Key work:
 - Users/orgs + RBAC (instructor vs. student vs. **agent**); labs owned by a
@@ -186,7 +188,10 @@ Key work:
   (ADR-0004); explicit lab state machine; fix `update_deployment` semantics
   (#13); append-only `events` table (lifecycle, submissions, agent commands).
 - Secrets handling (#14): stop logging credentials; encrypt or vault sensitive
-  outputs.
+  outputs. *(Shipped 2026-06-13 — `redaction.py` masks OpenTofu stderr / logged
+  variable dicts; `crypto.py` encrypts the `outputs` blob at rest with Fernet
+  when `SECRETS_ENCRYPTION_KEY` is set, transparent on read. Follow-ups: key
+  rotation, KMS-sourced key, owner-scoped output exposure with RBAC.)*
 - Per-tenant network isolation review per provider (security groups / docker
   network separation).
 

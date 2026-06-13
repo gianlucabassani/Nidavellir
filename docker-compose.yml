@@ -87,10 +87,15 @@ services:
       KEYS_DIR: /app/keys
       TF_PLUGIN_CACHE_DIR: /app/cache/terraform-plugins
 
+      # Secrets encryption at rest (audit #14). Unset -> plaintext outputs.
+      # Generate a key with `python -m crypto`. Must match on orchestrator and
+      # worker (worker encrypts on write, orchestrator decrypts for /status).
+      SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:-}
+
       # Celery Configuration
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
-      
+
       # API Configuration
       API_HOST: 0.0.0.0
       API_PORT: 8000
@@ -150,6 +155,8 @@ services:
       CACHE_DIR: /app/cache
       KEYS_DIR: /app/keys
       TF_PLUGIN_CACHE_DIR: /app/cache/terraform-plugins
+      # Must match the orchestrator's key (worker encrypts outputs on write).
+      SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:-}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-3}

@@ -12,6 +12,7 @@ from pathlib import Path
 
 from config import BASE_TERRAFORM_TEMPLATE, RUNS_DIR
 from providers.base import RangeProvider
+from redaction import redact, redact_mapping
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,8 @@ class OpenStackProvider(RangeProvider):
                     logger.warning(f"[{instance_id}] Init timeout, retry {attempt+1}/3")
                 except subprocess.CalledProcessError as e:
                     if attempt == 2:
-                        raise RuntimeError(f"Init failed: {e.stderr}")
+                        # stderr may echo OpenStack creds passed via the env.
+                        raise RuntimeError(f"Init failed: {redact(e.stderr)}")
 
             # STEP 2: TERRAFORM APPLY
             logger.info(f"[{instance_id}] Applying scenario")
@@ -96,8 +98,9 @@ class OpenStackProvider(RangeProvider):
             )
 
             if result.returncode != 0:
-                # Capture last 2000 chars of error for debugging
-                error_msg = result.stderr[-2000:] if result.stderr else "Unknown error"
+                # Redact first (stderr can echo OpenStack creds), then keep the
+                # last 2000 chars for debugging.
+                error_msg = redact(result.stderr)[-2000:] if result.stderr else "Unknown error"
                 logger.error(f"[{instance_id}] Apply failed: {error_msg}")
 
                 # CLEANUP FAILED WORKSPACE
@@ -151,10 +154,11 @@ class OpenStackProvider(RangeProvider):
             )
 
             if result.returncode != 0:
-                logger.error(f"[{instance_id}] Destroy failed: {result.stderr}")
+                safe_stderr = redact(result.stderr) if result.stderr else "Unknown error"
+                logger.error(f"[{instance_id}] Destroy failed: {safe_stderr}")
                 return {
                     "success": False,
-                    "error": f"Terraform destroy failed: {result.stderr[-1000:]}"
+                    "error": f"Terraform destroy failed: {safe_stderr[-1000:]}"
                 }
 
             # CLEANUP WORKSPACE
@@ -229,5 +233,5 @@ class OpenStackProvider(RangeProvider):
             if 'cidr' in net:
                 vars['private_cidr'] = net['cidr']
 
-        logger.info(f"Extracted Terraform vars: {vars}")
+        logger.info(f"Extracted Terraform vars: {redact_mapping(vars)}")
         return vars

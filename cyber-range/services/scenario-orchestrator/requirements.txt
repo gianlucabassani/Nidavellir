@@ -30,3 +30,6 @@ docker>=7.0.0
 sqlalchemy>=2.0
 alembic>=1.13
 psycopg[binary]>=3.1
+
+# Secrets hygiene (audit #14): Fernet encryption of lab outputs at rest.
+cryptography>=42.0

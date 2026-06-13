@@ -62,6 +62,14 @@ DATABASE_PATH = os.getenv("DATABASE_PATH", str(DATA_DIR / "deployments.db"))
 # TERRAFORM CONFIGURATION
 TF_PLUGIN_CACHE_DIR = os.getenv("TF_PLUGIN_CACHE_DIR", str(CACHE_DIR / "terraform-plugins"))
 
+# SECRETS / ENCRYPTION AT REST (audit #14)
+# When set to a urlsafe-base64 32-byte Fernet key (generate with
+# `python -m crypto`), lab outputs (SOC credentials, SSH commands, IPs) are
+# encrypted before they are written to the deployments.outputs column. Unset
+# -> plaintext passthrough (fine for the mock/dev demo; production should set
+# it). See crypto.py.
+SECRETS_ENCRYPTION_KEY = os.getenv("SECRETS_ENCRYPTION_KEY")
+
 # API CONFIGURATION
 API_HOST = os.getenv("API_HOST", "0.0.0.0")  # nosec B104 - container default, mapped by compose
 API_PORT = int(os.getenv("API_PORT", "8000"))
@@ -101,7 +109,15 @@ def validate_config():
             errors.append("OS_AUTH_URL is required (set MOCK_MODE=true to skip)")
     else:
         warnings.append("Running in MOCK_MODE - no real infrastructure will be created")
-    
+
+    # Encryption at rest for lab outputs (audit #14). Not fatal — the stack
+    # still runs storing plaintext — but flag it loudly in a real run.
+    if not mock_mode and not SECRETS_ENCRYPTION_KEY:
+        warnings.append(
+            "SECRETS_ENCRYPTION_KEY not set - lab outputs (incl. credentials) "
+            "will be stored in plaintext. Generate one with `python -m crypto`."
+        )
+
     # Check code directories exist
     for dir_name, dir_path in [
         ("TEMPLATES_DIR", TEMPLATES_DIR),

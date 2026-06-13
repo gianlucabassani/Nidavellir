@@ -245,6 +245,13 @@ GET /status/{instance_id}
 }
 ```
 
+> **Secrets at rest.** `outputs` contains credentials (e.g. `soc_credentials`)
+> and access details. When `SECRETS_ENCRYPTION_KEY` is set on the stack, this
+> blob is encrypted at rest in the database and decrypted only for API
+> responses — so the values you see here are plaintext, but a leaked DB file
+> is not. Without the key, outputs are stored in plaintext. See
+> [SECURITY.md](SECURITY.md#secrets-handling-audit-14).
+
 **Status Values** (transitions are enforced by a state machine — ADR-0004):
 | Status | Description |
 |--------|-------------|
