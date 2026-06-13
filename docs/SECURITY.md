@@ -1,10 +1,10 @@
 # CyberGuard — Security Posture & Threat Model
 
 > **Status (2026-06): NOT safe to expose to an untrusted network.**
-> The `docs/README.md` "Production Ready" badge refers to feature completeness
-> of the mock/OpenStack workflow, **not** to a hardened security posture. Treat
-> the current build as a trusted-LAN / single-operator tool until Phase 1 of the
-> [ROADMAP](../ROADMAP.md) lands.
+> API-key auth, input validation, CSRF and rate limiting are in place, but the
+> build still ships demo defaults and has **no per-owner authorization** (any
+> valid key can act on any arena). Treat it as a trusted-LAN / single-operator
+> tool until per-owner authz + the hardening checklist land (ROADMAP Phase 5).
 
 This document tracks the known security gaps so they are visible and tracked,
 not hidden. Each item links to the roadmap phase that closes it.
@@ -20,14 +20,14 @@ the most security-sensitive part of the system.
 
 | # | Severity | Gap | Location | Closed by |
 |---|----------|-----|----------|-----------|
-| 1 | **High** | No authentication or authorization. Any caller can deploy, list, or destroy **any** lab. | `api.py` (all routes) | **Fixed** — API-key auth on all data routes + WebUI session login ([ADR-0002](adr/0002-api-authentication.md)). Note: per-lab *ownership* enforcement still arrives with multi-tenancy (Phase 3); demo defaults (`dev-insecure-key`, `admin`/`cyberguard`) must be overridden per the checklist below. |
+| 1 | **High** | No authentication or authorization. Any caller can deploy, list, or destroy **any** lab. | `api.py` (all routes) | **Fixed** — API-key auth on all data routes + WebUI session login ([ADR-0002](adr/0002-api-authentication.md)). Note: per-arena *ownership* enforcement arrives with hardening (Phase 5); demo defaults (`dev-insecure-key`, `admin`/`cyberguard`) must be overridden per the checklist below. |
 | 2 | **High** | Hardcoded Flask `secret_key` and `debug=True` in source. | `webui/app.py` | **Fixed** — now env-driven (`SECRET_KEY`, `FLASK_DEBUG`) |
 | 3 | **High** | No CSRF protection on state-changing WebUI routes (`/create`, `/api/destroy`). | `webui/app.py` | **Fixed** — Flask-WTF `CSRFProtect` on all POSTs (forms + `X-CSRFToken` header for JS) |
-| 4 | **Med**  | Unvalidated user input (`scenario`, `instance_id`) flows toward Terraform `-var` args and workspace paths. Server-generated UUID mitigates the deploy path today, but the validation boundary is missing. | `api.py`, `orchestrator.py` | Phase 1 |
-| 5 | **Med**  | Bare `except:` clauses swallow errors and can mask failures (incl. security-relevant ones). | `api.py:43-47,99-103`, `orchestrator.py:212` | Phase 1 |
+| 4 | **Med**  | Unvalidated user input (`scenario`, `instance_id`) flows toward Terraform `-var` args and workspace paths. | `api.py`, `orchestrator.py` | **Fixed** — Pydantic validators + scenario registry; traversal guard repeated in the worker |
+| 5 | **Med**  | Bare `except:` clauses swallow errors and can mask failures (incl. security-relevant ones). | `api.py`, `orchestrator.py` | **Fixed** — typed exceptions + logging; `bandit -ll` is a blocking CI gate |
 | 6 | **Med**  | Secrets (OpenStack creds, SOC passwords) logged/echoed and stored in plaintext in the DB `outputs` column. | `database.py`, `orchestrator.py` | **Fixed** — OpenTofu stderr / logged variable dicts are run through `redaction.py` before logging or surfacing in API errors; lab outputs are encrypted at rest with Fernet (`crypto.py`) when `SECRETS_ENCRYPTION_KEY` is set. See *Secrets handling* below. |
-| 7 | **Med**  | No rate limiting; a single client can exhaust the worker pool / cloud quota. | `api.py` | **Fixed** — slowapi per-client limits on `/deploy` (10/min) and `/destroy` (30/min), tunable via `RATE_LIMIT_*` env; per-user quotas follow in Phase 3 |
-| 8 | **Low**  | No network isolation guarantees between concurrent tenant labs are documented/enforced. | `infra/terraform/network.tf` | Phase 2 |
+| 7 | **Med**  | No rate limiting; a single client can exhaust the worker pool / cloud quota. | `api.py` | **Fixed** — slowapi per-client limits on `/deploy` (10/min) and `/destroy` (30/min), tunable via `RATE_LIMIT_*` env; per-operator quotas follow in Phase 5 |
+| 8 | **Low**  | No network isolation guarantees between concurrent arenas are documented/enforced. | `infra/terraform/network.tf` | Phase 1–2 (topology segments + per-stance egress lockdown) |
 
 ## Secrets handling (audit #14)
 
@@ -54,7 +54,7 @@ Two layers protect lab and cloud secrets:
   OpenStack template (`infra/terraform/outputs.tf`) — that belongs with
   scenario-package parameterization. The `outputs` API responses still return
   decrypted credentials to any authenticated caller; narrowing that to the
-  lab's owner is multi-tenancy work (gap #1 / Phase 3 RBAC).
+  arena's owner is hardening work (gap #1 / Phase 5 RBAC).
 
 ## docker-local provider: Docker socket implications
 
@@ -62,9 +62,9 @@ The `docker-local` provider (ADR-0003) talks to the host Docker daemon. A
 worker that can reach `/var/run/docker.sock` is **root-equivalent on that
 host** — only enable it (the socket mount + `RANGE_PROVIDER=docker-local`)
 on machines where the operator already owns the host, i.e. laptops and
-dedicated lab hosts, never on a shared control-plane node. Lab containers
-get a dedicated bridge network per lab; full egress lockdown for agent
-training is tracked separately (roadmap Phase 5 guardrails).
+dedicated lab hosts, never on a shared control-plane node. Arena containers
+get a dedicated bridge network per arena; full egress lockdown is the MCP
+gateway's primary guardrail (roadmap Phase 2).
 
 ## Reporting a vulnerability
 

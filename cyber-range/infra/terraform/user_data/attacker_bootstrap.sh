@@ -25,7 +25,7 @@ echo "[+] APT lock libero. Inizio installazione."
 
 # --- LOG DI BOOTSTRAP ---
 LOG_FILE="/var/log/attacker_bootstrap.log"
-echo "[*] Inizio bootstrap macchina Attaccante (Mr. Robot + SOC Tester)..." > $LOG_FILE
+echo "[*] Inizio bootstrap macchina Attaccante (foothold + sensor tester)..." > $LOG_FILE
 
 # 1. INSTALLAZIONE DIPENDENZE E TOOL OFFENSIVI
 echo "[*] Installazione pacchetti..." >> $LOG_FILE
@@ -271,8 +271,8 @@ def clear_screen():
 def print_banner():
     print(colored("""
     ╔══════════════════════════════════════════╗
-    ║      MR. ROBOT & SOC TESTER v2.0         ║
-    ║      Automated Cyber Range Tools         ║
+    ║      CYBERGUARD ARENA TOOLS v2.0         ║
+    ║      Automated offensive tooling         ║
     ╚══════════════════════════════════════════╝
     """, "cyan", attrs=['bold']))
 

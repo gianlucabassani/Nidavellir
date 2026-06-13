@@ -29,7 +29,12 @@ from database import Database
 
 logger = logging.getLogger(__name__)
 
-ROLES = ("admin", "instructor", "student", "agent")
+# Platform roles (enterprise-arena pivot 2026-06-13): admin manages the
+# platform/keys, operator authors/runs/observes engagements, agent is the AI
+# under test. attacker/MITM/defender are per-session agent *stances* chosen via
+# the MCP gateway, not auth roles. (Legacy keys with the old instructor/student
+# roles still authenticate — the read path doesn't re-validate stored roles.)
+ROLES = ("admin", "operator", "agent")
 
 # Insecure default shared by docker-compose for the out-of-the-box mock demo.
 # The API logs a loud warning when it is in use; never keep it in production.

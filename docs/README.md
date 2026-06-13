@@ -1,12 +1,25 @@
-# 🛡️ CyberGuard 2.0: Cloud-Native Cyber Range
+# 🛡️ CyberGuard — Enterprise Cyber Arena
 
-**One-click deployment of red/blue team training environments on OpenStack.**
+**Dynamic, multi-machine vulnerable topologies + bring-your-own AI agents
+(attacker / MITM / defender) wired in via MCP — runnable locally, on OpenStack,
+or on AWS.**
 
-CyberGuard is an Infrastructure-as-Code platform that automates the creation of vulnerable labs for cybersecurity training. It features a modern web dashboard, asynchronous task processing, and complete workspace isolation for concurrent deployments.
+CyberGuard provisions arbitrary N-node arenas on demand and exposes them, through
+**MCP gateways**, to bring-your-own agents (agentic Claude Code or a company's
+own internal model) placed as **attacker**, **MITM**, or **defender**. Humans
+(operators) author and run engagements; the AI is the system under test. It runs
+fully on a laptop (Docker), on OpenStack, or on AWS, with async task processing,
+per-arena isolation, and full audit/trace.
 
-![Status](https://img.shields.io/badge/Status-Production_Ready-success)
-![Stack](https://img.shields.io/badge/Stack-Python%20%7C%20OpenTofu%20%7C%20Redis-blue)
+![Status](https://img.shields.io/badge/Status-Active_Development-yellow)
+![Stack](https://img.shields.io/badge/Stack-Python%20%7C%20OpenTofu%20%7C%20Redis%20%7C%20MCP-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
+
+> Direction (2026-06): pivoting from the original lab launcher to the arena
+> model above — see [`ROADMAP.md`](../ROADMAP.md). Technical inspiration for the
+> topology engine: **GOAD**. **AIronClaw** and **Karna/sicuranext** are cited
+> only as product-quality (UI/UX & utility) exemplars — not a scope or technical
+> model.
 
 
 
@@ -214,9 +227,9 @@ python3 app.py
 
 Open your browser at **http://localhost:5000**
 
-1. **Create a Lab:**
-   - Enter an instance name (e.g., `lab-team-1`)
-   - Select a scenario (`Mr. Robot CTF`)
+1. **Create an Arena:**
+   - Enter an instance name (e.g., `arena-1`)
+   - Select a scenario from the registry
    - Click **LAUNCH**
 
 2. **Monitor Deployment:**
@@ -281,7 +294,7 @@ os_auth_url         = "https://your-openstack:5000/v3"
 
 # Images (must exist in Glance)
 image_name          = "kali-linux-2025-cloud"
-victim_image_name   = "mrrobot-fixed"
+victim_image_name   = "victim-web"
 log_image_name      = "ubuntu_cloud"
 
 # Network
@@ -337,25 +350,24 @@ CyberGuard/
 ```
 
 
-## 🎓 Scenarios
+## 🧩 Scenarios
 
-### 1. Mr. Robot CTF (basic_pentest)
+A scenario is the authored, provider-agnostic spec for an arena. Today's specs
+are still the legacy fixed-role shape; **ROADMAP Phase 1** generalizes them to
+arbitrary N-node topologies (`nodes[]` + `segments[]`), GOAD-style.
 
-**Components:**
-- **Victim:** Mr. Robot vulnerable VM (WordPress)
-- **Attacker:** Kali Linux with pre-configured tools
-- **Monitor:** Wazuh + Suricata for Blue Team analysis
+### 1. basic_pentest
 
-**Learning Objectives:**
-- Web application penetration testing
-- WordPress vulnerability exploitation
-- Log analysis and incident detection
+**Nodes:** a vulnerable web victim, a Kali foothold, and a Wazuh + Suricata
+sensor node.
 
-### 2. Random VulnHub (random_vulnhub)
+**Objectives:** web-app exploitation; the foothold node is the attacker
+stance's entry point; the sensor node feeds defender-stance scoring.
 
-**Components:**
-- Dynamically selected vulnerable image from catalog (TODO: auto-importer)
-- Standard Kali attacker machine
+### 2. random_vulnhub
+
+**Nodes:** a catalog-selected vulnerable image + a Kali foothold. Wiring the
+VulnHub importer to make this real is a Phase-1 item (audit #10).
 
 
 
@@ -433,18 +445,24 @@ Key variables:
 The full phased plan — with a code-audit punch list, acceptance criteria, and
 sequencing — lives in **[ROADMAP.md](../ROADMAP.md)**. Highlights:
 
-- [x] Docker Compose deployment
-- [x] Test suite + CI + dev tooling *(Phase 0)*
-- [ ] Correctness & security hardening: Docker path fix, auth, input validation *(Phase 1)*
-- [ ] User authentication & multi-tenancy + lab TTL/auto-reaper *(Phase 2)*
-- [ ] Scenario platform: schema validation + VulnHub auto-importer *(Phase 3)*
-- [ ] Automated scoring system (gamification) *(Phase 4)*
-- [ ] Observability & scale *(Phase 5)*
-- [ ] WebSocket UI, bulk provisioning, Azure/AWS support *(Phase 6)*
+Shipped substrate:
+- [x] Docker Compose stack; test suite + CI (SQLite + Postgres)
+- [x] API-key auth + roles; input validation; CSRF + API rate limiting
+- [x] Provider abstraction (`mock` / `docker-local` / `openstack`); per-request provider
+- [x] PostgreSQL + SQLAlchemy + Alembic; lab state machine + `events` audit; TTL reaper
+- [x] Secrets hygiene (log redaction + Fernet-encrypted outputs at rest)
 
-> **Security note:** despite the "Production Ready" badge above (feature
-> completeness), the current build has **no authentication** — see
-> [docs/SECURITY.md](SECURITY.md). Do not expose it to an untrusted network until
-> Phase 1 lands.
+The pivot (re-sequenced around the three pillars):
+- [ ] **Phase 0** — repositioning & role rename (admin/operator/agent)
+- [ ] **Phase 1** — dynamic N-node topology engine (GOAD-style)
+- [ ] **Phase 2** — MCP agent gateway: attacker / MITM / defender stances *(priority)*
+- [ ] **Phase 3** — zero-to-prompt scenario generation (bring-your-own key)
+- [ ] **Phase 4** — scoring, eval & trace datasets
+- [ ] **Phase 5** — hardening + AWS hosting · **Phase 6** — observability · **Phase 7** — console redesign
+
+> **Security note:** API-key auth and rate limiting are in place, but the build
+> still ships demo defaults and lacks per-owner authorization — see
+> [docs/SECURITY.md](SECURITY.md). Do not expose it to an untrusted network
+> without overriding the demo credentials and completing the hardening checklist.
 
 

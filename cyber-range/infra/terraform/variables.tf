@@ -1,25 +1,25 @@
 # -------------------------------------------------------------------
-# --- Credenziali OpenStack --- 
+# --- OpenStack credentials ---
 # -------------------------------------------------------------------
 variable "os_project_domain" {
-  description = "Dominio del progetto OpenStack"
+  description = "OpenStack project domain"
   type        = string
   default     = "Default"
 }
 
 variable "os_user_name" {
-  description = "Username OpenStack"
+  description = "OpenStack username"
   type        = string
 }
 
 variable "os_user_domain" {
-  description = "Dominio utente"
+  description = "OpenStack user domain"
   type        = string
-  default     = "EDU-ITS"
+  default     = "Default"
 }
 
 variable "os_password" {
-  description = "Password utente OpenStack"
+  description = "OpenStack user password"
   type        = string
   sensitive   = true
 }
@@ -30,27 +30,27 @@ variable "os_auth_url" {
 }
 
 variable "os_region" {
-  description = "Regione OpenStack"
+  description = "OpenStack region"
   type        = string
   default     = "RegionOne"
 }
 
 variable "os_insecure" {
-  description = "Permetti certificati self-signed"
+  description = "Allow self-signed certificates"
   type        = bool
   default     = true
 }
 
 variable "os_tenant_id" {
-  description = "ID del progetto (tenant)"
+  description = "Project (tenant) ID"
   type        = string
 }
 
 # -------------------------------------------------------------------
-# --- Rete --- 
+# --- Network ---
 # -------------------------------------------------------------------
 variable "external_network_name" {
-  description = "Nome rete pubblica (pool FIP)"
+  description = "Public network name (floating-IP pool)"
   type        = string
   default     = "OPENSTACK_SHARED_PUBLIC"
 }
@@ -86,88 +86,90 @@ variable "dns_nameservers" {
 }
 
 # -------------------------------------------------------------------
-# --- VM / Flavor CONFIGURATION --- 
+# --- VM / flavor configuration ---
 # -------------------------------------------------------------------
 
-# Flavor generica per Kali e Victim (bastano 2GB)
+# Base flavor for the Kali foothold and the victim (2GB is enough).
 variable "flavor_name" {
-  description = "Flavor base (es. t3.small)"
+  description = "Base flavor (e.g. t3.small)"
   type        = string
   default     = "t3.small"
 }
 
-# NUOVA VARIABILE: Flavor maggiorata per il SOC (Wazuh richiede 4GB+)
+# Larger flavor for the SOC/sensor node (Wazuh needs 4GB+).
 variable "soc_flavor_name" {
-  description = "Flavor per la macchina SOC (richiede più RAM)"
+  description = "Flavor for the SOC node (needs more RAM)"
   type        = string
   default     = "t3.medium"
 }
 
 variable "image_name" {
-  description = "Nome immagine Kali"
+  description = "Kali image name"
   type        = string
   default     = "kali-linux-2025-cloud"
 }
 
 variable "vm_name" {
-  description = "Nome della macchina virtuale"
+  description = "Virtual machine name"
   type        = string
   default     = "cyber_guard-attack"
 }
 
 variable "root_volume_gb" {
-  description = "Dimensione del volume di root (GB)"
+  description = "Root volume size (GB)"
   type        = number
   default     = 30
 }
 
 # -------------------------------------------------------------------
-# --- VM di log --- 
+# --- Sensor / log VM ---
 # -------------------------------------------------------------------
 variable "log_image_name" {
-  description = "Nome immagine per la macchina di log"
+  description = "Image name for the sensor/log VM"
   type        = string
   default     = "ubuntu_cloud"
 }
 
 variable "log_vm_name" {
-  description = "Nome della macchina virtuale di log"
+  description = "Sensor/log VM name"
   type        = string
   default     = "cyber_guard_log"
 }
 
 variable "log_root_volume_gb" {
-  description = "Dimensione volume root VM di log"
+  description = "Root volume size for the sensor/log VM"
   type        = number
   default     = 40
 }
 
 # -------------------------------------------------------------------
-# --- VM Victim (Mr Robot) ---
+# --- Victim VM ---
+# NOTE: image default is a placeholder; re-imaged when scenarios move to the
+# Phase-1 N-node topology schema. The scenario spec overrides it per deploy.
 # -------------------------------------------------------------------
 variable "victim_image_name" {
-  description = "Nome immagine per la VM vittima"
+  description = "Image name for the victim VM"
   type        = string
-  default     = "mrrobot-fixed"
+  default     = "victim-web"
 }
 
 variable "victim_vm_name" {
-  description = "Nome della macchina virtuale vittima"
+  description = "Victim VM name"
   type        = string
   default     = "cyber_guard_victim"
 }
 
 variable "victim_root_volume_gb" {
-  description = "Dimensione volume root VM vittima"
+  description = "Root volume size for the victim VM"
   type        = number
   default     = 30
 }
 
 # -------------------------------------------------------------------
-# --- SSH / Keypair ---
+# --- SSH / keypair ---
 # -------------------------------------------------------------------
 variable "keypair_name" {
-  description = "Nome della keypair SSH in OpenStack"
+  description = "Name of the SSH keypair in OpenStack"
   type        = string
   default     = "cyberguard_ssh_key"
 }

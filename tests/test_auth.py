@@ -21,7 +21,7 @@ def anon_client():
     return TestClient(api.app)
 
 
-def _make_key(name="auth-tests", role="student"):
+def _make_key(name="auth-tests", role="operator"):
     key = auth.generate_api_key()
     Database().create_api_key(auth.hash_api_key(key), name=name, role=role)
     return key

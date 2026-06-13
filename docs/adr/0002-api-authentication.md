@@ -1,6 +1,11 @@
 # ADR-0002: API-key authentication with roles; session login on the WebUI
 
-- **Status:** Accepted
+- **Status:** Accepted (**superseded in part** — 2026-06-13 enterprise-arena
+  pivot: the role set `instructor`/`student` is renamed to **`operator`**
+  (`admin`/`agent` unchanged); see `ROADMAP.md` Phase 0 and
+  `.agent/proposals/VISION.md`. The API-key mechanism below is otherwise
+  unchanged. `attacker`/`MITM`/`defender` are per-session agent *stances*
+  chosen via the MCP gateway, not auth roles.)
 - **Date:** 2026-06-10
 - **Deciders:** CyberGuard maintainers
 

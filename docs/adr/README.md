@@ -21,6 +21,16 @@ contributors understand the reasoning instead of re-litigating it.
 | ADR | Title | Status |
 |-----|-------|--------|
 | [0001](0001-record-current-architecture.md) | Record the current architecture as a baseline | Accepted |
-| [0002](0002-api-authentication.md) | API-key authentication and WebUI operator login | Accepted |
+| [0002](0002-api-authentication.md) | API-key authentication and WebUI operator login | Accepted (roles → admin/operator/agent, 2026-06-13 pivot) |
 | [0003](0003-provider-driver-interface.md) | Pluggable deployment providers behind a RangeProvider interface | Accepted |
 | [0004](0004-postgres-persistence.md) | PostgreSQL persistence via SQLAlchemy + Alembic | Accepted |
+| 0005 | MCP agent gateway protocol, stances & guardrails | Planned (ROADMAP Phase 2) |
+| 0006 | AWS topology & cost controls | Planned (ROADMAP Phase 5) |
+
+> **2026-06-13 pivot:** CyberGuard repositioned as an enterprise agent-testing
+> arena (dynamic N-node topologies + bring-your-own agents via MCP as
+> attacker/MITM/defender). The ADRs above remain accurate as historical
+> records of their decisions; current product framing lives in
+> [`../../.agent/proposals/VISION.md`] and `ROADMAP.md`. Older ADRs mention
+> the prior school/classroom framing in their rationale — that is preserved as
+> written, per the no-rewrite-of-accepted-ADRs convention.

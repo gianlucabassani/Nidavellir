@@ -4,8 +4,8 @@ docker-local provider: container labs on the host Docker daemon (ADR-0003).
 Each lab gets its own bridge network and one container per scenario node;
 everything is tagged with `cyberguard.lab_id` labels so destroy() can find
 and remove a lab without any local state. Deploys take seconds and cost
-nothing — this is the workhorse for laptops, classrooms without a cloud,
-CI end-to-end tests, and (later) agent-training loops.
+nothing — this is the workhorse for laptops, CI end-to-end tests, dedicated
+lab hosts, and cheap agent-test iteration at scale.
 
 Notes:
 - `monitor`-role nodes are skipped for now: containerizing the Wazuh SOC is

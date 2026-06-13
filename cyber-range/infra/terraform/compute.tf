@@ -148,7 +148,7 @@ resource "openstack_compute_instance_v2" "cyber_guard_victim" {
   key_pair    = openstack_compute_keypair_v2.cyberguard_ssh_keypair.name
 
   block_device {
-    uuid                  = data.openstack_images_image_v2.mrrobot.id
+    uuid                  = data.openstack_images_image_v2.victim.id
     source_type           = "image"
     destination_type      = "volume"
     volume_size           = var.victim_root_volume_gb
@@ -163,7 +163,7 @@ resource "openstack_compute_instance_v2" "cyber_guard_victim" {
   user_data = <<EOF
 #!/bin/bash
 export WAZUH_MANAGER_IP="${openstack_networking_port_v2.log_vm_port.all_fixed_ips[0]}"
-export AGENT_NAME="victim-mrrobot"
+export AGENT_NAME="victim-web"
 export OS_TYPE="linux"
 ${data.local_file.victim_agent_script.content}
 EOF

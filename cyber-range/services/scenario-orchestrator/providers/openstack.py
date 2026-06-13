@@ -212,7 +212,7 @@ class OpenStackProvider(RangeProvider):
             role = vm.get('role')
 
             if role == 'victim':
-                vars['victim_image_name'] = vm.get('image', 'mrrobot-fixed')
+                vars['victim_image_name'] = vm.get('image', 'victim-web')
                 vars['victim_vm_name'] = vm.get('name', 'cyber_guard_victim')
                 if 'flavor' in vm:
                     vars['flavor_name'] = vm['flavor']

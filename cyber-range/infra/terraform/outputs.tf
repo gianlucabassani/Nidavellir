@@ -48,7 +48,7 @@ output "attack_vm_ssh_command" {
   value       = "ssh -i cyberguard_ssh_key.pem kali@${openstack_networking_floatingip_v2.attack_fip.address}"
 }
 
-# ========== VM VICTIM (MR ROBOT) ==========
+# ========== VICTIM VM ==========
 
 output "victim_vm_name" {
   description = "Nome della VM vittima"

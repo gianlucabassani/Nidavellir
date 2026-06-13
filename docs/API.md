@@ -6,7 +6,7 @@ Base URL: `http://localhost:8000`
 
 ## 📋 Overview
 
-The CyberGuard API provides RESTful endpoints for managing cyber range deployments.
+The CyberGuard API provides RESTful endpoints for managing arena deployments.
  All operations are **asynchronous**.
 
 ### Authentication
@@ -19,11 +19,17 @@ export CYBERGUARD_API_KEY=cg_...   # create one: python auth.py create-key <name
 curl -H "X-API-Key: $CYBERGUARD_API_KEY" http://localhost:8000/deployments
 ```
 
-Roles: `admin`, `instructor`, `student`, `agent` (recorded for auditing;
-fine-grained enforcement arrives with multi-tenancy). Missing or invalid keys
+Roles: `admin` (manage platform/keys), `operator` (author/run/observe
+engagements), `agent` (the AI under test). Recorded for auditing; per-owner
+enforcement arrives with hardening (ROADMAP Phase 5). Missing or invalid keys
 get `401`. The docker-compose stack bootstraps the key from the
 `CYBERGUARD_API_KEY` value in `.env` — the default `dev-insecure-key` is for
 the local mock demo only.
+
+> The role set is `admin` / `operator` / `agent` (the legacy
+> `instructor`/`student` were renamed to `operator` in the 2026-06 pivot; keys
+> issued with the old roles still authenticate). `attacker`/`MITM`/`defender`
+> are per-session agent **stances** (chosen via the MCP gateway), not auth roles.
 
 > All examples below assume `-H "X-API-Key: $CYBERGUARD_API_KEY"` is added.
 
@@ -52,7 +58,7 @@ should drive their scenario pickers from this (the WebUI does):
   "scenarios": [
     {
       "id": "basic_pentest",
-      "name": "Mr. Robot CTF Scenario",
+      "name": "Web App Pentest (VM)",
       "description": "…",
       "difficulty": "medium",
       "tags": [],
@@ -428,7 +434,7 @@ curl -X DELETE http://localhost:8000/destroy/lab-prod-001
 - `soc_dashboard_url`: Wazuh web interface URL
 - `soc_credentials`: Login credentials for Wazuh
 
-### Victim VM (Mr. Robot)
+### Victim VM
 - `victim_vm_name`: VM hostname
 - `victim_vm_private_ip`: Internal network IP
 - `victim_vm_floating_ip`: Public IP

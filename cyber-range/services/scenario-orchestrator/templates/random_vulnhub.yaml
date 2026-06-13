@@ -30,7 +30,7 @@ vms:
 
 metadata:
   description: "Dynamically generated scenario using random VulnHub images"
-  learning_objectives:
+  objectives:
     - "Work with unexpected vulnerable targets"
     - "Adapt exploitation techniques"
   tags: ["vulnhub", "random", "practice"]
