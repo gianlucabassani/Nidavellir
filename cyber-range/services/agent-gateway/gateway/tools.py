@@ -17,7 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 class ToolNotAllowed(Exception):
-    """The bound stance is not permitted to call this tool."""
+    """The bound stance is not permitted to call this tool / touch this node."""
+
+
+class BudgetExceeded(Exception):
+    """The session's command/step budget is exhausted."""
 
 
 @dataclass
@@ -25,6 +29,8 @@ class GatewayContext:
     client: RestClient
     session: Session
     trace_dir: str | None = None
+    step_budget: int = 0  # 0 = unlimited
+    steps_used: int = 0
 
 
 def _guard(ctx: GatewayContext, tool: str) -> None:
@@ -43,6 +49,49 @@ def _trace(ctx: GatewayContext, tool: str, args: dict, ok: bool, arena_id: str |
         ok=ok,
         arena_id=arena_id,
     )
+
+
+def _charge_step(ctx: GatewayContext) -> None:
+    if ctx.step_budget and ctx.steps_used >= ctx.step_budget:
+        raise BudgetExceeded(
+            f"command/step budget ({ctx.step_budget}) exhausted for this session"
+        )
+    ctx.steps_used += 1
+
+
+def _node_names(outputs: dict) -> set[str]:
+    return {
+        k[len("node_"):-len("_name")]
+        for k in outputs
+        if k.startswith("node_") and k.endswith("_name")
+    }
+
+
+def _footholds(outputs: dict) -> list[str]:
+    # A foothold is any node the provider exposed a shell command for.
+    return sorted(
+        k[len("node_"):-len("_ssh_command")]
+        for k in outputs
+        if k.startswith("node_") and k.endswith("_ssh_command")
+    )
+
+
+def _resolve_foothold(ctx: GatewayContext, arena_id: str, node: str | None) -> str:
+    """The node an attacker may exec from — enforces foothold-only scope."""
+    outputs = ctx.client.status(ctx.session.api_key, arena_id).get("outputs", {})
+    footholds = _footholds(outputs)
+    if node is not None:
+        if node not in footholds:
+            raise ToolNotAllowed(
+                f"the attacker stance may only run commands on a foothold node "
+                f"{footholds or '[]'}, not {node!r}"
+            )
+        return node
+    if len(footholds) == 1:
+        return footholds[0]
+    if not footholds:
+        raise ToolNotAllowed(f"arena {arena_id!r} has no foothold node to exec from")
+    raise ValueError(f"multiple footholds {footholds}; pass node= to choose one")
 
 
 def _new_arena_name() -> str:
@@ -112,3 +161,76 @@ def get_briefing(ctx: GatewayContext, arena_id: str) -> dict:
     }
     _trace(ctx, "get_briefing", {}, ok=True, arena_id=arena_id)
     return briefing
+
+
+# --- attacker stance ---------------------------------------------------------
+
+
+def get_topology(ctx: GatewayContext, arena_id: str) -> dict:
+    """The arena's nodes (name, private IP, web URL, state, foothold?) and
+    networks — the attacker's map of what's reachable."""
+    _guard(ctx, "get_topology")
+    outputs = ctx.client.status(ctx.session.api_key, arena_id).get("outputs", {})
+    footholds = set(_footholds(outputs))
+    nodes = [
+        {
+            "node": name,
+            "private_ip": outputs.get(f"node_{name}_private_ip"),
+            "url": outputs.get(f"node_{name}_url"),
+            "state": outputs.get(f"node_{name}_state"),
+            "foothold": name in footholds,
+        }
+        for name in sorted(_node_names(outputs))
+    ]
+    _trace(ctx, "get_topology", {}, ok=True, arena_id=arena_id)
+    return {"arena_id": arena_id, "networks": outputs.get("lab_networks", []), "nodes": nodes}
+
+
+def list_targets(ctx: GatewayContext, arena_id: str) -> dict:
+    """Just the in-scope targets (every non-foothold node) with how to reach
+    them — the shortlist an attacker actually engages."""
+    _guard(ctx, "list_targets")
+    outputs = ctx.client.status(ctx.session.api_key, arena_id).get("outputs", {})
+    footholds = set(_footholds(outputs))
+    targets = [
+        {
+            "node": name,
+            "private_ip": outputs.get(f"node_{name}_private_ip"),
+            "url": outputs.get(f"node_{name}_url"),
+            "state": outputs.get(f"node_{name}_state"),
+        }
+        for name in sorted(_node_names(outputs))
+        if name not in footholds
+    ]
+    _trace(ctx, "list_targets", {}, ok=True, arena_id=arena_id)
+    return {"targets": targets}
+
+
+def run_command(
+    ctx: GatewayContext,
+    arena_id: str,
+    command: str,
+    node: str | None = None,
+    timeout: int = 30,
+) -> dict:
+    """Run a shell command from the arena's foothold node and return its
+    output. Foothold-only (attacker scope), budget-charged, fully traced.
+
+    `node` defaults to the arena's single foothold; pass it explicitly when an
+    arena has more than one. Every command is also audited server-side (it
+    feeds the future defender stance)."""
+    _guard(ctx, "run_command")
+    _charge_step(ctx)
+    foothold = _resolve_foothold(ctx, arena_id, node)
+    try:
+        res = ctx.client.exec_command(ctx.session.api_key, arena_id, foothold, command, timeout)
+    except Exception:
+        _trace(ctx, "run_command",
+               {"node": foothold, "command": command[:512]}, ok=False, arena_id=arena_id)
+        raise
+    _trace(
+        ctx, "run_command",
+        {"node": foothold, "command": command[:512], "exit_code": res.get("exit_code")},
+        ok=True, arena_id=arena_id,
+    )
+    return res

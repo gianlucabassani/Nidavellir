@@ -18,6 +18,7 @@ from gateway import tools
 from gateway.config import GatewayConfig
 from gateway.rest_client import RestClient
 from gateway.session import session_from_config
+from gateway.stances import Stance, parse_stance
 from gateway.tools import GatewayContext
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,7 @@ def build_context(cfg: GatewayConfig | None = None) -> GatewayContext:
         client=RestClient(cfg.api_url, timeout=cfg.rest_timeout),
         session=session_from_config(cfg),
         trace_dir=cfg.trace_dir,
+        step_budget=cfg.step_budget,
     )
 
 
@@ -72,6 +74,27 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
     def destroy_arena(arena_id: str) -> dict:
         """Tear down an arena."""
         return tools.destroy_arena(ctx(), arena_id=arena_id)
+
+    # Per-stance tools: only register what the bound stance may use, so an
+    # agent's tool list reflects its stance (the runtime guard re-checks).
+    if parse_stance(cfg.stance) is Stance.attacker:
+        @mcp.tool()
+        def get_topology(arena_id: str) -> dict:
+            """The arena's nodes (IPs, URLs, which is the foothold) and networks."""
+            return tools.get_topology(ctx(), arena_id=arena_id)
+
+        @mcp.tool()
+        def list_targets(arena_id: str) -> dict:
+            """The in-scope targets (non-foothold nodes) and how to reach them."""
+            return tools.list_targets(ctx(), arena_id=arena_id)
+
+        @mcp.tool()
+        def run_command(arena_id: str, command: str, node: str | None = None,
+                        timeout: int = 30) -> dict:
+            """Run a shell command from the arena foothold; returns its output."""
+            return tools.run_command(
+                ctx(), arena_id=arena_id, command=command, node=node, timeout=timeout
+            )
 
     return mcp
 

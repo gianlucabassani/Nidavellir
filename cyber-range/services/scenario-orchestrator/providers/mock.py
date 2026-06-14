@@ -43,3 +43,12 @@ class MockProvider(RangeProvider):
     def destroy(self, instance_id):
         logger.info(f"[{instance_id}] 🎭 SIMULATING DESTROY...")
         return {"success": True}
+
+    def exec_in_node(self, instance_id, node, command, timeout=30):
+        logger.info(f"[{instance_id}] 🎭 SIMULATING exec on {node}: {command!r}")
+        return {
+            "success": True,
+            "exit_code": 0,
+            "stdout": f"[mock {node}] $ {command}\n(simulated; MOCK_MODE)\n",
+            "stderr": "",
+        }

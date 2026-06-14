@@ -43,6 +43,15 @@ class Orchestrator:
         logger.info(f"[{instance_id}] Destroy requested (provider: {self.provider.name})")
         return self.provider.destroy(instance_id)
 
+    def exec_in_node(self, instance_id: str, node: str, command: str, timeout: int = 30):
+        """Run a command inside an arena node (MCP attacker stance). Delegates
+        to the provider, which must run on the SAME backend the arena was
+        deployed with (recorded on the deployment)."""
+        logger.info(
+            f"[{instance_id}] exec on node {node!r} (provider: {self.provider.name})"
+        )
+        return self.provider.exec_in_node(instance_id, node, command, timeout)
+
     def _load_scenario(self, scenario_name: str) -> dict:
         """Load scenario YAML configuration (delegates to the registry)."""
         return load_scenario(scenario_name)

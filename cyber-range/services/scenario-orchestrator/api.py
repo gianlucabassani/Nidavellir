@@ -18,6 +18,7 @@ import config
 import scenarios
 from auth import Principal, ensure_bootstrap_key, require_principal
 from database import Database
+from orchestrator import Orchestrator
 from providers import available_providers, infra_class_of
 from states import IllegalTransition, LabStatus
 from tasks import deploy_lab, destroy_lab
@@ -52,6 +53,10 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 RATE_LIMIT_DEPLOY = os.getenv("RATE_LIMIT_DEPLOY", "10/minute")
 RATE_LIMIT_DESTROY = os.getenv("RATE_LIMIT_DESTROY", "30/minute")
+# Exec runs in an agent loop → more frequent than deploy/destroy.
+RATE_LIMIT_EXEC = os.getenv("RATE_LIMIT_EXEC", "120/minute")
+# Cap exec output returned over the API (the provider caps harder at source).
+EXEC_OUTPUT_CAP = 16384
 
 
 @app.get("/health")
@@ -357,6 +362,83 @@ def get_status(instance_id: str, principal: Principal = Depends(require_principa
             data["outputs"] = {}
 
     return data
+
+
+class ExecRequest(BaseModel):
+    node: str = Field(min_length=1, max_length=64)
+    command: str = Field(min_length=1, max_length=4096)
+    timeout: int = Field(default=30, ge=1, le=120)
+
+
+@app.post("/arenas/{instance_id}/exec")
+@limiter.limit(RATE_LIMIT_EXEC)
+async def exec_in_arena(
+    request: Request,
+    instance_id: str,
+    req: ExecRequest,
+    principal: Principal = Depends(require_principal),
+):
+    """Run a command inside an arena node (the MCP attacker stance's backend).
+
+    Synchronous — an agent needs the output back in-loop. Provider-enforced
+    (docker exec / SSH). Every exec is written to the `events` audit trail,
+    which also feeds the future defender stance. Node-scope (foothold-only) is
+    enforced by the gateway; this endpoint is the raw infra primitive.
+    """
+    record = db.get_deployment(instance_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    if record.get("status") != "active":
+        raise HTTPException(
+            status_code=409, detail=f"Arena is '{record.get('status')}', not active"
+        )
+
+    outputs = record.get("outputs") or {}
+    if isinstance(outputs, str):
+        try:
+            outputs = json.loads(outputs)
+        except json.JSONDecodeError:
+            outputs = {}
+    known = {
+        k[len("node_"):-len("_name")]
+        for k in outputs
+        if k.startswith("node_") and k.endswith("_name")
+    }
+    if known and req.node not in known:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown node '{req.node}' (arena nodes: {sorted(known)})",
+        )
+
+    orch = Orchestrator(provider_name=record.get("provider"))
+    try:
+        result = orch.exec_in_node(instance_id, req.node, req.command, req.timeout)
+    except NotImplementedError as e:
+        raise HTTPException(status_code=501, detail=str(e)) from e
+
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=502, detail=f"exec failed: {result.get('error', 'unknown error')}"
+        )
+
+    # Audit every command (also the defender stance's future feed).
+    db.record_event(
+        instance_id, "agent_exec",
+        {
+            "node": req.node,
+            "command": req.command[:512],
+            "exit_code": result.get("exit_code"),
+            "actor": principal.name,
+        },
+        actor=principal.name,
+    )
+    return {
+        "node": req.node,
+        "exit_code": result.get("exit_code"),
+        "stdout": (result.get("stdout") or "")[:EXEC_OUTPUT_CAP],
+        "stderr": (result.get("stderr") or "")[:EXEC_OUTPUT_CAP],
+    }
+
 
 if __name__ == "__main__":
     import uvicorn

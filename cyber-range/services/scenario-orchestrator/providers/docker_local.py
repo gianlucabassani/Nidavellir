@@ -272,6 +272,50 @@ class DockerLocalProvider(RangeProvider):
         except Exception:
             return "<no logs>"
 
+    # Cap captured output so a chatty command can't blow up the payload/DB.
+    EXEC_OUTPUT_CAP = 65536
+
+    def exec_in_node(self, instance_id, node, command, timeout=30):
+        container = self._find_node_container(instance_id, node)
+        if container is None:
+            return {"success": False, "error": f"node {node!r} not found in arena {instance_id}"}
+        try:
+            # `timeout` (coreutils/busybox) bounds the command inside the
+            # container — the SDK's exec has no native timeout. `sh -c` gives
+            # the agent a normal shell.
+            exit_code, output = container.exec_run(
+                ["timeout", str(int(timeout)), "sh", "-c", command], demux=True
+            )
+        except Exception as e:
+            logger.error(f"[{instance_id}] exec on {node} failed: {e}")
+            return {"success": False, "error": str(e)}
+
+        stdout, stderr = output if isinstance(output, tuple) else (output, None)
+        return {
+            "success": True,
+            "exit_code": exit_code,
+            "stdout": self._decode(stdout),
+            "stderr": self._decode(stderr),
+        }
+
+    def _find_node_container(self, instance_id, node):
+        name = self._container_name(instance_id, node)
+        try:
+            return self.client.containers.get(name)
+        except Exception:
+            # Fall back to the node label (handles any naming drift).
+            matches = self.client.containers.list(
+                all=True, filters={"label": f"{LABEL_LAB_ID}={instance_id}"}
+            )
+            return next((c for c in matches if c.labels.get(LABEL_NODE) == node), None)
+
+    @classmethod
+    def _decode(cls, raw) -> str:
+        if not raw:
+            return ""
+        text = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)
+        return text[: cls.EXEC_OUTPUT_CAP]
+
     def destroy(self, instance_id):
         try:
             label_filter = {"label": f"{LABEL_LAB_ID}={instance_id}"}

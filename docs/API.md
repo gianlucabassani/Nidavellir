@@ -132,6 +132,23 @@ with `422`. Images are pulled on first launch; a target that exits immediately
 is surfaced as `node_<name>_state: "exited"` + `unhealthy_nodes` in the arena
 status, not a silent success.
 
+### In-arena command execution
+
+`POST /arenas/{instance_id}/exec` — run a command inside an arena node and get
+its output. This is the backend the MCP gateway's attacker-stance `run_command`
+tool proxies (foothold-scope is enforced at the gateway; this endpoint is the
+raw infra primitive). Synchronous; provider-enforced (`docker exec`, SSH for VM
+providers once wired). **Every exec is written to the `events` audit trail.**
+
+```json
+{ "node": "jump", "command": "nmap -sV 10.0.0.2", "timeout": 30 }
+→ { "node": "jump", "exit_code": 0, "stdout": "...", "stderr": "" }
+```
+
+`404` unknown arena/node · `409` arena not `active` · `501` provider has no exec
+(VM providers, for now) · `422` empty command or out-of-range timeout (1–120s).
+Output is capped; the command is bounded to 4096 chars.
+
 ### Response Format
 
 All responses are JSON with the following structure:

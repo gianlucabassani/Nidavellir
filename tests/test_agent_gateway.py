@@ -39,12 +39,28 @@ class _FakeRestClient:
 
     def status(self, api_key, instance_id):
         self.calls.append(("status", api_key, instance_id))
-        return {"status": "active", "scenario": "basic_pentest",
-                "outputs": {"node_jump_private_ip": "10.0.0.5"}}
+        return {
+            "status": "active", "scenario": "basic_pentest",
+            "outputs": {
+                # foothold (has a shell command) + one web target
+                "node_jump_name": "cg-x-jump",
+                "node_jump_private_ip": "10.0.0.3",
+                "node_jump_ssh_command": "docker exec -it cg-x-jump /bin/bash",
+                "node_web_name": "cg-x-web",
+                "node_web_private_ip": "10.0.0.2",
+                "node_web_url": "http://127.0.0.1:32768",
+                "node_web_state": "running",
+                "lab_networks": ["cyberguard-x-lab"],
+            },
+        }
 
     def destroy(self, api_key, instance_id):
         self.calls.append(("destroy", api_key, instance_id))
         return {"status": "accepted"}
+
+    def exec_command(self, api_key, arena_id, node, command, timeout=30):
+        self.calls.append(("exec", api_key, arena_id, node, command, timeout))
+        return {"node": node, "exit_code": 0, "stdout": f"ran: {command}\n", "stderr": ""}
 
 
 def _ctx(stance=Stance.attacker, trace_dir=None, client=None):
@@ -71,9 +87,15 @@ def test_lifecycle_tools_allowed_for_every_session():
         assert {"list_scenarios", "deploy_arena", "destroy_arena"} <= tools_allowed
 
 
-def test_execution_tools_absent_in_skeleton():
-    # No stance exposes run_command/observe/etc. yet — that increment is gated.
-    assert not Session("k", Stance.attacker).can_use("run_command")
+def test_attacker_owns_exec_and_recon_tools():
+    atk = Session("k", Stance.attacker)
+    assert atk.can_use("run_command")
+    assert atk.can_use("list_targets")
+    assert atk.can_use("get_topology")
+    # other stances do NOT get the attacker toolset
+    assert not Session("k", Stance.defender).can_use("run_command")
+    assert not Session("k", Stance.mitm).can_use("run_command")
+    # tools for the not-yet-built stances stay absent
     assert not Session("k", Stance.defender).can_use("query_events")
 
 
@@ -124,11 +146,11 @@ def test_get_briefing_composes_status_scenario_and_roe():
     assert any("egress" in r for r in brief["rules_of_engagement"])
 
 
-def test_tool_call_blocked_when_stance_disallows(monkeypatch):
-    # Simulate a future exec tool not in any allow-list.
-    ctx = _ctx()
+def test_tool_call_blocked_when_stance_disallows():
+    # A tool that is in no allow-list must be refused for any stance.
+    ctx = _ctx(stance=Stance.attacker)
     with pytest.raises(ToolNotAllowed):
-        tools._guard(ctx, "run_command")
+        tools._guard(ctx, "delete_everything")
 
 
 # --- tracing -----------------------------------------------------------------
@@ -188,7 +210,7 @@ def test_rest_client_raises_on_error_status():
 # --- server wiring -----------------------------------------------------------
 
 
-def test_server_registers_exactly_the_lifecycle_tools():
+def test_unbound_session_registers_exactly_the_lifecycle_tools():
     import asyncio
 
     from gateway.server import build_server
@@ -197,3 +219,76 @@ def test_server_registers_exactly_the_lifecycle_tools():
     mcp = build_server(GatewayConfig(env={"CYBERGUARD_GATEWAY_HOST": "127.0.0.1"}))
     names = {t.name for t in asyncio.run(mcp.list_tools())}
     assert names == set(LIFECYCLE_TOOLS)
+
+
+def test_attacker_session_also_registers_the_attacker_tools():
+    import asyncio
+
+    from gateway.server import build_server
+
+    mcp = build_server(GatewayConfig(env={"CYBERGUARD_STANCE": "attacker"}))
+    names = {t.name for t in asyncio.run(mcp.list_tools())}
+    assert {"run_command", "list_targets", "get_topology"} <= names
+
+
+# --- attacker stance: run_command + recon ------------------------------------
+
+
+def test_run_command_resolves_the_foothold_and_execs():
+    ctx = _ctx(stance=Stance.attacker)
+    out = tools.run_command(ctx, "arena-1", "id")
+    assert out["exit_code"] == 0
+    exec_call = next(c for c in ctx.client.calls if c[0] == "exec")
+    # foothold auto-resolved from the arena outputs (the node with a shell cmd)
+    assert exec_call[3] == "jump"
+    assert exec_call[4] == "id"
+
+
+def test_run_command_refuses_a_non_foothold_node():
+    ctx = _ctx(stance=Stance.attacker)
+    # 'web' is a target, not a foothold → attacker scope violation
+    with pytest.raises(ToolNotAllowed):
+        tools.run_command(ctx, "arena-1", "whoami", node="web")
+
+
+def test_run_command_charges_the_budget():
+    from gateway.tools import BudgetExceeded
+
+    ctx = _ctx(stance=Stance.attacker)
+    ctx.step_budget = 1
+    tools.run_command(ctx, "arena-1", "echo 1")
+    with pytest.raises(BudgetExceeded):
+        tools.run_command(ctx, "arena-1", "echo 2")
+
+
+def test_run_command_is_traced(tmp_path):
+    ctx = _ctx(stance=Stance.attacker, trace_dir=str(tmp_path))
+    tools.run_command(ctx, "arena-1", "nmap -sV 10.0.0.2")
+    line = (tmp_path / "arena-1.jsonl").read_text().strip()
+    entry = json.loads(line)
+    assert entry["tool"] == "run_command"
+    assert entry["args"]["node"] == "jump"
+    assert "cg_secret_key" not in line
+
+
+def test_list_targets_excludes_the_foothold():
+    ctx = _ctx(stance=Stance.attacker)
+    targets = tools.list_targets(ctx, "arena-1")["targets"]
+    names = {t["node"] for t in targets}
+    assert names == {"web"}  # 'jump' (foothold) excluded
+    assert targets[0]["url"] == "http://127.0.0.1:32768"
+
+
+def test_get_topology_marks_the_foothold():
+    ctx = _ctx(stance=Stance.attacker)
+    topo = tools.get_topology(ctx, "arena-1")
+    by_node = {n["node"]: n for n in topo["nodes"]}
+    assert by_node["jump"]["foothold"] is True
+    assert by_node["web"]["foothold"] is False
+    assert topo["networks"] == ["cyberguard-x-lab"]
+
+
+def test_defender_cannot_run_command():
+    ctx = _ctx(stance=Stance.defender)
+    with pytest.raises(ToolNotAllowed):
+        tools.run_command(ctx, "arena-1", "id")

@@ -349,6 +349,12 @@ def test_real_container_lab_lifecycle():
             filters={"label": f"{LABEL_LAB_ID}={instance_id}"}
         )
         assert network.name == outputs["lab_network"]
+
+        # Attacker-stance exec works against a real container.
+        exec_res = provider.exec_in_node(instance_id, "attacker", "echo cyberguard-ok")
+        assert exec_res["success"] is True, exec_res.get("error")
+        assert exec_res["exit_code"] == 0
+        assert "cyberguard-ok" in exec_res["stdout"]
     finally:
         assert provider.destroy(instance_id)["success"] is True
 

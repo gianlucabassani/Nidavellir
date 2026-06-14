@@ -41,3 +41,22 @@ class RangeProvider(ABC):
     def destroy(self, instance_id: str) -> dict:
         """Tear down the instance. Must be idempotent: destroying an
         unknown/already-gone instance is success, not an error."""
+
+    def exec_in_node(
+        self,
+        instance_id: str,
+        node: str,
+        command: str,
+        timeout: int = 30,
+    ) -> dict:
+        """Run a shell command inside an arena node and capture its output.
+
+        Backs the MCP attacker stance's `run_command` (and, later, objective
+        verification). Result contract:
+            {"success": True, "exit_code": int, "stdout": str, "stderr": str}
+          | {"success": False, "error": "..."}
+        Not every backend supports exec (VM providers need SSH wiring first);
+        the default refuses cleanly rather than pretending."""
+        raise NotImplementedError(
+            f"the {self.name!r} provider does not support exec_in_node yet"
+        )

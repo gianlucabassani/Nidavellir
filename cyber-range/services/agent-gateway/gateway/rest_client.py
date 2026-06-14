@@ -71,3 +71,10 @@ class RestClient:
 
     def list_deployments(self, api_key: str) -> dict:
         return self._request("GET", "/deployments", api_key)
+
+    def exec_command(self, api_key: str, arena_id: str, node: str, command: str,
+                     timeout: int = 30) -> dict:
+        return self._request(
+            "POST", f"/arenas/{arena_id}/exec", api_key,
+            json={"node": node, "command": command, "timeout": timeout},
+        )

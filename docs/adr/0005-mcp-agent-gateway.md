@@ -1,6 +1,8 @@
 # ADR-0005: MCP agent gateway — protocol, stances & guardrails
 
-- **Status:** Proposed (skeleton landed: lifecycle tools + auth + stance binding)
+- **Status:** Proposed (landed: lifecycle tools + auth + stance binding; the
+  **attacker** stance — `get_topology`/`list_targets`/`run_command` with
+  foothold-scope, step-budget, audit + trace, and a provider exec primitive)
 - **Date:** 2026-06-14
 - **Deciders:** CyberGuard maintainers
 

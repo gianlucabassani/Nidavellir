@@ -29,3 +29,6 @@ class GatewayConfig:
         self.rest_timeout = float(env.get("CYBERGUARD_REST_TIMEOUT", "15"))
         # Where per-arena JSONL traces are written; unset → no file trace.
         self.trace_dir = env.get("CYBERGUARD_TRACE_DIR") or None
+        # Max commanding tool calls per session (0 = unlimited). A coarse
+        # backstop; durable/cross-process budgets are future work.
+        self.step_budget = int(env.get("CYBERGUARD_STEP_BUDGET", "0"))

@@ -11,7 +11,9 @@ guardrails land in a later, separately-reviewed increment — see
 This service is **not an AI.** The agent (model + key) is the user's; the
 gateway is the integration surface (scope boundary in `VISION.md`).
 
-## Tools (this skeleton)
+## Tools
+
+**Lifecycle** (every session):
 
 | Tool | Proxies | Notes |
 |------|---------|-------|
@@ -20,6 +22,17 @@ gateway is the integration surface (scope boundary in `VISION.md`).
 | `arena_status(arena_id)` | `GET /status/{id}` | poll until `active`; includes outputs |
 | `get_briefing(arena_id)` | status + registry | stance, scenario, rules of engagement |
 | `destroy_arena(arena_id)` | `DELETE /destroy/{id}` | always available |
+
+**Attacker stance** (`CYBERGUARD_STANCE=attacker`):
+
+| Tool | Backend | Notes |
+|------|---------|-------|
+| `get_topology(arena_id)` | `GET /status` | nodes (IP/URL/state) + networks; marks the foothold |
+| `list_targets(arena_id)` | `GET /status` | in-scope targets (non-foothold nodes) + how to reach them |
+| `run_command(arena_id, command, node?, timeout?)` | `POST /arenas/{id}/exec` | shell on the **foothold only**; budget-charged; audited + traced |
+
+MITM and defender toolsets are the next increments (see the resume plan in
+`.agent/STATE.md`).
 
 ## Run
 

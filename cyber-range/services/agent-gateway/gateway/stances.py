@@ -23,10 +23,11 @@ LIFECYCLE_TOOLS = frozenset(
     {"list_scenarios", "deploy_arena", "arena_status", "get_briefing", "destroy_arena"}
 )
 
-# Per-stance execution toolsets. EMPTY until the run_command / observe / detect
-# increment (which carries the command-execution + containment guardrails).
+# Per-stance execution/recon toolsets, gated by stance.
+#   attacker — recon the arena and run commands from the foothold (offensive).
+#   MITM / defender — land in the next increments (intercept / detect).
 STANCE_TOOLS: dict[Stance, frozenset[str]] = {
-    Stance.attacker: frozenset(),
+    Stance.attacker: frozenset({"get_topology", "list_targets", "run_command"}),
     Stance.mitm: frozenset(),
     Stance.defender: frozenset(),
 }
