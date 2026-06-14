@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Launch{% endblock %}
+{% block crumb %}<a href="{{ url_for('arenas') }}">Arenas</a> / <b>Launch</b>{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Launch an arena</h1>
+    <div class="sub">Deploy a predefined scenario, or assemble a custom lab from the image catalog.</div>
+  </div>
+</div>
+
+<div class="grid cols-2">
+
+  <!-- predefined scenario -->
+  <div class="card">
+    <div class="flexrow" style="margin-bottom:14px">
+      <span class="badge badge--accent"><i class="fa-solid fa-cubes"></i> Scenario</span>
+      <h3 style="margin:0">Deploy a scenario</h3>
+    </div>
+    <form action="{{ url_for('create_lab') }}" method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field">
+        <label class="label">Instance name</label>
+        <input class="input mono" type="text" name="instance_id" placeholder="lab-team-1" required
+               pattern="[a-z0-9][a-z0-9-]{0,39}" title="Lowercase letters, digits and hyphens (max 40)">
+      </div>
+      <div class="field">
+        <label class="label">Scenario</label>
+        <select class="select" name="scenario">
+          {% for s in scenarios %}
+          <option value="{{ s.id }}" title="{{ s.description }}">
+            {{ s.name }} · {{ s.difficulty }} · {{ s.nodes }} node{{ 's' if s.nodes != 1 }}{% if s.provider_class != 'container' %} · ⚠ VM{% endif %}
+          </option>
+          {% else %}
+          <option value="container_web_pentest">Web Pentest Lab (Containers)</option>
+          {% endfor %}
+        </select>
+        <div class="help">
+          Container scenarios deploy locally in seconds. <b>VM</b> scenarios need a
+          cloud provider (OpenStack/AWS) and will not run on the default local stack.
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">
+        <i class="fa-solid fa-rocket"></i> Launch scenario
+      </button>
+    </form>
+  </div>
+
+  <!-- custom lab builder -->
+  <div class="card">
+    <div class="flexrow" style="margin-bottom:14px">
+      <span class="badge badge--accent"><i class="fa-solid fa-screwdriver-wrench"></i> Custom</span>
+      <h3 style="margin:0">Build a custom lab</h3>
+    </div>
+    <p class="muted" style="margin-top:0;font-size:13px">
+      Pick an attacker box and one or more targets. Images are pulled on first launch (docker-local).
+    </p>
+    <form action="{{ url_for('build_custom') }}" method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field">
+        <label class="label">Instance name</label>
+        <input class="input mono" type="text" name="instance_id" placeholder="my-lab" required
+               pattern="[a-z0-9][a-z0-9-]{0,39}" title="Lowercase letters, digits and hyphens (max 40)">
+      </div>
+      <div class="field">
+        <label class="label">Attacker</label>
+        <select class="select" name="attacker" required>
+          {% for a in attackers %}
+          <option value="{{ a.id }}" title="{{ a.description }}">{{ a.name }} ({{ a.access }})</option>
+          {% else %}
+          <option disabled>catalog unavailable</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label class="label">Target(s) — ctrl / ⌘-click for several</label>
+        <select class="select" name="victims" multiple size="4" required>
+          {% for v in victims %}
+          <option value="{{ v.id }}" title="{{ v.description }}">{{ v.name }}{% if v.access == 'web' %} · web{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">
+        <i class="fa-solid fa-screwdriver-wrench"></i> Build lab
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}

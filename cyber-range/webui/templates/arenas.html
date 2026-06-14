@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}Arenas{% endblock %}
+{% block crumb %}<b>Arenas</b>{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Arenas</h1>
+    <div class="sub">Running and recent arena deployments.</div>
+  </div>
+  <div class="actions">
+    <a href="{{ url_for('launch') }}" class="btn btn-primary"><i class="fa-solid fa-rocket"></i> Launch arena</a>
+  </div>
+</div>
+
+<div class="card pad-0" style="margin-bottom:18px">
+  {% if current %}
+  <div class="rows">
+    {% for id, info in current.items() %}
+    <div class="row-item">
+      {{ ui.status_dot(info.status) }}
+      <div class="grow">
+        <div class="title">{{ info.user_id }}</div>
+        <div class="meta">{{ info.scenario }} · <span class="mono faint">{{ id[:8] }}</span></div>
+      </div>
+      {{ ui.status_badge(info.status) }}
+      <div class="acts">
+        {% if info.status == 'active' %}
+        <a href="{{ url_for('arena_detail', instance_id=id) }}" class="btn btn-sm"><i class="fa-solid fa-diagram-project"></i> Open</a>
+        {% elif info.status in ('failed', 'error_destroying') %}
+        <span class="muted" style="font-size:12px" title="{{ info.error or 'unknown error' }}"><i class="fa-solid fa-circle-exclamation"></i> error</span>
+        {% else %}
+        <span class="muted" style="font-size:12px"><i class="fa-solid fa-circle-notch fa-spin"></i> working…</span>
+        {% endif %}
+        <form action="{{ url_for('destroy_lab_form', instance_id=id) }}" method="POST"
+              onsubmit="return confirm('Destroy {{ info.user_id }}? This is irreversible.')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-danger" title="Destroy arena"><i class="fa-solid fa-trash-can"></i></button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty"><div class="ico"><i class="fa-solid fa-ghost"></i></div>
+    No active arenas. <a href="{{ url_for('launch') }}" style="color:var(--accent)">Launch one →</a>
+  </div>
+  {% endif %}
+</div>
+
+{% if archived %}
+<div class="card pad-0">
+  <div class="card-head">
+    <h3>Archive <span class="muted" style="font-weight:400">· {{ archived|length }} destroyed</span></h3>
+    <div class="spacer"></div>
+    <form action="{{ url_for('archive_clear') }}" method="POST"
+          onsubmit="return confirm('Remove all {{ archived|length }} archived record(s)?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-sm btn-ghost"><i class="fa-solid fa-broom"></i> Clear all</button>
+    </form>
+  </div>
+  <div class="rows">
+    {% for id, info in archived.items() %}
+    <div class="row-item" style="opacity:.6">
+      {{ ui.status_dot('destroyed') }}
+      <div class="grow"><div class="title">{{ info.user_id }}</div><div class="meta">{{ info.scenario }}</div></div>
+      {{ ui.status_badge('destroyed') }}
+      <form action="{{ url_for('archive_delete', instance_id=id) }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-sm btn-ghost" title="Remove from archive"><i class="fa-solid fa-xmark"></i></button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

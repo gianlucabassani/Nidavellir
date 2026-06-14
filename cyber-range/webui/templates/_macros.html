@@ -1,0 +1,22 @@
+{# Shared presentation helpers — status → badge / dot #}
+
+{% macro _cls(status) %}
+{%- if status == 'active' -%}ok
+{%- elif status in ('pending', 'deploying') -%}warn
+{%- elif status == 'destroying' -%}destroying
+{%- elif status in ('failed', 'error_destroying') -%}failed
+{%- elif status == 'destroyed' -%}destroyed
+{%- else -%}idle{%- endif -%}
+{% endmacro %}
+
+{% macro status_badge(status) %}
+  {%- set c = _cls(status) | trim -%}
+  {%- set m = {'ok':'ok','warn':'warn','destroying':'danger','failed':'danger','destroyed':'idle','idle':'idle'} -%}
+  <span class="badge badge--{{ m[c] }}">{{ (status or 'unknown') | replace('_',' ') | upper }}</span>
+{% endmacro %}
+
+{% macro status_dot(status) %}
+  {%- set c = _cls(status) | trim -%}
+  {%- set pulse = 'pulse' if status in ('pending','deploying','destroying') else '' -%}
+  <span class="dot dot--{{ c }} {{ pulse }}"></span>
+{% endmacro %}

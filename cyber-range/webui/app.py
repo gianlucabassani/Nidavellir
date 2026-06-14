@@ -1,5 +1,6 @@
 import hmac
 import os
+import re
 
 import requests
 from flask import (
@@ -16,40 +17,83 @@ from flask_wtf import CSRFProtect
 
 app = Flask(__name__)
 # Never hardcode the secret: it signs session cookies/flash messages.
-# Set SECRET_KEY in the environment for any non-local deployment.
 app.secret_key = os.getenv("SECRET_KEY", "dev-insecure-change-me")
-# CSRF on every state-changing route (SECURITY #3). Forms embed the token via
-# {{ csrf_token() }}; JS fetches send it as the X-CSRFToken header.
 csrf = CSRFProtect(app)
 API_URL = os.getenv("ORCHESTRATOR_URL", "http://localhost:8000")
 
-# Surfaced in the UI so users know lab links/credentials are simulated.
-MOCK_MODE = os.getenv("MOCK_MODE", "false").lower() == "true"
-
 # Key the WebUI uses to authenticate against the orchestrator API (ADR-0002).
-# The default matches the compose-stack bootstrap key for the mock demo only.
 API_KEY = os.getenv("ORCHESTRATOR_API_KEY", "dev-insecure-key")
 API_HEADERS = {"X-API-Key": API_KEY}
 
-# Operator login for the dashboard itself. Defaults are for the local mock
-# demo; any reachable deployment must override both (see docs/SECURITY.md).
+# Operator login for the dashboard itself.
 WEBUI_USERNAME = os.getenv("WEBUI_USERNAME", "admin")
 WEBUI_PASSWORD = os.getenv("WEBUI_PASSWORD", "cyberguard")
 
 if WEBUI_PASSWORD == "cyberguard":  # noqa: S105 - detecting the default, not setting it
     app.logger.warning(
-        "WEBUI_PASSWORD is the well-known default — fine for the local mock "
-        "demo, NEVER for a reachable deployment."
+        "WEBUI_PASSWORD is the well-known default — fine for the local demo, "
+        "NEVER for a reachable deployment."
     )
 
+_TRANSIENT = ("pending", "deploying", "destroying")
 
+
+# --- orchestrator API helpers ------------------------------------------------
+def _api_get(path, timeout=5):
+    """GET {API_URL}{path}; returns (json_or_None, ok)."""
+    try:
+        resp = requests.get(f"{API_URL}{path}", headers=API_HEADERS, timeout=timeout)
+        if resp.status_code == 200:
+            return resp.json(), True
+        if resp.status_code == 401:
+            flash("Backend rejected the WebUI API key (check ORCHESTRATOR_API_KEY)", "danger")
+        return None, False
+    except requests.RequestException:
+        return None, False
+
+
+def _deployments():
+    data, ok = _api_get("/deployments")
+    return (data or {}), ok
+
+
+def _scenarios():
+    data, _ = _api_get("/scenarios")
+    return (data or {}).get("scenarios", [])
+
+
+def _catalog():
+    data, _ = _api_get("/catalog")
+    images = (data or {}).get("images", [])
+    attackers = [i for i in images if i["kind"] == "attacker" and i["available"]]
+    victims = [i for i in images if i["kind"] == "victim" and i["available"]]
+    return images, attackers, victims
+
+
+def _parse_nodes(outputs):
+    """Flatten the provider's per-node outputs into a render-friendly list."""
+    nodes = []
+    for key in outputs:
+        m = re.match(r"^node_(.+)_name$", key)
+        if not m:
+            continue
+        n = m.group(1)
+        ssh = outputs.get(f"node_{n}_ssh_command")
+        url = outputs.get(f"node_{n}_url")
+        nodes.append({
+            "name": n,
+            "ip": outputs.get(f"node_{n}_private_ip", ""),
+            "state": outputs.get(f"node_{n}_state", "running"),
+            "url": url,
+            "ssh": ssh,
+            "foothold": bool(ssh),
+        })
+    return sorted(nodes, key=lambda x: (not x["foothold"], x["name"]))
+
+
+# --- auth --------------------------------------------------------------------
 @app.before_request
 def require_login():
-    """Every route except the login page and static assets needs a session.
-
-    /api/health is also open: it only mirrors the orchestrator's own
-    unauthenticated liveness probe, and the nav badge needs it pre-login.
-    """
     if request.endpoint in ("login", "static", "orchestrator_health"):
         return None
     if not session.get("logged_in"):
@@ -57,112 +101,161 @@ def require_login():
     return None
 
 
-@app.route('/login', methods=['GET', 'POST'])
+@app.route("/login", methods=["GET", "POST"])
 def login():
-    if request.method == 'POST':
-        username = request.form.get('username', '')
-        password = request.form.get('password', '')
-        user_ok = hmac.compare_digest(username, WEBUI_USERNAME)
-        pass_ok = hmac.compare_digest(password, WEBUI_PASSWORD)
-        if user_ok and pass_ok:
-            session['logged_in'] = True
-            session['username'] = username
-            target = request.args.get('next') or url_for('lobby')
-            # Only follow relative targets — never an absolute/external URL.
-            if not target.startswith('/'):
-                target = url_for('lobby')
+    if request.method == "POST":
+        username = request.form.get("username", "")
+        password = request.form.get("password", "")
+        if hmac.compare_digest(username, WEBUI_USERNAME) and hmac.compare_digest(password, WEBUI_PASSWORD):
+            session["logged_in"] = True
+            session["username"] = username
+            target = request.args.get("next") or url_for("overview")
+            if not target.startswith("/"):
+                target = url_for("overview")
             return redirect(target)
         flash("Invalid credentials", "danger")
-    return render_template('login.html')
+    return render_template("login.html")
 
 
-@app.route('/logout', methods=['POST'])
+@app.route("/logout", methods=["POST"])
 def logout():
     session.clear()
-    return redirect(url_for('login'))
+    return redirect(url_for("login"))
 
 
-@app.route('/')
-def lobby():
-    """Lobby: List all active scenarios"""
-    deployments, scenarios, catalog_images = {}, [], []
-    try:
-        # Calls the Correct Endpoint /deployments
-        resp = requests.get(f"{API_URL}/deployments", headers=API_HEADERS, timeout=5)
-        deployments = resp.json() if resp.status_code == 200 else {}
-        if resp.status_code == 401:
-            flash("Backend rejected the WebUI API key (check ORCHESTRATOR_API_KEY)", "danger")
+# --- pages -------------------------------------------------------------------
+@app.route("/")
+def overview():
+    deployments, ok = _deployments()
+    scenarios = _scenarios()
+    images, _, _ = _catalog()
 
-        # Scenario registry drives the launch dropdown (no hardcoded list)
-        reg = requests.get(f"{API_URL}/scenarios", headers=API_HEADERS, timeout=5)
-        if reg.status_code == 200:
-            scenarios = reg.json().get("scenarios", [])
+    by = {}
+    for v in deployments.values():
+        by[v.get("status")] = by.get(v.get("status"), 0) + 1
+    stats = {
+        "total": len(deployments),
+        "active": by.get("active", 0),
+        "transient": sum(by.get(s, 0) for s in _TRANSIENT),
+        "failed": by.get("failed", 0) + by.get("error_destroying", 0),
+        "scenarios": len(scenarios),
+        "images": len(images),
+    }
+    current = [(k, v) for k, v in deployments.items() if v.get("status") != "destroyed"]
+    archived = [(k, v) for k, v in deployments.items() if v.get("status") == "destroyed"]
+    recent = (current + archived)[:6]
 
-        # Curated image catalog drives the manual "build a custom arena" form.
-        cat = requests.get(f"{API_URL}/catalog", headers=API_HEADERS, timeout=5)
-        if cat.status_code == 200:
-            catalog_images = cat.json().get("images", [])
-    except requests.RequestException:
-        flash("Backend Offline", "danger")
+    return render_template("overview.html", active="overview", stats=stats,
+                           recent=recent, backend_ok=ok)
 
-    attackers = [i for i in catalog_images if i["kind"] == "attacker" and i["available"]]
-    victims = [i for i in catalog_images if i["kind"] == "victim" and i["available"]]
 
-    # Destroyed labs are history, not missions: keep the main view clean and
-    # park them in a collapsed archive section.
-    current = {k: v for k, v in deployments.items() if v.get('status') != 'destroyed'}
-    archived = {k: v for k, v in deployments.items() if v.get('status') == 'destroyed'}
+@app.route("/arenas")
+def arenas():
+    deployments, _ = _deployments()
+    current = {k: v for k, v in deployments.items() if v.get("status") != "destroyed"}
+    archived = {k: v for k, v in deployments.items() if v.get("status") == "destroyed"}
+    return render_template("arenas.html", active="arenas", current=current, archived=archived)
 
+
+@app.route("/launch")
+def launch():
+    _, attackers, victims = _catalog()
+    return render_template("launch.html", active="launch",
+                           scenarios=_scenarios(), attackers=attackers, victims=victims)
+
+
+@app.route("/scenarios")
+def scenarios():
+    _, attackers, victims = _catalog()
+    return render_template("scenarios.html", active="scenarios",
+                           scenarios=_scenarios(), attackers=attackers, victims=victims)
+
+
+@app.route("/arena/<instance_id>")
+def arena_detail(instance_id):
+    data, ok = _api_get(f"/status/{instance_id}")
+    if not ok or data is None:
+        flash(f"Arena {instance_id} not found.", "warning")
+        return redirect(url_for("arenas"))
+    outputs = data.get("outputs", {}) or {}
     return render_template(
-        'lobby.html',
-        deployments=current,
-        archived=archived,
-        scenarios=scenarios,
-        attackers=attackers,
-        victims=victims,
-        mock_mode=MOCK_MODE,
+        "arena_detail.html", active="arenas",
+        instance_id=instance_id,
+        instance_name=data.get("user_id", instance_id),
+        state=data.get("status", "unknown"),
+        outputs=outputs,
+        nodes=_parse_nodes(outputs),
+        unhealthy=outputs.get("unhealthy_nodes"),
+        provider=outputs.get("provider") or data.get("provider"),
     )
 
 
-@app.route('/dashboard/<instance_id>')
-def dashboard(instance_id):
-    """Specific Mission Control for one lab"""
-    try:
-        resp = requests.get(
-            f"{API_URL}/status/{instance_id}", headers=API_HEADERS, timeout=5
-        )
+# --- planned (TODO) sections -------------------------------------------------
+_STUBS = {
+    "agents": {
+        "feature": "Agents", "icon": "fa-robot",
+        "summary": "Connect and observe bring-your-own AI agents through the MCP gateway.",
+        "blurb": "Agents reach an arena only through the MCP gateway, wired in as "
+                 "attacker, MITM, or defender. This page will manage those connections "
+                 "and replay what each agent did, step by step.",
+        "todo": [
+            {"title": "Gateway connections", "note": "attacker / MITM / defender stances"},
+            {"title": "Live agent traces", "note": "per-step command + output timeline"},
+            {"title": "Budgets & kill switch", "note": "step / time / token limits per agent"},
+        ],
+        "roadmap": "Phase 2 — MCP agent gateway & stances",
+    },
+    "audit": {
+        "feature": "Audit", "icon": "fa-clipboard-list",
+        "summary": "Immutable event trail across every arena and agent action.",
+        "blurb": "Every deploy, exec, and lifecycle change is already recorded in the "
+                 "append-only events table. This view will stream, filter, and export it.",
+        "todo": [
+            {"title": "Live event stream", "note": "feed from the events table (SSE)"},
+            {"title": "Filter & search", "note": "by arena, actor, type, time window"},
+            {"title": "Trace export", "note": "red/blue datasets for replay & eval"},
+        ],
+        "roadmap": "Phase 7 — SSE console · Phase 4 — trace export",
+    },
+    "settings": {
+        "feature": "Settings", "icon": "fa-gear",
+        "summary": "Operator profile, API keys and console preferences.",
+        "blurb": "Manage your operator identity, issue and revoke API keys for agents "
+                 "and operators, and set console defaults.",
+        "todo": [
+            {"title": "Profile", "note": "display name, password"},
+            {"title": "API keys", "note": "issue / revoke agent + operator keys"},
+            {"title": "Preferences", "note": "default provider, arena TTL"},
+        ],
+        "roadmap": "Phase 5 — ownership / RBAC & quotas",
+    },
+}
 
-        if resp.status_code != 200:
-            flash(f"Instance {instance_id} not found.", "warning")
-            return redirect(url_for('lobby'))
 
-        data = resp.json()
-
-        # Passes Dict to template (Fixed "str object" error)
-        return render_template('dashboard.html',
-                             instance_id=instance_id,
-                             instance_name=data.get('user_id', 'Unknown'),
-                             status=data.get('outputs', {}),
-                             state=data.get('status', 'unknown'),
-                             mock_mode=MOCK_MODE)
-    except requests.RequestException as e:
-        app.logger.error(f"Dashboard error for {instance_id}: {e}")
-        return redirect(url_for('lobby'))
+@app.route("/agents")
+def agents():
+    return render_template("stub.html", active="agents", **_STUBS["agents"])
 
 
-@app.route('/create', methods=['POST'])
+@app.route("/audit")
+def audit():
+    return render_template("stub.html", active="audit", **_STUBS["audit"])
+
+
+@app.route("/settings")
+def settings():
+    return render_template("stub.html", active="settings", **_STUBS["settings"])
+
+
+# --- actions -----------------------------------------------------------------
+@app.route("/create", methods=["POST"])
 def create_lab():
-    scenario = request.form.get('scenario')
-    instance_id = request.form.get('instance_id')
-
-    # Calls Correct Endpoint /deploy with Correct Keys
     try:
         resp = requests.post(f"{API_URL}/deploy", json={
-            "scenario": scenario,
-            "instance_id": instance_id
+            "scenario": request.form.get("scenario"),
+            "instance_id": request.form.get("instance_id"),
         }, headers=API_HEADERS, timeout=5)
         if resp.status_code == 422:
-            # Surface the API's validation message (e.g. bad name, unknown scenario)
             try:
                 detail = resp.json()["detail"][0]["msg"]
             except (ValueError, LookupError):
@@ -170,31 +263,25 @@ def create_lab():
             flash(f"Launch rejected: {detail}", "warning")
         elif resp.status_code != 200:
             flash(f"Deploy failed (HTTP {resp.status_code})", "danger")
+        else:
+            flash(f"Launching '{request.form.get('instance_id')}'…", "info")
     except requests.RequestException as e:
         flash(f"Deploy failed: {e}", "danger")
+    return redirect(url_for("arenas"))
 
-    return redirect(url_for('lobby'))
 
-
-@app.route('/build-custom', methods=['POST'])
+@app.route("/build-custom", methods=["POST"])
 def build_custom():
-    """Manual scenario creator: build a custom arena from catalog picks."""
-    instance_id = request.form.get('instance_id')
-    attacker = request.form.get('attacker')
-    victims = request.form.getlist('victims')
-
+    instance_id = request.form.get("instance_id")
+    attacker = request.form.get("attacker")
+    victims = request.form.getlist("victims")
     try:
         resp = requests.post(f"{API_URL}/arenas/custom", json={
-            "instance_id": instance_id,
-            "attacker": attacker,
-            "victims": victims,
+            "instance_id": instance_id, "attacker": attacker, "victims": victims,
         }, headers=API_HEADERS, timeout=10)
         if resp.status_code == 200:
-            flash(
-                f"Building arena '{instance_id}': {attacker} vs "
-                f"{', '.join(victims)} (images are pulled on first use)",
-                "info",
-            )
+            flash(f"Building '{instance_id}': {attacker} vs {', '.join(victims)} "
+                  "(images pulled on first use)", "info")
         elif resp.status_code == 422:
             try:
                 detail = resp.json()["detail"]
@@ -207,16 +294,12 @@ def build_custom():
             flash(f"Build failed (HTTP {resp.status_code})", "danger")
     except requests.RequestException as e:
         flash(f"Build failed: {e}", "danger")
-
-    return redirect(url_for('lobby'))
+    return redirect(url_for("arenas"))
 
 
 def _request_destroy(instance_id):
-    """Ask the orchestrator to destroy a lab. Returns (ok, message)."""
     try:
-        resp = requests.delete(
-            f"{API_URL}/destroy/{instance_id}", headers=API_HEADERS, timeout=10
-        )
+        resp = requests.delete(f"{API_URL}/destroy/{instance_id}", headers=API_HEADERS, timeout=10)
     except requests.RequestException:
         return False, "Backend offline"
     if resp.status_code != 200:
@@ -228,30 +311,25 @@ def _request_destroy(instance_id):
     return True, "Destroy started"
 
 
-@app.route('/api/destroy/<instance_id>', methods=['POST'])
+@app.route("/api/destroy/<instance_id>", methods=["POST"])
 def destroy_lab(instance_id):
-    """JSON destroy (dashboard JS). Relays the orchestrator's verdict."""
     ok, message = _request_destroy(instance_id)
     if not ok:
         return jsonify({"error": message}), 502
     return jsonify({"status": "ok"})
 
 
-@app.route('/destroy/<instance_id>', methods=['POST'])
+@app.route("/destroy/<instance_id>", methods=["POST"])
 def destroy_lab_form(instance_id):
-    """Form destroy (lobby buttons): flash the outcome and return to lobby."""
     ok, message = _request_destroy(instance_id)
     flash(message, "info" if ok else "danger")
-    return redirect(url_for('lobby'))
+    return redirect(url_for("arenas"))
 
 
-@app.route('/archive/delete/<instance_id>', methods=['POST'])
+@app.route("/archive/delete/<instance_id>", methods=["POST"])
 def archive_delete(instance_id):
-    """Remove one destroyed/failed lab record from the archive."""
     try:
-        resp = requests.delete(
-            f"{API_URL}/deployments/{instance_id}", headers=API_HEADERS, timeout=10
-        )
+        resp = requests.delete(f"{API_URL}/deployments/{instance_id}", headers=API_HEADERS, timeout=10)
         if resp.status_code != 200:
             try:
                 detail = resp.json().get("detail", "")
@@ -260,29 +338,24 @@ def archive_delete(instance_id):
             flash(detail or f"Delete failed (HTTP {resp.status_code})", "danger")
     except requests.RequestException:
         flash("Backend offline", "danger")
-    return redirect(url_for('lobby'))
+    return redirect(url_for("arenas"))
 
 
-@app.route('/archive/clear', methods=['POST'])
+@app.route("/archive/clear", methods=["POST"])
 def archive_clear():
-    """Remove every destroyed/failed lab record from the archive."""
     try:
-        resp = requests.delete(
-            f"{API_URL}/deployments", headers=API_HEADERS, timeout=10
-        )
+        resp = requests.delete(f"{API_URL}/deployments", headers=API_HEADERS, timeout=10)
         if resp.status_code == 200:
-            deleted = resp.json().get("deleted", 0)
-            flash(f"Archive cleared ({deleted} record(s) removed)", "info")
+            flash(f"Archive cleared ({resp.json().get('deleted', 0)} record(s))", "info")
         else:
             flash(f"Clear failed (HTTP {resp.status_code})", "danger")
     except requests.RequestException:
         flash("Backend offline", "danger")
-    return redirect(url_for('lobby'))
+    return redirect(url_for("arenas"))
 
 
-@app.route('/api/health')
+@app.route("/api/health")
 def orchestrator_health():
-    """Backend reachability for the nav-bar status badge (no auth state)."""
     try:
         resp = requests.get(f"{API_URL}/health", timeout=3)
         ok = resp.status_code == 200
@@ -291,19 +364,15 @@ def orchestrator_health():
     return jsonify({"status": "ok" if ok else "offline"})
 
 
-@app.route('/api/poll/<instance_id>')
+@app.route("/api/poll/<instance_id>")
 def poll_status(instance_id):
     try:
-        resp = requests.get(
-            f"{API_URL}/status/{instance_id}", headers=API_HEADERS, timeout=5
-        )
+        resp = requests.get(f"{API_URL}/status/{instance_id}", headers=API_HEADERS, timeout=5)
         return jsonify(resp.json())
     except requests.RequestException:
         return jsonify({"status": "offline"})
 
 
-if __name__ == '__main__':
-    # debug=True exposes the Werkzeug interactive debugger (RCE) — gate it behind an env flag.
+if __name__ == "__main__":
     debug = os.getenv("FLASK_DEBUG", "false").lower() == "true"
-    # Containerized service: bind-all is intentional; compose maps the port.
-    app.run(host='0.0.0.0', port=5000, debug=debug)  # nosec B104
+    app.run(host="0.0.0.0", port=5000, debug=debug)  # nosec B104

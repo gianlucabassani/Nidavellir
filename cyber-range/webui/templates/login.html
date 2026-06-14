@@ -1,29 +1,49 @@
-{% extends "base.html" %}
-
-{% block content %}
-<div class="row justify-content-center mt-5">
-    <div class="col-md-4">
-        <div class="card bg-dark-glass border-secondary">
-            <div class="card-body p-4">
-                <h4 class="font-tech text-center mb-4">
-                    <i class="fa-solid fa-lock text-warning me-2"></i>OPERATOR LOGIN
-                </h4>
-                <form method="POST">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <div class="mb-3">
-                        <label class="form-label text-muted small text-uppercase">Username</label>
-                        <input type="text" class="form-control" name="username" autofocus required>
-                    </div>
-                    <div class="mb-4">
-                        <label class="form-label text-muted small text-uppercase">Password</label>
-                        <input type="password" class="form-control" name="password" required>
-                    </div>
-                    <button type="submit" class="btn btn-warning w-100 font-tech fw-bold">
-                        AUTHENTICATE
-                    </button>
-                </form>
-            </div>
-        </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CyberGuard · Sign in</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+<div class="auth">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <span class="mark"><i class="fa-solid fa-shield-halved"></i></span>
+      Cyber<b>Guard</b>
     </div>
+
+    <div class="flashes">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+        <div class="flash flash--{{ category }}">
+          <i class="fa-solid fa-circle-exclamation"></i><span>{{ message }}</span>
+        </div>
+        {% endfor %}
+      {% endwith %}
+    </div>
+
+    <div class="card">
+      <h3 style="margin-bottom:4px">Operator sign in</h3>
+      <p class="muted" style="margin-top:0;font-size:13px">Access the cyber arena console.</p>
+      <form method="POST" style="margin-top:18px">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="field">
+          <label class="label">Username</label>
+          <input class="input" type="text" name="username" autofocus required>
+        </div>
+        <div class="field">
+          <label class="label">Password</label>
+          <input class="input" type="password" name="password" required>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">
+          <i class="fa-solid fa-arrow-right-to-bracket"></i> Sign in
+        </button>
+      </form>
+    </div>
+  </div>
 </div>
-{% endblock %}
+</body>
+</html>

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}Overview{% endblock %}
+{% block crumb %}<b>Overview</b>{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Overview</h1>
+    <div class="sub">Your cyber arena fleet at a glance.</div>
+  </div>
+  <div class="actions">
+    <a href="{{ url_for('launch') }}" class="btn btn-primary"><i class="fa-solid fa-rocket"></i> Launch arena</a>
+  </div>
+</div>
+
+{% if not backend_ok %}
+<div class="notice" style="margin-bottom:18px">
+  <i class="fa-solid fa-triangle-exclamation ico"></i>
+  <span>The orchestrator API is unreachable — fleet data may be incomplete.</span>
+</div>
+{% endif %}
+
+<div class="grid cols-4" style="margin-bottom:18px">
+  <div class="stat"><div class="n accent">{{ stats.total }}</div><div class="l">Total arenas</div></div>
+  <div class="stat"><div class="n ok">{{ stats.active }}</div><div class="l">Active</div></div>
+  <div class="stat"><div class="n warn">{{ stats.transient }}</div><div class="l">In progress</div></div>
+  <div class="stat"><div class="n danger">{{ stats.failed }}</div><div class="l">Failed</div></div>
+</div>
+
+<div class="grid cols-2">
+  <div class="card pad-0">
+    <div class="card-head"><h3>Recent arenas</h3><div class="spacer"></div>
+      <a href="{{ url_for('arenas') }}" class="muted" style="font-size:12.5px">View all <i class="fa-solid fa-arrow-right"></i></a>
+    </div>
+    {% if recent %}
+    <div class="rows">
+      {% for id, info in recent %}
+      <div class="row-item">
+        {{ ui.status_dot(info.status) }}
+        <div class="grow">
+          <div class="title">{{ info.user_id }}</div>
+          <div class="meta">{{ info.scenario }}</div>
+        </div>
+        {{ ui.status_badge(info.status) }}
+        {% if info.status == 'active' %}
+        <a href="{{ url_for('arena_detail', instance_id=id) }}" class="btn btn-sm btn-ghost"><i class="fa-solid fa-arrow-right"></i></a>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty"><div class="ico"><i class="fa-solid fa-ghost"></i></div>No arenas yet. Launch one to get started.</div>
+    {% endif %}
+  </div>
+
+  <div class="stack">
+    <div class="card">
+      <h3 style="margin-bottom:6px">Quick start</h3>
+      <p class="muted" style="margin-top:0;font-size:13px">Spin up a container arena in seconds — no cloud account needed.</p>
+      <div class="flexrow" style="margin-top:14px">
+        <a href="{{ url_for('launch') }}" class="btn btn-primary"><i class="fa-solid fa-screwdriver-wrench"></i> Build a custom lab</a>
+        <a href="{{ url_for('scenarios') }}" class="btn btn-ghost"><i class="fa-solid fa-cubes"></i> Browse scenarios</a>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="margin-bottom:12px">Catalog</h3>
+      <div class="flexrow" style="justify-content:space-between">
+        <span class="muted">Ready-to-deploy scenarios</span><b>{{ stats.scenarios }}</b>
+      </div>
+      <div class="divider"></div>
+      <div class="flexrow" style="justify-content:space-between">
+        <span class="muted">Curated images</span><b>{{ stats.images }}</b>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -59,8 +59,12 @@ services:
       - "8000:8000"
     command: uvicorn api:app --host 0.0.0.0 --port 8000
     environment:
-      # Mock Mode (set to false for production)
-      MOCK_MODE: ${MOCK_MODE:-true}
+      # The local stack provisions REAL container arenas by default: the
+      # docker-local provider talks to the host Docker daemon (socket mounted
+      # below). Set MOCK_MODE=true (and unset RANGE_PROVIDER) for the no-infra
+      # demo, or RANGE_PROVIDER=openstack/aws + creds for cloud backends.
+      MOCK_MODE: ${MOCK_MODE:-false}
+      RANGE_PROVIDER: ${RANGE_PROVIDER:-docker-local}
 
       # API authentication (ADR-0002). The default is a well-known dev key for
       # the local mock demo — ALWAYS override CYBERGUARD_API_KEY in .env for
@@ -117,6 +121,11 @@ services:
       # Terraform templates (read-only)
       - ./cyber-range/infra/terraform:/app/terraform:ro
       - ./cyber-range/infra/terraform-aws:/app/terraform-aws:ro
+
+      # Docker socket: the orchestrator runs in-arena `exec` (MCP attacker
+      # stance) in-process, so it needs the daemon too. ROOT-EQUIVALENT host
+      # access — trusted/dev hosts only. Required by RANGE_PROVIDER=docker-local.
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - cyberguard-network
     healthcheck:
@@ -141,8 +150,9 @@ services:
     # FIXED: Use the correct module path (no orchestrator. prefix)
     command: celery -A tasks worker --loglevel=info --concurrency=3
     environment:
-      # Same environment as orchestrator
-      MOCK_MODE: ${MOCK_MODE:-true}
+      # Same environment as orchestrator — real container arenas by default.
+      MOCK_MODE: ${MOCK_MODE:-false}
+      RANGE_PROVIDER: ${RANGE_PROVIDER:-docker-local}
       OS_AUTH_URL: ${OS_AUTH_URL:-}
       OS_USERNAME: ${OS_USERNAME:-}
       OS_PASSWORD: ${OS_PASSWORD:-}
@@ -172,6 +182,10 @@ services:
       - tf-cache:/app/cache
       - ./cyber-range/infra/terraform:/app/terraform:ro
       - ./cyber-range/infra/terraform-aws:/app/terraform-aws:ro
+      # Docker socket: the worker runs deploy/destroy for RANGE_PROVIDER=
+      # docker-local against the host daemon (sibling containers). ROOT-
+      # EQUIVALENT host access — trusted/dev hosts only.
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - cyberguard-network
 
@@ -218,8 +232,9 @@ services:
     environment:
       ORCHESTRATOR_URL: http://orchestrator:8000
       ORCHESTRATOR_API_KEY: ${CYBERGUARD_API_KEY:-dev-insecure-key}
-      # Lets the UI label simulated data (mock badge, disabled dead links)
-      MOCK_MODE: ${MOCK_MODE:-true}
+      # Lets the UI label simulated data (mock badge, disabled dead links).
+      # Defaults to false now that the stack provisions real arenas.
+      MOCK_MODE: ${MOCK_MODE:-false}
       FLASK_ENV: ${FLASK_ENV:-production}
       SECRET_KEY: ${SECRET_KEY:-change-me}
       WEBUI_USERNAME: ${WEBUI_USERNAME:-admin}

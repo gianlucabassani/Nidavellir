@@ -99,19 +99,26 @@ def validate_config():
     errors = []
     warnings = []
     
-    # Check OpenStack credentials (skip in MOCK mode)
+    # OpenStack creds are mandatory only when OpenStack is the *active* default
+    # provider. Mirror the precedence in providers.get_provider(): an explicit
+    # RANGE_PROVIDER wins, otherwise MOCK_MODE=true -> mock, else openstack.
+    # docker-local / aws / mock need no OpenStack creds, so a container-only
+    # stack (RANGE_PROVIDER=docker-local, MOCK_MODE=false) must still boot.
     mock_mode = os.getenv("MOCK_MODE", "false").lower() == "true"
-    
-    if not mock_mode:
+    range_provider = os.getenv("RANGE_PROVIDER")
+    default_provider = range_provider or ("mock" if mock_mode else "openstack")
+
+    if default_provider == "openstack":
+        skip = "set MOCK_MODE=true or RANGE_PROVIDER=docker-local to skip"
         if not OS_USERNAME:
-            errors.append("OS_USERNAME is required (set MOCK_MODE=true to skip)")
+            errors.append(f"OS_USERNAME is required ({skip})")
         if not OS_PASSWORD:
-            errors.append("OS_PASSWORD is required (set MOCK_MODE=true to skip)")
+            errors.append(f"OS_PASSWORD is required ({skip})")
         if not OS_PROJECT_ID:
-            errors.append("OS_PROJECT_ID (or OS_TENANT_ID) is required (set MOCK_MODE=true to skip)")
+            errors.append(f"OS_PROJECT_ID (or OS_TENANT_ID) is required ({skip})")
         if not OS_AUTH_URL:
-            errors.append("OS_AUTH_URL is required (set MOCK_MODE=true to skip)")
-    else:
+            errors.append(f"OS_AUTH_URL is required ({skip})")
+    if mock_mode:
         warnings.append("Running in MOCK_MODE - no real infrastructure will be created")
 
     # Encryption at rest for lab outputs (audit #14). Not fatal — the stack

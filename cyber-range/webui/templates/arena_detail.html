@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}{{ instance_name }}{% endblock %}
+{% block crumb %}<a href="{{ url_for('arenas') }}">Arenas</a> / <b>{{ instance_name }}</b>{% endblock %}
+{% block head %}<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="flexrow">
+      <h1 style="margin:0">{{ instance_name }}</h1>
+      <span id="lab-status">{{ ui.status_badge(state) }}</span>
+    </div>
+    <div class="sub mono">{{ provider or 'provider ?' }} · {{ instance_id }}</div>
+  </div>
+  <div class="actions">
+    <a href="{{ url_for('arenas') }}" class="btn btn-ghost"><i class="fa-solid fa-arrow-left"></i> Back</a>
+    <button onclick="destroyInstance('{{ instance_id }}')" class="btn btn-danger"><i class="fa-solid fa-trash-can"></i> Destroy</button>
+  </div>
+</div>
+
+{% if unhealthy %}
+<div class="notice flash--warning" style="margin-bottom:18px">
+  <i class="fa-solid fa-triangle-exclamation ico" style="color:var(--warn)"></i>
+  <span>These nodes exited right after start: <b>{{ unhealthy | join(', ') }}</b>. Check the image / command (a target with no foreground service exits immediately).</span>
+</div>
+{% endif %}
+
+<div class="grid" style="grid-template-columns: 1.1fr 1.4fr">
+  <!-- nodes -->
+  <div class="card pad-0">
+    <div class="card-head"><h3><i class="fa-solid fa-server"></i> Nodes</h3>
+      <div class="spacer"></div><span class="muted" style="font-size:12px">{{ nodes|length }} node{{ 's' if nodes|length != 1 }}</span>
+    </div>
+    {% if nodes %}
+    <table class="table">
+      <thead><tr><th>Node</th><th>Private IP</th><th>State</th><th>Access</th></tr></thead>
+      <tbody>
+        {% for n in nodes %}
+        <tr>
+          <td>
+            <div class="flexrow">
+              {% if n.foothold %}<i class="fa-solid fa-user-ninja" style="color:var(--danger)" title="foothold"></i>
+              {% elif n.url %}<i class="fa-solid fa-bullseye" style="color:var(--warn)" title="web target"></i>
+              {% else %}<i class="fa-solid fa-microchip muted"></i>{% endif %}
+              <b>{{ n.name }}</b>
+            </div>
+          </td>
+          <td class="mono">{{ n.ip or '—' }}</td>
+          <td>{% if n.state == 'running' %}<span class="badge badge--ok">running</span>
+              {% else %}<span class="badge badge--danger">{{ n.state }}</span>{% endif %}</td>
+          <td>
+            {% if n.url %}<a href="{{ n.url }}" target="_blank" class="btn btn-sm"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open</a>{% endif %}
+            {% if not n.url and not n.ssh %}<span class="faint">—</span>{% endif %}
+          </td>
+        </tr>
+        {% if n.ssh %}
+        <tr><td colspan="4" style="padding-top:0">
+          <label class="label" style="margin-bottom:4px">Shell command</label>
+          <div class="copyfield">
+            <input class="input mono" value="{{ n.ssh }}" readonly id="ssh-{{ loop.index }}">
+            <button class="btn btn-sm" onclick="copyField('ssh-{{ loop.index }}')"><i class="fa-regular fa-copy"></i></button>
+          </div>
+        </td></tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty"><div class="ico"><i class="fa-solid fa-circle-notch fa-spin"></i></div>Provisioning nodes…</div>
+    {% endif %}
+  </div>
+
+  <!-- topology -->
+  <div class="card pad-0">
+    <div class="card-head"><h3><i class="fa-solid fa-diagram-project"></i> Topology</h3>
+      <div class="spacer"></div>
+      <button class="btn btn-sm btn-ghost" onclick="CyberGuard.fit()"><i class="fa-solid fa-expand"></i> Fit</button>
+    </div>
+    <div id="topo"></div>
+  </div>
+</div>
+
+<script id="lab-data" type="application/json">{{ outputs | tojson | safe }}</script>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.body.dataset.instanceId = "{{ instance_id }}";
+  CyberGuard.initArena();
+</script>
+{% endblock %}
