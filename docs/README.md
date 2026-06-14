@@ -17,9 +17,9 @@ per-arena isolation, and full audit/trace.
 
 > Direction (2026-06): pivoting from the original lab launcher to the arena
 > model above — see [`ROADMAP.md`](../ROADMAP.md). Technical inspiration for the
-> topology engine: **GOAD**. **AIronClaw** and **Karna/sicuranext** are cited
-> only as product-quality (UI/UX & utility) exemplars — not a scope or technical
-> model.
+> topology engine: **GOAD**. We also hold ourselves to the product-quality
+> (UI/UX & operator-utility) bar of well-executed security products — but those
+> are a quality bar only, not a scope or technical model.
 
 
 
@@ -352,9 +352,14 @@ CyberGuard/
 
 ## 🧩 Scenarios
 
-A scenario is the authored, provider-agnostic spec for an arena. Today's specs
-are still the legacy fixed-role shape; **ROADMAP Phase 1** generalizes them to
-arbitrary N-node topologies (`nodes[]` + `segments[]`), GOAD-style.
+A scenario is the authored, provider-agnostic spec for an arena: arbitrary
+`nodes[]` on named network `segments[]`, plus `objectives` and optional
+`agents[]` stance bindings (GOAD-style, not a fixed victim/attacker/monitor
+trio). The shipped specs are now **schema v3** — see
+[SCENARIOS.md](SCENARIOS.md) for the authoring guide and
+[scenario.schema.json](scenario.schema.json) for the machine-readable contract.
+The generic per-provider compiler (`nodes[]` → container project / Terraform
+module) is ROADMAP Phase 1 **P1-2**.
 
 ### 1. basic_pentest
 

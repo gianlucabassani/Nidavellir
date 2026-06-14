@@ -1,0 +1,309 @@
+{
+  "$defs": {
+    "AgentBinding": {
+      "additionalProperties": false,
+      "description": "Wires a BYO agent stance onto a node (consumed by the Phase 2 gateway).",
+      "properties": {
+        "stance": {
+          "$ref": "#/$defs/Stance"
+        },
+        "node": {
+          "title": "Node",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stance",
+        "node"
+      ],
+      "title": "AgentBinding",
+      "type": "object"
+    },
+    "Network": {
+      "properties": {
+        "segments": {
+          "items": {
+            "$ref": "#/$defs/Segment"
+          },
+          "title": "Segments",
+          "type": "array"
+        }
+      },
+      "title": "Network",
+      "type": "object"
+    },
+    "Node": {
+      "description": "One machine in the topology \u2014 a container or a VM, per provider.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "role": {
+          "default": "node",
+          "title": "Role",
+          "type": "string"
+        },
+        "image": {
+          "title": "Image",
+          "type": "string"
+        },
+        "size": {
+          "default": "small",
+          "title": "Size",
+          "type": "string"
+        },
+        "segments": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Segments",
+          "type": "array"
+        },
+        "ports": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Ports",
+          "type": "array"
+        },
+        "entrypoint": {
+          "default": false,
+          "title": "Entrypoint",
+          "type": "boolean"
+        },
+        "command": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Command"
+        },
+        "services": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Services",
+          "type": "array"
+        },
+        "tools": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tools",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "image"
+      ],
+      "title": "Node",
+      "type": "object"
+    },
+    "Objective": {
+      "description": "A scored goal. Full scoring is Phase 4; this keeps the authoring shape.",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "points": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Points"
+        }
+      },
+      "required": [
+        "description"
+      ],
+      "title": "Objective",
+      "type": "object"
+    },
+    "ProviderClass": {
+      "enum": [
+        "vm",
+        "container",
+        "any"
+      ],
+      "title": "ProviderClass",
+      "type": "string"
+    },
+    "Requires": {
+      "properties": {
+        "provider_class": {
+          "$ref": "#/$defs/ProviderClass",
+          "default": "any"
+        }
+      },
+      "title": "Requires",
+      "type": "object"
+    },
+    "Segment": {
+      "additionalProperties": false,
+      "description": "A named network segment nodes can be attached to.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "cidr": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cidr"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Segment",
+      "type": "object"
+    },
+    "Stance": {
+      "enum": [
+        "attacker",
+        "mitm",
+        "defender"
+      ],
+      "title": "Stance",
+      "type": "string"
+    }
+  },
+  "description": "A validated v3 scenario: an N-node topology over named segments.",
+  "properties": {
+    "schema": {
+      "default": "cyberguard/v3",
+      "title": "Schema",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "title": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Title"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "difficulty": {
+      "default": "unknown",
+      "title": "Difficulty",
+      "type": "string"
+    },
+    "requires": {
+      "$ref": "#/$defs/Requires"
+    },
+    "network": {
+      "$ref": "#/$defs/Network"
+    },
+    "nodes": {
+      "items": {
+        "$ref": "#/$defs/Node"
+      },
+      "minItems": 1,
+      "title": "Nodes",
+      "type": "array"
+    },
+    "agents": {
+      "items": {
+        "$ref": "#/$defs/AgentBinding"
+      },
+      "title": "Agents",
+      "type": "array"
+    },
+    "objectives": {
+      "items": {
+        "$ref": "#/$defs/Objective"
+      },
+      "title": "Objectives",
+      "type": "array"
+    },
+    "ttl_hours": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ttl Hours"
+    },
+    "tags": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Tags",
+      "type": "array"
+    }
+  },
+  "required": [
+    "name",
+    "nodes"
+  ],
+  "title": "ScenarioSpec",
+  "type": "object"
+}

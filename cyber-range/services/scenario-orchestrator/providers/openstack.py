@@ -13,6 +13,7 @@ from pathlib import Path
 from config import BASE_TERRAFORM_TEMPLATE, RUNS_DIR
 from providers.base import RangeProvider
 from redaction import redact, redact_mapping
+from scenario_spec import normalized_nodes, primary_cidr
 
 logger = logging.getLogger(__name__)
 
@@ -198,23 +199,21 @@ class OpenStackProvider(RangeProvider):
 
     def _extract_terraform_vars(self, scenario_config: dict) -> dict:
         """
-        Extract Terraform variables from scenario YAML
-
-        Maps scenario.yaml values to terraform variables:
-        - vms[0].image → victim_image_name
-        - vms[1].image → image_name (attacker)
-        - vms[2].image → log_image_name (monitor)
+        Extract Terraform variables from a scenario, mapping the canonical
+        victim/attacker/monitor roles onto the (still fixed 3-VM) template's
+        variables. Reads both v3 ``nodes[]`` and legacy ``vms[]`` shapes via
+        ``normalized_nodes`` — Phase 1's P1-2 replaces this fixed template with
+        a generic ``nodes[]`` module.
         """
         vars = {}
 
-        # Map VM definitions to Terraform variables
-        for vm in scenario_config.get('vms', []):
+        for vm in normalized_nodes(scenario_config):
             role = vm.get('role')
 
             if role == 'victim':
                 vars['victim_image_name'] = vm.get('image', 'victim-web')
                 vars['victim_vm_name'] = vm.get('name', 'cyber_guard_victim')
-                if 'flavor' in vm:
+                if vm.get('flavor'):
                     vars['flavor_name'] = vm['flavor']
 
             elif role == 'attacker':
@@ -224,14 +223,12 @@ class OpenStackProvider(RangeProvider):
             elif role == 'monitor':
                 vars['log_image_name'] = vm.get('image', 'ubuntu_cloud')
                 vars['log_vm_name'] = vm.get('name', 'cyber_guard_log')
-                if 'flavor' in vm:
+                if vm.get('flavor'):
                     vars['soc_flavor_name'] = vm['flavor']
 
-        # Network configuration
-        if 'network' in scenario_config:
-            net = scenario_config['network']
-            if 'cidr' in net:
-                vars['private_cidr'] = net['cidr']
+        cidr = primary_cidr(scenario_config)
+        if cidr:
+            vars['private_cidr'] = cidr
 
         logger.info(f"Extracted Terraform vars: {redact_mapping(vars)}")
         return vars

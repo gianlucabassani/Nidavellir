@@ -59,10 +59,13 @@ should drive their scenario pickers from this (the WebUI does):
     {
       "id": "basic_pentest",
       "name": "Web App Pentest (VM)",
+      "title": "Web App Pentest (VM)",
       "description": "…",
       "difficulty": "medium",
       "tags": [],
-      "provider_class": "vm"
+      "provider_class": "vm",
+      "nodes": 3,
+      "valid": true
     }
   ]
 }
@@ -70,7 +73,10 @@ should drive their scenario pickers from this (the WebUI does):
 
 `provider_class` (`vm` | `container`) is the infrastructure class the scenario
 needs — it must match the `infra_class` of the provider that deploys it (see
-below).
+below). `nodes` is the topology size and `valid` is `true` when the scenario
+validates against the [v3 schema](scenario.schema.json) (see
+[SCENARIOS.md](SCENARIOS.md)); a `false` here means the registry fell back to
+raw metadata for a non-conforming template.
 
 ### Provider Registry
 

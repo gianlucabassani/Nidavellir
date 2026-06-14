@@ -20,6 +20,7 @@ import logging
 
 from providers.base import RangeProvider
 from redaction import redact_mapping
+from scenario_spec import normalized_nodes
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +91,7 @@ class DockerLocalProvider(RangeProvider):
             self.client.networks.create(net_name, driver="bridge", labels=labels)
 
             containers = {}
-            for vm in scenario_config.get("vms", []):
+            for vm in normalized_nodes(scenario_config):
                 role = vm.get("role", "node")
                 if role == "monitor":
                     logger.info(

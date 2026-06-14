@@ -96,7 +96,7 @@ def test_orchestrator_delegates_with_loaded_config():
     assert result["success"] is True
     (config, instance_id, _), = recorder.deploys
     assert instance_id == "dispatch-1"
-    assert config["vms"], "provider must receive the parsed scenario config"
+    assert config["nodes"], "provider must receive the parsed scenario config"
 
 
 def test_orchestrator_blocks_unknown_scenario_before_provider():

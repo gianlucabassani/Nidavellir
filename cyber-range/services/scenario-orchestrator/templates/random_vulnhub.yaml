@@ -1,38 +1,45 @@
+schema: cyberguard/v3
 name: random_vulnhub
-version: "1.0"
+title: "Random VulnHub"
+version: "2.0"
 difficulty: medium
-description: Random VulnHub scenario with dynamically selected vulnerable images
+description: >
+  Random VulnHub arena: a Kali foothold plus a dynamically selected vulnerable
+  victim image. The image map resolves `vulnhub-random` to an imported disk
+  (VulnHub importer wiring is P1-5).
 
 requires:
   provider_class: vm   # VulnHub images are full VM disks
 
 network:
-  cidr: "10.0.2.0/24"
-  name: vulnhub_network
-  topology: "Simple: Attacker + Random Victim"
+  segments:
+    - name: vulnhub_network
+      cidr: "10.0.2.0/24"
+      description: "simple: attacker + random victim"
 
-vms:
+nodes:
   - name: attacker
     role: attacker
     image: "kali-rolling-2024"
-    disk_gb: 20
-    public_ip: true
-    ram_gb: 4
-    vcpus: 2
+    size: medium
+    segments: [vulnhub_network]
+    entrypoint: true
 
   - name: victim
     role: victim
     image: "vulnhub-random"
-    disk_gb: 30
-    public_ip: true
-    ram_gb: 2
-    vcpus: 2
+    size: small
+    segments: [vulnhub_network]
+
+agents:
+  - {stance: attacker, node: attacker}
+
+objectives:
+  - description: "Work with unexpected vulnerable targets"
+  - description: "Adapt exploitation techniques"
 
 metadata:
-  description: "Dynamically generated scenario using random VulnHub images"
-  objectives:
-    - "Work with unexpected vulnerable targets"
-    - "Adapt exploitation techniques"
+  author: CyberGuard
   tags: ["vulnhub", "random", "practice"]
   max_users: 2
   estimated_duration_hours: 4

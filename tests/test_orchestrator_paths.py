@@ -48,7 +48,7 @@ def test_load_scenario_resolves_via_templates_dir():
     """Scenario loading must go through config.TEMPLATES_DIR (not __file__ math)."""
     scenario = Orchestrator()._load_scenario("basic_pentest")
     assert scenario is not None
-    assert scenario["vms"], "expected the basic_pentest scenario to define VMs"
+    assert scenario["nodes"], "expected the basic_pentest scenario to define nodes"
 
     assert Orchestrator()._load_scenario("no-such-scenario") is None
 
