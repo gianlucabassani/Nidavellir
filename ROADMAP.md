@@ -12,11 +12,10 @@
 > infrastructure and gives agents command execution inside it.
 
 Reference points: **GOAD** (data-defined modular multi-machine labs, variants,
-multi-provider) is the technical model for the topology engine. **AIronClaw**
-and **Karna/sicuranext** are **product-quality exemplars** — well-built products
-we aim to match on UI/UX and operator utility, *not* a scope or technical model
-(their domains differ from ours); the gateway and stances are designed on their
-own terms.
+multi-provider) is the technical model for the topology engine. Separately, we
+aim to match the **product-quality** bar of well-executed security products on
+UI/UX and operator utility — but that is a quality bar only, *not* a scope or
+technical model; the gateway and stances are designed on their own terms.
 
 ---
 
