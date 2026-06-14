@@ -24,7 +24,7 @@ contributors understand the reasoning instead of re-litigating it.
 | [0002](0002-api-authentication.md) | API-key authentication and WebUI operator login | Accepted (roles → admin/operator/agent, 2026-06-13 pivot) |
 | [0003](0003-provider-driver-interface.md) | Pluggable deployment providers behind a RangeProvider interface | Accepted |
 | [0004](0004-postgres-persistence.md) | PostgreSQL persistence via SQLAlchemy + Alembic | Accepted |
-| 0005 | MCP agent gateway protocol, stances & guardrails | Planned (ROADMAP Phase 2) |
+| [0005](0005-mcp-agent-gateway.md) | MCP agent gateway protocol, stances & guardrails | Proposed (skeleton landed: lifecycle tools + auth + stance binding) |
 | [0006](0006-aws-topology.md) | AWS topology — generic nodes[] module & egress lockdown | Proposed (driver + module landed; real apply needs creds) |
 
 > **2026-06-13 pivot:** CyberGuard repositioned as an enterprise agent-testing

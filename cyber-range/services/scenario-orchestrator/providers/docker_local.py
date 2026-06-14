@@ -137,8 +137,19 @@ class DockerLocalProvider(RangeProvider):
                 container = self._run_node(instance_id, node, networks, labels)
                 records.append((node, container))
 
-            outputs = self._collect_outputs(networks, wanted, records)
-            logger.info(f"[{instance_id}] docker-local deployment complete")
+            outputs = self._collect_outputs(instance_id, networks, wanted, records)
+            unhealthy = outputs.get("unhealthy_nodes")
+            if unhealthy:
+                # Don't pretend the arena is healthy: a node that exited the
+                # instant it started (a target with no foreground service, a bad
+                # image, a crash-on-boot) is the #1 docker-local gotcha. Surface
+                # it loudly rather than reporting a silent, useless success.
+                logger.warning(
+                    f"[{instance_id}] deployment complete but these nodes exited "
+                    f"immediately: {unhealthy} — see node_<name>_state / logs"
+                )
+            else:
+                logger.info(f"[{instance_id}] docker-local deployment complete")
             return {"success": True, "outputs": outputs}
 
         except Exception as e:
@@ -181,7 +192,7 @@ class DockerLocalProvider(RangeProvider):
             networks[seg].connect(container)
         return container
 
-    def _collect_outputs(self, networks, wanted, records) -> dict:
+    def _collect_outputs(self, instance_id, networks, wanted, records) -> dict:
         outputs = {
             "provider": self.name,
             "lab_network": networks[wanted[0]].name if wanted else None,
@@ -189,11 +200,24 @@ class DockerLocalProvider(RangeProvider):
         }
 
         seen_roles = set()
+        unhealthy = []
         for node, container in records:
-            container.reload()  # IP/ports are only populated after start
+            container.reload()  # IP/ports/state are only populated after start
             role = node.get("role", "node")
             name = node["name"]
             primary_net = networks[self._node_segments(node)[0]].name
+
+            # Liveness: a node that already exited (a target with no foreground
+            # service, a crash-on-boot, a bad image) is the #1 docker-local
+            # gotcha. Record its state so a dead box is diagnosable, not silent.
+            state = (container.attrs.get("State") or {}).get("Status", "running")
+            outputs[f"node_{name}_state"] = state
+            if state != "running":
+                unhealthy.append(name)
+                logger.warning(
+                    f"[{instance_id}] node {name!r} ({role}) is {state} right "
+                    f"after start — last logs: {self._tail_logs(container)}"
+                )
 
             nets = container.attrs["NetworkSettings"]["Networks"]
             ip = nets.get(primary_net, {}).get("IPAddress", "")
@@ -234,7 +258,19 @@ class DockerLocalProvider(RangeProvider):
                     if role == "victim":
                         outputs["victim_web_url"] = url
 
+        if unhealthy:
+            outputs["unhealthy_nodes"] = unhealthy
         return outputs
+
+    @staticmethod
+    def _tail_logs(container, limit: int = 500) -> str:
+        """Best-effort last log lines from a (likely exited) container."""
+        try:
+            raw = container.logs(tail=20)
+            text = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)
+            return text.strip()[-limit:]
+        except Exception:
+            return "<no logs>"
 
     def destroy(self, instance_id):
         try:

@@ -1,0 +1,6 @@
+# CyberGuard MCP agent gateway (ROADMAP Phase 2).
+# Official MCP Python SDK (FastMCP server, stdio + streamable-HTTP transports).
+mcp>=1.2
+
+# Thin HTTP client over the orchestrator REST API.
+requests>=2.28.0

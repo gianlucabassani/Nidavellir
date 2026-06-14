@@ -13,6 +13,7 @@ import uuid
 import sys
 from datetime import datetime, timedelta
 
+import catalog
 import config
 import scenarios
 from auth import Principal, ensure_bootstrap_key, require_principal
@@ -113,10 +114,81 @@ def _check_provider_compatibility(scenario_id: str, provider_name: str | None):
         )
 
 
+class CustomArenaRequest(BaseModel):
+    """Build a custom arena from curated catalog picks (manual scenario creator)."""
+
+    instance_id: str = Field(pattern=INSTANCE_NAME_PATTERN)
+    attacker: str = Field(min_length=1, max_length=64)
+    victims: list[str] = Field(min_length=1, max_length=8)
+    # Custom arenas are container topologies → docker-local by default.
+    provider: str | None = Field(default="docker-local", max_length=32)
+
+    @field_validator("provider")
+    @classmethod
+    def provider_must_exist(cls, value: str | None) -> str | None:
+        if value is not None and value not in available_providers():
+            raise ValueError(f"unknown provider '{value}' — see GET /providers")
+        return value
+
+
 @app.get("/scenarios")
 def list_scenarios(principal: Principal = Depends(require_principal)):
     """Registry of deployable scenarios (id + display metadata)."""
     return {"scenarios": scenarios.list_scenarios()}
+
+
+@app.get("/catalog")
+def get_catalog(kind: str | None = None, principal: Principal = Depends(require_principal)):
+    """Curated attacker/victim images for the manual scenario creator."""
+    return {"images": catalog.list_catalog(kind)}
+
+
+@app.post("/arenas/custom")
+@limiter.limit(RATE_LIMIT_DEPLOY)
+async def deploy_custom_arena(
+    request: Request,
+    req: CustomArenaRequest,
+    principal: Principal = Depends(require_principal),
+):
+    """Compile catalog picks into a validated v3 topology and queue it.
+
+    The topology is built server-side from the whitelist (no arbitrary image
+    strings), validated, then dispatched as an inline scenario — so a custom
+    arena never touches the scenario registry/filesystem.
+    """
+    try:
+        spec = catalog.build_custom_scenario(req.instance_id, req.attacker, req.victims)
+    except catalog.CatalogError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+    # Custom arenas are container-class; refuse a non-container backend up front.
+    offered = infra_class_of(req.provider) if req.provider else "any"
+    if offered not in ("any", "container"):
+        raise HTTPException(
+            status_code=422,
+            detail=f"provider '{req.provider}' provides {offered}-class infra, not container",
+        )
+
+    system_id = str(uuid.uuid4())
+    label = f"custom:{req.attacker}+{'+'.join(req.victims)}"[:64]
+    expires_at = datetime.now() + timedelta(minutes=config.LAB_TTL_MINUTES)
+    db.create_deployment(
+        system_id, req.instance_id, label,
+        provider=req.provider, actor=principal.name, expires_at=expires_at,
+    )
+    logger.info(
+        f"Queuing custom arena '{req.instance_id}' ({system_id}): "
+        f"{label} provider={req.provider} by '{principal.name}'"
+    )
+    deploy_lab.delay(
+        instance_id=system_id,
+        scenario_name=label,
+        user_id=req.instance_id,
+        variables={},
+        provider=req.provider,
+        scenario_config=spec,
+    )
+    return {"status": "accepted", "instance_id": system_id}
 
 
 @app.get("/providers")

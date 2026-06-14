@@ -5,6 +5,7 @@
 SHELL := /bin/bash
 COMPOSE := docker-compose
 ORCH := cyber-range/services/scenario-orchestrator
+GATEWAY := cyber-range/services/agent-gateway
 
 # Use the project venv's tools when .venv/ exists; fall back to PATH otherwise.
 VENV_BIN := .venv/bin
@@ -33,13 +34,13 @@ cov: ## Run tests with coverage report
 	MOCK_MODE=true $(PYTEST) --cov=$(ORCH) --cov-report=term-missing
 
 lint: ## Lint Python with ruff
-	$(RUFF) check $(ORCH) cyber-range/services/vulnhub-importer cyber-range/webui tests
+	$(RUFF) check $(ORCH) $(GATEWAY) cyber-range/services/vulnhub-importer cyber-range/webui tests
 
 fmt: ## Auto-format Python with ruff
-	$(RUFF) format $(ORCH) cyber-range/services/vulnhub-importer cyber-range/webui tests
+	$(RUFF) format $(ORCH) $(GATEWAY) cyber-range/services/vulnhub-importer cyber-range/webui tests
 
 security: ## Static security scan with bandit
-	$(BANDIT) -r $(ORCH) cyber-range/services/vulnhub-importer cyber-range/webui -ll
+	$(BANDIT) -r $(ORCH) $(GATEWAY) cyber-range/services/vulnhub-importer cyber-range/webui -ll
 
 check: lint security test ## Run lint + security + tests (CI parity)
 

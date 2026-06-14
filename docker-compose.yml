@@ -234,6 +234,34 @@ services:
       timeout: 10s
       retries: 3
 
+  # MCP Agent Gateway — the only path a bring-your-own agent has into an arena
+  # (ROADMAP Phase 2). Opt-in: `docker compose --profile agent-gateway up`.
+  agent-gateway:
+    build:
+      context: ./cyber-range/services/agent-gateway
+      dockerfile: Dockerfile
+    container_name: cyberguard-agent-gateway
+    profiles: ["agent-gateway"]
+    restart: unless-stopped
+    depends_on:
+      - orchestrator
+    ports:
+      - "9000:9000"
+    environment:
+      CYBERGUARD_API_URL: http://orchestrator:8000
+      # The agent principal's key (role=agent). Defaults to the dev key for the
+      # local mock demo; set a real agent key for any reachable deployment.
+      CYBERGUARD_AGENT_KEY: ${CYBERGUARD_AGENT_KEY:-dev-insecure-key}
+      CYBERGUARD_STANCE: ${CYBERGUARD_STANCE:-attacker}
+      CYBERGUARD_GATEWAY_TRANSPORT: streamable-http
+      CYBERGUARD_GATEWAY_HOST: 0.0.0.0
+      CYBERGUARD_GATEWAY_PORT: 9000
+      CYBERGUARD_TRACE_DIR: /app/traces
+    volumes:
+      - ./traces:/app/traces
+    networks:
+      - cyberguard-network
+
 networks:
   cyberguard-network:
     driver: bridge

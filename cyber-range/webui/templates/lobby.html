@@ -2,7 +2,7 @@
 {% block content %}
 <div class="row">
     <div class="col-md-4">
-        <div class="card bg-dark-glass border-success h-100">
+        <div class="card bg-dark-glass border-success">
             <div class="card-body">
                 <h3 class="font-tech text-success mb-4">NEW DEPLOYMENT</h3>
                 <form action="/create" method="POST">
@@ -27,6 +27,45 @@
                         </select>
                     </div>
                     <button type="submit" class="btn btn-success w-100 font-tech">LAUNCH <i class="fa-solid fa-rocket ms-2"></i></button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card bg-dark-glass border-info mt-3">
+            <div class="card-body">
+                <h3 class="font-tech text-info mb-1">BUILD A CUSTOM LAB</h3>
+                <p class="text-muted small mb-3">
+                    Pick an attacker box and one or more targets — the images are
+                    pulled on first launch (docker-local).
+                </p>
+                <form action="/build-custom" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label class="form-label text-muted">INSTANCE NAME (Unique)</label>
+                        <input type="text" name="instance_id" class="form-control font-mono"
+                               placeholder="my-lab" required
+                               pattern="[a-z0-9][a-z0-9-]{0,39}"
+                               title="Lowercase letters, digits and hyphens (max 40 chars)">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted">ATTACKER</label>
+                        <select name="attacker" class="form-select bg-dark text-light border-secondary" required>
+                            {% for a in attackers %}
+                            <option value="{{ a.id }}" title="{{ a.description }}">{{ a.name }}</option>
+                            {% else %}
+                            <option disabled>catalog unavailable</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted">TARGET(S) — ctrl/⌘-click for several</label>
+                        <select name="victims" multiple size="4" class="form-select bg-dark text-light border-secondary" required>
+                            {% for v in victims %}
+                            <option value="{{ v.id }}" title="{{ v.description }}">{{ v.name }}{% if v.access == 'web' %} · web{% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-info w-100 font-tech">BUILD <i class="fa-solid fa-screwdriver-wrench ms-2"></i></button>
                 </form>
             </div>
         </div>

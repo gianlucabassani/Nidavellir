@@ -37,22 +37,25 @@ app.conf.beat_schedule = {
 logger = logging.getLogger(__name__)
 
 @app.task(name="deploy_lab", bind=True)
-def deploy_lab(self, instance_id, scenario_name, user_id, variables=None, provider=None):
+def deploy_lab(self, instance_id, scenario_name, user_id, variables=None, provider=None,
+               scenario_config=None):
     """
     Async Task: Deploys a laboratory environment.
     bind=True allows access to the task instance (e.g., self.request.id).
     `provider` is the per-request provider name (None -> install default).
+    `scenario_config` is an optional inline v3 topology (a custom/generated
+    arena built from the catalog); when absent the named scenario is loaded.
     """
     db = Database()
     orch = Orchestrator(provider_name=provider)
 
     logger.info(f"[{instance_id}] Task received. Scenario: {scenario_name}")
-    
+
     # 1. Update DB: Set status to deploying
     db.update_deployment(instance_id, status="deploying", actor="worker")
-    
+
     # 2. Execute Deployment
-    result = orch.deploy(scenario_name, instance_id, variables)
+    result = orch.deploy(scenario_name, instance_id, variables, scenario_config=scenario_config)
     
     # 3. Handle Result
     if result["success"]:

@@ -85,7 +85,7 @@ def logout():
 @app.route('/')
 def lobby():
     """Lobby: List all active scenarios"""
-    deployments, scenarios = {}, []
+    deployments, scenarios, catalog_images = {}, [], []
     try:
         # Calls the Correct Endpoint /deployments
         resp = requests.get(f"{API_URL}/deployments", headers=API_HEADERS, timeout=5)
@@ -97,8 +97,16 @@ def lobby():
         reg = requests.get(f"{API_URL}/scenarios", headers=API_HEADERS, timeout=5)
         if reg.status_code == 200:
             scenarios = reg.json().get("scenarios", [])
+
+        # Curated image catalog drives the manual "build a custom arena" form.
+        cat = requests.get(f"{API_URL}/catalog", headers=API_HEADERS, timeout=5)
+        if cat.status_code == 200:
+            catalog_images = cat.json().get("images", [])
     except requests.RequestException:
         flash("Backend Offline", "danger")
+
+    attackers = [i for i in catalog_images if i["kind"] == "attacker" and i["available"]]
+    victims = [i for i in catalog_images if i["kind"] == "victim" and i["available"]]
 
     # Destroyed labs are history, not missions: keep the main view clean and
     # park them in a collapsed archive section.
@@ -110,6 +118,8 @@ def lobby():
         deployments=current,
         archived=archived,
         scenarios=scenarios,
+        attackers=attackers,
+        victims=victims,
         mock_mode=MOCK_MODE,
     )
 
@@ -162,6 +172,41 @@ def create_lab():
             flash(f"Deploy failed (HTTP {resp.status_code})", "danger")
     except requests.RequestException as e:
         flash(f"Deploy failed: {e}", "danger")
+
+    return redirect(url_for('lobby'))
+
+
+@app.route('/build-custom', methods=['POST'])
+def build_custom():
+    """Manual scenario creator: build a custom arena from catalog picks."""
+    instance_id = request.form.get('instance_id')
+    attacker = request.form.get('attacker')
+    victims = request.form.getlist('victims')
+
+    try:
+        resp = requests.post(f"{API_URL}/arenas/custom", json={
+            "instance_id": instance_id,
+            "attacker": attacker,
+            "victims": victims,
+        }, headers=API_HEADERS, timeout=10)
+        if resp.status_code == 200:
+            flash(
+                f"Building arena '{instance_id}': {attacker} vs "
+                f"{', '.join(victims)} (images are pulled on first use)",
+                "info",
+            )
+        elif resp.status_code == 422:
+            try:
+                detail = resp.json()["detail"]
+                if isinstance(detail, list):
+                    detail = detail[0].get("msg", "invalid input")
+            except (ValueError, LookupError, AttributeError):
+                detail = "invalid selection"
+            flash(f"Build rejected: {detail}", "warning")
+        else:
+            flash(f"Build failed (HTTP {resp.status_code})", "danger")
+    except requests.RequestException as e:
+        flash(f"Build failed: {e}", "danger")
 
     return redirect(url_for('lobby'))
 

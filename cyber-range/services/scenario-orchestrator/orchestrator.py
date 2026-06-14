@@ -22,12 +22,16 @@ class Orchestrator:
         # otherwise RANGE_PROVIDER / MOCK_MODE decide (providers.get_provider).
         self.provider = provider or get_provider(provider_name)
 
-    def deploy(self, scenario_name: str, instance_id: str, user_vars: dict = None):
+    def deploy(self, scenario_name: str, instance_id: str, user_vars: dict = None,
+               scenario_config: dict = None):
         logger.info(
             f"[{instance_id}] Starting deployment of scenario '{scenario_name}' "
             f"(provider: {self.provider.name})"
         )
-        scenario_config = self._load_scenario(scenario_name)
+        # An inline scenario_config (a custom/generated topology) is used as-is;
+        # otherwise the named scenario is loaded from the registry.
+        if scenario_config is None:
+            scenario_config = self._load_scenario(scenario_name)
         if scenario_config is None:
             return {
                 "success": False,

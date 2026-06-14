@@ -98,6 +98,40 @@ A provider with `infra_class: any` (mock) accepts every scenario; otherwise
 the scenario's `provider_class` must equal the provider's `infra_class` or
 the deploy is rejected with `422`.
 
+### Image catalog & custom arenas (manual scenario creator)
+
+`GET /catalog` — the curated attacker/victim images an operator can pick to
+build a custom arena (optional `?kind=attacker|victim`):
+
+```json
+{
+  "images": [
+    {"id": "kali-cli", "name": "Kali Linux (CLI)", "kind": "attacker",
+     "image": "kalilinux/kali-rolling:latest", "provider_class": "container",
+     "access": "cli", "available": true, "ports": []},
+    {"id": "dvwa", "name": "DVWA", "kind": "victim", "access": "web",
+     "ports": [80], "available": true}
+  ]
+}
+```
+
+`POST /arenas/custom` — build a custom arena from catalog picks. The topology is
+compiled server-side from the whitelist (no arbitrary image strings), validated
+against the v3 schema, and queued as an inline scenario — it never touches the
+scenario registry. Container-class, so it defaults to the `docker-local`
+provider.
+
+```json
+{ "instance_id": "my-lab", "attacker": "kali-cli", "victims": ["dvwa"],
+  "provider": "docker-local" }
+```
+
+Returns `{"status": "accepted", "instance_id": "<system-uuid>"}`. A bad
+selection (unknown id, wrong kind, a VM-only image like `mr-robot`) is rejected
+with `422`. Images are pulled on first launch; a target that exits immediately
+is surfaced as `node_<name>_state: "exited"` + `unhealthy_nodes` in the arena
+status, not a silent success.
+
 ### Response Format
 
 All responses are JSON with the following structure:

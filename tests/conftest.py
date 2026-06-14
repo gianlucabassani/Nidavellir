@@ -29,13 +29,12 @@ os.environ["RATE_LIMIT_ENABLED"] = "false"
 # The service uses flat imports (`from database import Database`), so its
 # directory must be on sys.path. pytest.ini also sets `pythonpath`, this is a
 # belt-and-suspenders guarantee.
-_ORCH = (
-    Path(__file__).resolve().parent.parent
-    / "cyber-range"
-    / "services"
-    / "scenario-orchestrator"
-)
+_SERVICES = Path(__file__).resolve().parent.parent / "cyber-range" / "services"
+_ORCH = _SERVICES / "scenario-orchestrator"
 sys.path.insert(0, str(_ORCH))
+# The agent gateway is a separate, namespaced package (`gateway.*`), so it does
+# not collide with the orchestrator's flat modules (e.g. both have config.py).
+sys.path.insert(0, str(_SERVICES / "agent-gateway"))
 
 
 def pytest_report_header(config):

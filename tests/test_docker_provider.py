@@ -18,7 +18,7 @@ from providers.docker_local import (
 
 
 class _FakeContainer:
-    def __init__(self, name, labels, network, ports=None):
+    def __init__(self, name, labels, network, ports=None, state="running"):
         self.name = name
         self.labels = labels
         self.removed = False
@@ -27,14 +27,18 @@ class _FakeContainer:
             for i, port in enumerate(ports):
                 bindings[port] = [{"HostIp": "0.0.0.0", "HostPort": str(49000 + i)}]
         self.attrs = {
+            "State": {"Status": state, "ExitCode": 0 if state == "running" else 1},
             "NetworkSettings": {
                 "Networks": {network: {"IPAddress": "172.99.0.10"}},
                 "Ports": bindings,
-            }
+            },
         }
 
     def reload(self):
         pass
+
+    def logs(self, tail=20):
+        return b"boom: exited\n"
 
     def remove(self, force=False):
         self.removed = True
@@ -60,17 +64,21 @@ class _FakeNetwork:
 
 
 class _FakeContainers:
-    def __init__(self):
+    def __init__(self, exit_nodes=None):
         self.created = []
         self.run_kwargs = []
+        # node names whose container should report 'exited' right after start
+        self.exit_nodes = set(exit_nodes or ())
 
     def run(self, **kwargs):
         self.run_kwargs.append(kwargs)
+        node = kwargs["labels"].get(LABEL_NODE)
         container = _FakeContainer(
             kwargs["name"],
             kwargs["labels"],
             kwargs["network"],
             list((kwargs.get("ports") or {}).keys()),
+            state="exited" if node in self.exit_nodes else "running",
         )
         self.created.append(container)
         return container
@@ -101,8 +109,8 @@ class _FakeNetworks:
 
 
 class _FakeClient:
-    def __init__(self):
-        self.containers = _FakeContainers()
+    def __init__(self, exit_nodes=None):
+        self.containers = _FakeContainers(exit_nodes=exit_nodes)
         self.networks = _FakeNetworks()
 
 
@@ -270,6 +278,25 @@ def test_entrypoint_non_attacker_node_gets_keepalive_and_ssh():
     assert outputs["node_ops_ssh_command"].startswith("docker exec -it ")
     # non-canonical role → no legacy role-prefixed keys, per-node only
     assert "attack_vm_ssh_command" not in outputs
+
+
+def test_exited_node_is_surfaced_not_silently_successful():
+    # The #1 docker-local gotcha: a target with no foreground service exits the
+    # instant it starts. The deploy still 'succeeds', but the dead node must be
+    # visible (state + unhealthy_nodes), not silently reported as fine.
+    client = _FakeClient(exit_nodes={"web"})
+    provider = DockerLocalProvider(client=client)
+    scenario = {
+        "requires": {"provider_class": "container"},
+        "nodes": [
+            {"name": "web", "role": "victim", "image": "alpine"},
+            {"name": "jump", "role": "attacker", "image": "alpine"},
+        ],
+    }
+    outputs = provider.deploy(scenario, "exit-test")["outputs"]
+    assert outputs["node_web_state"] == "exited"
+    assert outputs["node_jump_state"] == "running"
+    assert outputs["unhealthy_nodes"] == ["web"]
 
 
 # --- real-docker integration (the P1-4 e2e; runs in CI) -------------------------
