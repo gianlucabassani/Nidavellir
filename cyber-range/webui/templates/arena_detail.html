@@ -81,6 +81,30 @@
   </div>
 </div>
 
+<div class="card pad-0" style="margin-top:18px">
+  <div class="card-head"><h3><i class="fa-solid fa-clipboard-list"></i> Activity</h3>
+    <div class="spacer"></div>
+    <a href="{{ url_for('audit') }}" class="muted" style="font-size:12.5px">Full audit <i class="fa-solid fa-arrow-right"></i></a>
+  </div>
+  {% if events %}
+  <table class="table">
+    <thead><tr><th>Time</th><th>Type</th><th>Actor</th><th>Details</th></tr></thead>
+    <tbody>
+      {% for e in events %}
+      <tr>
+        <td class="mono faint" style="white-space:nowrap">{{ e.ts }}</td>
+        <td>{{ ui.event_badge(e.type) }}</td>
+        <td>{{ e.actor }}</td>
+        <td>{{ ui.event_detail(e) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty" style="padding:32px">No recorded activity for this arena yet.</div>
+  {% endif %}
+</div>
+
 <script id="lab-data" type="application/json">{{ outputs | tojson | safe }}</script>
 {% endblock %}
 

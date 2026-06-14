@@ -78,3 +78,8 @@ class RestClient:
             "POST", f"/arenas/{arena_id}/exec", api_key,
             json={"node": node, "command": command, "timeout": timeout},
         )
+
+    def list_events(self, api_key: str, arena_id: str, limit: int = 100) -> dict:
+        return self._request(
+            "GET", f"/deployments/{arena_id}/events?limit={int(limit)}", api_key
+        )

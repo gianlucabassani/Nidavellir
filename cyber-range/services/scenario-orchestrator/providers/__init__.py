@@ -32,6 +32,17 @@ def infra_class_of(name: str) -> str:
     return _REGISTRY[name].infra_class
 
 
+def default_provider_name() -> str:
+    """The provider name `get_provider(None)` resolves to — mirrors the
+    precedence below without instantiating a driver (RANGE_PROVIDER > MOCK_MODE
+    > openstack). Lets callers (API/UI) reason about the active default."""
+    name = os.getenv("RANGE_PROVIDER")
+    if name is None:
+        mock = os.getenv("MOCK_MODE", "false").lower() == "true"
+        name = "mock" if mock else "openstack"
+    return name
+
+
 def get_provider(name: str | None = None) -> RangeProvider:
     if name is None:
         name = os.getenv("RANGE_PROVIDER")

@@ -73,6 +73,34 @@ def test_status_unknown_returns_404(client):
     assert resp.status_code == 404
 
 
+def test_providers_reports_active_default(client):
+    body = client.get("/providers").json()
+    assert "default" in body
+    assert {p["name"] for p in body["providers"]} >= {"mock", "docker-local"}
+
+
+def test_events_endpoints_expose_the_audit_trail(client):
+    # A deploy records a synchronous 'created' event (the dispatch is stubbed).
+    sysid = client.post(
+        "/deploy", json={"scenario": "basic_pentest", "instance_id": "evt-lab"}
+    ).json()["instance_id"]
+
+    per_arena = client.get(f"/deployments/{sysid}/events")
+    assert per_arena.status_code == 200
+    events = per_arena.json()["events"]
+    assert any(e["type"] == "created" for e in events)
+    assert all(e["lab_id"] == sysid for e in events)
+
+    glob = client.get("/events?limit=20")
+    assert glob.status_code == 200
+    assert any(e["lab_id"] == sysid for e in glob.json()["events"])
+
+
+def test_arena_events_404_for_unknown_arena(client):
+    resp = client.get(f"/deployments/{uuid.uuid4()}/events")
+    assert resp.status_code == 404
+
+
 def test_destroy_unknown_returns_404(client):
     resp = client.delete(f"/destroy/{uuid.uuid4()}")
     assert resp.status_code == 404

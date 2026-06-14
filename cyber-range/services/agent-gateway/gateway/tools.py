@@ -234,3 +234,25 @@ def run_command(
         ok=True, arena_id=arena_id,
     )
     return res
+
+
+# --- defender stance ---------------------------------------------------------
+
+
+def query_events(
+    ctx: GatewayContext,
+    arena_id: str,
+    limit: int = 100,
+    type: str | None = None,
+) -> dict:
+    """Read the arena's audit/event stream (newest first) — the defender's
+    detection feed. Each entry is an audited action: deploy, status change, or
+    `agent_exec` (a command the attacker ran, with node + exit code). Optionally
+    filter by `type` (e.g. 'agent_exec'). Read-only."""
+    _guard(ctx, "query_events")
+    data = ctx.client.list_events(ctx.session.api_key, arena_id, limit)
+    events = data.get("events", [])
+    if type:
+        events = [e for e in events if e.get("type") == type]
+    _trace(ctx, "query_events", {"limit": limit, "type": type}, ok=True, arena_id=arena_id)
+    return {"arena_id": arena_id, "count": len(events), "events": events}

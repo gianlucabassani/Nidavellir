@@ -70,6 +70,22 @@ def _catalog():
     return images, attackers, victims
 
 
+def _events(instance_id=None, limit=100):
+    path = f"/deployments/{instance_id}/events" if instance_id else "/events"
+    data, _ = _api_get(f"{path}?limit={int(limit)}")
+    return (data or {}).get("events", [])
+
+
+def _default_infra():
+    """Infra class ('container'|'vm'|'any') of the orchestrator's default provider
+    — lets the UI flag scenarios the default backend can't run."""
+    data, _ = _api_get("/providers")
+    if not data:
+        return "any"
+    infra = {p["name"]: p["infra_class"] for p in data.get("providers", [])}
+    return infra.get(data.get("default"), "any")
+
+
 def _parse_nodes(outputs):
     """Flatten the provider's per-node outputs into a render-friendly list."""
     nodes = []
@@ -160,8 +176,12 @@ def arenas():
 @app.route("/launch")
 def launch():
     _, attackers, victims = _catalog()
-    return render_template("launch.html", active="launch",
-                           scenarios=_scenarios(), attackers=attackers, victims=victims)
+    default_infra = _default_infra()
+    scenarios = _scenarios()
+    # Compatible scenarios first, so the (auto-selected) first option is runnable.
+    scenarios.sort(key=lambda s: default_infra not in ("any", s.get("provider_class")))
+    return render_template("launch.html", active="launch", scenarios=scenarios,
+                           attackers=attackers, victims=victims, default_infra=default_infra)
 
 
 @app.route("/scenarios")
@@ -187,6 +207,7 @@ def arena_detail(instance_id):
         nodes=_parse_nodes(outputs),
         unhealthy=outputs.get("unhealthy_nodes"),
         provider=outputs.get("provider") or data.get("provider"),
+        events=_events(instance_id, limit=30),
     )
 
 
@@ -204,18 +225,6 @@ _STUBS = {
             {"title": "Budgets & kill switch", "note": "step / time / token limits per agent"},
         ],
         "roadmap": "Phase 2 — MCP agent gateway & stances",
-    },
-    "audit": {
-        "feature": "Audit", "icon": "fa-clipboard-list",
-        "summary": "Immutable event trail across every arena and agent action.",
-        "blurb": "Every deploy, exec, and lifecycle change is already recorded in the "
-                 "append-only events table. This view will stream, filter, and export it.",
-        "todo": [
-            {"title": "Live event stream", "note": "feed from the events table (SSE)"},
-            {"title": "Filter & search", "note": "by arena, actor, type, time window"},
-            {"title": "Trace export", "note": "red/blue datasets for replay & eval"},
-        ],
-        "roadmap": "Phase 7 — SSE console · Phase 4 — trace export",
     },
     "settings": {
         "feature": "Settings", "icon": "fa-gear",
@@ -239,7 +248,7 @@ def agents():
 
 @app.route("/audit")
 def audit():
-    return render_template("stub.html", active="audit", **_STUBS["audit"])
+    return render_template("audit.html", active="audit", events=_events(limit=150))
 
 
 @app.route("/settings")

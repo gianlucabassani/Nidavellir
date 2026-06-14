@@ -88,8 +88,8 @@ def test_logout_rejects_missing_csrf_token(client):
     assert client.get("/").status_code == 200  # still logged in
 
 
-def test_lobby_separates_destroyed_labs(client, monkeypatch):
-    """Destroyed labs must leave the mission list and land in the archive."""
+def test_arenas_separate_destroyed_into_archive(client, monkeypatch):
+    """Destroyed arenas must leave the active list and land in the archive."""
     import app as webui_module
 
     class _FakeResp:
@@ -113,14 +113,14 @@ def test_lobby_separates_destroyed_labs(client, monkeypatch):
 
     monkeypatch.setattr(webui_module.requests, "get", fake_get)
     _login(client)
-    html = client.get("/").data.decode()
+    html = client.get("/arenas").data.decode()
 
     assert "lab-alive" in html
-    assert "ARCHIVE" in html and "lab-gone" in html
-    # The destroyed lab must not render as a mission card (those carry the
-    # status badge layout); it appears only inside the archive collapse.
-    archive_idx = html.index("id=\"archive\"")
-    assert html.index("lab-gone") > archive_idx
+    assert "Archive" in html and "lab-gone" in html
+    # The destroyed arena appears only inside the archive section, which renders
+    # below the active list — so it must come after the "Archive" heading.
+    assert html.index("lab-gone") > html.index("Archive")
+    assert html.index("lab-alive") < html.index("Archive")
 
 
 def test_external_redirect_target_is_ignored(client):
@@ -173,7 +173,7 @@ def test_destroy_form_route_redirects_with_flash(client):
     assert resp.status_code == 302  # back to the lobby with a flash, not a 500
 
 
-def test_lobby_archive_offers_cleanup_controls(client, monkeypatch):
+def test_arenas_archive_offers_cleanup_controls(client, monkeypatch):
     import app as webui_module
 
     class _FakeResp:
@@ -195,7 +195,7 @@ def test_lobby_archive_offers_cleanup_controls(client, monkeypatch):
 
     monkeypatch.setattr(webui_module.requests, "get", fake_get)
     _login(client)
-    html = client.get("/").data.decode()
+    html = client.get("/arenas").data.decode()
 
     assert "/archive/clear" in html
     assert "/archive/delete/id-2" in html

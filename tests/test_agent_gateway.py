@@ -62,6 +62,15 @@ class _FakeRestClient:
         self.calls.append(("exec", api_key, arena_id, node, command, timeout))
         return {"node": node, "exit_code": 0, "stdout": f"ran: {command}\n", "stderr": ""}
 
+    def list_events(self, api_key, arena_id, limit=100):
+        self.calls.append(("list_events", api_key, arena_id, limit))
+        return {"events": [
+            {"id": 2, "type": "agent_exec", "actor": "agent",
+             "payload": {"node": "jump", "command": "whoami", "exit_code": 0}},
+            {"id": 1, "type": "status", "actor": "worker",
+             "payload": {"from": "pending", "to": "active"}},
+        ]}
+
 
 def _ctx(stance=Stance.attacker, trace_dir=None, client=None):
     return GatewayContext(
@@ -95,8 +104,8 @@ def test_attacker_owns_exec_and_recon_tools():
     # other stances do NOT get the attacker toolset
     assert not Session("k", Stance.defender).can_use("run_command")
     assert not Session("k", Stance.mitm).can_use("run_command")
-    # tools for the not-yet-built stances stay absent
-    assert not Session("k", Stance.defender).can_use("query_events")
+    # the MITM toolset is still unbuilt
+    assert not Session("k", Stance.mitm).can_use("query_events")
 
 
 # --- session auth ------------------------------------------------------------
@@ -292,3 +301,40 @@ def test_defender_cannot_run_command():
     ctx = _ctx(stance=Stance.defender)
     with pytest.raises(ToolNotAllowed):
         tools.run_command(ctx, "arena-1", "id")
+
+
+# --- defender stance ---------------------------------------------------------
+
+
+def test_defender_owns_query_events_and_topology():
+    dfn = Session("k", Stance.defender)
+    assert dfn.can_use("query_events")
+    assert dfn.can_use("get_topology")
+    assert not dfn.can_use("list_targets")  # recon-for-attack stays attacker-only
+
+
+def test_query_events_proxies_and_filters_by_type():
+    ctx = _ctx(stance=Stance.defender)
+    out = tools.query_events(ctx, "arena-1")
+    assert out["arena_id"] == "arena-1" and out["count"] == 2
+    assert ("list_events", "cg_secret_key", "arena-1", 100) in ctx.client.calls
+    only_exec = tools.query_events(ctx, "arena-1", type="agent_exec")
+    assert only_exec["count"] == 1
+    assert only_exec["events"][0]["type"] == "agent_exec"
+
+
+def test_query_events_blocked_for_attacker():
+    ctx = _ctx(stance=Stance.attacker)
+    with pytest.raises(ToolNotAllowed):
+        tools.query_events(ctx, "arena-1")
+
+
+def test_defender_session_registers_query_events_not_run_command():
+    import asyncio
+
+    from gateway.server import build_server
+    mcp = build_server(GatewayConfig(env={"CYBERGUARD_STANCE": "defender",
+                                          "CYBERGUARD_GATEWAY_HOST": "127.0.0.1"}))
+    names = {t.name for t in asyncio.run(mcp.list_tools())}
+    assert {"query_events", "get_topology"} <= names
+    assert "run_command" not in names

@@ -29,16 +29,17 @@
         <label class="label">Scenario</label>
         <select class="select" name="scenario">
           {% for s in scenarios %}
-          <option value="{{ s.id }}" title="{{ s.description }}">
-            {{ s.name }} · {{ s.difficulty }} · {{ s.nodes }} node{{ 's' if s.nodes != 1 }}{% if s.provider_class != 'container' %} · ⚠ VM{% endif %}
+          {% set ok = default_infra in ('any', s.provider_class) %}
+          <option value="{{ s.id }}" title="{{ s.description }}" {{ 'disabled' if not ok }}>
+            {{ s.name }} · {{ s.difficulty }} · {{ s.nodes }} node{{ 's' if s.nodes != 1 }}{% if not ok %} · ⚠ needs {{ s.provider_class }} provider{% endif %}
           </option>
           {% else %}
           <option value="container_web_pentest">Web Pentest Lab (Containers)</option>
           {% endfor %}
         </select>
         <div class="help">
-          Container scenarios deploy locally in seconds. <b>VM</b> scenarios need a
-          cloud provider (OpenStack/AWS) and will not run on the default local stack.
+          Default provider serves <b>{{ default_infra }}</b>-class infra. Greyed-out
+          scenarios need a different backend (e.g. VM scenarios need OpenStack/AWS).
         </div>
       </div>
       <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">

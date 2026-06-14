@@ -77,7 +77,9 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
 
     # Per-stance tools: only register what the bound stance may use, so an
     # agent's tool list reflects its stance (the runtime guard re-checks).
-    if parse_stance(cfg.stance) is Stance.attacker:
+    stance = parse_stance(cfg.stance)
+
+    if stance is Stance.attacker:
         @mcp.tool()
         def get_topology(arena_id: str) -> dict:
             """The arena's nodes (IPs, URLs, which is the foothold) and networks."""
@@ -95,6 +97,18 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
             return tools.run_command(
                 ctx(), arena_id=arena_id, command=command, node=node, timeout=timeout
             )
+
+    elif stance is Stance.defender:
+        @mcp.tool()
+        def get_topology(arena_id: str) -> dict:
+            """The arena's nodes (IPs, URLs, foothold) and networks — what to watch."""
+            return tools.get_topology(ctx(), arena_id=arena_id)
+
+        @mcp.tool()
+        def query_events(arena_id: str, limit: int = 100, type: str | None = None) -> dict:
+            """Read the arena's audit/event stream (the detection feed). Filter by
+            `type` (e.g. 'agent_exec' for attacker commands)."""
+            return tools.query_events(ctx(), arena_id=arena_id, limit=limit, type=type)
 
     return mcp
 

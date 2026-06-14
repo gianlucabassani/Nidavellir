@@ -19,7 +19,7 @@ import scenarios
 from auth import Principal, ensure_bootstrap_key, require_principal
 from database import Database
 from orchestrator import Orchestrator
-from providers import available_providers, infra_class_of
+from providers import available_providers, default_provider_name, infra_class_of
 from states import IllegalTransition, LabStatus
 from tasks import deploy_lab, destroy_lab
 from config import validate_config
@@ -198,12 +198,14 @@ async def deploy_custom_arena(
 
 @app.get("/providers")
 def list_providers(principal: Principal = Depends(require_principal)):
-    """Available deployment backends and the infrastructure class they serve."""
+    """Available deployment backends, the infra class each serves, and the
+    active default (so clients can flag scenarios the default can't run)."""
     return {
+        "default": default_provider_name(),
         "providers": [
             {"name": name, "infra_class": infra_class_of(name)}
             for name in available_providers()
-        ]
+        ],
     }
 
 @app.get("/deployments")
@@ -438,6 +440,29 @@ async def exec_in_arena(
         "stdout": (result.get("stdout") or "")[:EXEC_OUTPUT_CAP],
         "stderr": (result.get("stderr") or "")[:EXEC_OUTPUT_CAP],
     }
+
+
+# Audit stream (ADR-0004). Read-only views over the append-only `events` table —
+# the operator audit console (WebUI) and the defender stance's detection feed.
+EVENTS_MAX_LIMIT = 500
+
+
+@app.get("/events")
+def list_events(limit: int = 100, principal: Principal = Depends(require_principal)):
+    """Recent audit events across all arenas (newest first)."""
+    limit = max(1, min(limit, EVENTS_MAX_LIMIT))
+    return {"events": db.list_events(limit=limit)}
+
+
+@app.get("/deployments/{instance_id}/events")
+def list_arena_events(
+    instance_id: str, limit: int = 100, principal: Principal = Depends(require_principal)
+):
+    """Audit events for a single arena (newest first) — deploy/status/exec/etc."""
+    if not db.get_deployment(instance_id):
+        raise HTTPException(status_code=404, detail="Instance not found")
+    limit = max(1, min(limit, EVENTS_MAX_LIMIT))
+    return {"events": db.list_events(lab_id=instance_id, limit=limit)}
 
 
 if __name__ == "__main__":

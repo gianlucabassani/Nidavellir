@@ -20,3 +20,22 @@
   {%- set pulse = 'pulse' if status in ('pending','deploying','destroying') else '' -%}
   <span class="dot dot--{{ c }} {{ pulse }}"></span>
 {% endmacro %}
+
+{% macro event_badge(type) %}
+  {%- set m = {'created':'ok','status':'info','agent_exec':'accent','reaped':'idle',
+               'record_deleted':'idle','failed':'danger'} -%}
+  <span class="badge badge--{{ m.get(type, 'idle') }}">{{ (type or '?') | replace('_',' ') }}</span>
+{% endmacro %}
+
+{# Compact human summary of an event's payload. #}
+{% macro event_detail(e) %}
+  {%- set p = e.payload or {} -%}
+  {%- if e.type == 'agent_exec' -%}
+    <span class="mono faint">{{ p.node }}</span> · exit {{ p.exit_code }} ·
+    <span class="mono">{{ (p.command or '') | truncate(80) }}</span>
+  {%- elif e.type == 'status' -%}
+    <span class="mono">{{ p.get('from','?') }} → {{ p.get('to', p.get('status','?')) }}</span>
+  {%- elif p -%}
+    <span class="mono faint">{{ p | tojson | truncate(90) }}</span>
+  {%- else -%}<span class="faint">—</span>{%- endif -%}
+{% endmacro %}
