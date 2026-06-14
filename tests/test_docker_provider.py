@@ -9,6 +9,7 @@ import pytest
 
 from providers.docker_local import (
     LABEL_LAB_ID,
+    LABEL_NODE,
     LABEL_ROLE,
     DockerLocalProvider,
 )
@@ -44,6 +45,15 @@ class _FakeNetwork:
         self.name = name
         self.labels = labels
         self.removed = False
+        self.connected = []
+
+    def connect(self, container):
+        # Mirror docker SDK: attaching a running container adds an interface
+        # (and an IP) on this network.
+        self.connected.append(container)
+        container.attrs["NetworkSettings"]["Networks"][self.name] = {
+            "IPAddress": "172.99.7.7"
+        }
 
     def remove(self):
         self.removed = True
@@ -181,6 +191,85 @@ def test_failed_deploy_rolls_back(monkeypatch):
     # The half-created lab must have been torn down.
     assert all(c.removed for c in client.containers.created)
     assert all(n.removed for n in client.networks.created)
+
+
+# --- v3 multi-segment topology (P1-2) ------------------------------------------
+
+
+MULTI_SEGMENT = {
+    "requires": {"provider_class": "container"},
+    "network": {"segments": [{"name": "dmz"}, {"name": "corp"}]},
+    "nodes": [
+        {"name": "web", "role": "victim", "image": "dvwa", "segments": ["dmz"], "ports": [80]},
+        {"name": "db", "role": "victim", "image": "postgres", "segments": ["corp"]},
+        {"name": "jump", "role": "attacker", "image": "kali",
+         "segments": ["dmz", "corp"], "entrypoint": True},
+    ],
+}
+
+
+def test_multi_segment_creates_one_network_per_segment_and_straddles():
+    client = _FakeClient()
+    provider = DockerLocalProvider(client=client)
+
+    result = provider.deploy(MULTI_SEGMENT, "multiseg1-uuid")
+    assert result["success"] is True
+
+    # One bridge per declared segment (short id "multiseg").
+    names = {n.name for n in client.networks.created}
+    assert names == {"cyberguard-multiseg-corp", "cyberguard-multiseg-dmz"}
+
+    # The straddling foothold is attached to both of its segments.
+    jump = next(c for c in client.containers.created if c.name.endswith("-jump"))
+    assert set(jump.attrs["NetworkSettings"]["Networks"]) >= {
+        "cyberguard-multiseg-dmz", "cyberguard-multiseg-corp"
+    }
+
+    # Containers are keyed/labeled by unique node name (not role).
+    node_labels = {kw["labels"][LABEL_NODE] for kw in client.containers.run_kwargs}
+    assert node_labels == {"web", "db", "jump"}
+    # default-first then alpha → corp, dmz; the primary is the first.
+    assert result["outputs"]["lab_networks"] == [
+        "cyberguard-multiseg-corp", "cyberguard-multiseg-dmz"
+    ]
+    assert result["outputs"]["lab_network"] == "cyberguard-multiseg-corp"
+
+
+def test_repeated_roles_get_per_node_outputs_without_collision():
+    provider = DockerLocalProvider(client=_FakeClient())
+    outputs = provider.deploy(MULTI_SEGMENT, "multiseg2")["outputs"]
+
+    # Both victims are addressable per-node (no overwrite).
+    assert outputs["node_web_private_ip"]
+    assert outputs["node_db_private_ip"]
+    assert outputs["node_jump_private_ip"]
+    # The legacy role key resolves to the FIRST victim only.
+    assert outputs["victim_vm_name"] == outputs["node_web_name"]
+    # The foothold exposes an exec command per-node and on the legacy key.
+    assert outputs["node_jump_ssh_command"].startswith("docker exec -it ")
+    assert "attack_vm_ssh_command" in outputs
+    # A published port surfaces as a per-node URL.
+    assert outputs["node_web_url"].startswith("http://127.0.0.1:")
+
+
+def test_entrypoint_non_attacker_node_gets_keepalive_and_ssh():
+    client = _FakeClient()
+    provider = DockerLocalProvider(client=client)
+    scenario = {
+        "requires": {"provider_class": "container"},
+        "network": {"segments": [{"name": "lab"}]},
+        "nodes": [
+            {"name": "ops", "role": "jumpbox", "image": "ubuntu",
+             "segments": ["lab"], "entrypoint": True},
+        ],
+    }
+    outputs = provider.deploy(scenario, "entry1")["outputs"]
+
+    (kw,) = client.containers.run_kwargs
+    assert kw["command"] == "sleep infinity"  # an entrypoint node is kept alive
+    assert outputs["node_ops_ssh_command"].startswith("docker exec -it ")
+    # non-canonical role → no legacy role-prefixed keys, per-node only
+    assert "attack_vm_ssh_command" not in outputs
 
 
 # --- real-docker integration (the P1-4 e2e; runs in CI) -------------------------

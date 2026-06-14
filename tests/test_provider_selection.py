@@ -43,7 +43,12 @@ def test_providers_endpoint_lists_backends(client):
     resp = client.get("/providers")
     assert resp.status_code == 200
     by_name = {p["name"]: p["infra_class"] for p in resp.json()["providers"]}
-    assert by_name == {"mock": "any", "openstack": "vm", "docker-local": "container"}
+    assert by_name == {
+        "mock": "any",
+        "openstack": "vm",
+        "docker-local": "container",
+        "aws": "vm",
+    }
 
 
 def test_deploy_without_provider_uses_default(client):

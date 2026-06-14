@@ -86,6 +86,7 @@ infrastructure class each one provides:
 ```json
 {
   "providers": [
+    { "name": "aws", "infra_class": "vm" },
     { "name": "docker-local", "infra_class": "container" },
     { "name": "mock", "infra_class": "any" },
     { "name": "openstack", "infra_class": "vm" }

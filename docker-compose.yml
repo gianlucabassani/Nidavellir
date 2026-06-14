@@ -116,6 +116,7 @@ services:
       
       # Terraform templates (read-only)
       - ./cyber-range/infra/terraform:/app/terraform:ro
+      - ./cyber-range/infra/terraform-aws:/app/terraform-aws:ro
     networks:
       - cyberguard-network
     healthcheck:
@@ -170,6 +171,7 @@ services:
       - ./keys:/app/keys
       - tf-cache:/app/cache
       - ./cyber-range/infra/terraform:/app/terraform:ro
+      - ./cyber-range/infra/terraform-aws:/app/terraform-aws:ro
     networks:
       - cyberguard-network
 

@@ -358,8 +358,11 @@ A scenario is the authored, provider-agnostic spec for an arena: arbitrary
 trio). The shipped specs are now **schema v3** — see
 [SCENARIOS.md](SCENARIOS.md) for the authoring guide and
 [scenario.schema.json](scenario.schema.json) for the machine-readable contract.
-The generic per-provider compiler (`nodes[]` → container project / Terraform
-module) is ROADMAP Phase 1 **P1-2**.
+The generic per-provider compiler (ROADMAP Phase 1 **P1-2**) realizes the
+topology on **docker-local** (one bridge per segment, one container per node)
+and **AWS** (per-arena VPC, one subnet per segment, one EC2 per node, no egress);
+a per-provider **image map** resolves logical images (`dvwa`/`kali`/…) per
+backend. The OpenStack generic module is pending (needs creds).
 
 ### 1. basic_pentest
 
@@ -453,7 +456,7 @@ sequencing — lives in **[ROADMAP.md](../ROADMAP.md)**. Highlights:
 Shipped substrate:
 - [x] Docker Compose stack; test suite + CI (SQLite + Postgres)
 - [x] API-key auth + roles; input validation; CSRF + API rate limiting
-- [x] Provider abstraction (`mock` / `docker-local` / `openstack`); per-request provider
+- [x] Provider abstraction (`mock` / `docker-local` / `openstack` / `aws`); per-request provider
 - [x] PostgreSQL + SQLAlchemy + Alembic; lab state machine + `events` audit; TTL reaper
 - [x] Secrets hygiene (log redaction + Fernet-encrypted outputs at rest)
 

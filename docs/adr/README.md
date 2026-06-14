@@ -25,7 +25,7 @@ contributors understand the reasoning instead of re-litigating it.
 | [0003](0003-provider-driver-interface.md) | Pluggable deployment providers behind a RangeProvider interface | Accepted |
 | [0004](0004-postgres-persistence.md) | PostgreSQL persistence via SQLAlchemy + Alembic | Accepted |
 | 0005 | MCP agent gateway protocol, stances & guardrails | Planned (ROADMAP Phase 2) |
-| 0006 | AWS topology & cost controls | Planned (ROADMAP Phase 5) |
+| [0006](0006-aws-topology.md) | AWS topology — generic nodes[] module & egress lockdown | Proposed (driver + module landed; real apply needs creds) |
 
 > **2026-06-13 pivot:** CyberGuard repositioned as an enterprise agent-testing
 > arena (dynamic N-node topologies + bring-your-own agents via MCP as

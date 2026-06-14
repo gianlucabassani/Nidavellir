@@ -16,6 +16,8 @@ if IN_DOCKER:
     CYBER_RANGE_DIR = BASE_DIR
     TEMPLATES_DIR = BASE_DIR / "templates"
     BASE_TERRAFORM_TEMPLATE = BASE_DIR / "terraform"
+    # Generic nodes[] AWS module (ROADMAP P1-2/P5-2); mounted by compose.
+    AWS_TERRAFORM_TEMPLATE = BASE_DIR / "terraform-aws"
 else:
     # Local development paths (relative)
     # DIRECTORIES - Corrected Path Resolution
@@ -25,6 +27,8 @@ else:
     # Code directories (inside cyber-range/)
     TEMPLATES_DIR = Path(__file__).parent / "templates"  # scenario-orchestrator/templates/
     BASE_TERRAFORM_TEMPLATE = CYBER_RANGE_DIR / "infra" / "terraform"
+    # Generic nodes[] AWS module (ROADMAP P1-2/P5-2).
+    AWS_TERRAFORM_TEMPLATE = CYBER_RANGE_DIR / "infra" / "terraform-aws"
 
 # Runtime directories (at project root for easy access)
 RUNS_DIR = Path(os.getenv("RUNS_DIR", str(BASE_DIR / "runs")))

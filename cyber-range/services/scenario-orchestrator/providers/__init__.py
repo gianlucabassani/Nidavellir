@@ -9,6 +9,7 @@ Selection precedence:
 """
 import os
 
+from providers.aws import AWSProvider
 from providers.base import RangeProvider
 from providers.docker_local import DockerLocalProvider
 from providers.mock import MockProvider
@@ -18,7 +19,7 @@ _REGISTRY: dict[str, type[RangeProvider]] = {
     MockProvider.name: MockProvider,
     OpenStackProvider.name: OpenStackProvider,
     DockerLocalProvider.name: DockerLocalProvider,
-    # "aws" lands here (roadmap Phase 7)
+    AWSProvider.name: AWSProvider,
 }
 
 

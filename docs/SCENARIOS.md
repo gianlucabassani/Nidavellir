@@ -125,7 +125,50 @@ lifted to first-class fields. New scenarios should be authored directly in v3.
 - Provider drivers consume `scenario_spec.normalized_nodes()` /
   `primary_cidr()`, so they accept either shape during the migration.
 
-The generic per-provider compiler that turns `nodes[]`/`segments[]` into a
-container project or a Terraform `nodes[]` module is Phase 1 **P1-2**; today
-docker-local fans out one container per node and the OpenStack driver still maps
-the canonical roles onto its fixed 3-VM template.
+### docker-local compilation (P1-2)
+
+The docker-local driver realizes the topology directly: **one bridge network
+per declared `segment`** (per arena), **one container per node** named
+`cg-<arena>-<node>` and attached to the networks of every segment it declares
+(a node can straddle segments). Nodes that declare no segment share a per-arena
+default bridge (named `cyberguard-<arena>`, preserving the flat single-network
+behaviour). `entrypoint`/`attacker` nodes are kept alive (`sleep infinity`) and
+get a `docker exec` command; declared `ports` are published on random host ports.
+
+Outputs are emitted **per node** (`node_<name>_private_ip`, `node_<name>_name`,
+`node_<name>_ssh_command`, `node_<name>_url`) plus `lab_networks[]`, so N-node
+topologies and repeated roles are fully addressable. Legacy role-prefixed keys
+(`attack_vm_*`, `victim_vm_*`, `victim_web_url`, …) are still emitted for the
+first node of each canonical role, for dashboard/mock parity.
+
+### AWS compilation (P1-2 / P5-2)
+
+The `aws` driver compiles the same v3 topology to a **per-arena VPC** via a
+generic OpenTofu module (`infra/terraform-aws/`): one `aws_subnet` per declared
+`segment`, one `aws_instance` per `node` (`for_each`), everything tagged
+`cyberguard:arena_id`. **No internet gateway/NAT is created** and the security
+group is confined to the VPC CIDR — arenas have no egress by construction
+(`associate_public_ip` defaults off; SSM is the intended access path). Node
+`size` maps to an instance type; `image` resolves through the image map to a
+fixed AMI id or a `data.aws_ami` name+owner lookup. The scenario→variables
+mapping (`AWSProvider.compile_vars`) is pure and unit-tested; the real `apply`
+needs an AWS account (credentials/region from the environment), so it is
+exercised only when creds are present — see [ADR-0006](adr/0006-aws-topology.md).
+A node that straddles multiple segments lands in its **first** segment's subnet
+for now (true multi-homing is a follow-up). AWS outputs are flattened to the
+same `node_<name>_*` contract as docker-local.
+
+### Image map
+
+A node's `image` is a **logical name** resolved per provider by `images.py`:
+`dvwa`/`kali`/`ubuntu`/… → a container tag for docker-local, an AMI selector
+(name-filter + owner, or a fixed id) for aws. Unknown names — including a
+concrete container tag or `ami-…` id — **pass through unchanged**, so a scenario
+stays portable while still allowing a concrete reference when needed.
+
+### Still pending
+
+The OpenStack driver still maps the canonical roles onto its fixed 3-VM template
+(it reads v3 via `normalized_nodes`); replacing that with the generic
+`TerraformDriver` + a `nodes[]` module (as AWS now does) is deferred — it needs
+OpenStack credentials to verify.
