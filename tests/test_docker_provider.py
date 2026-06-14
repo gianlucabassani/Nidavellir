@@ -45,9 +45,11 @@ class _FakeContainer:
 
 
 class _FakeNetwork:
-    def __init__(self, name, labels):
+    def __init__(self, name, labels, internal=False, options=None):
         self.name = name
         self.labels = labels
+        self.internal = internal
+        self.options = options or {}
         self.removed = False
         self.connected = []
 
@@ -95,8 +97,8 @@ class _FakeNetworks:
     def __init__(self):
         self.created = []
 
-    def create(self, name, driver=None, labels=None):
-        network = _FakeNetwork(name, labels or {})
+    def create(self, name, driver=None, labels=None, internal=False, options=None):
+        network = _FakeNetwork(name, labels or {}, internal=internal, options=options)
         self.created.append(network)
         return network
 
@@ -115,7 +117,9 @@ class _FakeClient:
 
 
 CONTAINER_SCENARIO = {
-    "requires": {"provider_class": "container"},
+    # egress: open -> exercise the un-contained path (one bridge, publish on it);
+    # lockdown (the default) has its own dedicated tests below.
+    "requires": {"provider_class": "container", "egress": "open"},
     "vms": [
         {"name": "victim", "role": "victim", "image": "vulnerables/web-dvwa:latest", "ports": [80]},
         {"name": "attacker", "role": "attacker", "image": "kalilinux/kali-rolling:latest"},
@@ -205,7 +209,7 @@ def test_failed_deploy_rolls_back(monkeypatch):
 
 
 MULTI_SEGMENT = {
-    "requires": {"provider_class": "container"},
+    "requires": {"provider_class": "container", "egress": "open"},
     "network": {"segments": [{"name": "dmz"}, {"name": "corp"}]},
     "nodes": [
         {"name": "web", "role": "victim", "image": "dvwa", "segments": ["dmz"], "ports": [80]},
@@ -299,6 +303,72 @@ def test_exited_node_is_surfaced_not_silently_successful():
     assert outputs["unhealthy_nodes"] == ["web"]
 
 
+# --- egress containment (P2-3), default-ON ------------------------------------
+
+
+LOCKED_SCENARIO = {
+    "requires": {"provider_class": "container"},  # egress defaults to locked
+    "network": {"segments": [{"name": "lab"}]},
+    "nodes": [
+        {"name": "web", "role": "victim", "image": "dvwa", "segments": ["lab"], "ports": [80]},
+        {"name": "kali", "role": "attacker", "image": "kali", "segments": ["lab"],
+         "entrypoint": True},
+    ],
+}
+
+
+def test_locked_arena_uses_internal_nets_and_a_no_masquerade_ingress():
+    client = _FakeClient()
+    provider = DockerLocalProvider(client=client)
+
+    outputs = provider.deploy(LOCKED_SCENARIO, "lockaaaa-uuid")["outputs"]
+    assert outputs["egress"] == "blocked"
+
+    by_name = {n.name: n for n in client.networks.created}
+    seg = by_name["cyberguard-lockaaaa-lab"]
+    assert seg.internal is True  # hard egress block (no route to the internet)
+    ingress = by_name["cyberguard-lockaaaa-ingress"]
+    assert ingress.internal is False
+    assert ingress.options.get("com.docker.network.bridge.enable_ip_masquerade") == "false"
+
+    # The web node (publishes a port) runs PRIMARY on the ingress bridge so the
+    # operator's browser can reach it; publishing dies on an `internal` net.
+    web_kw = next(kw for kw in client.containers.run_kwargs if kw["labels"][LABEL_NODE] == "web")
+    assert web_kw["network"] == "cyberguard-lockaaaa-ingress"
+    assert web_kw.get("ports")  # the published port rides the ingress net
+    # The foothold (no ports) stays on the internal segment only — no ingress.
+    kali_kw = next(kw for kw in client.containers.run_kwargs if kw["labels"][LABEL_NODE] == "kali")
+    assert kali_kw["network"] == "cyberguard-lockaaaa-lab"
+    # The published web node still surfaces a host URL for the browser.
+    assert outputs["node_web_url"].startswith("http://127.0.0.1:")
+
+
+def test_locked_arena_without_published_ports_has_no_ingress_net():
+    client = _FakeClient()
+    provider = DockerLocalProvider(client=client)
+    scenario = {
+        "requires": {"provider_class": "container"},
+        "nodes": [{"name": "box", "role": "attacker", "image": "alpine", "entrypoint": True}],
+    }
+    outputs = provider.deploy(scenario, "nolisten-uuid")["outputs"]
+    assert outputs["egress"] == "blocked"
+    assert all(n.internal for n in client.networks.created)  # only internal segment net(s)
+    assert not any(n.name.endswith("-ingress") for n in client.networks.created)
+
+
+def test_open_arena_keeps_egress_and_creates_no_ingress():
+    client = _FakeClient()
+    provider = DockerLocalProvider(client=client)
+    scenario = {
+        "requires": {"provider_class": "container", "egress": "open"},
+        "nodes": [{"name": "web", "role": "victim", "image": "dvwa", "ports": [80]}],
+    }
+    outputs = provider.deploy(scenario, "openaaaa")["outputs"]
+    assert outputs["egress"] == "open"
+    assert all(n.internal is False for n in client.networks.created)
+    assert not any(n.name.endswith("-ingress") for n in client.networks.created)
+
+
 # --- real-docker integration (the P1-4 e2e; runs in CI) -------------------------
 
 
@@ -366,3 +436,30 @@ def test_real_container_lab_lifecycle():
     assert client.networks.list(
         filters={"label": f"{LABEL_LAB_ID}={instance_id}"}
     ) == []
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not _docker_available(), reason="no Docker daemon available")
+def test_locked_arena_blocks_egress_real_docker():
+    """Containment proof (P2-3): a node in a default-locked arena cannot reach
+    an external canary. This is the guarantee before any untrusted agent runs."""
+    scenario = {
+        "requires": {"provider_class": "container"},  # locked by default
+        "nodes": [{"name": "box", "role": "attacker", "image": "alpine:3.20",
+                   "entrypoint": True}],
+    }
+    provider = DockerLocalProvider()
+    iid = "itest-containment"
+    try:
+        assert provider.deploy(scenario, iid)["success"] is True
+        # Reach for a public IP from inside the arena -> must NOT connect.
+        res = provider.exec_in_node(
+            iid, "box",
+            "wget -q -T5 -O- http://1.1.1.1 && echo REACHED || echo BLOCKED",
+            timeout=15,
+        )
+        assert res["success"] is True, res.get("error")
+        assert "BLOCKED" in res["stdout"]
+        assert "REACHED" not in res["stdout"]
+    finally:
+        assert provider.destroy(iid)["success"] is True

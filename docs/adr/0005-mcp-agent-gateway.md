@@ -1,8 +1,13 @@
 # ADR-0005: MCP agent gateway — protocol, stances & guardrails
 
-- **Status:** Proposed (landed: lifecycle tools + auth + stance binding; the
+- **Status:** Accepted (landed: lifecycle tools + auth + stance binding; the
   **attacker** stance — `get_topology`/`list_targets`/`run_command` with
-  foothold-scope, step-budget, audit + trace, and a provider exec primitive)
+  foothold-scope, step-budget, audit + trace + provider exec primitive; the
+  **defender** stance — `query_events`/`get_topology` over the audit stream; and
+  **default-on egress containment** — locked arenas use Docker `internal`
+  segment networks with a no-masquerade ingress bridge for browser access,
+  proven by a CI containment test. **Deferred:** the allowlisted apt/pip mirror
+  for in-arena tooling, MITM stance, per-request HTTP auth.)
 - **Date:** 2026-06-14
 - **Deciders:** CyberGuard maintainers
 

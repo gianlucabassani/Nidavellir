@@ -42,6 +42,17 @@ DEFAULT_ATTACKER_COMMAND = "sleep infinity"
 # provider and WebUI expect these). Other roles are addressed per-node only.
 _ROLE_PREFIX = {"attacker": "attack_vm", "victim": "victim_vm", "monitor": "log_vm"}
 
+# Egress containment (ROADMAP P2-3), default-ON. A locked arena's segment
+# networks are `internal` — no route to the internet (verified: a node cannot
+# reach a public IP). Publishing a host port is silently dropped on an
+# `internal` net, so a node that exposes web ports ALSO joins a per-arena
+# no-masquerade "ingress" bridge: host->container DNAT works there for the
+# operator's browser, while the absence of SNAT keeps egress dead. A scenario
+# opts out (e.g. for tooling that must apt-install at runtime) with
+# `requires.egress: open`.
+_INGRESS_SEGMENT = "ingress"
+_NO_MASQUERADE = {"com.docker.network.bridge.enable_ip_masquerade": "false"}
+
 
 class DockerLocalProvider(RangeProvider):
     name = "docker-local"
@@ -83,6 +94,13 @@ class DockerLocalProvider(RangeProvider):
         """The segments a node attaches to, defaulting to the shared bridge."""
         return list(node.get("segments") or [_DEFAULT_SEGMENT])
 
+    @staticmethod
+    def _is_locked(scenario_config: dict) -> bool:
+        """Egress containment is ON unless the scenario opts out
+        (`requires.egress: open`)."""
+        egress = (scenario_config.get("requires") or {}).get("egress", "none")
+        return str(egress).lower() != "open"
+
     # --- interface -----------------------------------------------------------
 
     def deploy(self, scenario_config, instance_id, user_vars=None):
@@ -123,21 +141,41 @@ class DockerLocalProvider(RangeProvider):
                     wanted.append(seg)
         wanted.sort(key=lambda s: (s != _DEFAULT_SEGMENT, s))
 
+        locked = self._is_locked(scenario_config)
+        needs_ingress = locked and any(node.get("ports") for node in nodes)
+
         try:
             networks = {}
             for seg in wanted:
                 net_name = self._network_name(instance_id, seg)
-                logger.info(f"[{instance_id}] Creating arena network {net_name}")
+                logger.info(
+                    f"[{instance_id}] Creating arena network {net_name}"
+                    f"{' (internal/no-egress)' if locked else ''}"
+                )
                 networks[seg] = self.client.networks.create(
-                    net_name, driver="bridge", labels=labels
+                    net_name, driver="bridge", internal=locked, labels=labels
+                )
+
+            # Per-arena ingress bridge (no SNAT): lets the operator's browser
+            # reach published web ports on a locked arena without giving the
+            # node any working egress.
+            ingress = None
+            if needs_ingress:
+                ing_name = self._network_name(instance_id, _INGRESS_SEGMENT)
+                logger.info(f"[{instance_id}] Creating ingress network {ing_name} (no egress)")
+                ingress = self.client.networks.create(
+                    ing_name, driver="bridge", options=_NO_MASQUERADE, labels=labels
                 )
 
             records = []
             for node in nodes:
-                container = self._run_node(instance_id, node, networks, labels)
+                container = self._run_node(
+                    instance_id, node, networks, ingress, labels, locked
+                )
                 records.append((node, container))
 
             outputs = self._collect_outputs(instance_id, networks, wanted, records)
+            outputs["egress"] = "blocked" if locked else "open"
             unhealthy = outputs.get("unhealthy_nodes")
             if unhealthy:
                 # Don't pretend the arena is healthy: a node that exited the
@@ -158,16 +196,28 @@ class DockerLocalProvider(RangeProvider):
             self.destroy(instance_id)
             return {"success": False, "error": str(e)}
 
-    def _run_node(self, instance_id, node, networks, labels):
+    def _run_node(self, instance_id, node, networks, ingress, labels, locked):
         role = node.get("role", "node")
-        primary, *extra = self._node_segments(node)
+        segments = self._node_segments(node)
         image = images.resolve(node["image"], self.name)
+        has_ports = bool(node.get("ports"))
+
+        # A locked node that publishes ports runs PRIMARY on the no-masquerade
+        # ingress bridge (publishing is silently dropped on an `internal` net),
+        # then joins its segment(s) for inter-node traffic — egress stays dead.
+        # Otherwise it runs on its first segment as before.
+        if locked and has_ports and ingress is not None:
+            run_net = ingress.name
+            attach = segments
+        else:
+            run_net = networks[segments[0]].name
+            attach = segments[1:]
 
         run_kwargs = {
             "image": image,
             "name": self._container_name(instance_id, node["name"]),
             "detach": True,
-            "network": networks[primary].name,
+            "network": run_net,
             "labels": {**labels, LABEL_ROLE: role, LABEL_NODE: node["name"]},
         }
 
@@ -178,8 +228,8 @@ class DockerLocalProvider(RangeProvider):
             run_kwargs["command"] = command
 
         # Publish declared service ports on random host ports so the operator's
-        # browser can reach e.g. DVWA.
-        if node.get("ports"):
+        # browser can reach e.g. DVWA (via the ingress bridge when locked).
+        if has_ports:
             run_kwargs["ports"] = {f"{p}/tcp": None for p in node["ports"]}
 
         logger.info(
@@ -187,8 +237,8 @@ class DockerLocalProvider(RangeProvider):
         )
         container = self.client.containers.run(**run_kwargs)
 
-        # Attach to any further segments this node straddles.
-        for seg in extra:
+        # Attach to the remaining segments this node straddles.
+        for seg in attach:
             networks[seg].connect(container)
         return container
 

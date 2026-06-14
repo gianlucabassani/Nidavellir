@@ -10,6 +10,11 @@
     <div class="flexrow">
       <h1 style="margin:0">{{ instance_name }}</h1>
       <span id="lab-status">{{ ui.status_badge(state) }}</span>
+      {% if outputs.egress == 'blocked' %}
+      <span class="badge badge--ok" title="Arena has no internet egress (contained)"><i class="fa-solid fa-lock"></i> contained</span>
+      {% elif outputs.egress == 'open' %}
+      <span class="badge badge--warn" title="Arena can reach the internet"><i class="fa-solid fa-globe"></i> egress open</span>
+      {% endif %}
     </div>
     <div class="sub mono">{{ provider or 'provider ?' }} · {{ instance_id }}</div>
   </div>

@@ -28,7 +28,7 @@ class _FakeContainers:
 
 
 class _FakeNetworks:
-    def create(self, name, driver=None, labels=None):
+    def create(self, name, driver=None, labels=None, internal=False, options=None):
         class _N:
             pass
 
