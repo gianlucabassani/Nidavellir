@@ -40,6 +40,11 @@ class _FakeContainer:
     def logs(self, tail=20):
         return b"boom: exited\n"
 
+    def exec_run(self, cmd, **kwargs):
+        self.exec_calls = getattr(self, "exec_calls", [])
+        self.exec_calls.append(cmd)
+        return (0, b"")
+
     def remove(self, force=False):
         self.removed = True
 
@@ -53,10 +58,13 @@ class _FakeNetwork:
         self.removed = False
         self.connected = []
 
-    def connect(self, container):
+    def connect(self, container, aliases=None):
         # Mirror docker SDK: attaching a running container adds an interface
-        # (and an IP) on this network.
+        # (and an IP) on this network. `aliases` registers DNS names (used by
+        # the package mirror, reachable as `mirror` on each arena segment).
         self.connected.append(container)
+        self.aliases = getattr(self, "aliases", {})
+        self.aliases[container.name] = list(aliases or [])
         container.attrs["NetworkSettings"]["Networks"][self.name] = {
             "IPAddress": "172.99.7.7"
         }
@@ -110,10 +118,26 @@ class _FakeNetworks:
         ]
 
 
+class _FakeImages:
+    def __init__(self, present=True):
+        self.present = present  # whether the mirror image already exists
+        self.built = []
+
+    def get(self, name):
+        if self.present:
+            return object()
+        raise RuntimeError(f"image {name} not found")
+
+    def build(self, **kwargs):
+        self.built.append(kwargs)
+        return (object(), [])
+
+
 class _FakeClient:
-    def __init__(self, exit_nodes=None):
+    def __init__(self, exit_nodes=None, mirror_image_present=True):
         self.containers = _FakeContainers(exit_nodes=exit_nodes)
         self.networks = _FakeNetworks()
+        self.images = _FakeImages(present=mirror_image_present)
 
 
 CONTAINER_SCENARIO = {
@@ -277,7 +301,7 @@ def test_entrypoint_non_attacker_node_gets_keepalive_and_ssh():
     }
     outputs = provider.deploy(scenario, "entry1")["outputs"]
 
-    (kw,) = client.containers.run_kwargs
+    kw = next(kw for kw in client.containers.run_kwargs if kw["labels"][LABEL_NODE] == "ops")
     assert kw["command"] == "sleep infinity"  # an entrypoint node is kept alive
     assert outputs["node_ops_ssh_command"].startswith("docker exec -it ")
     # non-canonical role → no legacy role-prefixed keys, per-node only
@@ -352,8 +376,79 @@ def test_locked_arena_without_published_ports_has_no_ingress_net():
     }
     outputs = provider.deploy(scenario, "nolisten-uuid")["outputs"]
     assert outputs["egress"] == "blocked"
-    assert all(n.internal for n in client.networks.created)  # only internal segment net(s)
     assert not any(n.name.endswith("-ingress") for n in client.networks.created)
+    # Segment nets are internal (no egress). The only non-internal bridge is the
+    # package mirror's own egress bridge (the mirror needs to reach the repos).
+    seg_nets = [n for n in client.networks.created if not n.name.endswith("-mirror")]
+    assert seg_nets and all(n.internal for n in seg_nets)
+    mirror_net = next(n for n in client.networks.created if n.name.endswith("-mirror"))
+    assert mirror_net.internal is False
+
+
+# --- allowlisted package mirror (P2-3 / ADR-0005) -----------------------------
+
+
+def test_locked_arena_with_foothold_gets_allowlisted_mirror():
+    client = _FakeClient()
+    provider = DockerLocalProvider(client=client)
+    outputs = provider.deploy(LOCKED_SCENARIO, "mirroraa-uuid")["outputs"]
+
+    assert outputs["package_mirror"] == "allowlisted"
+
+    # A dedicated egress bridge + a mirror container running on it.
+    mirror_net = next(n for n in client.networks.created if n.name.endswith("-mirror"))
+    assert mirror_net.internal is False  # the mirror must reach the package repos
+    mirror_kw = next(
+        kw for kw in client.containers.run_kwargs if kw["labels"][LABEL_NODE] == "mirror"
+    )
+    assert mirror_kw["network"] == mirror_net.name
+
+    # The mirror joins each internal segment as `mirror` so footholds resolve it.
+    seg = next(n for n in client.networks.created if n.name == "cyberguard-mirroraa-lab")
+    assert "mirror" in seg.aliases.get(mirror_kw["name"], [])
+
+    # The foothold (kali) gets its apt/pip pointed at the mirror; the victim does not.
+    kali_kw = next(kw for kw in client.containers.run_kwargs if kw["labels"][LABEL_NODE] == "kali")
+    assert kali_kw["environment"]["http_proxy"] == "http://mirror:3128"
+    assert kali_kw["environment"]["https_proxy"] == "http://mirror:3128"
+    web_kw = next(kw for kw in client.containers.run_kwargs if kw["labels"][LABEL_NODE] == "web")
+    assert "environment" not in web_kw
+
+    # The foothold's apt is pinned to the allowlisted direct CDN.
+    kali_ct = next(c for c in client.containers.created if c.labels.get(LABEL_NODE) == "kali")
+    assert any("kali.download" in str(c) for c in getattr(kali_ct, "exec_calls", []))
+
+
+def test_mirror_image_is_built_when_absent():
+    client = _FakeClient(mirror_image_present=False)
+    provider = DockerLocalProvider(client=client)
+    provider.deploy(LOCKED_SCENARIO, "buildimg-uuid")
+    assert client.images.built, "mirror image should be built on first use"
+    assert client.images.built[0]["tag"] == "cyberguard/arena-mirror:latest"
+
+
+def test_mirror_opt_out_and_open_arena_have_no_mirror():
+    # Explicit opt-out on a locked arena.
+    client = _FakeClient()
+    provider = DockerLocalProvider(client=client)
+    scenario = {
+        "requires": {"provider_class": "container", "mirror": "off"},
+        "nodes": [{"name": "box", "role": "attacker", "image": "alpine", "entrypoint": True}],
+    }
+    outputs = provider.deploy(scenario, "nomirror1")["outputs"]
+    assert "package_mirror" not in outputs
+    assert not any(n.name.endswith("-mirror") for n in client.networks.created)
+
+    # An open (un-contained) arena never needs a mirror — egress works directly.
+    client2 = _FakeClient()
+    provider2 = DockerLocalProvider(client=client2)
+    open_scenario = {
+        "requires": {"provider_class": "container", "egress": "open"},
+        "nodes": [{"name": "box", "role": "attacker", "image": "alpine", "entrypoint": True}],
+    }
+    outputs2 = provider2.deploy(open_scenario, "nomirror2")["outputs"]
+    assert "package_mirror" not in outputs2
+    assert not any(n.name.endswith("-mirror") for n in client2.networks.created)
 
 
 def test_open_arena_keeps_egress_and_creates_no_ingress():
@@ -389,7 +484,9 @@ def test_real_container_lab_lifecycle():
     import docker
 
     scenario = {
-        "requires": {"provider_class": "container"},
+        # Open arena: a focused deploy/inspect/destroy lifecycle test. Egress
+        # containment + the package mirror have their own dedicated tests below.
+        "requires": {"provider_class": "container", "egress": "open"},
         "vms": [
             {"name": "victim", "role": "victim", "image": "alpine:3.20",
              "command": "sleep 60"},
@@ -461,5 +558,52 @@ def test_locked_arena_blocks_egress_real_docker():
         assert res["success"] is True, res.get("error")
         assert "BLOCKED" in res["stdout"]
         assert "REACHED" not in res["stdout"]
+    finally:
+        assert provider.destroy(iid)["success"] is True
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not _docker_available(), reason="no Docker daemon available")
+def test_locked_arena_mirror_allows_repos_but_not_egress_real_docker():
+    """The package mirror (P2-3 / ADR-0005) lets a contained foothold reach
+    allowlisted repos via the proxy, WITHOUT re-opening general egress: direct
+    internet is still dead, and a non-allowlisted host is denied by the proxy."""
+    scenario = {
+        "requires": {"provider_class": "container"},  # locked + mirror by default
+        "nodes": [{"name": "box", "role": "attacker", "image": "alpine:3.20",
+                   "entrypoint": True}],
+    }
+    provider = DockerLocalProvider()
+    iid = "itest-mirror"
+    try:
+        assert provider.deploy(scenario, iid)["success"] is True
+
+        # 1) Direct egress is STILL blocked — the mirror must not be a NAT hole.
+        direct = provider.exec_in_node(
+            iid, "box",
+            "env -u http_proxy -u https_proxy wget -q -T5 -O- http://1.1.1.1 "
+            "&& echo REACHED || echo BLOCKED",
+            timeout=15,
+        )
+        assert "BLOCKED" in direct["stdout"], direct
+        assert "REACHED" not in direct["stdout"], direct
+
+        # 2) An allowlisted repo IS reachable through the proxy (http_proxy is
+        #    pre-set on the foothold, so plain wget routes via the mirror).
+        allowed = provider.exec_in_node(
+            iid, "box",
+            "wget -q -T15 -O- http://deb.debian.org/debian/dists/bookworm/Release "
+            "| head -c1 >/dev/null && echo REACHED || echo BLOCKED",
+            timeout=25,
+        )
+        assert "REACHED" in allowed["stdout"], allowed
+
+        # 3) A non-allowlisted host is denied by the proxy (squid 403).
+        denied = provider.exec_in_node(
+            iid, "box",
+            "wget -q -T10 -O- http://example.com/ && echo REACHED || echo DENIED",
+            timeout=20,
+        )
+        assert "REACHED" not in denied["stdout"], denied
     finally:
         assert provider.destroy(iid)["success"] is True

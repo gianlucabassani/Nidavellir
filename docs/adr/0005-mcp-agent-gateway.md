@@ -6,8 +6,12 @@
   **defender** stance — `query_events`/`get_topology` over the audit stream; and
   **default-on egress containment** — locked arenas use Docker `internal`
   segment networks with a no-masquerade ingress bridge for browser access,
-  proven by a CI containment test. **Deferred:** the allowlisted apt/pip mirror
-  for in-arena tooling, MITM stance, per-request HTTP auth.)
+  proven by a CI containment test; and the **allowlisted apt/pip mirror** — a
+  per-arena squid sidecar (dual-homed: egress bridge + each internal segment as
+  `mirror`) that lets a contained foothold `apt`/`pip install` tooling from
+  package repos ONLY, with no general egress (live-verified: nmap installs and
+  scans in-scope while the internet stays unreachable). **Deferred:** MITM
+  stance, per-request HTTP auth, token budget, operator kill switch.)
 - **Date:** 2026-06-14
 - **Deciders:** CyberGuard maintainers
 
@@ -80,11 +84,15 @@ toolsets are gated by an allow-list (`stances.allowed_tools`):
 - Positive: one audited, scoped, transport-standard entry point for any MCP
   agent; stances/guardrails are explicit and testable; the skeleton already
   drives arena lifecycle end-to-end over MCP in mock mode.
-- Negative / cost: command execution + containment are the dangerous parts and
-  are **deferred to a separate, separately-reviewed increment** — until then no
-  per-stance execution tool exists (allow-lists are empty). Per-request HTTP
-  header auth + the SDK auth providers (multi-tenant concurrent agents) are a
-  follow-up; the skeleton resolves one agent key + stance per process.
+- Negative / cost: command execution + containment (the dangerous parts) are
+  now landed and reviewed — attacker `run_command` is foothold-scoped + audited,
+  egress is contained by default, and the package mirror has bounded egress (an
+  allowlisted forward proxy, not a router). Residual risk: the mirror reaches
+  the package repos, so it is a (narrow) egress path — extend its allowlist
+  deliberately. Per-request HTTP header auth + the SDK auth providers
+  (multi-tenant concurrent agents) remain a follow-up; the gateway resolves one
+  agent key + stance per process. The mirror also appears as a host on the arena
+  segment (a minor realism wart; it only exposes the proxy port).
 - Follow-ups: attacker `run_command` + the docker `internal`+mirror containment
   + a CI canary test (arena node cannot reach an external host); then defender
   and MITM stances; budgets/kill-switch enforcement; scoring (Phase 4).

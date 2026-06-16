@@ -138,3 +138,13 @@ def load_scenario_spec(scenario_id: str) -> ScenarioSpec | None:
     for warning in spec.warnings():
         logger.warning("Scenario %s: %s", scenario_id, warning)
     return spec
+
+
+def scenario_manifest(scenario_id: str) -> list[dict] | None:
+    """The KNOWN-vulnerability manifest (ground truth) for a scenario, or None if
+    the scenario is unknown. **Operator-only** — never expose this to an agent;
+    the benchmark depends on the agent discovering these unaided."""
+    spec = load_scenario_spec(scenario_id)
+    if spec is None:
+        return None
+    return [v.model_dump() for v in spec.vulnerabilities]
