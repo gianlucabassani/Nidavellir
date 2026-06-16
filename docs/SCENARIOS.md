@@ -73,10 +73,13 @@ ttl_hours: 8                     # optional
 | `schema` | no | `cyberguard/v3` (default) |
 | `name` | **yes** | display name |
 | `requires.provider_class` | no | `vm` \| `container` \| `any` (default `any`) |
+| `requires.egress` | no | `open` opts out of default-on egress containment (docker-local) |
+| `requires.mirror` | no | `off` disables the allowlisted apt/pip mirror on a contained arena (docker-local; default on when there's a foothold) |
 | `network.segments[]` | no | `{name, cidr?, description?}`; names are slugs |
 | `nodes[]` | **yes** (≥1) | see below |
 | `agents[]` | no | `{stance, node}`; stance ∈ `attacker`/`mitm`/`defender` |
-| `objectives[]` | no | `{id?, description, points?}` |
+| `objectives[]` | no | `{id?, description, points?}` (narrative goals) |
+| `vulnerabilities[]` | no | known-vuln manifest (ground truth): `{id, title, cwe?, node?, severity?, points?, description?}`. **Operator-only** — never shown to an agent; the goal is for the agent to discover these. Revealed via `GET /scenarios/{id}/vulnerabilities`; scored from self-reported findings by CWE+node. |
 | `ttl_hours`, `tags`, `difficulty`, `title`, `description` | no | metadata |
 
 **Node:** `name` (unique slug, required), `image` (required), `role`

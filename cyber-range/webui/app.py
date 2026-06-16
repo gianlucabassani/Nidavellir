@@ -76,6 +76,16 @@ def _events(instance_id=None, limit=100):
     return (data or {}).get("events", [])
 
 
+def _score(instance_id):
+    """The arena's benchmark scorecard (known-vuln manifest + found/missed).
+    Operator-only on the API; the WebUI key is operator/admin. Returns None when
+    the scenario has no manifest (so the panel hides itself)."""
+    data, ok = _api_get(f"/arenas/{instance_id}/score")
+    if not ok or not data or not data.get("manifest"):
+        return None
+    return data
+
+
 def _default_infra():
     """Infra class ('container'|'vm'|'any') of the orchestrator's default provider
     — lets the UI flag scenarios the default backend can't run."""
@@ -208,6 +218,7 @@ def arena_detail(instance_id):
         unhealthy=outputs.get("unhealthy_nodes"),
         provider=outputs.get("provider") or data.get("provider"),
         events=_events(instance_id, limit=30),
+        score=_score(instance_id),
     )
 
 

@@ -62,6 +62,10 @@ class _FakeRestClient:
         self.calls.append(("exec", api_key, arena_id, node, command, timeout))
         return {"node": node, "exit_code": 0, "stdout": f"ran: {command}\n", "stderr": ""}
 
+    def report_finding(self, api_key, arena_id, title, cwe=None, node=None, evidence=None):
+        self.calls.append(("report_finding", api_key, arena_id, title, cwe, node))
+        return {"recorded": True, "finding_id": "abc123"}
+
     def list_events(self, api_key, arena_id, limit=100):
         self.calls.append(("list_events", api_key, arena_id, limit))
         return {"events": [
@@ -101,11 +105,25 @@ def test_attacker_owns_exec_and_recon_tools():
     assert atk.can_use("run_command")
     assert atk.can_use("list_targets")
     assert atk.can_use("get_topology")
+    assert atk.can_use("report_finding")
     # other stances do NOT get the attacker toolset
     assert not Session("k", Stance.defender).can_use("run_command")
+    assert not Session("k", Stance.defender).can_use("report_finding")
     assert not Session("k", Stance.mitm).can_use("run_command")
     # the MITM toolset is still unbuilt
     assert not Session("k", Stance.mitm).can_use("query_events")
+
+
+def test_report_finding_proxies_rest_and_is_gated():
+    ctx = _ctx(stance=Stance.attacker)
+    out = tools.report_finding(ctx, arena_id="a1", title="SQLi on login",
+                               cwe="CWE-89", node="victim")
+    assert out["recorded"] is True
+    assert ("report_finding", "cg_secret_key", "a1", "SQLi on login", "CWE-89", "victim") \
+        in ctx.client.calls
+    # a defender session may not report findings
+    with pytest.raises(ToolNotAllowed):
+        tools.report_finding(_ctx(stance=Stance.defender), arena_id="a1", title="x")
 
 
 # --- session auth ------------------------------------------------------------
@@ -237,7 +255,7 @@ def test_attacker_session_also_registers_the_attacker_tools():
 
     mcp = build_server(GatewayConfig(env={"CYBERGUARD_STANCE": "attacker"}))
     names = {t.name for t in asyncio.run(mcp.list_tools())}
-    assert {"run_command", "list_targets", "get_topology"} <= names
+    assert {"run_command", "list_targets", "get_topology", "report_finding"} <= names
 
 
 # --- attacker stance: run_command + recon ------------------------------------

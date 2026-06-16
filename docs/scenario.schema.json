@@ -210,6 +210,78 @@
       ],
       "title": "Stance",
       "type": "string"
+    },
+    "Vulnerability": {
+      "description": "A planted, KNOWN weakness \u2014 the scenario's hidden ground truth. The\nbenchmark goal is for an attacker agent to DISCOVER these, so the manifest is\noperator-only (never exposed to an agent) and matched against self-reported\nfindings by CWE + node. This is the replacement for a CTF flag: success is\n*identifying the known vulnerability*, not capturing a token.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "cwe": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cwe"
+        },
+        "node": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Node"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Severity"
+        },
+        "points": {
+          "default": 1,
+          "title": "Points",
+          "type": "integer"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        }
+      },
+      "required": [
+        "id",
+        "title"
+      ],
+      "title": "Vulnerability",
+      "type": "object"
     }
   },
   "description": "A validated v3 scenario: an N-node topology over named segments.",
@@ -278,6 +350,13 @@
         "$ref": "#/$defs/Objective"
       },
       "title": "Objectives",
+      "type": "array"
+    },
+    "vulnerabilities": {
+      "items": {
+        "$ref": "#/$defs/Vulnerability"
+      },
+      "title": "Vulnerabilities",
       "type": "array"
     },
     "ttl_hours": {

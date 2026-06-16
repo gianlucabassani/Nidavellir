@@ -18,6 +18,7 @@ Notes:
   /var/run/docker.sock (root-equivalent on the host — see SECURITY.md).
 """
 import logging
+import os
 
 import images
 from providers.base import RangeProvider
@@ -52,6 +53,25 @@ _ROLE_PREFIX = {"attacker": "attack_vm", "victim": "victim_vm", "monitor": "log_
 # `requires.egress: open`.
 _INGRESS_SEGMENT = "ingress"
 _NO_MASQUERADE = {"com.docker.network.bridge.enable_ip_masquerade": "false"}
+
+# Allowlisted package mirror (ROADMAP P2-3 / ADR-0005). A locked arena has no
+# egress, so a foothold can't `apt`/`pip install` tooling. The mirror sidecar
+# fixes that without re-opening egress: it runs on a per-arena bridge that DOES
+# have egress, joins each internal segment under the alias `mirror`, and runs an
+# allowlisted forward proxy (squid) reachable only from arena clients and only
+# for package repos. Footholds get `http_proxy` pointed at it. The proxy is not
+# a router, so peers can't tunnel arbitrary traffic — only HTTP(S) to the
+# allowlist. ON by default for locked arenas that have a foothold; opt out with
+# `requires.mirror: off`.
+_MIRROR_SEGMENT = "mirror"           # per-arena egress bridge suffix
+_MIRROR_NODE = "mirror"              # container suffix + DNS alias on segments
+_MIRROR_PORT = 3128
+_MIRROR_PROXY_URL = f"http://{_MIRROR_NODE}:{_MIRROR_PORT}"
+_MIRROR_IMAGE = "cyberguard/arena-mirror:latest"
+# Build context baked into the orchestrator/worker image at /app/infra/...
+_MIRROR_CONTEXT = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "infra", "arena-mirror"
+)
 
 
 class DockerLocalProvider(RangeProvider):
@@ -101,6 +121,19 @@ class DockerLocalProvider(RangeProvider):
         egress = (scenario_config.get("requires") or {}).get("egress", "none")
         return str(egress).lower() != "open"
 
+    @staticmethod
+    def _mirror_enabled(scenario_config: dict) -> bool:
+        """The allowlisted package mirror is ON unless the scenario opts out
+        (`requires.mirror: off`)."""
+        mirror = (scenario_config.get("requires") or {}).get("mirror", "on")
+        return str(mirror).lower() not in ("off", "false", "no", "none", "0")
+
+    @staticmethod
+    def _is_foothold(node: dict) -> bool:
+        """A node an agent operates from (attacker role or explicit entrypoint).
+        Only footholds get the package-mirror proxy wired in."""
+        return node.get("role") == "attacker" or bool(node.get("entrypoint"))
+
     # --- interface -----------------------------------------------------------
 
     def deploy(self, scenario_config, instance_id, user_vars=None):
@@ -143,6 +176,14 @@ class DockerLocalProvider(RangeProvider):
 
         locked = self._is_locked(scenario_config)
         needs_ingress = locked and any(node.get("ports") for node in nodes)
+        # A contained arena gets an allowlisted package mirror so its foothold
+        # can still install tooling. Pointless on an open arena (direct egress
+        # already works) or one with nothing to operate from.
+        needs_mirror = (
+            locked
+            and self._mirror_enabled(scenario_config)
+            and any(self._is_foothold(node) for node in nodes)
+        )
 
         try:
             networks = {}
@@ -167,15 +208,33 @@ class DockerLocalProvider(RangeProvider):
                     ing_name, driver="bridge", options=_NO_MASQUERADE, labels=labels
                 )
 
+            # Bring the package mirror up before the nodes so its `mirror` alias
+            # resolves the moment a foothold runs apt/pip.
+            mirror = self._run_mirror(instance_id, networks, wanted, labels) if needs_mirror else None
+
             records = []
             for node in nodes:
                 container = self._run_node(
-                    instance_id, node, networks, ingress, labels, locked
+                    instance_id, node, networks, ingress, labels, locked, mirror
                 )
                 records.append((node, container))
 
             outputs = self._collect_outputs(instance_id, networks, wanted, records)
             outputs["egress"] = "blocked" if locked else "open"
+            if mirror is not None:
+                # A dead mirror means the foothold can't install tooling — don't
+                # report it as healthy (same philosophy as unhealthy_nodes).
+                mirror.reload()
+                mstate = (mirror.attrs.get("State") or {}).get("Status", "running")
+                if mstate == "running":
+                    outputs["package_mirror"] = "allowlisted"
+                else:
+                    outputs["package_mirror"] = "failed"
+                    logger.warning(
+                        f"[{instance_id}] package mirror is {mstate} right after "
+                        f"start — foothold installs will fail. Logs: "
+                        f"{self._tail_logs(mirror)}"
+                    )
             unhealthy = outputs.get("unhealthy_nodes")
             if unhealthy:
                 # Don't pretend the arena is healthy: a node that exited the
@@ -196,7 +255,7 @@ class DockerLocalProvider(RangeProvider):
             self.destroy(instance_id)
             return {"success": False, "error": str(e)}
 
-    def _run_node(self, instance_id, node, networks, ingress, labels, locked):
+    def _run_node(self, instance_id, node, networks, ingress, labels, locked, mirror=None):
         role = node.get("role", "node")
         segments = self._node_segments(node)
         image = images.resolve(node["image"], self.name)
@@ -227,6 +286,19 @@ class DockerLocalProvider(RangeProvider):
         if command is not None:
             run_kwargs["command"] = command
 
+        # Point a foothold's apt/pip at the allowlisted mirror. Set in the
+        # container config so `docker exec` sessions inherit it too. NO_PROXY
+        # keeps loopback/intra-arena traffic off the proxy.
+        if mirror is not None and self._is_foothold(node):
+            run_kwargs["environment"] = {
+                "http_proxy": _MIRROR_PROXY_URL,
+                "https_proxy": _MIRROR_PROXY_URL,
+                "HTTP_PROXY": _MIRROR_PROXY_URL,
+                "HTTPS_PROXY": _MIRROR_PROXY_URL,
+                "no_proxy": "localhost,127.0.0.1,::1",
+                "NO_PROXY": "localhost,127.0.0.1,::1",
+            }
+
         # Publish declared service ports on random host ports so the operator's
         # browser can reach e.g. DVWA (via the ingress bridge when locked).
         if has_ports:
@@ -240,6 +312,64 @@ class DockerLocalProvider(RangeProvider):
         # Attach to the remaining segments this node straddles.
         for seg in attach:
             networks[seg].connect(container)
+
+        # With a mirror, normalize a foothold's apt to the allowlisted direct
+        # CDN (the default Kali host is a redirector to mirrors we can't allow).
+        if mirror is not None and self._is_foothold(node):
+            self._pin_foothold_repos(container)
+        return container
+
+    # Kali's default `http.kali.org` is a MirrorBrain redirector that 302s to
+    # rotating community mirrors the allowlist can't cover; `kali.download` (the
+    # official CDN) serves directly and IS allowlisted. Rewrite both the DEB822
+    # (`.sources`) and classic (`.list`) forms. No-op on images without them.
+    _APT_PIN_SCRIPT = (
+        r"sed -i -E 's#(https?://)(http\.)?kali\.org/#\1kali.download/#g' "
+        "/etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list "
+        "/etc/apt/sources.list 2>/dev/null || true"
+    )
+
+    def _pin_foothold_repos(self, container):
+        """Point a foothold's apt at the allowlisted direct CDN. Best-effort —
+        a foothold is still useful (pip, already-direct Debian/Ubuntu) if this
+        no-ops on an unfamiliar image."""
+        try:
+            container.exec_run(["sh", "-c", self._APT_PIN_SCRIPT])
+        except Exception as e:
+            logger.warning(f"apt-source pin on {container.name} failed (non-fatal): {e}")
+
+    def _ensure_mirror_image(self):
+        """Build the arena-mirror image on first use (cached thereafter). The
+        build context is baked into this service image at `infra/arena-mirror`."""
+        try:
+            self.client.images.get(_MIRROR_IMAGE)
+            return
+        except Exception:
+            pass
+        logger.info(f"Building arena mirror image {_MIRROR_IMAGE} from {_MIRROR_CONTEXT}")
+        self.client.images.build(path=_MIRROR_CONTEXT, tag=_MIRROR_IMAGE, rm=True)
+
+    def _run_mirror(self, instance_id, networks, wanted, labels):
+        """Start the allowlisted package proxy for a contained arena. It runs on
+        a per-arena egress bridge (so it can reach the package repos) and joins
+        every internal segment under the alias `mirror` (so footholds reach it)."""
+        self._ensure_mirror_image()
+        egress_name = self._network_name(instance_id, _MIRROR_SEGMENT)
+        logger.info(f"[{instance_id}] Creating mirror egress bridge {egress_name}")
+        egress_net = self.client.networks.create(
+            egress_name, driver="bridge", internal=False, labels=labels
+        )
+        logger.info(f"[{instance_id}] Starting allowlisted package mirror")
+        container = self.client.containers.run(
+            image=_MIRROR_IMAGE,
+            name=self._container_name(instance_id, _MIRROR_NODE),
+            detach=True,
+            network=egress_net.name,
+            labels={**labels, LABEL_ROLE: "mirror", LABEL_NODE: _MIRROR_NODE},
+        )
+        # Reachable as `mirror` on each internal arena segment.
+        for seg in wanted:
+            networks[seg].connect(container, aliases=[_MIRROR_NODE])
         return container
 
     def _collect_outputs(self, instance_id, networks, wanted, records) -> dict:

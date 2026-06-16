@@ -83,3 +83,15 @@ class RestClient:
         return self._request(
             "GET", f"/deployments/{arena_id}/events?limit={int(limit)}", api_key
         )
+
+    def report_finding(self, api_key: str, arena_id: str, title: str,
+                       cwe: str | None = None, node: str | None = None,
+                       evidence: str | None = None) -> dict:
+        body: dict = {"title": title}
+        if cwe:
+            body["cwe"] = cwe
+        if node:
+            body["node"] = node
+        if evidence:
+            body["evidence"] = evidence
+        return self._request("POST", f"/arenas/{arena_id}/findings", api_key, json=body)

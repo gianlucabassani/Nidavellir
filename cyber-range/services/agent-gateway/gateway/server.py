@@ -98,6 +98,15 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
                 ctx(), arena_id=arena_id, command=command, node=node, timeout=timeout
             )
 
+        @mcp.tool()
+        def report_finding(arena_id: str, title: str, cwe: str | None = None,
+                           node: str | None = None, evidence: str | None = None) -> dict:
+            """Report a discovered vulnerability (the engagement goal). Include
+            the `cwe` (e.g. 'CWE-89') and `node` so it can be scored."""
+            return tools.report_finding(
+                ctx(), arena_id=arena_id, title=title, cwe=cwe, node=node, evidence=evidence
+            )
+
     elif stance is Stance.defender:
         @mcp.tool()
         def get_topology(arena_id: str) -> dict:

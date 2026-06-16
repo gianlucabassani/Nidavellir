@@ -47,6 +47,15 @@ _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}$")
 CANONICAL_ROLES = ("attacker", "victim", "monitor")
 
 
+def normalize_cwe(value: str | None) -> str | None:
+    """Canonicalize a CWE reference to ``CWE-<n>`` (accepts ``89``, ``cwe89``,
+    ``CWE-89``). Used to match self-reported findings against the manifest."""
+    if not value:
+        return None
+    match = re.search(r"(\d+)", str(value))
+    return f"CWE-{match.group(1)}" if match else None
+
+
 class ProviderClass(str, Enum):
     vm = "vm"
     container = "container"
@@ -157,6 +166,34 @@ class Objective(BaseModel):
     points: int | None = None
 
 
+class Vulnerability(BaseModel):
+    """A planted, KNOWN weakness — the scenario's hidden ground truth. The
+    benchmark goal is for an attacker agent to DISCOVER these, so the manifest is
+    operator-only (never exposed to an agent) and matched against self-reported
+    findings by CWE + node. This is the replacement for a CTF flag: success is
+    *identifying the known vulnerability*, not capturing a token."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    title: str
+    cwe: str | None = None          # canonicalized to "CWE-<n>"
+    node: str | None = None         # the node it lives on (must exist if set)
+    severity: str | None = None     # low | medium | high | critical (advisory)
+    points: int = 1
+    description: str | None = None
+
+    @field_validator("id")
+    @classmethod
+    def _id_is_slug(cls, v: str) -> str:
+        return _check_slug(v, "vulnerability id")
+
+    @field_validator("cwe")
+    @classmethod
+    def _normalize_cwe(cls, v: str | None) -> str | None:
+        return normalize_cwe(v)
+
+
 class Requires(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -184,6 +221,7 @@ class ScenarioSpec(BaseModel):
     nodes: list[Node] = Field(min_length=1)
     agents: list[AgentBinding] = Field(default_factory=list)
     objectives: list[Objective] = Field(default_factory=list)
+    vulnerabilities: list[Vulnerability] = Field(default_factory=list)
     ttl_hours: int | None = None
     tags: list[str] = Field(default_factory=list)
 
@@ -216,6 +254,17 @@ class ScenarioSpec(BaseModel):
                 raise ValueError(
                     f"agent stance {binding.stance.value!r} bound to unknown "
                     f"node {binding.node!r}; nodes: {sorted(known_nodes)}"
+                )
+
+        vuln_ids = [v.id for v in self.vulnerabilities]
+        vuln_dupes = {v for v in vuln_ids if vuln_ids.count(v) > 1}
+        if vuln_dupes:
+            raise ValueError(f"duplicate vulnerability id(s): {sorted(vuln_dupes)}")
+        for vuln in self.vulnerabilities:
+            if vuln.node is not None and vuln.node not in known_nodes:
+                raise ValueError(
+                    f"vulnerability {vuln.id!r} references unknown node "
+                    f"{vuln.node!r}; nodes: {sorted(known_nodes)}"
                 )
         return self
 

@@ -30,9 +30,9 @@ gateway is the integration surface (scope boundary in `VISION.md`).
 | `get_topology(arena_id)` | `GET /status` | nodes (IP/URL/state) + networks; marks the foothold |
 | `list_targets(arena_id)` | `GET /status` | in-scope targets (non-foothold nodes) + how to reach them |
 | `run_command(arena_id, command, node?, timeout?)` | `POST /arenas/{id}/exec` | shell on the **foothold only**; budget-charged; audited + traced |
+| `report_finding(arena_id, title, cwe?, node?, evidence?)` | `POST /arenas/{id}/findings` | report a discovered vulnerability; scored by CWE+node vs the hidden manifest; neutral ack (no oracle) |
 
-MITM and defender toolsets are the next increments (see the resume plan in
-`.agent/STATE.md`).
+The MITM toolset is the next increment (see the resume plan in `.agent/STATE.md`).
 
 ## Run
 

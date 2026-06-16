@@ -149,6 +149,27 @@ providers once wired). **Every exec is written to the `events` audit trail.**
 (VM providers, for now) · `422` empty command or out-of-range timeout (1–120s).
 Output is capped; the command is bounded to 4096 chars.
 
+### Known-vulnerability manifest, findings & scoring
+
+The benchmark model (replaces CTF flags): a scenario plants a **known-vulnerability
+manifest** (ground truth). The agent's goal is to **discover** those vulnerabilities;
+the manifest is operator-only and never shown to an agent.
+
+- `GET /scenarios/{scenario_id}/vulnerabilities` — **reveal** the manifest (the
+  benchmark baseline). **operator/admin only** (`403` for an `agent` key); `404`
+  unknown scenario.
+- `POST /arenas/{instance_id}/findings` — an attacker self-reports a finding
+  (the MCP `report_finding` backend). Matched against the hidden manifest by
+  **CWE + node**; the match is recorded for scoring but the response is a neutral
+  ack (no oracle — the agent can't learn whether it was right).
+  ```json
+  { "title": "SQLi on login", "cwe": "CWE-89", "node": "victim", "evidence": "..." }
+  → { "recorded": true, "finding_id": "7097421dd9fc" }
+  ```
+- `GET /arenas/{instance_id}/score` — **scorecard**: `found`/`missed` vuln ids,
+  `points_earned`/`points_total`, `findings_submitted`, and the `manifest`.
+  **operator/admin only** (`403` for an `agent` key).
+
 ### Response Format
 
 All responses are JSON with the following structure:

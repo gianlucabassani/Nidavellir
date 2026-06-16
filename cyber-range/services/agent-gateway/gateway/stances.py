@@ -28,7 +28,9 @@ LIFECYCLE_TOOLS = frozenset(
 #   defender — read the arena's audit/event stream to detect activity (blue).
 #   MITM — lands in a later increment (in-path intercept).
 STANCE_TOOLS: dict[Stance, frozenset[str]] = {
-    Stance.attacker: frozenset({"get_topology", "list_targets", "run_command"}),
+    Stance.attacker: frozenset(
+        {"get_topology", "list_targets", "run_command", "report_finding"}
+    ),
     Stance.defender: frozenset({"get_topology", "query_events"}),
     Stance.mitm: frozenset(),
 }

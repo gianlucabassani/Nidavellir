@@ -199,3 +199,42 @@ def test_arenas_archive_offers_cleanup_controls(client, monkeypatch):
 
     assert "/archive/clear" in html
     assert "/archive/delete/id-2" in html
+
+
+def test_arena_detail_renders_challenges_panel(client, monkeypatch):
+    """The arena detail page shows the known-vuln manifest with found/missed."""
+    import app as webui_module
+
+    class _FakeResp:
+        status_code = 200
+
+        def __init__(self, payload):
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    def fake_get(url, **kwargs):
+        if "/status/" in url:
+            return _FakeResp({"user_id": "lab-x", "status": "active", "outputs": {}})
+        if url.rstrip("/").endswith("/score") or "/score?" in url:
+            return _FakeResp({
+                "total_vulnerabilities": 2, "found": ["sqli-login"], "missed": ["xss"],
+                "points_earned": 1, "points_total": 2, "findings_submitted": 1,
+                "manifest": [
+                    {"id": "sqli-login", "title": "SQL injection", "cwe": "CWE-89",
+                     "node": "victim", "severity": "high"},
+                    {"id": "xss", "title": "Reflected XSS", "cwe": "CWE-79",
+                     "node": "victim", "severity": "medium"},
+                ],
+            })
+        return _FakeResp({"events": []})
+
+    monkeypatch.setattr(webui_module.requests, "get", fake_get)
+    _login(client)
+    html = client.get("/arena/abc").data.decode()
+
+    assert "Challenges" in html
+    assert "SQL injection" in html and "CWE-89" in html
+    assert "1 / 2 found" in html
+    assert "found" in html and "open" in html  # the discovered one + the missed one

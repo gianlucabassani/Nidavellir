@@ -236,6 +236,32 @@ def run_command(
     return res
 
 
+def report_finding(
+    ctx: GatewayContext,
+    arena_id: str,
+    title: str,
+    cwe: str | None = None,
+    node: str | None = None,
+    evidence: str | None = None,
+) -> dict:
+    """Report a discovered vulnerability. The engagement goal is to DISCOVER the
+    arena's known weaknesses; this records your finding for scoring. Pass the
+    `cwe` (e.g. 'CWE-89') and `node` so it can be credited. The acknowledgement
+    is deliberately neutral — it won't tell you whether you were right."""
+    _guard(ctx, "report_finding")
+    try:
+        res = ctx.client.report_finding(
+            ctx.session.api_key, arena_id, title, cwe=cwe, node=node, evidence=evidence
+        )
+    except Exception:
+        _trace(ctx, "report_finding",
+               {"title": title[:256], "cwe": cwe, "node": node}, ok=False, arena_id=arena_id)
+        raise
+    _trace(ctx, "report_finding",
+           {"title": title[:256], "cwe": cwe, "node": node}, ok=True, arena_id=arena_id)
+    return res
+
+
 # --- defender stance ---------------------------------------------------------
 
 

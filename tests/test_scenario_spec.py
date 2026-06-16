@@ -136,6 +136,34 @@ def test_bad_slug_and_port_rejected():
         )
 
 
+# --- known-vulnerability manifest --------------------------------------------
+
+
+def test_vulnerabilities_parse_and_normalize_cwe():
+    spec = ScenarioSpec.from_raw({**V3, "vulnerabilities": [
+        {"id": "sqli", "title": "SQLi", "cwe": "89", "node": "web", "points": 3},
+        {"id": "xss", "title": "XSS", "cwe": "CWE-79"},
+    ]})
+    assert [v.id for v in spec.vulnerabilities] == ["sqli", "xss"]
+    assert spec.vulnerabilities[0].cwe == "CWE-89"   # bare number canonicalized
+    assert spec.vulnerabilities[1].cwe == "CWE-79"
+    assert spec.vulnerabilities[0].points == 3
+
+
+def test_duplicate_vulnerability_id_rejected():
+    bad = {**V3, "vulnerabilities": [
+        {"id": "dup", "title": "a"}, {"id": "dup", "title": "b"},
+    ]}
+    with pytest.raises(ValidationError, match="duplicate vulnerability id"):
+        ScenarioSpec.from_raw(bad)
+
+
+def test_vulnerability_on_unknown_node_rejected():
+    bad = {**V3, "vulnerabilities": [{"id": "v", "title": "t", "node": "ghost"}]}
+    with pytest.raises(ValidationError, match="unknown node"):
+        ScenarioSpec.from_raw(bad)
+
+
 # --- soft advisories (do not block) -----------------------------------------
 
 
