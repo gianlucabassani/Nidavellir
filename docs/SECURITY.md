@@ -66,6 +66,27 @@ dedicated lab hosts, never on a shared control-plane node. Arena containers
 get a dedicated bridge network per arena; full egress lockdown is the MCP
 gateway's primary guardrail (roadmap Phase 2).
 
+## Build-from-source for SUT arenas (P1-6, off by default)
+
+Software-under-test arenas can build a victim node's workload from an arbitrary
+repo (`service.source`; ADR-0007). Building untrusted source **executes
+third-party code at build time** (the Dockerfile `RUN` steps) — strictly more
+dangerous than pulling a published image. So it is **disabled by default** and
+must be enabled explicitly with **`CYBERGUARD_ALLOW_SOURCE_BUILD=true`**; until
+then a `source` service fails with a clear error and operators are steered to a
+packaged `service.image`. When enabled:
+
+- the build runs through the host daemon (BuildKit) — same trust assumption as
+  the Docker-socket note above, so enable it only on hosts the operator owns;
+- **build-time network is open** (apt/pip/npm/go mod) by design, but the arena
+  **runtime stays egress-locked** regardless (the containment guarantee holds for
+  the engagement, not the build);
+- the source is pinned by `ref` for reproducibility, and the built image is
+  arena-labeled so teardown reclaims it (no image-per-arena leak).
+
+A rootless/sandboxed builder is the planned hardening for hosted multi-tenant
+(roadmap Phase 5).
+
 ## Reporting a vulnerability
 
 This is an educational project. If you find a security issue, open a private

@@ -5,6 +5,7 @@ Unit tests drive the provider with a fake Docker client (no daemon needed);
 the integration test at the bottom runs a real container lab end-to-end and
 is what CI uses to prove the provider against an actual Docker daemon.
 """
+import config
 import pytest
 
 from providers.docker_local import (
@@ -118,10 +119,19 @@ class _FakeNetworks:
         ]
 
 
+class _FakeImage:
+    def __init__(self, tag=None, labels=None):
+        self.tags = [tag] if tag else []
+        self.id = tag or "sha256:fake"
+        self.labels = labels or {}
+
+
 class _FakeImages:
     def __init__(self, present=True):
         self.present = present  # whether the mirror image already exists
         self.built = []
+        self._images = []       # _FakeImage objects, for list()/remove()
+        self.removed = []
 
     def get(self, name):
         if self.present:
@@ -130,7 +140,19 @@ class _FakeImages:
 
     def build(self, **kwargs):
         self.built.append(kwargs)
-        return (object(), [])
+        image = _FakeImage(tag=kwargs.get("tag"), labels=kwargs.get("labels"))
+        self._images.append(image)
+        return (image, [])
+
+    def list(self, filters=None):
+        if not filters:
+            return list(self._images)
+        key, _, val = filters["label"].partition("=")
+        return [i for i in self._images if i.labels.get(key) == val]
+
+    def remove(self, image_id, force=False):
+        self.removed.append(image_id)
+        self._images = [i for i in self._images if i.id != image_id]
 
 
 class _FakeClient:
@@ -607,3 +629,100 @@ def test_locked_arena_mirror_allows_repos_but_not_egress_real_docker():
         assert "REACHED" not in denied["stdout"], denied
     finally:
         assert provider.destroy(iid)["success"] is True
+
+
+# --- software-under-test `service:` provisioning (P1-6, packaged-first) -------
+
+def test_sut_packaged_service_image_is_used_and_whitebox_surfaced():
+    client = _FakeClient()
+    provider = DockerLocalProvider(client=client)
+    scenario = {
+        "requires": {"provider_class": "container", "egress": "open"},
+        "nodes": [
+            {"name": "victim", "role": "victim", "ports": [3000],
+             "service": {"image": "bkimminich/juice-shop:latest", "whitebox": True}},
+            {"name": "attacker", "role": "attacker",
+             "image": "kalilinux/kali-rolling:latest", "entrypoint": True},
+        ],
+    }
+    result = provider.deploy(scenario, "sut12345-rest-of-uuid")
+    assert result["success"] is True
+    images_run = [k["image"] for k in client.containers.run_kwargs]
+    assert "bkimminich/juice-shop:latest" in images_run   # packaged service image used
+    assert result["outputs"].get("node_victim_whitebox") is True
+
+
+def test_sut_source_build_disabled_by_default_fails_clearly(monkeypatch):
+    # Building untrusted source executes it at build time, so it is OFF unless
+    # CYBERGUARD_ALLOW_SOURCE_BUILD is set — a `source` service then fails with a
+    # clear, actionable error pointing at the flag (default-deny posture).
+    monkeypatch.setattr(config, "ALLOW_SOURCE_BUILD", False)
+    client = _FakeClient()
+    provider = DockerLocalProvider(client=client)
+    scenario = {
+        "requires": {"provider_class": "container", "egress": "open"},
+        "nodes": [
+            {"name": "victim", "role": "victim",
+             "service": {"source": {"repo": "https://github.com/o/p", "ref": "v1"}}},
+            {"name": "attacker", "role": "attacker",
+             "image": "kalilinux/kali-rolling:latest", "entrypoint": True},
+        ],
+    }
+    result = provider.deploy(scenario, "sut99999-rest-of-uuid")
+    assert result["success"] is False
+    assert "build-from-source" in result["error"]
+    assert "CYBERGUARD_ALLOW_SOURCE_BUILD" in result["error"]
+
+
+def test_sut_source_build_runs_built_image_when_enabled(monkeypatch):
+    # With the gate enabled, a `source` service is built via the daemon from a
+    # pinned remote git context and the node runs the freshly built image.
+    monkeypatch.setattr(config, "ALLOW_SOURCE_BUILD", True)
+    client = _FakeClient()
+    provider = DockerLocalProvider(client=client)
+    scenario = {
+        "requires": {"provider_class": "container", "egress": "open"},
+        "nodes": [
+            {"name": "victim", "role": "victim", "ports": [3000],
+             "service": {"source": {
+                 "repo": "https://github.com/o/p", "ref": "v1", "context": "web"}}},
+            {"name": "attacker", "role": "attacker",
+             "image": "kalilinux/kali-rolling:latest", "entrypoint": True},
+        ],
+    }
+    result = provider.deploy(scenario, "sutbuild1-rest-of-uuid")
+    assert result["success"] is True, result.get("error")
+
+    # The daemon was asked to build from a pinned, sub-dir'd remote git context,
+    # tagged + arena-labeled, pulling fresh bases.
+    build = next(b for b in client.images.built
+                 if str(b.get("tag", "")).startswith("cyberguard/sut:"))
+    assert build["path"] == "https://github.com/o/p#v1:web"
+    assert build["dockerfile"] == "Dockerfile"
+    assert build["pull"] is True
+    assert build["labels"][LABEL_LAB_ID] == "sutbuild1-rest-of-uuid"
+
+    # The victim runs that built image — not a pulled catalog tag.
+    victim_kw = next(kw for kw in client.containers.run_kwargs
+                     if kw["labels"][LABEL_NODE] == "victim")
+    assert victim_kw["image"] == build["tag"]
+
+
+def test_sut_source_build_image_is_reclaimed_on_destroy(monkeypatch):
+    # A from-source build would leak one image per arena; destroy() reclaims the
+    # arena-labeled built image.
+    monkeypatch.setattr(config, "ALLOW_SOURCE_BUILD", True)
+    client = _FakeClient()
+    provider = DockerLocalProvider(client=client)
+    scenario = {
+        "requires": {"provider_class": "container", "egress": "open"},
+        "nodes": [
+            {"name": "victim", "role": "victim",
+             "service": {"source": {"repo": "https://github.com/o/p", "ref": "v1"}}},
+        ],
+    }
+    provider.deploy(scenario, "sutbuild2-uuid")
+    built_tag = client.images.built[-1]["tag"]
+
+    assert provider.destroy("sutbuild2-uuid")["success"] is True
+    assert built_tag in client.images.removed

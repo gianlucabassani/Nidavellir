@@ -1,0 +1,61 @@
+schema: cyberguard/v3
+name: "Software-under-test (OSS project)"
+title: "Software-under-test (OSS project)"
+version: "1.0"
+difficulty: unknown
+description: >
+  Software-under-test (SUT) arena: point CyberGuard at an open-source project and
+  pentest it from a Kali foothold. The victim runs a service via a `service:`
+  block — packaged-first (prefer an existing published image; build from source
+  only for gaps). This example is black-box against a published OWASP Juice Shop
+  image; flip `service.whitebox: true` (and supply source) for white-box. No
+  hidden manifest — this is a discovery-mode arena (findings are operator-triaged).
+  See ADR-0007.
+
+requires:
+  provider_class: container
+
+network:
+  segments:
+    - name: lab
+      description: "flat bridge, per-arena isolated"
+
+nodes:
+  - name: victim
+    role: victim
+    segments: [lab]
+    ports: [3000]
+    service:
+      # Packaged-first: an existing, user-approved published image is preferred
+      # over building from source (avoids version/build mismatch). For white-box,
+      # set `whitebox: true` and add a `source: {repo, ref, build}` block built
+      # per the project's own instructions (build execution is a P1-6 follow-up).
+      image: "bkimminich/juice-shop:latest"
+      whitebox: false
+    services:
+      - "http (3000)"
+
+  - name: attacker
+    role: attacker
+    image: kali
+    segments: [lab]
+    entrypoint: true
+    command: sleep infinity
+    tools:
+      - "apt/pip install at runtime via the allowlisted mirror"
+
+agents:
+  - {stance: attacker, node: attacker}
+
+objectives:
+  - description: "Black-box assessment of an open-source web service"
+  - description: "Discover and report vulnerabilities from a foothold container"
+
+# Discovery mode: no known-vulnerability manifest. The agent (or a human operator)
+# reports what it finds; the operator triages. A benchmark variant would pin a
+# version and add a `vulnerabilities:` manifest of known CVEs (ADR-0007 P4-7).
+
+metadata:
+  author: CyberGuard
+  tags: [sut, oss, container, blackbox, juice-shop]
+  estimated_duration_hours: 2

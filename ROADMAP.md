@@ -81,6 +81,13 @@ Effort: S ≈ days, M ≈ 1–2 weeks, L ≈ 3–5 weeks for one dev.
 > pillars — topology engine, MCP agent gateway, prompt-to-scenario generation —
 > on top of it.
 
+> **Standing principle (all phases): AI-centered, never AI-required.** CyberGuard
+> is built for testing AI agents and is MCP/agent-compliant throughout, but every
+> arena must remain fully usable by a **human attacker against a static vulnerable
+> target, with no model in the loop** (browser / SSH / console access to the
+> attacker node + manual finding submission). The MCP gateway and agent stances are
+> an *additional* way in, never the only one.
+
 ### Arena archetypes & the software-under-test (SUT) arena
 
 The data-defined model (Phase 1) exists so that **new arena *kinds* are cheap**: a
@@ -95,10 +102,13 @@ It is **not a new engine** — it composes the existing topology compiler, egres
 containment + package mirror, MCP gateway/stances, and the events/scoring spine.
 It needs four small, reusable capabilities, slotted into the phases below:
 
-1. **Service provisioner** (Phase 1) — a node's workload can be declared as a
-   *source* (git repo + ref + build / Dockerfile / compose), a *package*, or an
-   *image*, pinned for reproducibility — not only a catalog image. Adding an OSS
-   target becomes a validated `service:` block.
+1. **Service provisioner** (Phase 1), **packaged-first** — a node's workload is a
+   `service:` block: an *image*/container (preferred), a *package*, or *source*
+   (git repo + ref + build), pinned for reproducibility. **Black-box** prefers an
+   existing, user-approved image and builds from source only for gaps (avoids
+   version mismatch); **white-box** requires the source, configured per the
+   project's own instructions, with the agent reading the source while it tests
+   dynamically from the attacker node. (Distinct from catalog/VulnHub expansion.)
 2. **Optional AI-assisted setup, gated** (Phase 2) — standing an arbitrary service
    up often needs configuration. The operator chooses, per arena, how: operator-
    scripted, **human-in-the-loop** (the agent proposes setup steps; the operator
@@ -161,13 +171,18 @@ Key work:
   AMI).
 - **Arena packs + variants** (GOAD model: full / light / mini); a first
   multi-node AD-style or service-mesh arena beyond the legacy 2–3 node ones.
-- **Wire the VulnHub importer** (#10): catalog → import → emit a v3 scenario
-  pack + image registration.
-- **SUT provisioning (software-under-test arenas):** a `service:` block on a node
-  (`source` = git repo + ref + build | `image` | `package`), built and pinned by
-  the compiler, so a node can run *any* open-source project — not just a catalog
-  image. Ship a first `software-under-test` pack template. (See the archetype
-  above; ADR-0007.)
+- **VulnHub importer / catalog expansion** (#10): a **deterministic auto-converter
+  from public sources (e.g. VulnHub)** → import → emit a v3 scenario pack + image
+  registration. A **separate, still-needed track** that grows the library of known,
+  ready-to-run targets — complementary to SUT provisioning, not replaced by it.
+- **SUT provisioning (software-under-test arenas), packaged-first:** a `service:`
+  block on a node — an `image`/container (preferred), a `package`, or `source` (git
+  repo + ref + build). **Black-box prefers an existing, user-approved image and
+  builds from source only for gaps** (avoids version/build mismatch); **white-box
+  requires the source**, configured per the project's own instructions, with the
+  agent reading the source while it tests dynamically from the attacker node.
+  Version-pinned; ship a first `software-under-test` pack. Separate from the
+  VulnHub auto-converter / catalog expansion (P1-5). (Archetype above; ADR-0007.)
 
 **Acceptance:** one scenario spec deploys an N-node arena on at least two
 providers with no code change; adding a scenario = dropping a validated pack.
@@ -191,7 +206,10 @@ Key work:
 - **Guardrails (server-enforced):** provider-enforced **egress lockdown** (no
   internet from arena segments — verified by a CI containment test), best-effort
   scope screen, per-key **step/time/token budgets**, per-command timeout,
-  operator **kill switch**.
+  operator **kill switch / pause** — **two-scope** (per-arena and per-workspace):
+  a paused scope rejects new agent tool-calls and the worker stops enqueuing
+  while an **in-flight command completes** (no half-state, nothing lost), with a
+  `PAUSED` state surfaced and a clean resume.
 - **Trace capture:** append-only JSONL per run + index in `events`; paired
   red/blue streams when stances run concurrently on one arena.
 - **MOCK_MODE:** canned `run_command` responses per scenario so agent-loop
@@ -270,6 +288,18 @@ Key work:
 - **Ownership/RBAC + quotas** on top of the existing roles: an operator
   sees/destroys their own arenas; per-operator quotas (active arenas, vCPU);
   owner-scoped output exposure (the deferred half of secrets hygiene).
+- **Multi-tenant workspaces + SSO** (abstracted from a review of a SicuraNext
+  console): **workspaces as the tenancy boundary** (team-shared — a switcher,
+  every view scoped — reframing the ownership work above from per-operator →
+  per-workspace); **Google OAuth2 SSO** for the human console with server-side
+  httpOnly sessions, while the **MCP/agent path stays API-key**; a **dev-login
+  bypass that auto-disables** once a real provider is configured; and
+  **graduated RBAC with structural guardrails** (auditor / operator / admin /
+  owner — can't remove the last owner, only an owner manages owners).
+- **Envelope custody for the BYO-AI key**: the control plane stores the
+  operator's AI key as **ciphertext it cannot itself decrypt** (per-workspace
+  public key at ingest; only the agent process decrypts) — a hardening upgrade
+  to BYO-key custody over Fernet-at-rest. No Kong; the gateway owns the seam.
 - **`aws` driver**: generic `nodes[]` modules, VPC-per-arena, everything tagged
   `cyberguard:arena_id`, private subnets with **no NAT by default**, SSM access
   (no inbound SSH).
@@ -293,7 +323,11 @@ liveness vs readiness probes; worker graceful shutdown + retry policy.
 ### ⚪ Phase 7 — Operator/auditor console redesign · **L**
 
 Ground-up UI (modern dashboard / dark SOC-console aesthetic; htmx vs SPA decided
-in an ADR). Information architecture: **arena fleet** overview (state-grouped,
+in an ADR). **The current console is a temporary surface** — the rework is
+**modular and modern**, keeps a **persistent communication link with whatever model
+is connected** (extending the connected-model chip into a live model channel), and
+**preserves the no-AI human-operator path** (an engagement is fully drivable by a
+human with no model). Information architecture: **arena fleet** overview (state-grouped,
 filterable), **mission control** per arena (topology, objectives/score),
 **agent-trace replay** and **red-vs-blue** views, **auditor** read-only views.
 SSE live updates from `events` (replace polling). Browser arena access

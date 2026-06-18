@@ -82,16 +82,49 @@ ttl_hours: 8                     # optional
 | `vulnerabilities[]` | no | known-vuln manifest (ground truth): `{id, title, cwe?, node?, severity?, points?, description?}`. **Operator-only** — never shown to an agent; the goal is for the agent to discover these. Revealed via `GET /scenarios/{id}/vulnerabilities`; scored from self-reported findings by CWE+node. |
 | `ttl_hours`, `tags`, `difficulty`, `title`, `description` | no | metadata |
 
-**Node:** `name` (unique slug, required), `image` (required), `role`
-(slug, default `node`), `size` (default `small`), `segments[]`, `ports[]`,
-`entrypoint` (bool), `command`, plus informational `services[]`/`tools[]`.
+**Node:** `name` (unique slug, required), a **workload** (`image` *or* a
+`service:` block — see below), `role` (slug, default `node`), `size` (default
+`small`), `segments[]`, `ports[]`, `entrypoint` (bool), `command`, plus
+informational `services[]`/`tools[]`.
+
+### Software-under-test: the `service:` block (P1-6, packaged-first)
+
+For SUT arenas (point a node at an arbitrary open-source project), a node may
+declare a `service:` instead of a bare `image` (ADR-0007). **Packaged-first** —
+prefer an existing published image; build from source only for gaps:
+
+```yaml
+nodes:
+  - name: victim
+    role: victim
+    ports: [3000]
+    service:
+      image: "bkimminich/juice-shop:latest"   # preferred (packaged); resolved as the effective image
+      whitebox: false                          # true → expose source to the agent (white-box)
+      # OR build from source (docker-local builds via the daemon; see the note below):
+      # source: {repo: "https://github.com/owner/app", ref: "v1.2.3", dockerfile: "Dockerfile"}
+      # OR install a package (execution is a separate follow-up):
+      # package: "some-pkg"
+```
+
+`service.image` wins over a node's own `image` (packaged-first).
+
+**Build from source (`service.source`)** is built by docker-local via the daemon
+(a remote git context, pinned by `ref`), but is **OFF by default**: building an
+arbitrary repo runs third-party code at build time, so it requires
+`CYBERGUARD_ALLOW_SOURCE_BUILD=true` (see [`SECURITY.md`](SECURITY.md)). When the
+flag is unset, a `source` service fails with a clear error pointing at it — prefer
+a packaged `service.image`. Build-time network is open (apt/pip/npm); the arena
+**runtime stays egress-locked** regardless. `service.package` install is not wired
+yet (supply a `source` or an `image`).
 
 ### Validation: hard errors vs. soft warnings
 
 Structural problems raise a validation error and the scenario **does not
 load**:
 
-- a node with no `image`;
+- a node with no workload (neither `image` nor a `service` with image/source/package);
+- a `service` with none of `image`/`source`/`package`;
 - a node attached to an undefined segment;
 - an agent bound to a node that doesn't exist;
 - duplicate node or segment names;

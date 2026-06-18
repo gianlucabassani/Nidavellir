@@ -45,8 +45,27 @@
           "type": "string"
         },
         "image": {
-          "title": "Image",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image"
+        },
+        "service": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Service"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "size": {
           "default": "small",
@@ -100,8 +119,7 @@
         }
       },
       "required": [
-        "name",
-        "image"
+        "name"
       ],
       "title": "Node",
       "type": "object"
@@ -200,6 +218,117 @@
         "name"
       ],
       "title": "Segment",
+      "type": "object"
+    },
+    "Service": {
+      "additionalProperties": false,
+      "description": "A node's workload for software-under-test (SUT) arenas: point a victim\nnode at an arbitrary open-source project. **Packaged-first** \u2014 prefer an\nexisting published `image`; build from `source` (or install a `package`) only\nwhen no approved image exists (avoids version/build mismatch). `whitebox`\nexposes the source to the agent for source-aware testing (ADR-0007).",
+      "properties": {
+        "image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceBuild"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "package": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Package"
+        },
+        "whitebox": {
+          "default": false,
+          "title": "Whitebox",
+          "type": "boolean"
+        }
+      },
+      "title": "Service",
+      "type": "object"
+    },
+    "SourceBuild": {
+      "additionalProperties": false,
+      "description": "Build a node's workload from source \u2014 e.g. a GitHub project (P1-6, SUT\narenas). Pin `ref` (commit/tag) for reproducibility. The *execution* (clone +\nbuild) is a deliberate, separately-reviewed increment: the schema is accepted\nnow; docker-local builds from source in a later P1-6 step (until then, prefer\na packaged `Service.image`).",
+      "properties": {
+        "repo": {
+          "title": "Repo",
+          "type": "string"
+        },
+        "ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ref"
+        },
+        "build": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Build"
+        },
+        "dockerfile": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dockerfile"
+        },
+        "context": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Context"
+        }
+      },
+      "required": [
+        "repo"
+      ],
+      "title": "SourceBuild",
       "type": "object"
     },
     "Stance": {

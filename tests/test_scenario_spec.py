@@ -201,6 +201,7 @@ def test_unused_segment_warns():
         ("basic_pentest", "vm", 3),
         ("container_web_pentest", "container", 2),
         ("random_vulnhub", "vm", 2),
+        ("software_under_test", "container", 2),
     ],
 )
 def test_shipped_templates_validate(scenario_id, provider_class, n_nodes):
@@ -228,3 +229,76 @@ def test_json_schema_uses_alias_and_marks_nodes_required():
     schema = json_schema()
     assert "schema" in schema["properties"]   # the `schema` alias, not schema_version
     assert "nodes" in schema["required"]
+
+
+# --- software-under-test `service:` block (P1-6, packaged-first) -------------
+
+_SUT_BASE = {
+    "schema": "cyberguard/v3",
+    "name": "sut",
+    "requires": {"provider_class": "container"},
+    "network": {"segments": [{"name": "lab"}]},
+    "agents": [{"stance": "attacker", "node": "jump"}],
+}
+
+
+def _sut(victim_node):
+    return {
+        **_SUT_BASE,
+        "nodes": [
+            victim_node,
+            {"name": "jump", "role": "attacker", "image": "kali",
+             "segments": ["lab"], "entrypoint": True},
+        ],
+    }
+
+
+def test_service_image_is_packaged_first_effective_image():
+    spec = ScenarioSpec.from_raw(_sut(
+        {"name": "victim", "role": "victim", "segments": ["lab"], "ports": [3000],
+         "service": {"image": "bkimminich/juice-shop:latest", "whitebox": False}}
+    ))
+    victim = next(n for n in spec.nodes if n.name == "victim")
+    assert victim.image is None                      # no top-level image…
+    assert victim.effective_image == "bkimminich/juice-shop:latest"  # …service wins
+
+
+def test_service_image_wins_over_node_image():
+    spec = ScenarioSpec.from_raw(_sut(
+        {"name": "victim", "role": "victim", "image": "ignored:1",
+         "segments": ["lab"], "service": {"image": "real:2"}}
+    ))
+    assert next(n for n in spec.nodes if n.name == "victim").effective_image == "real:2"
+
+
+def test_service_without_any_source_is_rejected():
+    with pytest.raises(ValidationError, match="image, source, or package"):
+        ScenarioSpec.from_raw(_sut(
+            {"name": "victim", "role": "victim", "segments": ["lab"],
+             "service": {"whitebox": True}}
+        ))
+
+
+def test_source_build_node_validates_and_marks_needs_build():
+    raw = _sut(
+        {"name": "victim", "role": "victim", "segments": ["lab"],
+         "service": {"source": {"repo": "https://github.com/o/p", "ref": "v1.2.3"},
+                     "whitebox": True}}
+    )
+    spec = ScenarioSpec.from_raw(raw)                 # validates (build deferred)
+    victim = next(n for n in spec.nodes if n.name == "victim")
+    assert victim.effective_image is None             # must be built
+    norm = {n["name"]: n for n in normalized_nodes(raw)}
+    assert norm["victim"]["needs_build"] is True
+    assert norm["victim"]["whitebox"] is True
+    assert norm["victim"]["image"] is None
+
+
+def test_normalized_nodes_resolves_packaged_service_image():
+    raw = _sut(
+        {"name": "victim", "role": "victim", "segments": ["lab"],
+         "service": {"image": "pkg:1"}}
+    )
+    norm = {n["name"]: n for n in normalized_nodes(raw)}
+    assert norm["victim"]["image"] == "pkg:1"         # effective image for the driver
+    assert norm["victim"]["needs_build"] is False

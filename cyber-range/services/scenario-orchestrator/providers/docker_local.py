@@ -20,6 +20,7 @@ Notes:
 import logging
 import os
 
+import config
 import images
 from providers.base import RangeProvider
 from redaction import redact_mapping
@@ -38,6 +39,11 @@ _DEFAULT_SEGMENT = "_default"
 
 # Keeps tool containers (kali etc.) alive when the scenario doesn't say how.
 DEFAULT_ATTACKER_COMMAND = "sleep infinity"
+
+# Software-under-test (SUT) arenas, P1-6: a node may build its workload from
+# source (ADR-0007). The built image is tagged + labeled per arena so destroy()
+# can reclaim it — otherwise a from-source build leaks one image per arena.
+_SUT_IMAGE_PREFIX = "cyberguard/sut"
 
 # Canonical roles get stable, dashboard-facing output key prefixes (the mock
 # provider and WebUI expect these). Other roles are addressed per-node only.
@@ -258,7 +264,17 @@ class DockerLocalProvider(RangeProvider):
     def _run_node(self, instance_id, node, networks, ingress, labels, locked, mirror=None):
         role = node.get("role", "node")
         segments = self._node_segments(node)
-        image = images.resolve(node["image"], self.name)
+        # Resolve the workload image. Packaged-first (SUT arenas, P1-6): `image`
+        # is the effective image from normalized_nodes (a service's published
+        # image wins). A build-from-source service (`needs_build`) is built here
+        # via the daemon — gated by CYBERGUARD_ALLOW_SOURCE_BUILD (ADR-0007).
+        if node.get("needs_build"):
+            image = self._build_service_image(instance_id, node, labels)
+        elif not node.get("image"):
+            # The schema validator guarantees a workload; defensive only.
+            raise ValueError(f"node {node['name']!r} has no runnable image")
+        else:
+            image = images.resolve(node["image"], self.name)
         has_ports = bool(node.get("ports"))
 
         # A locked node that publishes ports runs PRIMARY on the no-masquerade
@@ -318,6 +334,76 @@ class DockerLocalProvider(RangeProvider):
         if mirror is not None and self._is_foothold(node):
             self._pin_foothold_repos(container)
         return container
+
+    def _build_service_image(self, instance_id, node, labels):
+        """Build a node's workload from source (SUT arenas, P1-6; ADR-0007).
+
+        **OFF by default** — building an arbitrary repo runs third-party code at
+        BUILD time (Dockerfile RUN), strictly more dangerous than pulling a
+        published image — so it requires CYBERGUARD_ALLOW_SOURCE_BUILD=true.
+
+        Builds via the daemon (BuildKit) with a **remote git context**, so there
+        is no local checkout and no `git` binary needed here; the ``#<ref>``
+        fragment pins the source for reproducibility. **Build-time network is
+        open** (apt/pip/npm/go mod) by design — the arena *runtime* stays
+        egress-locked regardless. The built image is tagged + arena-labeled so
+        destroy() reclaims it. Returns the concrete local tag to run.
+        """
+        if not config.ALLOW_SOURCE_BUILD:
+            raise ValueError(
+                f"node {node['name']!r} declares a build-from-source service, but "
+                "source builds are disabled (building untrusted code executes it "
+                "at build time). Enable explicitly with CYBERGUARD_ALLOW_SOURCE_"
+                "BUILD=true (see SECURITY.md), or supply a packaged `service.image`"
+            )
+        service = node.get("service") or {}
+        source = service.get("source")
+        if not source:
+            # `service.package` install needs a base image + an install recipe;
+            # only source (git) builds are wired in this increment.
+            raise ValueError(
+                f"node {node['name']!r}: `service.package` install is not "
+                "supported yet — supply a `service.source` or a packaged `image`"
+            )
+        repo = source.get("repo")
+        if not repo:
+            raise ValueError(f"node {node['name']!r}: service.source needs a `repo`")
+        ref = source.get("ref")
+        subdir = source.get("context")
+        dockerfile = source.get("dockerfile") or "Dockerfile"
+
+        # Daemon-side remote git context: "<repo>#<ref>:<subdir>". The repo is
+        # operator-authored (authoring the scenario is the approval); pin `ref`
+        # to a commit/tag for a reproducible, trustworthy build.
+        if ref and subdir:
+            remote = f"{repo}#{ref}:{subdir}"
+        elif ref:
+            remote = f"{repo}#{ref}"
+        elif subdir:
+            remote = f"{repo}#:{subdir}"
+        else:
+            remote = repo
+            logger.warning(
+                f"[{instance_id}] node {node['name']!r} builds from {repo} with "
+                "no pinned source.ref — not reproducible (pin a commit/tag)"
+            )
+
+        tag = f"{_SUT_IMAGE_PREFIX}:{self._short(instance_id)}-{node['name']}"
+        logger.info(
+            f"[{instance_id}] Building SUT image {tag} for node {node['name']!r} "
+            f"from {remote} (dockerfile={dockerfile}); build-time egress is OPEN"
+        )
+        image_obj, _logs = self.client.images.build(
+            path=remote,
+            dockerfile=dockerfile,
+            tag=tag,
+            rm=True,
+            forcerm=True,
+            pull=True,
+            labels=dict(labels),
+            timeout=config.SOURCE_BUILD_TIMEOUT,
+        )
+        return image_obj.tags[0] if getattr(image_obj, "tags", None) else tag
 
     # Kali's default `http.kali.org` is a MirrorBrain redirector that 302s to
     # rotating community mirrors the allowlist can't cover; `kali.download` (the
@@ -418,6 +504,8 @@ class DockerLocalProvider(RangeProvider):
             # topologies are fully addressable.
             outputs[f"node_{name}_name"] = container.name
             outputs[f"node_{name}_private_ip"] = ip
+            if node.get("whitebox"):
+                outputs[f"node_{name}_whitebox"] = True
             if is_foothold:
                 outputs[f"node_{name}_ssh_command"] = ssh
             if floating:
@@ -507,6 +595,20 @@ class DockerLocalProvider(RangeProvider):
             for network in self.client.networks.list(filters=label_filter):
                 logger.info(f"[{instance_id}] Removing network {network.name}")
                 network.remove()
+
+            # Reclaim any per-arena SUT image built from source (P1-6); without
+            # this a from-source build leaks one image per arena. Best-effort —
+            # an image still referenced elsewhere may refuse removal. The shared
+            # package-mirror image is unlabeled, so it is never matched here.
+            for image in self.client.images.list(filters=label_filter):
+                image_id = getattr(image, "id", None)
+                try:
+                    self.client.images.remove(image_id, force=True)
+                    logger.info(f"[{instance_id}] Removing built image {image_id}")
+                except Exception as e:
+                    logger.warning(
+                        f"[{instance_id}] could not remove image {image_id}: {e}"
+                    )
 
             return {"success": True}
         except Exception as e:

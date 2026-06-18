@@ -74,6 +74,17 @@ TF_PLUGIN_CACHE_DIR = os.getenv("TF_PLUGIN_CACHE_DIR", str(CACHE_DIR / "terrafor
 # it). See crypto.py.
 SECRETS_ENCRYPTION_KEY = os.getenv("SECRETS_ENCRYPTION_KEY")
 
+# SOFTWARE-UNDER-TEST (SUT) ARENAS — build-from-source execution (P1-6, ADR-0007).
+# Building an arbitrary OSS repo executes third-party code at BUILD time (the
+# Dockerfile RUN steps), which is strictly more dangerous than pulling a published
+# image — so it is OFF by default and must be enabled explicitly. Build-time
+# network is open (apt/pip/npm/go mod); the arena RUNTIME stays egress-locked
+# regardless. SOURCE_BUILD_TIMEOUT bounds the build request. See SECURITY.md.
+ALLOW_SOURCE_BUILD = os.getenv("CYBERGUARD_ALLOW_SOURCE_BUILD", "false").lower() in (
+    "true", "1", "yes", "on"
+)
+SOURCE_BUILD_TIMEOUT = int(os.getenv("SOURCE_BUILD_TIMEOUT", "1200"))
+
 # API CONFIGURATION
 API_HOST = os.getenv("API_HOST", "0.0.0.0")  # nosec B104 - container default, mapped by compose
 API_PORT = int(os.getenv("API_PORT", "8000"))

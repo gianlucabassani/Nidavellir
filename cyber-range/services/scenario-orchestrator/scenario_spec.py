@@ -109,6 +109,44 @@ class Segment(BaseModel):
         return v
 
 
+class SourceBuild(BaseModel):
+    """Build a node's workload from source — e.g. a GitHub project (P1-6, SUT
+    arenas). Pin `ref` (commit/tag) for reproducibility. The *execution* (clone +
+    build) runs on docker-local via the daemon, but is **OFF by default** because
+    building untrusted code executes it at build time: enable explicitly with
+    ``CYBERGUARD_ALLOW_SOURCE_BUILD=true`` (see SECURITY.md). When disabled, prefer
+    a packaged `Service.image`. `service.package` install is a separate follow-up."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    repo: str                          # git URL
+    ref: str | None = None             # commit / tag / branch (pin for repro)
+    build: str | None = None           # build command
+    dockerfile: str | None = None      # path to a Dockerfile within the repo
+    context: str | None = None         # build-context subdir
+
+
+class Service(BaseModel):
+    """A node's workload for software-under-test (SUT) arenas: point a victim
+    node at an arbitrary open-source project. **Packaged-first** — prefer an
+    existing published `image`; build from `source` (or install a `package`) only
+    when no approved image exists (avoids version/build mismatch). `whitebox`
+    exposes the source to the agent for source-aware testing (ADR-0007)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    image: str | None = None           # preferred: an existing published image
+    source: SourceBuild | None = None  # build from a repo (execution deferred)
+    package: str | None = None         # install a package (execution deferred)
+    whitebox: bool = False             # mount/expose source to the agent
+
+    @model_validator(mode="after")
+    def _has_a_source(self) -> Service:
+        if not (self.image or self.source or self.package):
+            raise ValueError("service needs one of: image, source, or package")
+        return self
+
+
 class Node(BaseModel):
     """One machine in the topology — a container or a VM, per provider."""
 
@@ -116,7 +154,11 @@ class Node(BaseModel):
 
     name: str
     role: str = "node"
-    image: str
+    #: the concrete image/tag. Optional when a `service` provides the workload
+    #: (packaged-first: service.image, or a build-from-source service).
+    image: str | None = None
+    #: software-under-test workload (image / source / package) — SUT arenas.
+    service: Service | None = None
     size: str = "small"
     segments: list[str] = Field(default_factory=list)
     ports: list[int] = Field(default_factory=list)
@@ -145,6 +187,29 @@ class Node(BaseModel):
             if not 1 <= p <= 65535:
                 raise ValueError(f"port {p} out of range 1-65535")
         return v
+
+    @model_validator(mode="after")
+    def _has_workload(self) -> Node:
+        """A node must declare a workload: a concrete `image`, or a `service`
+        (packaged `image`, or a build-from-`source`/`package`)."""
+        svc = self.service
+        has_image = bool(self.image) or bool(svc and svc.image)
+        has_build = bool(svc and (svc.source or svc.package))
+        if not (has_image or has_build):
+            raise ValueError(
+                f"node {self.name!r} has no workload: set `image`, or a "
+                "`service` (image / source / package)"
+            )
+        return self
+
+    @property
+    def effective_image(self) -> str | None:
+        """The image to run, **packaged-first**: a service's published image wins,
+        else the node's own `image`. None when the workload must be built from
+        source (handled by the provider)."""
+        if self.service and self.service.image:
+            return self.service.image
+        return self.image
 
 
 class AgentBinding(BaseModel):
@@ -375,11 +440,25 @@ def _coerce_objective(obj) -> dict:
 
 
 def _canonical_node(node: dict) -> dict:
-    """Fill defaults for a v3 node dict (non-validating)."""
+    """Fill defaults for a v3 node dict (non-validating). Resolves the SUT
+    `service` block **packaged-first**: `image` becomes the effective image to
+    run (service's published image wins over the node's own), and `needs_build`
+    flags a workload that must be built from source/package (no runnable image
+    yet — the provider decides how to handle it)."""
+    service = node.get("service") if isinstance(node.get("service"), dict) else None
+    eff_image = node.get("image")
+    needs_build = False
+    whitebox = False
+    if service is not None:
+        whitebox = bool(service.get("whitebox", False))
+        if service.get("image"):
+            eff_image = service["image"]                 # packaged-first
+        elif service.get("source") or service.get("package"):
+            needs_build = True                            # build/install — deferred
     canonical = {
         "name": node.get("name", "node"),
         "role": node.get("role", "node"),
-        "image": node.get("image"),
+        "image": eff_image,
         "size": node.get("size", "small"),
         "segments": list(node.get("segments") or []),
         "ports": list(node.get("ports") or []),
@@ -387,6 +466,9 @@ def _canonical_node(node: dict) -> dict:
         "command": node.get("command"),
         "services": list(node.get("services") or []),
         "tools": list(node.get("tools") or []),
+        "service": service,
+        "whitebox": whitebox,
+        "needs_build": needs_build,
     }
     if node.get("flavor"):
         canonical["flavor"] = node["flavor"]
