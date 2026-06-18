@@ -44,7 +44,9 @@ a thin wrapper.
 `destroy_arena`) are available to every session; **per-stance execution**
 toolsets are gated by an allow-list (`stances.allowed_tools`):
 - **attacker** — `run_command` (docker exec / SSH on the foothold), `upload/
-  download_file`, `submit_flag`;
+  download_file`, `report_finding` (self-report a discovered known vuln, matched
+  against the hidden manifest by CWE + node — the 2026-06-16 manifest model that
+  replaced `submit_flag`);
 - **MITM** — in-path `observe_stream` / `modify_message` on a shared segment;
 - **defender** — `query_events`, `get_alerts`, `submit_detection`.
 

@@ -149,6 +149,24 @@ providers once wired). **Every exec is written to the `events` audit trail.**
 (VM providers, for now) · `422` empty command or out-of-range timeout (1–120s).
 Output is capped; the command is bounded to 4096 chars.
 
+### Connected-agent telemetry
+
+`POST /arenas/{instance_id}/agent-session` — a bring-your-own agent declares the
+**model + provider** driving an arena. This is the backend the MCP gateway's
+`announce_agent` tool proxies; the model/provider are self-declared (CyberGuard
+ships no AI), recorded as an append-only `agent_session` event, and surfaced as
+the operator console's *connected model* chip. Attribution/telemetry only — not
+ground truth, not scored.
+
+```json
+{ "model": "gemini-2.0-flash", "provider": "gemini", "stance": "attacker" }
+→ { "recorded": true }
+```
+
+`404` unknown arena · `422` missing `model`/`provider`. Any authenticated
+principal may call it (the agent announces itself). The latest `agent_session`
+event (via `GET /events`) drives the console chip.
+
 ### Known-vulnerability manifest, findings & scoring
 
 The benchmark model (replaces CTF flags): a scenario plants a **known-vulnerability

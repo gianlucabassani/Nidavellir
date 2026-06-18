@@ -1,0 +1,11 @@
+# CyberGuard reference agent harness — dependencies. Bring your own model + key.
+# A thin tool-use loop that drives the MCP agent gateway.
+
+# Official MCP Python SDK — the streamable-HTTP client used to reach the gateway.
+mcp>=1.2
+
+# Model SDKs. Install the one(s) for the provider(s) you use:
+#   --provider anthropic                  -> anthropic
+#   --provider openai|deepseek|gemini|ollama|local  -> openai (OpenAI-compatible)
+anthropic>=0.49
+openai>=1.40

@@ -95,3 +95,10 @@ class RestClient:
         if evidence:
             body["evidence"] = evidence
         return self._request("POST", f"/arenas/{arena_id}/findings", api_key, json=body)
+
+    def announce_agent(self, api_key: str, arena_id: str, model: str, provider: str,
+                       stance: str | None = None) -> dict:
+        body: dict = {"model": model, "provider": provider}
+        if stance:
+            body["stance"] = stance
+        return self._request("POST", f"/arenas/{arena_id}/agent-session", api_key, json=body)

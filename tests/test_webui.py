@@ -238,3 +238,30 @@ def test_arena_detail_renders_challenges_panel(client, monkeypatch):
     assert "SQL injection" in html and "CWE-89" in html
     assert "1 / 2 found" in html
     assert "found" in html and "open" in html  # the discovered one + the missed one
+
+
+def test_current_agent_disconnected_when_no_session(client):
+    """With the backend at a closed port, no events → no connected model."""
+    _login(client)
+    resp = client.get("/api/current-agent")
+    assert resp.status_code == 200
+    assert resp.get_json() == {"connected": False}
+
+
+def test_current_agent_reports_latest_announced_model(client, monkeypatch):
+    """The chip endpoint surfaces the newest agent_session event's model/provider."""
+    import app as webui_module
+
+    monkeypatch.setattr(webui_module, "_events", lambda limit=100: [
+        {"type": "agent_exec", "lab_id": "arena-9", "payload": {"node": "kali"}},
+        {"type": "agent_session", "lab_id": "arena-9", "ts": "2026-06-18 10:00:00",
+         "actor": "agent-x",
+         "payload": {"model": "gemini-2.0-flash", "provider": "Gemini", "stance": "attacker"}},
+    ])
+    _login(client)
+    data = client.get("/api/current-agent").get_json()
+    assert data["connected"] is True
+    assert data["model"] == "gemini-2.0-flash"
+    assert data["provider"] == "gemini"   # lower-cased for the logo lookup
+    assert data["arena_id"] == "arena-9"
+    assert data["stance"] == "attacker"

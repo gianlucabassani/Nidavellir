@@ -26,6 +26,7 @@ contributors understand the reasoning instead of re-litigating it.
 | [0004](0004-postgres-persistence.md) | PostgreSQL persistence via SQLAlchemy + Alembic | Accepted |
 | [0005](0005-mcp-agent-gateway.md) | MCP agent gateway protocol, stances & guardrails | Proposed (skeleton landed: lifecycle tools + auth + stance binding) |
 | [0006](0006-aws-topology.md) | AWS topology — generic nodes[] module & egress lockdown | Proposed (driver + module landed; real apply needs creds) |
+| [0007](0007-software-under-test-arenas.md) | Software-under-test arenas — provision/configure/monitor/score any OSS project | Proposed (roadmap archetype; ROADMAP P1-6/P2-10/P3-3/P4-6/P4-7/P7-6) |
 
 > **2026-06-13 pivot:** CyberGuard repositioned as an enterprise agent-testing
 > arena (dynamic N-node topologies + bring-your-own agents via MCP as

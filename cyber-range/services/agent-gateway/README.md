@@ -22,6 +22,7 @@ gateway is the integration surface (scope boundary in `VISION.md`).
 | `arena_status(arena_id)` | `GET /status/{id}` | poll until `active`; includes outputs |
 | `get_briefing(arena_id)` | status + registry | stance, scenario, rules of engagement |
 | `destroy_arena(arena_id)` | `DELETE /destroy/{id}` | always available |
+| `announce_agent(arena_id, model, provider)` | `POST /arenas/{id}/agent-session` | declares the connected model/provider (+ bound stance) for the console's *connected model* chip; harness plumbing, telemetry only |
 
 **Attacker stance** (`CYBERGUARD_STANCE=attacker`):
 
@@ -33,6 +34,14 @@ gateway is the integration surface (scope boundary in `VISION.md`).
 | `report_finding(arena_id, title, cwe?, node?, evidence?)` | `POST /arenas/{id}/findings` | report a discovered vulnerability; scored by CWE+node vs the hidden manifest; neutral ack (no oracle) |
 
 The MITM toolset is the next increment (see the resume plan in `.agent/STATE.md`).
+
+## Reference client
+
+A thin bring-your-own Claude agent that drives this gateway over MCP lives in
+[`examples/agent-harness/`](../../../examples/agent-harness/) — a wiring sample
+(BYO `ANTHROPIC_API_KEY`), not a product. It connects over streamable HTTP,
+lists the stance's tools, and runs an engagement end-to-end (deploy → recon →
+`run_command` → `report_finding` → destroy).
 
 ## Run
 

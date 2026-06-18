@@ -81,7 +81,50 @@ Effort: S ≈ days, M ≈ 1–2 weeks, L ≈ 3–5 weeks for one dev.
 > pillars — topology engine, MCP agent gateway, prompt-to-scenario generation —
 > on top of it.
 
-### 🟠 Phase 0 — Repositioning & hygiene · **S** *(in progress)*
+### Arena archetypes & the software-under-test (SUT) arena
+
+The data-defined model (Phase 1) exists so that **new arena *kinds* are cheap**: a
+scenario is config, not code, so AD labs, service meshes, CTF-style web apps, and
+LLM-app targets are all one engine with different packs. The flagship next
+archetype — and the one that most exercises this extensibility — is the
+**software-under-test (SUT) arena**: point CyberGuard at *any* open-source project
+and have a bring-your-own agent pentest it, **white- or black-box**, with the
+service stood up on the victim node, deeply monitored, and scored.
+
+It is **not a new engine** — it composes the existing topology compiler, egress
+containment + package mirror, MCP gateway/stances, and the events/scoring spine.
+It needs four small, reusable capabilities, slotted into the phases below:
+
+1. **Service provisioner** (Phase 1) — a node's workload can be declared as a
+   *source* (git repo + ref + build / Dockerfile / compose), a *package*, or an
+   *image*, pinned for reproducibility — not only a catalog image. Adding an OSS
+   target becomes a validated `service:` block.
+2. **Optional AI-assisted setup, gated** (Phase 2) — standing an arbitrary service
+   up often needs configuration. The operator chooses, per arena, how: operator-
+   scripted, **human-in-the-loop** (the agent proposes setup steps; the operator
+   approves), or **autonomous** — a short-lived, **opt-in** *configurator* role
+   with write/config tools on the victim node, dropped before the engagement. The
+   consent gate is load-bearing: write/config access is never granted silently.
+3. **Deep monitoring + crash oracle** (Phase 4) — a sidecar around the service
+   captures logs, crashes/panics, sanitizer aborts, unhandled 5xx, and resource
+   exhaustion into `events`/the defender feed. A crash or sanitizer abort is a
+   **first-class evidence signal**, so a target with *no pre-known manifest* can
+   still be scored ("the agent made it fall over").
+4. **Scoring for open-ended targets** (Phase 4) — *discovery mode* (evidence +
+   self-reported findings; operator triages) or *benchmark mode* (pin a version
+   with known CVEs + a manifest → score CVE-rediscovery per model).
+
+Operators drive all of this through an **arena wizard** (Phase 3 → console in
+Phase 7): white vs black box, the setup/configurator choice + consent, target ref,
+exposed ports, monitoring level, scoring mode, budgets → a validated pack via the
+existing validator/compiler. Designed for scale: container-first, version-pinned,
+TTL-reaped, and runnable in parallel like every other arena. The scope boundary
+holds — when the model configures the service it is still **bring-your-own AI under
+the operator's key**, exercising a gated capability CyberGuard provides; CyberGuard
+ships the provisioner, sandbox, monitor, and consent gate, not the AI. Decision
+record: **ADR-0007**.
+
+### 🟠 Phase 0 — Repositioning & hygiene · **S** *(complete)*
 
 **Goal:** the whole project reads as the enterprise arena; the school/ITS
 framing is gone from docs *and* code.
@@ -120,6 +163,11 @@ Key work:
   multi-node AD-style or service-mesh arena beyond the legacy 2–3 node ones.
 - **Wire the VulnHub importer** (#10): catalog → import → emit a v3 scenario
   pack + image registration.
+- **SUT provisioning (software-under-test arenas):** a `service:` block on a node
+  (`source` = git repo + ref + build | `image` | `package`), built and pinned by
+  the compiler, so a node can run *any* open-source project — not just a catalog
+  image. Ship a first `software-under-test` pack template. (See the archetype
+  above; ADR-0007.)
 
 **Acceptance:** one scenario spec deploys an N-node arena on at least two
 providers with no code change; adding a scenario = dropping a validated pack.
@@ -136,7 +184,7 @@ Key work:
   `destroy_arena`) proxy the REST API; the per-stance toolsets are the product.
 - **Stances** (each a scoped MCP toolset + guardrails + trace):
   - **attacker** — `run_command` (SSH / `docker exec` on the foothold node),
-    `upload/download`, `submit_flag`;
+    `upload/download`, `report_finding` (self-report a discovered known vuln);
   - **MITM** — in-path position on a shared segment: observe and manipulate
     traffic between arena nodes (sanitize / flag / block);
   - **defender** — `query_events` / `get_alerts` / `submit_detection`.
@@ -150,6 +198,12 @@ Key work:
   tests stay free and deterministic.
 - **Reference connectors** (thin, optional): an `examples/agent-harness/`
   Claude tool-use loop and a custom-model sample — wiring samples, not products.
+- **Setup / configurator capability (SUT arenas):** an operator-gated, time-boxed
+  role with write/config tools on the victim node to *bring a service up*
+  (operator-scripted / human-in-the-loop / autonomous-opt-in), then dropped to the
+  attacker stance for the engagement; plus **white-box source access** (the mounted
+  repo) when the arena is white-box. The consent gate + HITL approval path are
+  mandatory — never silently granted. (Archetype above; ADR-0007.)
 
 **Acceptance:** a BYO agent connected over MCP completes a container arena
 end-to-end with every action audited; a containment test proves arena nodes
@@ -167,6 +221,12 @@ Key work:
   validator + compiler + sandbox only. **Never auto-deploy unreviewed infra** —
   generated specs are diffed/reviewed before apply.
 - Exposed as an MCP authoring tool (`scaffold_scenario`) and in the WebUI.
+- **Arena wizard (incl. SUT arenas):** a guided authoring flow — target source /
+  image / package + ref, white vs black box, the setup/configurator choice +
+  consent, exposed ports, monitoring level, scoring mode, budgets → a validated v3
+  pack via the same validator/compiler. The configurator-consent is the
+  load-bearing safety choice; nothing with write/config or autonomy is enabled
+  without it. (Console surface in Phase 7; archetype above.)
 
 **Acceptance:** a natural-language brief produces a schema-valid scenario pack
 that deploys; invalid generations are rejected with actionable errors; nothing
@@ -177,8 +237,11 @@ deploys without an explicit review step.
 **Goal:** arenas double as reproducible benchmarks for agents.
 
 Key work:
-- Scoring engine: `objectives.yaml` (hashed flags, command-proof, detection
-  rules); `submit_flag` → points; per-run metrics (objectives solved, steps,
+- Scoring engine — **known-vulnerability manifest, not CTF flags**: a scenario
+  carries a hidden `vulnerabilities[]` ground truth (CWE + node + points); the
+  attacker `report_finding` matches a self-reported finding against it by **CWE
+  + node** (neutral ack — no oracle); manifest is operator-only with a reveal
+  endpoint + `/arenas/{id}/score`. Per-run metrics (vulns found, steps,
   wall-clock, tokens).
 - Benchmark mode: pinned images + seeded secrets; run reports comparing
   model+version+harness across stances.
@@ -186,6 +249,15 @@ Key work:
   when an alert matches a red action within a window.
 - **Trace → dataset export**: paired red/blue eval/replay artifacts from
   `events` + JSONL traces.
+- **Deep service monitoring + crash oracle (SUT arenas):** a monitor sidecar
+  around the service-under-test (logs / crash / sanitizer abort / unhandled-5xx /
+  resource exhaustion / optional coverage) → `events` + the defender feed, with a
+  crash/abort/5xx counted as a **scored evidence signal**.
+- **Evidence-based + CVE-rediscovery scoring (SUT arenas):** *discovery mode* (no
+  manifest — monitor signals + self-reported findings, operator triages) and
+  *benchmark mode* (pin a version + a CVE manifest → score rediscovery across
+  model + version + harness). Per-run metrics (crashes induced, distinct fault
+  sites, steps, tokens).
 
 **Acceptance:** an agent run yields a scored report; red-vs-blue produces a
 paired dataset; benchmark runs are reproducible from pinned inputs.
@@ -225,7 +297,10 @@ in an ADR). Information architecture: **arena fleet** overview (state-grouped,
 filterable), **mission control** per arena (topology, objectives/score),
 **agent-trace replay** and **red-vs-blue** views, **auditor** read-only views.
 SSE live updates from `events` (replace polling). Browser arena access
-(Guacamole/noVNC) — evaluate. No class/leaderboard framing.
+(Guacamole/noVNC) — evaluate. No class/leaderboard framing. **Arena wizard UI +
+service-monitor panel (SUT arenas):** the guided setup in the console, a live
+target health / crash / log panel, and the configurator-consent + HITL-approval
+prompts surfaced in the UI.
 
 ---
 
@@ -273,7 +348,9 @@ a webhook that feeds blue-team scoring and the defender stance.
 
 ADRs: **0002** auth (roles → operator in Phase 0) · **0003** provider driver &
 scenario compilation · **0004** PostgreSQL + Alembic · **0005** MCP agent
-gateway protocol, stances & guardrails · **0006** AWS topology & cost controls.
+gateway protocol, stances & guardrails · **0006** AWS topology & cost controls ·
+**0007** software-under-test arenas (service provisioner, gated configurator role
++ consent/HITL, deep monitoring & crash-oracle, discovery-vs-CVE scoring).
 
 ---
 

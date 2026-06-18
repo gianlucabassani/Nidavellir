@@ -31,6 +31,77 @@
       .finally(() => setTimeout(pollHealth, 10000));
   }
 
+  /* ---- connected-model chip (every page) ------------------------------ */
+  // Schematic provider marks (not trademarks) — colored bubble + glyph.
+  const BRANDS = {
+    anthropic: { name: "Anthropic · Claude", color: "#d97757",
+      svg: '<svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>' },
+    openai: { name: "OpenAI", color: "#10a37f",
+      svg: '<svg viewBox="0 0 24 24"><path d="M12 3l7.79 4.5v9L12 21l-7.79-4.5v-9z" fill="none" stroke="currentColor" stroke-width="2"/></svg>' },
+    gemini: { name: "Google · Gemini", color: "#4285f4",
+      svg: '<svg viewBox="0 0 24 24"><path d="M12 2c.6 5.3 3.1 7.8 8.4 8.4-5.3.6-7.8 3.1-8.4 8.4-.6-5.3-3.1-7.8-8.4-8.4C8.9 9.8 11.4 7.3 12 2z" fill="currentColor"/></svg>' },
+    deepseek: { name: "DeepSeek", color: "#4d6bfe",
+      svg: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 13c2 2.2 8 2.2 10-1.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>' },
+    ollama: { name: "Ollama · local", color: "#414959",
+      svg: '<svg viewBox="0 0 24 24"><path d="M8.5 3v4M15.5 3v4M6 10a6 6 0 0112 0v4a6 6 0 01-12 0z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' },
+    local: { name: "Local model", color: "#22d3ee",
+      svg: '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>' },
+  };
+  const FALLBACK = { name: "AI model", color: "#6b7280",
+    svg: '<svg viewBox="0 0 24 24"><rect x="5" y="8" width="14" height="10" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 4v4M9.5 13h.01M14.5 13h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>' };
+  const brandOf = (p) => BRANDS[(p || "").toLowerCase()] || FALLBACK;
+
+  function escapeHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  let currentAgent = null;
+
+  function renderAgentChip(d) {
+    const chip = document.getElementById("model-chip");
+    if (!chip) return;
+    if (!d || !d.connected) { chip.hidden = true; currentAgent = null; return; }
+    currentAgent = d;
+    const b = brandOf(d.provider);
+    const logo = document.getElementById("model-chip-logo");
+    logo.style.background = b.color;
+    logo.innerHTML = b.svg;
+    document.getElementById("model-chip-name").textContent = d.model || b.name;
+    chip.hidden = false;
+  }
+
+  function pollAgent() {
+    if (!document.getElementById("model-chip")) return;
+    fetch("/api/current-agent")
+      .then((r) => r.json())
+      .then(renderAgentChip)
+      .catch(() => {})
+      .finally(() => setTimeout(pollAgent, 10000));
+  }
+
+  function openModelModal() {
+    const d = currentAgent;
+    if (!d) return;
+    const b = brandOf(d.provider);
+    const logo = document.getElementById("model-modal-logo");
+    logo.style.background = b.color;
+    logo.innerHTML = b.svg;
+    document.getElementById("model-modal-name").textContent = d.model || b.name;
+    document.getElementById("model-modal-provider").textContent = b.name;
+    const rows = [
+      ["Provider", b.name], ["Model", d.model || "—"], ["Stance", d.stance || "—"],
+      ["Arena", d.arena_id || "—"], ["Connected", d.ts || "—"], ["Via key", d.actor || "—"],
+    ];
+    document.getElementById("model-modal-kv").innerHTML =
+      rows.map(([k, v]) => "<dt>" + k + "</dt><dd>" + escapeHtml(v) + "</dd>").join("");
+    document.getElementById("model-modal").hidden = false;
+  }
+  function closeModelModal() {
+    const m = document.getElementById("model-modal");
+    if (m) m.hidden = true;
+  }
+
   /* ---- status → badge markup (mirrors _macros.html) ------------------- */
   function statusBadge(status) {
     const map = {
@@ -184,8 +255,12 @@
   };
 
   window.CyberGuard = {
-    initArena, renderTopology,
+    initArena, renderTopology, openModelModal, closeModelModal,
     fit: function () { if (topoCy) topoCy.fit(null, 30); },
   };
-  document.addEventListener("DOMContentLoaded", pollHealth);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModelModal(); });
+  document.addEventListener("DOMContentLoaded", function () {
+    pollHealth();
+    pollAgent();
+  });
 })();

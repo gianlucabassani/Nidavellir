@@ -66,6 +66,10 @@ class _FakeRestClient:
         self.calls.append(("report_finding", api_key, arena_id, title, cwe, node))
         return {"recorded": True, "finding_id": "abc123"}
 
+    def announce_agent(self, api_key, arena_id, model, provider, stance=None):
+        self.calls.append(("announce_agent", api_key, arena_id, model, provider, stance))
+        return {"recorded": True}
+
     def list_events(self, api_key, arena_id, limit=100):
         self.calls.append(("list_events", api_key, arena_id, limit))
         return {"events": [
@@ -162,6 +166,20 @@ def test_deploy_arena_returns_canonical_system_id():
     deploy_call = next(c for c in ctx.client.calls if c[0] == "deploy")
     assert deploy_call[2] == "basic_pentest"
     assert deploy_call[4] == "docker-local"
+
+
+def test_announce_agent_proxies_with_the_bound_stance():
+    # The harness declares its model/provider; the gateway adds the session stance.
+    ctx = _ctx(stance=Stance.attacker)
+    out = tools.announce_agent(ctx, arena_id="a1", model="deepseek-chat", provider="deepseek")
+    assert out["recorded"] is True
+    assert ("announce_agent", "cg_secret_key", "a1", "deepseek-chat", "deepseek", "attacker") \
+        in ctx.client.calls
+
+
+def test_announce_agent_is_lifecycle_grade_for_every_stance():
+    for stance in (None, Stance.attacker, Stance.defender, Stance.mitm):
+        assert "announce_agent" in allowed_tools(stance)
 
 
 def test_get_briefing_composes_status_scenario_and_roe():

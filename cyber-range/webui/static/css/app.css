@@ -192,6 +192,49 @@ code, .mono { font-family: var(--mono); }
 .badge--idle   { color: var(--idle);   border-color: var(--border-strong); }
 .badge--accent { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); }
 
+/* ---- connected-model chip (topbar) + details modal --------------------- */
+.model-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 4px 10px 4px 5px; border-radius: 20px; cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--border-strong);
+  color: var(--text); font-family: var(--font); font-size: 12.5px; font-weight: 600;
+  transition: border-color .15s, background .15s, transform .1s;
+}
+.model-chip:hover { border-color: var(--accent-line); background: var(--surface-3); }
+.model-chip:active { transform: translateY(1px); }
+.model-chip__name { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-chip__logo, .model-bubble {
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%; flex: none; color: #fff;
+  background: var(--accent-strong); /* overridden per-provider by JS */
+}
+.model-chip__logo { width: 22px; height: 22px; }
+.model-chip__logo svg { width: 14px; height: 14px; }
+.model-bubble { width: 44px; height: 44px; }
+.model-bubble svg { width: 26px; height: 26px; }
+
+.modal { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; }
+.modal[hidden] { display: none; }
+.modal__backdrop { position: absolute; inset: 0; background: rgba(8,10,16,.66); backdrop-filter: blur(2px); }
+.modal__card {
+  position: relative; width: min(420px, calc(100vw - 32px));
+  background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: var(--radius); box-shadow: var(--shadow); padding: 22px;
+}
+.modal__x {
+  position: absolute; top: 12px; right: 12px; width: 30px; height: 30px;
+  border: none; background: transparent; color: var(--muted); cursor: pointer;
+  border-radius: var(--radius-sm); font-size: 15px;
+}
+.modal__x:hover { background: var(--surface-3); color: var(--text); }
+.modal__head { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.modal__title { font-size: 17px; font-weight: 700; color: var(--text); }
+.modal__sub { font-size: 12.5px; color: var(--muted); text-transform: capitalize; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 0; font-size: 13px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; color: var(--text); font-family: var(--mono); font-size: 12px; word-break: break-all; }
+.modal__foot { margin: 18px 0 0; font-size: 11.5px; color: var(--faint); line-height: 1.5; }
+
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--idle); flex: none; }
 .dot--active   { background: var(--ok);   box-shadow: 0 0 0 3px rgba(52,211,153,.18); }
 .dot--pending  { background: var(--warn); box-shadow: 0 0 0 3px rgba(245,158,11,.18); }

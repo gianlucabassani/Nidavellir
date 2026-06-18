@@ -75,6 +75,13 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
         """Tear down an arena."""
         return tools.destroy_arena(ctx(), arena_id=arena_id)
 
+    @mcp.tool()
+    def announce_agent(arena_id: str, model: str, provider: str) -> dict:
+        """Declare the connected agent's model + provider so the operator console
+        can show which AI is driving this arena. Telemetry only — the harness
+        calls this, not the model."""
+        return tools.announce_agent(ctx(), arena_id=arena_id, model=model, provider=provider)
+
     # Per-stance tools: only register what the bound stance may use, so an
     # agent's tool list reflects its stance (the runtime guard re-checks).
     stance = parse_stance(cfg.stance)

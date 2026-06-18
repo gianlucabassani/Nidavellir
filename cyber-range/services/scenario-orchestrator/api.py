@@ -466,6 +466,38 @@ def list_arena_events(
     return {"events": db.list_events(lab_id=instance_id, limit=limit)}
 
 
+class AgentSessionRequest(BaseModel):
+    model: str = Field(min_length=1, max_length=128)
+    provider: str = Field(min_length=1, max_length=64)
+    stance: str | None = Field(default=None, max_length=32)
+
+
+@app.post("/arenas/{instance_id}/agent-session")
+async def announce_agent_session(
+    instance_id: str,
+    req: AgentSessionRequest,
+    principal: Principal = Depends(require_principal),
+):
+    """Record that a bring-your-own agent connected to this arena, with the
+    model + provider driving it. The model/provider are self-declared by the
+    agent harness (CyberGuard ships no AI) and recorded as an append-only
+    `agent_session` event — this powers the operator console's *connected model*
+    indicator. Not ground truth; purely an attribution/telemetry signal."""
+    if not db.get_deployment(instance_id):
+        raise HTTPException(status_code=404, detail="Arena not found")
+    db.record_event(
+        instance_id, "agent_session",
+        {
+            "model": req.model[:128],
+            "provider": req.provider[:64],
+            "stance": req.stance,
+            "actor": principal.name,
+        },
+        actor=principal.name,
+    )
+    return {"recorded": True}
+
+
 # Known-vulnerability manifest & findings (the benchmark model — replaces CTF
 # flags). A scenario plants KNOWN vulnerabilities; the agent's goal is to
 # DISCOVER them. The manifest is operator-only ground truth; an attacker

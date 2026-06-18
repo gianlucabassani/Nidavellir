@@ -76,6 +76,26 @@ def _events(instance_id=None, limit=100):
     return (data or {}).get("events", [])
 
 
+def _current_agent():
+    """The most recently connected BYO agent's model + provider, from the latest
+    `agent_session` event (events are newest-first). None when no agent has
+    announced itself. Powers the topbar 'connected model' chip."""
+    for e in _events(limit=100):
+        if e.get("type") == "agent_session":
+            p = e.get("payload") or {}
+            if not p.get("model"):
+                continue
+            return {
+                "model": p.get("model"),
+                "provider": (p.get("provider") or "").lower(),
+                "stance": p.get("stance"),
+                "arena_id": e.get("lab_id"),
+                "ts": e.get("ts"),
+                "actor": p.get("actor") or e.get("actor"),
+            }
+    return None
+
+
 def _score(instance_id):
     """The arena's benchmark scorecard (known-vuln manifest + found/missed).
     Operator-only on the API; the WebUI key is operator/admin. Returns None when
@@ -382,6 +402,15 @@ def orchestrator_health():
     except requests.RequestException:
         ok = False
     return jsonify({"status": "ok" if ok else "offline"})
+
+
+@app.route("/api/current-agent")
+def current_agent():
+    """JSON for the topbar 'connected model' chip (polled by app.js)."""
+    agent = _current_agent()
+    if not agent:
+        return jsonify({"connected": False})
+    return jsonify({"connected": True, **agent})
 
 
 @app.route("/api/poll/<instance_id>")

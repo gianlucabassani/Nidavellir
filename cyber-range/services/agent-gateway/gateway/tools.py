@@ -139,6 +139,24 @@ def destroy_arena(ctx: GatewayContext, arena_id: str) -> dict:
     return {"arena_id": arena_id, "status": (res or {}).get("status", "accepted")}
 
 
+def announce_agent(ctx: GatewayContext, arena_id: str, model: str, provider: str) -> dict:
+    """Declare the connected agent's model + provider for the operator console's
+    'connected model' indicator. Stance is taken from the bound session. This is
+    harness plumbing (telemetry), not an agent action — the raw key is never sent
+    in the body, only forwarded as the auth header by the REST client."""
+    _guard(ctx, "announce_agent")
+    stance = ctx.session.stance.value if ctx.session.stance else None
+    try:
+        res = ctx.client.announce_agent(ctx.session.api_key, arena_id, model, provider, stance)
+    except Exception:
+        _trace(ctx, "announce_agent",
+               {"model": model, "provider": provider}, ok=False, arena_id=arena_id)
+        raise
+    _trace(ctx, "announce_agent",
+           {"model": model, "provider": provider}, ok=True, arena_id=arena_id)
+    return res
+
+
 def get_briefing(ctx: GatewayContext, arena_id: str) -> dict:
     """The engagement brief for the bound stance: arena status, the scenario
     summary, the stance, and the rules of engagement. (The richer per-stance
