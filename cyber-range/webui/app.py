@@ -39,6 +39,19 @@ _TRANSIENT = ("pending", "deploying", "destroying")
 
 
 # --- orchestrator API helpers ------------------------------------------------
+def _api_error(resp):
+    """Best-effort human message from a non-200 orchestrator response. FastAPI
+    returns {"detail": "..."} or {"detail": [validation errors]}; fall back to
+    the status code."""
+    try:
+        detail = resp.json().get("detail")
+    except ValueError:
+        detail = None
+    if isinstance(detail, list):  # pydantic validation errors
+        detail = "; ".join(e.get("msg", "invalid") for e in detail)
+    return detail or f"HTTP {resp.status_code}"
+
+
 def _api_get(path, timeout=5):
     """GET {API_URL}{path}; returns (json_or_None, ok)."""
     try:
@@ -411,6 +424,52 @@ def current_agent():
     if not agent:
         return jsonify({"connected": False})
     return jsonify({"connected": True, **agent})
+
+
+@app.route("/api/model-connection", methods=["GET"])
+def model_connection_get():
+    """Masked model-connection status for the topbar bubble (proxies the
+    orchestrator's GET /agent/model). Never carries the key."""
+    data, _ = _api_get("/agent/model")
+    return jsonify(data or {"configured": False})
+
+
+@app.route("/api/model-connection", methods=["PUT"])
+def model_connection_set():
+    """Store the operator's bring-your-own model key (proxies orchestrator
+    PUT /agent/model). The key transits webui→orchestrator over the internal
+    network and is encrypted at rest there; the webui never stores or logs it.
+    CSRF-protected (the JS sends X-CSRFToken)."""
+    body = request.get_json(silent=True) or {}
+    payload = {
+        "provider": (body.get("provider") or "").strip().lower(),
+        "model": (body.get("model") or "").strip(),
+        "api_key": body.get("api_key") or "",
+    }
+    try:
+        resp = requests.put(
+            f"{API_URL}/agent/model", json=payload, headers=API_HEADERS, timeout=5
+        )
+    except requests.RequestException:
+        return jsonify({"error": "orchestrator unreachable"}), 502
+    if resp.status_code == 200:
+        return jsonify(resp.json())
+    return jsonify({"error": _api_error(resp)}), resp.status_code
+
+
+@app.route("/api/model-connection", methods=["DELETE"])
+def model_connection_delete():
+    """Forget the operator's stored model credential (proxies DELETE
+    /agent/model). CSRF-protected."""
+    try:
+        resp = requests.delete(
+            f"{API_URL}/agent/model", headers=API_HEADERS, timeout=5
+        )
+    except requests.RequestException:
+        return jsonify({"error": "orchestrator unreachable"}), 502
+    if resp.status_code == 200:
+        return jsonify(resp.json())
+    return jsonify({"error": _api_error(resp)}), resp.status_code
 
 
 @app.route("/api/poll/<instance_id>")

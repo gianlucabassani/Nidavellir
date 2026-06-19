@@ -44,6 +44,34 @@ class ApiKey(Base):
     )
 
 
+class ModelConnection(Base):
+    """An operator's bring-your-own model credential (provider + model + API key),
+    bound to the operator principal (``owner`` is the PK — one current connection
+    per operator).
+
+    Security-by-design: the API key is stored **Fernet-encrypted at rest**
+    (``crypto.encrypt_secret``) in ``encrypted_key``; only a non-secret last-4
+    hint (``key_last4``) is kept in clear for masked display. The plaintext key
+    is never logged and never returned over the API — it is decrypted only
+    in-process when an *activator* (scenario generator / agent-stance launch)
+    needs it. ``status`` is ``standby`` while configured-but-idle ("active but
+    waiting") and flips to ``active`` when a feature is using the connection.
+    """
+
+    __tablename__ = "model_connections"
+
+    owner: Mapped[str] = mapped_column(Text, primary_key=True)  # Principal.name
+    provider: Mapped[str] = mapped_column(Text, nullable=False)
+    model: Mapped[str] = mapped_column(Text, nullable=False)
+    encrypted_key: Mapped[str] = mapped_column(Text, nullable=False)  # Fernet ciphertext
+    key_last4: Mapped[str | None] = mapped_column(Text)  # display hint only
+    status: Mapped[str] = mapped_column(
+        Text, nullable=False, default="standby", server_default="standby"
+    )
+    created_at: Mapped[datetime | None] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
 class Event(Base):
     """Append-only audit stream: lab state transitions and admin actions.
 

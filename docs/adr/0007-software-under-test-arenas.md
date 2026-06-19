@@ -73,6 +73,29 @@ We will support **software-under-test arenas** via the following, fronted by an
    follows the project's documented instructions. Granting write/config or autonomy
    **requires explicit operator consent** captured in the wizard; the default is
    operator-scripted / HITL.
+
+   **Confirmed design (2026-06-18).** The configurator is a **4th, special stance**
+   (time-boxed, **victim-scoped**, write-capable, revoked before the engagement),
+   adding an explicit arena **setup phase** (`provisioning → setup → ready →
+   engagement`). Decided forks:
+   - **Build order:** ship **operator-scripted + HITL first**; **autonomous-opt-in**
+     comes later behind a **double lock** — a platform flag
+     (`CYBERGUARD_ALLOW_AUTONOMOUS_CONFIGURATOR=true`) **and** explicit per-arena
+     operator consent (defense in depth for the most dangerous mode).
+   - **Privilege boundary = HARD:** the configurator and the attacker are **separate
+     sessions/keys** — the attacker key never holds write/config; at
+     `finish_setup`/time-box expiry the configurator is revoked and the engagement
+     runs under the attacker stance. Not a same-session stance transition (avoids
+     lingering write privilege). Falls out naturally from the current
+     one-stance-per-process gateway.
+   - **Setup egress = opt-in OPEN:** during setup the victim may be granted open
+     egress (parallel to build-from-source), behind an explicit per-arena opt-in;
+     the arena **runtime stays egress-locked** regardless.
+   - **Enforcement point = the orchestrator** (consent + victim-scope + time-box +
+     step/command budget); the gateway only exposes the configurator toolset for
+     `stance=configurator`. State via a `setup_session`/`setup_step` event model
+     (reuse `events`, no migration). Every consent/proposal/approval/exec/revocation
+     is audited. The **operator-scripted** mode is the **AI-optional human path**.
 3. **Deep monitoring + crash oracle** — a monitor sidecar around the SUT streams
    logs, process crashes/panics, sanitizer aborts, unhandled 5xx, and resource
    exhaustion into `events` and the defender feed. A crash / sanitizer abort /

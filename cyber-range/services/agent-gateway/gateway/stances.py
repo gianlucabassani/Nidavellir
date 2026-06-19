@@ -2,12 +2,12 @@
 Agent stances and their tool allow-lists.
 
 A stance is how a bring-your-own agent is wired into an arena. Every session
-may call the shared *lifecycle* tools; the per-stance *execution* toolsets
-(`run_command`, `observe_stream`, `query_events`, …) are intentionally EMPTY in
-this skeleton — they (and their guardrails) land in a later, separately
-reviewed increment. `allowed_tools()` is the single source of truth the gateway
-uses to gate a call, so an unbound or wrong-stance session cannot reach a tool
-it should not.
+may call the shared *lifecycle* tools; the per-stance *execution* toolsets are
+defined in `STANCE_TOOLS` below — `attacker` (recon + `run_command` +
+`report_finding`) and `defender` (`query_events`) are implemented and
+registered; `mitm` is still empty (lands in a later increment). `allowed_tools()`
+is the single source of truth the gateway uses to gate a call, so an unbound or
+wrong-stance session cannot reach a tool it should not.
 """
 from enum import Enum
 

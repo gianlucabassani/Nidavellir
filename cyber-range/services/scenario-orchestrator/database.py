@@ -21,7 +21,7 @@ from sqlalchemy import create_engine, or_, select
 from sqlalchemy.orm import sessionmaker
 
 from crypto import decrypt_secret, encrypt_secret
-from models import ApiKey, Base, Deployment, Event
+from models import ApiKey, Base, Deployment, Event, ModelConnection
 from states import LabStatus, validate_transition
 
 # Labs in these states are still "live" (have or may have real infrastructure)
@@ -320,6 +320,90 @@ class Database:
             }
             session.commit()
             return record
+
+    # --- model connections (operator's BYO agent model credential) ----------
+    # The API key is Fernet-encrypted at rest; only a last-4 hint is kept clear.
+    # Masked reads never expose the key; the plaintext is available only via
+    # get_decrypted_model_credential for in-process use by activation features.
+
+    @staticmethod
+    def _mc_masked(row: ModelConnection) -> dict:
+        return {
+            "configured": True,
+            "provider": row.provider,
+            "model": row.model,
+            "key_last4": row.key_last4,
+            "status": row.status,
+            "updated_at": _stringify(row.updated_at),
+        }
+
+    def upsert_model_connection(self, owner, provider, model, api_key, keep_key=False):
+        """Create/replace the operator's model connection. Encrypts the API key
+        at rest, keeps only a last-4 hint in clear, resets status to standby.
+        Returns the masked view (never the key).
+
+        ``keep_key=True`` updates provider/model but retains the stored key
+        (the "update model, leave key blank" path); if there is no stored key
+        yet it stores an empty one (keyless local runtimes)."""
+        now = datetime.now()
+        with self._session() as session:
+            row = session.get(ModelConnection, owner)
+            if row is None:
+                row = ModelConnection(owner=owner, created_at=now)
+                session.add(row)
+            row.provider = provider
+            row.model = model
+            if not keep_key:
+                row.encrypted_key = encrypt_secret(api_key or "")
+                row.key_last4 = api_key[-4:] if api_key else None
+            elif row.encrypted_key is None:
+                row.encrypted_key = encrypt_secret("")
+                row.key_last4 = None
+            row.status = "standby"
+            row.updated_at = now
+            session.commit()
+            return self._mc_masked(row)
+
+    def get_model_connection(self, owner):
+        """Masked view of the operator's model connection, or None. Never
+        returns the API key."""
+        with self._session() as session:
+            row = session.get(ModelConnection, owner)
+            return self._mc_masked(row) if row else None
+
+    def set_model_connection_status(self, owner, status):
+        """Flip the connection between 'standby' and 'active' (used by the
+        activators). Returns the masked view, or None if unset."""
+        with self._session() as session:
+            row = session.get(ModelConnection, owner)
+            if row is None:
+                return None
+            row.status = status
+            session.commit()
+            return self._mc_masked(row)
+
+    def get_decrypted_model_credential(self, owner):
+        """Plaintext provider/model/api_key for IN-PROCESS use by activation
+        features (scenario generator, agent-stance launch) ONLY. Never exposed
+        over HTTP, never logged. None if the operator has no connection."""
+        with self._session() as session:
+            row = session.get(ModelConnection, owner)
+            if row is None:
+                return None
+            return {
+                "provider": row.provider,
+                "model": row.model,
+                "api_key": decrypt_secret(row.encrypted_key),
+            }
+
+    def delete_model_connection(self, owner) -> bool:
+        with self._session() as session:
+            row = session.get(ModelConnection, owner)
+            if row is None:
+                return False
+            session.delete(row)
+            session.commit()
+            return True
 
     def count_api_keys(self):
         with self._session() as session:

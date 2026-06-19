@@ -45,6 +45,17 @@ DEFAULT_ATTACKER_COMMAND = "sleep infinity"
 # can reclaim it — otherwise a from-source build leaks one image per arena.
 _SUT_IMAGE_PREFIX = "cyberguard/sut"
 
+# White-box source access (SUT arenas, P2-10 safe half; ADR-0007). When a victim
+# node's service is `whitebox: true` AND has a `source`, the repo is cloned
+# (read-only, pinned to `ref`) into a per-arena docker volume and mounted
+# **read-only** into the foothold(s) at `/whitebox/<victim>` — the agent reads
+# the source while it tests the running service. Cloning runs nothing from the
+# repo (a `git clone` is not code execution — that's why read access is ungated,
+# unlike build-from-source). The clone helper has egress only to the git host
+# during deploy; the volume is arena-labeled and reclaimed on destroy.
+_GIT_HELPER_IMAGE = os.getenv("CYBERGUARD_GIT_HELPER_IMAGE", "alpine/git:latest")
+_WHITEBOX_MOUNT_BASE = "/whitebox"
+
 # Canonical roles get stable, dashboard-facing output key prefixes (the mock
 # provider and WebUI expect these). Other roles are addressed per-node only.
 _ROLE_PREFIX = {"attacker": "attack_vm", "victim": "victim_vm", "monitor": "log_vm"}
@@ -218,15 +229,30 @@ class DockerLocalProvider(RangeProvider):
             # resolves the moment a foothold runs apt/pip.
             mirror = self._run_mirror(instance_id, networks, wanted, labels) if needs_mirror else None
 
+            # White-box source (read-only) must be cloned before the footholds
+            # start, since they mount it. Only meaningful with a foothold to read
+            # it from.
+            whitebox = {}
+            if any(self._is_foothold(node) for node in nodes):
+                whitebox = self._prepare_whitebox_sources(instance_id, nodes, labels)
+            elif any(node.get("whitebox") for node in nodes):
+                logger.warning(
+                    f"[{instance_id}] white-box node(s) declared but no foothold to "
+                    "mount the source on — skipping white-box source provisioning"
+                )
+
             records = []
             for node in nodes:
                 container = self._run_node(
-                    instance_id, node, networks, ingress, labels, locked, mirror
+                    instance_id, node, networks, ingress, labels, locked, mirror, whitebox
                 )
                 records.append((node, container))
 
             outputs = self._collect_outputs(instance_id, networks, wanted, records)
             outputs["egress"] = "blocked" if locked else "open"
+            # Surface where each white-box source is readable on the foothold(s).
+            for victim in whitebox:
+                outputs[f"node_{victim}_whitebox_source"] = f"{_WHITEBOX_MOUNT_BASE}/{victim}"
             if mirror is not None:
                 # A dead mirror means the foothold can't install tooling — don't
                 # report it as healthy (same philosophy as unhealthy_nodes).
@@ -261,7 +287,7 @@ class DockerLocalProvider(RangeProvider):
             self.destroy(instance_id)
             return {"success": False, "error": str(e)}
 
-    def _run_node(self, instance_id, node, networks, ingress, labels, locked, mirror=None):
+    def _run_node(self, instance_id, node, networks, ingress, labels, locked, mirror=None, whitebox=None):
         role = node.get("role", "node")
         segments = self._node_segments(node)
         # Resolve the workload image. Packaged-first (SUT arenas, P1-6): `image`
@@ -313,6 +339,14 @@ class DockerLocalProvider(RangeProvider):
                 "HTTPS_PROXY": _MIRROR_PROXY_URL,
                 "no_proxy": "localhost,127.0.0.1,::1",
                 "NO_PROXY": "localhost,127.0.0.1,::1",
+            }
+
+        # Mount white-box source read-only into the foothold so the agent can
+        # read it while testing the running service from here (SUT arenas).
+        if whitebox and self._is_foothold(node):
+            run_kwargs["volumes"] = {
+                vol: {"bind": f"{_WHITEBOX_MOUNT_BASE}/{victim}", "mode": "ro"}
+                for victim, vol in whitebox.items()
             }
 
         # Publish declared service ports on random host ports so the operator's
@@ -457,6 +491,65 @@ class DockerLocalProvider(RangeProvider):
         for seg in wanted:
             networks[seg].connect(container, aliases=[_MIRROR_NODE])
         return container
+
+    def _prepare_whitebox_sources(self, instance_id, nodes, labels) -> dict:
+        """Clone each white-box node's source into a per-arena read-only volume.
+
+        Returns ``{victim_node_name: volume_name}`` for the footholds to mount.
+        A white-box node with no `service.source` keeps the prior behaviour (the
+        `whitebox` flag is still surfaced) but gets no mounted source — warned,
+        not failed, so a packaged-image + `whitebox` flag arena still deploys.
+        """
+        mounts: dict[str, str] = {}
+        for node in nodes:
+            if not node.get("whitebox"):
+                continue
+            source = (node.get("service") or {}).get("source") or {}
+            if not source.get("repo"):
+                logger.warning(
+                    f"[{instance_id}] node {node['name']!r} is white-box but has no "
+                    "service.source repo — no source mounted for the agent"
+                )
+                continue
+            vol_name = f"cg-{self._short(instance_id)}-src-{node['name']}"
+            self._clone_source_into_volume(instance_id, vol_name, source, labels)
+            mounts[node["name"]] = vol_name
+        return mounts
+
+    def _clone_source_into_volume(self, instance_id, vol_name, source, labels):
+        """Clone a repo (read-only, pinned to `ref`) into a labeled docker volume
+        via a short-lived helper. The helper runs on the default bridge (egress
+        to the git host only — never the locked arena net) and `git clone` runs
+        nothing from the repo. `repo`/`ref` are passed as env and referenced
+        quoted, so an odd value cannot inject into the helper shell."""
+        repo = source["repo"]
+        ref = source.get("ref") or ""
+        logger.info(
+            f"[{instance_id}] Cloning white-box source {repo}"
+            f"{('@' + ref) if ref else ''} into volume {vol_name}"
+        )
+        self.client.volumes.create(name=vol_name, labels=dict(labels))
+        # Full clone (not shallow) so checking out an arbitrary commit SHA works;
+        # .git is kept (commit history is useful for white-box source review).
+        script = (
+            'set -e; git clone --quiet -- "$REPO" /src; '
+            'if [ -n "$REF" ]; then git -C /src checkout --quiet "$REF"; fi'
+        )
+        try:
+            self.client.containers.run(
+                image=_GIT_HELPER_IMAGE,
+                entrypoint="/bin/sh",
+                command=["-c", script],
+                environment={"REPO": repo, "REF": ref},
+                volumes={vol_name: {"bind": "/src", "mode": "rw"}},
+                labels=dict(labels),
+                detach=False,
+                remove=True,
+            )
+        except Exception as e:
+            raise RuntimeError(
+                f"white-box source clone failed for {repo}: {e}"
+            ) from e
 
     def _collect_outputs(self, instance_id, networks, wanted, records) -> dict:
         outputs = {
@@ -608,6 +701,18 @@ class DockerLocalProvider(RangeProvider):
                 except Exception as e:
                     logger.warning(
                         f"[{instance_id}] could not remove image {image_id}: {e}"
+                    )
+
+            # Reclaim per-arena white-box source volumes (P2-10); a leaked volume
+            # would persist the cloned source across teardowns.
+            for volume in self.client.volumes.list(filters=label_filter):
+                try:
+                    volume.remove(force=True)
+                    logger.info(f"[{instance_id}] Removing source volume {volume.name}")
+                except Exception as e:
+                    logger.warning(
+                        f"[{instance_id}] could not remove volume "
+                        f"{getattr(volume, 'name', None)}: {e}"
                     )
 
             return {"success": True}

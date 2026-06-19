@@ -167,6 +167,33 @@ ground truth, not scored.
 principal may call it (the agent announces itself). The latest `agent_session`
 event (via `GET /events`) drives the console chip.
 
+### Model connection (operator's bring-your-own key)
+
+The operator configures their **bring-your-own model** (provider + model + API
+key) once, from the console's model bubble. The key is **encrypted at rest**
+(Fernet) and bound to the operator principal; the connection sits in **standby**
+("active but waiting") until a feature needs it — the scenario generator or an
+arena whose mode uses an agent in a stance. CyberGuard custodies the key and
+provides the connection; the model stays the operator's (scope boundary). **All
+three are operator/admin only — an `agent`-role key gets `403`** (an agent must
+never read or manage the credential; activators decrypt it server-side, never
+over HTTP).
+
+- `PUT /agent/model` — store/replace the connection. The key is never logged and
+  never returned. Known providers: `anthropic`, `openai`, `gemini`, `deepseek`,
+  `ollama`, `local` (the last two may run keyless). On update, a **blank
+  `api_key` keeps the stored key** (so you can change the model without
+  re-entering the key).
+  ```json
+  { "provider": "anthropic", "model": "claude-opus-4-8", "api_key": "sk-…" }
+  → { "configured": true, "provider": "anthropic", "model": "claude-opus-4-8",
+      "key_last4": "…1a2b", "status": "standby", "updated_at": "…" }
+  ```
+  `422` unknown provider, or a cloud provider with no key.
+- `GET /agent/model` — the **masked** connection (`key_last4` only, never the
+  key), or `{ "configured": false }`.
+- `DELETE /agent/model` — forget the stored credential (`{ "removed": true|false }`).
+
 ### Known-vulnerability manifest, findings & scoring
 
 The benchmark model (replaces CTF flags): a scenario plants a **known-vulnerability

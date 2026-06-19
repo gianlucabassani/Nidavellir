@@ -9,6 +9,7 @@ import logging
 import time
 
 from providers.base import RangeProvider
+from scenario_spec import normalized_nodes
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,24 @@ class MockProvider(RangeProvider):
             "victim_vm_private_ip": "192.168.0.10",
             "victim_vm_floating_ip": "192.168.1.60",
         }
+
+        # Modern flat `node_<name>_*` contract — what the WebUI _parse_nodes()
+        # reads to render the Arena Detail nodes table + topology. Derived from
+        # the scenario's own nodes so mock mode mirrors the requested scenario
+        # (not a fixed trio); without these keys the nodes table renders empty
+        # under MOCK_MODE.
+        for i, node in enumerate(normalized_nodes(scenario_config)):
+            name = node.get("name")
+            if not name:
+                continue
+            ip = f"192.168.50.{10 + i}"
+            fake_outputs[f"node_{name}_name"] = name
+            fake_outputs[f"node_{name}_private_ip"] = ip
+            fake_outputs[f"node_{name}_ssh_command"] = f"ssh user@{ip}  # simulated"
+            fake_outputs[f"node_{name}_state"] = "running"
+            if node.get("ports"):
+                fake_outputs[f"node_{name}_url"] = f"http://{ip}"
+
         return {"success": True, "outputs": fake_outputs}
 
     def destroy(self, instance_id):

@@ -69,13 +69,19 @@
       </button>
       <div class="crumb">{% block crumb %}{% endblock %}</div>
       <div class="spacer"></div>
-      <button class="model-chip" id="model-chip" hidden type="button"
-              title="Connected agent model — click for details"
-              onclick="CyberGuard.openModelModal()">
-        <span class="model-chip__logo" id="model-chip-logo"></span>
-        <span class="model-chip__name" id="model-chip-name">—</span>
-        <span class="dot dot--active"></span>
-      </button>
+      <div class="model-chip-wrap" id="model-chip-wrap">
+        <button class="model-chip" id="model-chip" type="button"
+                title="Model connection — hover to pick a provider, click to manage"
+                onclick="CyberGuard.openModelModal()">
+          <span class="model-chip__logo" id="model-chip-logo"></span>
+          <span class="model-chip__name" id="model-chip-name">Connect model</span>
+          <span class="dot" id="model-chip-dot"></span>
+        </button>
+        <div class="model-menu" id="model-menu" role="menu" aria-label="Pick a model provider">
+          <div class="model-menu__head">Connect a model</div>
+          <div class="model-menu__list" id="model-menu-list"></div>
+        </div>
+      </div>
       <span class="badge badge--idle" id="orch-badge" title="Orchestrator API health">
         <span class="dot" id="orch-dot"></span><span id="orch-text">checking…</span>
       </span>
@@ -99,24 +105,46 @@
   </div>
 </div>
 
-<!-- connected-model details (populated by app.js) -->
+<!-- model connection: pick a provider + store the BYO key (driven by app.js) -->
 <div class="modal" id="model-modal" hidden>
   <div class="modal__backdrop" onclick="CyberGuard.closeModelModal()"></div>
-  <div class="modal__card" role="dialog" aria-modal="true" aria-label="Connected model">
+  <div class="modal__card" role="dialog" aria-modal="true" aria-label="Connect model">
     <button class="modal__x" type="button" onclick="CyberGuard.closeModelModal()" title="Close">
       <i class="fa-solid fa-xmark"></i>
     </button>
     <div class="modal__head">
       <span class="model-bubble" id="model-modal-logo"></span>
       <div>
-        <div class="modal__title" id="model-modal-name">—</div>
-        <div class="modal__sub" id="model-modal-provider">—</div>
+        <div class="modal__title" id="model-modal-name">Connect a model</div>
+        <div class="modal__sub" id="model-modal-provider">Choose your provider</div>
       </div>
     </div>
+
+    <div class="model-pick" id="model-pick" role="group" aria-label="Provider"></div>
+
+    <form id="model-form" autocomplete="off" onsubmit="return CyberGuard.saveModel(event)">
+      <div class="field">
+        <label class="label" for="model-form-model">Model</label>
+        <input class="input mono" type="text" id="model-form-model" placeholder="model id" spellcheck="false">
+      </div>
+      <div class="field" style="margin-bottom:10px">
+        <label class="label" for="model-form-key">API key</label>
+        <input class="input mono" type="password" id="model-form-key" placeholder="paste your key" autocomplete="new-password">
+        <div class="help" id="model-form-keyhint">Encrypted at rest — never shown again.</div>
+      </div>
+      <div class="model-form__err" id="model-form-err" hidden></div>
+      <div class="model-form__actions">
+        <button type="submit" class="btn btn-primary" id="model-form-save">Connect</button>
+        <button type="button" class="btn btn-danger" id="model-form-remove" hidden onclick="CyberGuard.removeModel()">Remove</button>
+      </div>
+    </form>
+
     <dl class="kv" id="model-modal-kv"></dl>
     <p class="modal__foot">
-      Self-declared by the connected agent harness — CyberGuard ships no AI, only
-      the gateway. Attribution/telemetry signal, not ground truth.
+      Your key is <strong>encrypted at rest</strong> and never returned in plaintext —
+      CyberGuard custodies it and provides the connection; the model stays yours
+      (bring-your-own). The connection waits in <strong>standby</strong> until a
+      scenario generator or an agent-mode arena needs it.
     </p>
   </div>
 </div>

@@ -91,6 +91,22 @@ def test_vm_scenario_on_container_provider_rejected(client):
     assert client.fake_deploy.calls == []
 
 
+def test_vm_scenario_without_provider_rejected_when_default_is_container(
+    client, monkeypatch
+):
+    """No explicit provider resolves to the active default; a vm-scenario must
+    still be rejected up front when that default is container-class (was a
+    silent bypass → async Celery failure)."""
+    monkeypatch.setenv("RANGE_PROVIDER", "docker-local")  # default → container
+    resp = client.post(
+        "/deploy",
+        json={"scenario": "basic_pentest", "instance_id": "psel-nodef"},  # vm
+    )
+    assert resp.status_code == 422
+    assert "vm-class" in resp.text
+    assert client.fake_deploy.calls == []
+
+
 def test_container_scenario_on_vm_provider_rejected(client):
     resp = client.post(
         "/deploy",

@@ -79,7 +79,7 @@ sudo systemctl start redis-server
 Processes the deployment tasks. We enable Mock Mode here.
 
 ```bash
-cd services/scenario-orchestrator
+cd cyber-range/services/scenario-orchestrator
 pip install -r requirements.txt
 export MOCK_MODE=true
 celery -A tasks worker --loglevel=info --concurrency=3
@@ -89,7 +89,7 @@ celery -A tasks worker --loglevel=info --concurrency=3
 The REST backend that handles requests.
 
 ```bash
-cd services/scenario-orchestrator
+cd cyber-range/services/scenario-orchestrator
 # If using a virtualenv, ensure it is activated
 uvicorn api:app --host 0.0.0.0 --port 8000
 ```
@@ -98,7 +98,7 @@ uvicorn api:app --host 0.0.0.0 --port 8000
 The frontend user interface.
 
 ```bash
-cd webui
+cd cyber-range/webui
 pip install -r requirements.txt
 python3 app.py
 ```

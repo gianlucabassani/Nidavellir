@@ -34,17 +34,17 @@
   /* ---- connected-model chip (every page) ------------------------------ */
   // Schematic provider marks (not trademarks) — colored bubble + glyph.
   const BRANDS = {
-    anthropic: { name: "Anthropic · Claude", color: "#d97757",
+    anthropic: { name: "Anthropic · Claude", color: "#d97757", model: "claude-opus-4-8",
       svg: '<svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>' },
-    openai: { name: "OpenAI", color: "#10a37f",
+    openai: { name: "OpenAI", color: "#10a37f", model: "gpt-4o",
       svg: '<svg viewBox="0 0 24 24"><path d="M12 3l7.79 4.5v9L12 21l-7.79-4.5v-9z" fill="none" stroke="currentColor" stroke-width="2"/></svg>' },
-    gemini: { name: "Google · Gemini", color: "#4285f4",
+    gemini: { name: "Google · Gemini", color: "#4285f4", model: "gemini-2.0-flash",
       svg: '<svg viewBox="0 0 24 24"><path d="M12 2c.6 5.3 3.1 7.8 8.4 8.4-5.3.6-7.8 3.1-8.4 8.4-.6-5.3-3.1-7.8-8.4-8.4C8.9 9.8 11.4 7.3 12 2z" fill="currentColor"/></svg>' },
-    deepseek: { name: "DeepSeek", color: "#4d6bfe",
+    deepseek: { name: "DeepSeek", color: "#4d6bfe", model: "deepseek-chat",
       svg: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 13c2 2.2 8 2.2 10-1.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>' },
-    ollama: { name: "Ollama · local", color: "#414959",
+    ollama: { name: "Ollama · local", color: "#414959", model: "llama3",
       svg: '<svg viewBox="0 0 24 24"><path d="M8.5 3v4M15.5 3v4M6 10a6 6 0 0112 0v4a6 6 0 01-12 0z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' },
-    local: { name: "Local model", color: "#22d3ee",
+    local: { name: "Local model", color: "#22d3ee", model: "",
       svg: '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>' },
   };
   const FALLBACK = { name: "AI model", color: "#6b7280",
@@ -56,50 +56,196 @@
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
-  let currentAgent = null;
+  const PROVIDERS = ["anthropic", "openai", "gemini", "deepseek", "ollama", "local"];
+  const KEYLESS = ["local", "ollama"]; // local runtimes may run without a key
 
-  function renderAgentChip(d) {
+  let modelConn = null;   // {configured, provider, model, key_last4, status, updated_at}
+  let liveAgent = null;   // {connected, provider, model, stance, ...} self-declared
+  let pickProvider = null; // provider currently selected in the modal
+
+  const setBubble = (el, b) => { el.style.background = b.color; el.innerHTML = b.svg; };
+  const csrfToken = () => {
+    const m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.content : "";
+  };
+
+  // Hover dropdown (desktop fast path) — built once.
+  function buildProviderMenu() {
+    const list = document.getElementById("model-menu-list");
+    if (!list || list.childElementCount) return;
+    PROVIDERS.forEach((p) => {
+      const b = brandOf(p);
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "model-menu__item";
+      item.setAttribute("role", "menuitem");
+      item.innerHTML =
+        '<span class="model-menu__logo" style="background:' + b.color + '">' + b.svg +
+        "</span><span>" + escapeHtml(b.name) + "</span>";
+      item.addEventListener("click", () => openModelConfig(p));
+      list.appendChild(item);
+    });
+  }
+
+  // Provider tiles inside the modal (works without hover, e.g. touch).
+  function buildPicker() {
+    const pick = document.getElementById("model-pick");
+    if (!pick || pick.childElementCount) return;
+    PROVIDERS.forEach((p) => {
+      const b = brandOf(p);
+      const t = document.createElement("button");
+      t.type = "button";
+      t.className = "model-pick__item";
+      t.dataset.provider = p;
+      t.title = b.name;
+      t.innerHTML = '<span class="model-pick__logo" style="background:' + b.color + '">' + b.svg + "</span>";
+      t.addEventListener("click", () => selectProvider(p, false));
+      pick.appendChild(t);
+    });
+  }
+
+  function renderChip() {
     const chip = document.getElementById("model-chip");
     if (!chip) return;
-    if (!d || !d.connected) { chip.hidden = true; currentAgent = null; return; }
-    currentAgent = d;
-    const b = brandOf(d.provider);
     const logo = document.getElementById("model-chip-logo");
-    logo.style.background = b.color;
-    logo.innerHTML = b.svg;
-    document.getElementById("model-chip-name").textContent = d.model || b.name;
-    chip.hidden = false;
+    const name = document.getElementById("model-chip-name");
+    const dot = document.getElementById("model-chip-dot");
+    const active = !!(liveAgent && liveAgent.connected);
+    if (modelConn && modelConn.configured) {
+      const b = brandOf(modelConn.provider);
+      setBubble(logo, b);
+      name.textContent = modelConn.model || b.name;
+      dot.className = "dot " + (active ? "dot--active" : "dot--standby");
+      chip.title = b.name + " · " + (active ? "active" : "standby") + " — click to manage";
+    } else {
+      setBubble(logo, FALLBACK);
+      name.textContent = "Connect model";
+      dot.className = "dot";
+      chip.title = "Connect a model — hover to pick a provider";
+    }
   }
 
-  function pollAgent() {
-    if (!document.getElementById("model-chip")) return;
-    fetch("/api/current-agent")
-      .then((r) => r.json())
-      .then(renderAgentChip)
-      .catch(() => {})
-      .finally(() => setTimeout(pollAgent, 10000));
+  function refreshModel() {
+    if (!document.getElementById("model-chip")) return Promise.resolve();
+    return Promise.all([
+      fetch("/api/model-connection").then((r) => r.json()).catch(() => null),
+      fetch("/api/current-agent").then((r) => r.json()).catch(() => null),
+    ]).then(([mc, la]) => {
+      modelConn = mc && mc.configured ? mc : null;
+      liveAgent = la;
+      renderChip();
+    });
+  }
+  function pollModel() { refreshModel().finally(() => setTimeout(pollModel, 10000)); }
+
+  function setFormError(msg) {
+    const el = document.getElementById("model-form-err");
+    if (!el) return;
+    el.textContent = msg || "";
+    el.hidden = !msg;
   }
 
-  function openModelModal() {
-    const d = currentAgent;
-    if (!d) return;
-    const b = brandOf(d.provider);
-    const logo = document.getElementById("model-modal-logo");
-    logo.style.background = b.color;
-    logo.innerHTML = b.svg;
-    document.getElementById("model-modal-name").textContent = d.model || b.name;
-    document.getElementById("model-modal-provider").textContent = b.name;
-    const rows = [
-      ["Provider", b.name], ["Model", d.model || "—"], ["Stance", d.stance || "—"],
-      ["Arena", d.arena_id || "—"], ["Connected", d.ts || "—"], ["Via key", d.actor || "—"],
-    ];
-    document.getElementById("model-modal-kv").innerHTML =
-      rows.map(([k, v]) => "<dt>" + k + "</dt><dd>" + escapeHtml(v) + "</dd>").join("");
+  function selectProvider(provider, keepModel) {
+    pickProvider = provider;
+    const b = brandOf(provider);
+    setBubble(document.getElementById("model-modal-logo"), b);
+    document.getElementById("model-modal-name").textContent = b.name;
+    document.getElementById("model-modal-provider").textContent = "Provider · " + provider;
+    document.querySelectorAll("#model-pick .model-pick__item").forEach((el) => {
+      el.classList.toggle("is-on", el.dataset.provider === provider);
+    });
+    if (!keepModel) document.getElementById("model-form-model").value = b.model || "";
+    document.getElementById("model-form-key").placeholder =
+      KEYLESS.includes(provider) ? "(optional for local runtimes)" : "paste your key";
+    showModalMeta();
+  }
+
+  function showModalMeta() {
+    const kv = document.getElementById("model-modal-kv");
+    const remove = document.getElementById("model-form-remove");
+    const save = document.getElementById("model-form-save");
+    const hint = document.getElementById("model-form-keyhint");
+    const isCurrent = modelConn && modelConn.configured && modelConn.provider === pickProvider;
+    if (isCurrent) {
+      const active = !!(liveAgent && liveAgent.connected);
+      const rows = [
+        ["Status", active ? "active" : "standby (waiting)"],
+        ["Stored key", modelConn.key_last4 ? "•••• " + modelConn.key_last4 : "—"],
+        ["Updated", modelConn.updated_at || "—"],
+      ];
+      kv.innerHTML = rows.map(([k, v]) => "<dt>" + k + "</dt><dd>" + escapeHtml(v) + "</dd>").join("");
+      remove.hidden = false;
+      save.textContent = "Update";
+      hint.textContent = "Leave the key blank to keep the stored one. Encrypted at rest.";
+    } else {
+      kv.innerHTML = "";
+      remove.hidden = true;
+      save.textContent = "Connect";
+      hint.textContent = "Encrypted at rest — never shown again.";
+    }
+  }
+
+  function openModelConfig(provider) {
+    buildPicker();
+    const keepModel = !!(modelConn && modelConn.configured && modelConn.provider === provider);
+    selectProvider(provider, keepModel);
+    if (keepModel) document.getElementById("model-form-model").value = modelConn.model || "";
+    document.getElementById("model-form-key").value = "";
+    setFormError("");
     document.getElementById("model-modal").hidden = false;
+    setTimeout(() => document.getElementById("model-form-key").focus(), 30);
+  }
+
+  // Clicking the bubble → manage the current connection, or start a new one.
+  function openModelModal() {
+    openModelConfig((modelConn && modelConn.provider) || pickProvider || PROVIDERS[0]);
   }
   function closeModelModal() {
     const m = document.getElementById("model-modal");
     if (m) m.hidden = true;
+  }
+
+  function saveModel(e) {
+    e.preventDefault();
+    const provider = pickProvider;
+    const model = document.getElementById("model-form-model").value.trim();
+    const key = document.getElementById("model-form-key").value;
+    if (!model) { setFormError("Enter a model id."); return false; }
+    // Blank key is allowed only when keeping an existing same-provider key, or
+    // for keyless local runtimes — the orchestrator enforces the same rule.
+    const reusing = modelConn && modelConn.configured && modelConn.provider === provider;
+    if (!key && !reusing && !KEYLESS.includes(provider)) {
+      setFormError("Enter your API key."); return false;
+    }
+    const save = document.getElementById("model-form-save");
+    save.disabled = true;
+    setFormError("");
+    fetch("/api/model-connection", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken() },
+      body: JSON.stringify({ provider: provider, model: model, api_key: key }),
+    })
+      .then((r) => r.json().then((b) => ({ ok: r.ok, b: b || {} })))
+      .then(({ ok, b }) => {
+        if (!ok) { setFormError(b.error || "Save failed."); return; }
+        modelConn = b.configured ? b : null;
+        renderChip();
+        closeModelModal();
+      })
+      .catch(() => setFormError("Network error."))
+      .finally(() => { save.disabled = false; });
+    return false;
+  }
+
+  function removeModel() {
+    if (!confirm("Forget the stored model key?")) return;
+    fetch("/api/model-connection", {
+      method: "DELETE",
+      headers: { "X-CSRFToken": csrfToken() },
+    })
+      .then((r) => r.json().catch(() => ({})))
+      .then(() => { modelConn = null; renderChip(); closeModelModal(); })
+      .catch(() => {});
   }
 
   /* ---- status → badge markup (mirrors _macros.html) ------------------- */
@@ -255,12 +401,14 @@
   };
 
   window.CyberGuard = {
-    initArena, renderTopology, openModelModal, closeModelModal,
+    initArena, renderTopology,
+    openModelModal, closeModelModal, openModelConfig, saveModel, removeModel,
     fit: function () { if (topoCy) topoCy.fit(null, 30); },
   };
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModelModal(); });
   document.addEventListener("DOMContentLoaded", function () {
     pollHealth();
-    pollAgent();
+    buildProviderMenu();
+    pollModel();
   });
 })();

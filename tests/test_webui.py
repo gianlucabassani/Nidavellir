@@ -265,3 +265,42 @@ def test_current_agent_reports_latest_announced_model(client, monkeypatch):
     assert data["provider"] == "gemini"   # lower-cased for the logo lookup
     assert data["arena_id"] == "arena-9"
     assert data["stance"] == "attacker"
+
+
+# --- model-connection bubble (BYO key) proxy --------------------------------
+
+def test_model_connection_get_offline_reports_unconfigured(client):
+    """With the backend down, the bubble endpoint degrades to 'not configured'."""
+    _login(client)
+    resp = client.get("/api/model-connection")
+    assert resp.status_code == 200
+    assert resp.get_json() == {"configured": False}
+
+
+def test_model_connection_put_requires_csrf(client):
+    """Storing a key is a state change → CSRF-protected (no token = rejected)."""
+    _login(client)
+    resp = client.put(
+        "/api/model-connection",
+        json={"provider": "anthropic", "model": "claude-opus-4-8", "api_key": "k"},
+    )
+    assert resp.status_code == 400  # CSRF missing
+
+
+def test_model_connection_delete_requires_csrf(client):
+    _login(client)
+    assert client.delete("/api/model-connection").status_code == 400
+
+
+def test_model_connection_put_relays_unreachable_backend(client):
+    """With CSRF satisfied but the orchestrator at a closed port, the proxy
+    reports the backend as unreachable rather than 500-ing."""
+    _login(client)
+    token = _csrf_token(client, "/")
+    resp = client.put(
+        "/api/model-connection",
+        json={"provider": "anthropic", "model": "claude-opus-4-8", "api_key": "k"},
+        headers={"X-CSRFToken": token},
+    )
+    assert resp.status_code == 502
+    assert "unreachable" in resp.get_json()["error"]

@@ -103,18 +103,26 @@ class DeployRequest(BaseModel):
 
 
 def _check_provider_compatibility(scenario_id: str, provider_name: str | None):
-    """Reject vm-scenarios on container backends (and vice versa) up front."""
-    if provider_name is None:
-        return
-    meta = next(s for s in scenarios.list_scenarios() if s["id"] == scenario_id)
+    """Reject vm-scenarios on container backends (and vice versa) up front.
+
+    An unspecified provider resolves to the active default so the check still
+    runs — previously a ``None`` provider skipped validation entirely, letting
+    an incompatible deploy queue and then fail asynchronously in the Celery
+    OpenTofu/Docker step, which is opaque to the operator."""
+    resolved = provider_name or default_provider_name()
+    if resolved not in available_providers():
+        return  # an unknown provider surfaces a clear error later at get_provider()
+    meta = next((s for s in scenarios.list_scenarios() if s["id"] == scenario_id), None)
+    if meta is None:
+        return  # an unknown scenario id is rejected downstream (404)
     needed = meta["provider_class"]
-    offered = infra_class_of(provider_name)
+    offered = infra_class_of(resolved)
     if needed != "any" and offered not in ("any", needed):
         raise HTTPException(
             status_code=422,
             detail=(
                 f"Scenario '{scenario_id}' requires {needed}-class "
-                f"infrastructure but provider '{provider_name}' "
+                f"infrastructure but provider '{resolved}' "
                 f"provides {offered}"
             ),
         )
@@ -513,6 +521,80 @@ def _require_operator(principal: Principal) -> None:
         )
 
 
+# --- BYO model connection (operator's session-bound agent credential) -------
+# The operator configures their bring-your-own model (provider + model + API
+# key) once, from the console's model bubble. The key is encrypted at rest and
+# the connection sits in *standby* ("active but waiting") until a feature needs
+# it — the scenario generator (P3) or an arena whose mode uses an agent in a
+# stance (P2 / white-box SUT). CyberGuard custodies the key and provides the
+# connection plumbing; the model is the operator's (scope boundary holds — the
+# platform never launches the agent on its own, and arenas stay AI-optional).
+# Operator/admin only; an agent-role key must never manage credentials.
+MODEL_PROVIDERS = ("anthropic", "openai", "gemini", "deepseek", "ollama", "local")
+_KEYLESS_PROVIDERS = ("local", "ollama")  # local runtimes may run without a key
+
+
+class ModelConnectionRequest(BaseModel):
+    provider: str = Field(min_length=1, max_length=32)
+    model: str = Field(min_length=1, max_length=128)
+    api_key: str = Field(default="", max_length=512)
+
+    @field_validator("provider")
+    @classmethod
+    def _known_provider(cls, value: str) -> str:
+        if value.lower() not in MODEL_PROVIDERS:
+            raise ValueError(
+                f"unknown model provider '{value}' "
+                f"(known: {', '.join(MODEL_PROVIDERS)})"
+            )
+        return value.lower()
+
+
+@app.put("/agent/model")
+def set_model_connection(
+    req: ModelConnectionRequest,
+    principal: Principal = Depends(require_principal),
+):
+    """Store the operator's bring-your-own model credential, bound to the
+    operator. The API key is encrypted at rest, never logged, and never returned
+    — only a masked last-4 is surfaced. Resets the connection to *standby*."""
+    _require_operator(principal)
+    existing = db.get_model_connection(principal.name)
+    keep_key = False
+    if not req.api_key:
+        if existing and existing.get("provider") == req.provider:
+            keep_key = True  # update model only; retain the stored key
+        elif req.provider not in _KEYLESS_PROVIDERS:
+            raise HTTPException(
+                status_code=422,
+                detail=f"provider '{req.provider}' requires an API key",
+            )
+    masked = db.upsert_model_connection(
+        principal.name, req.provider, req.model, req.api_key, keep_key=keep_key
+    )
+    # Only the non-secret provider/model are logged — never the key.
+    logger.info(
+        f"Model connection configured by '{principal.name}': "
+        f"provider={req.provider} model={req.model} (key encrypted at rest)"
+    )
+    return masked
+
+
+@app.get("/agent/model")
+def read_model_connection(principal: Principal = Depends(require_principal)):
+    """The operator's current model connection (masked — never the key), or
+    {"configured": false}."""
+    _require_operator(principal)
+    return db.get_model_connection(principal.name) or {"configured": False}
+
+
+@app.delete("/agent/model")
+def remove_model_connection(principal: Principal = Depends(require_principal)):
+    """Forget the operator's stored model credential."""
+    _require_operator(principal)
+    return {"removed": db.delete_model_connection(principal.name)}
+
+
 def _match_vuln_id(node, cwe, manifest, claimed) -> str | None:
     """The first not-yet-claimed manifest vuln a finding satisfies, or None.
     Match = same CWE (normalized) AND (vuln has no node, or the same node)."""
@@ -571,6 +653,11 @@ async def report_finding(
     if not record:
         raise HTTPException(status_code=404, detail="Arena not found")
 
+    # Custom/SUT arenas store a synthetic label (e.g. "custom:kali-cli+dvwa")
+    # that is not a registered scenario id, so there is no manifest to match
+    # against — these run in *discovery mode*: the finding is recorded and ack'd
+    # but never scored by CWE. A manifest for custom arenas is future work
+    # (operator-supplied manifest / SUT crash-oracle scoring, ROADMAP P4-7).
     manifest = scenarios.scenario_manifest(record.get("scenario")) or []
     claimed = {
         (e.get("payload") or {}).get("matched_vuln_id")

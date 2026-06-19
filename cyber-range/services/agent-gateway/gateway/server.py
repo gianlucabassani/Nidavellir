@@ -2,9 +2,10 @@
 The MCP server: registers the shared lifecycle tools and wires the transport.
 
 Built on the official MCP Python SDK (`FastMCP`). The tool wrappers are thin —
-each delegates to `gateway.tools`, which holds the testable logic. Per-stance
-execution toolsets (and their guardrails) are added in a later increment; this
-skeleton exposes only the lifecycle surface.
+each delegates to `gateway.tools`, which holds the testable logic. Beyond the
+shared lifecycle surface, the per-stance execution toolsets are registered here
+according to the bound stance (attacker: recon + `run_command` +
+`report_finding`; defender: `query_events`) and gated by `stances.allowed_tools`.
 
 Run:
     CYBERGUARD_AGENT_KEY=cg_... python -m gateway.server                # stdio

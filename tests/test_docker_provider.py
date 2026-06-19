@@ -83,11 +83,13 @@ class _FakeContainers:
 
     def run(self, **kwargs):
         self.run_kwargs.append(kwargs)
-        node = kwargs["labels"].get(LABEL_NODE)
+        # The git-clone helper runs un-named on the default bridge (no `name`/
+        # `network`), so tolerate their absence.
+        node = kwargs.get("labels", {}).get(LABEL_NODE)
         container = _FakeContainer(
-            kwargs["name"],
-            kwargs["labels"],
-            kwargs["network"],
+            kwargs.get("name", "auto"),
+            kwargs.get("labels", {}),
+            kwargs.get("network"),
             list((kwargs.get("ports") or {}).keys()),
             state="exited" if node in self.exit_nodes else "running",
         )
@@ -155,11 +157,38 @@ class _FakeImages:
         self._images = [i for i in self._images if i.id != image_id]
 
 
+class _FakeVolume:
+    def __init__(self, name, labels):
+        self.name = name
+        self.labels = labels or {}
+        self.removed = False
+
+    def remove(self, force=False):
+        self.removed = True
+
+
+class _FakeVolumes:
+    def __init__(self):
+        self.created = []
+
+    def create(self, name=None, labels=None):
+        volume = _FakeVolume(name, labels or {})
+        self.created.append(volume)
+        return volume
+
+    def list(self, filters=None):
+        if not filters:
+            return [v for v in self.created if not v.removed]
+        key, _, val = filters["label"].partition("=")
+        return [v for v in self.created if not v.removed and v.labels.get(key) == val]
+
+
 class _FakeClient:
     def __init__(self, exit_nodes=None, mirror_image_present=True):
         self.containers = _FakeContainers(exit_nodes=exit_nodes)
         self.networks = _FakeNetworks()
         self.images = _FakeImages(present=mirror_image_present)
+        self.volumes = _FakeVolumes()
 
 
 CONTAINER_SCENARIO = {
@@ -726,3 +755,89 @@ def test_sut_source_build_image_is_reclaimed_on_destroy(monkeypatch):
 
     assert provider.destroy("sutbuild2-uuid")["success"] is True
     assert built_tag in client.images.removed
+
+
+# --- white-box source access (P2-10 safe half: read-only source mount) --------
+
+def test_whitebox_source_cloned_and_mounted_readonly_on_foothold():
+    client = _FakeClient()
+    provider = DockerLocalProvider(client=client)
+    scenario = {
+        "requires": {"provider_class": "container", "egress": "open"},
+        "nodes": [
+            {"name": "app", "role": "victim", "ports": [3000],
+             "service": {"image": "bkimminich/juice-shop:latest", "whitebox": True,
+                         "source": {"repo": "https://github.com/juice-shop/juice-shop",
+                                    "ref": "v15.0.0"}}},
+            {"name": "kali", "role": "attacker",
+             "image": "kalilinux/kali-rolling:latest", "entrypoint": True},
+        ],
+    }
+    outputs = provider.deploy(scenario, "wbx12345-rest-of-uuid")["outputs"]
+
+    # A per-arena, labeled source volume was created.
+    (vol,) = client.volumes.created
+    assert vol.name == "cg-wbx12345-src-app"
+    assert vol.labels[LABEL_LAB_ID] == "wbx12345-rest-of-uuid"
+
+    # The git-clone helper ran with repo/ref via env (no shell-injection surface).
+    helper = next(kw for kw in client.containers.run_kwargs
+                  if kw.get("image") == "alpine/git:latest")
+    assert helper["environment"] == {
+        "REPO": "https://github.com/juice-shop/juice-shop", "REF": "v15.0.0"}
+    assert helper["volumes"][vol.name]["bind"] == "/src"
+    assert helper["remove"] is True
+
+    # The foothold mounts that volume READ-ONLY at /whitebox/<victim>; the victim
+    # does not mount it.
+    kali = next(kw for kw in client.containers.run_kwargs
+                if kw.get("labels", {}).get(LABEL_NODE) == "kali")
+    assert kali["volumes"][vol.name] == {"bind": "/whitebox/app", "mode": "ro"}
+    app = next(kw for kw in client.containers.run_kwargs
+               if kw.get("labels", {}).get(LABEL_NODE) == "app")
+    assert "volumes" not in app
+
+    # The readable path is surfaced and the whitebox flag retained.
+    assert outputs["node_app_whitebox_source"] == "/whitebox/app"
+    assert outputs["node_app_whitebox"] is True
+
+
+def test_whitebox_without_source_warns_and_still_deploys():
+    # A packaged image + the `whitebox` flag but no source: backward-compatible —
+    # no clone, deploy succeeds, the flag is still surfaced (no source to mount).
+    client = _FakeClient()
+    provider = DockerLocalProvider(client=client)
+    scenario = {
+        "requires": {"provider_class": "container", "egress": "open"},
+        "nodes": [
+            {"name": "app", "role": "victim", "ports": [3000],
+             "service": {"image": "bkimminich/juice-shop:latest", "whitebox": True}},
+            {"name": "kali", "role": "attacker",
+             "image": "kalilinux/kali-rolling:latest", "entrypoint": True},
+        ],
+    }
+    result = provider.deploy(scenario, "wbxnosrc-uuid")
+    assert result["success"] is True
+    assert client.volumes.created == []
+    assert result["outputs"]["node_app_whitebox"] is True
+    assert "node_app_whitebox_source" not in result["outputs"]
+
+
+def test_whitebox_source_volume_reclaimed_on_destroy():
+    client = _FakeClient()
+    provider = DockerLocalProvider(client=client)
+    scenario = {
+        "requires": {"provider_class": "container", "egress": "open"},
+        "nodes": [
+            {"name": "app", "role": "victim",
+             "service": {"image": "nginx", "whitebox": True,
+                         "source": {"repo": "https://github.com/o/p", "ref": "v1"}}},
+            {"name": "kali", "role": "attacker", "image": "alpine", "entrypoint": True},
+        ],
+    }
+    provider.deploy(scenario, "wbxgc-uuid")
+    (vol,) = client.volumes.created
+    assert not vol.removed
+
+    assert provider.destroy("wbxgc-uuid")["success"] is True
+    assert vol.removed is True

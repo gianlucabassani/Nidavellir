@@ -82,6 +82,49 @@ def test_mock_deploy_returns_ui_compatible_outputs(monkeypatch):
         assert key in result["outputs"], key
 
 
+def test_openstack_rejects_container_scenario_without_shelling_out(monkeypatch):
+    """The refactored OpenStack driver (now on TerraformDriver) keeps a vm/any
+    compatibility gate: a container scenario fails fast in deploy() before any
+    tofu subprocess runs."""
+    import subprocess
+
+    def _boom(*a, **k):  # pragma: no cover - must not be reached
+        raise AssertionError("tofu must not run for an unsupported scenario")
+
+    monkeypatch.setattr(subprocess, "run", _boom)
+
+    result = OpenStackProvider().deploy(
+        {"requires": {"provider_class": "container"}}, "os-incompat"
+    )
+    assert result["success"] is False
+    assert "container-class" in result["error"]
+    assert OpenStackProvider._supports({"requires": {"provider_class": "vm"}}) is True
+    assert OpenStackProvider._supports({}) is True  # provider-agnostic default
+
+
+def test_mock_deploy_emits_node_outputs_for_scenario_nodes(monkeypatch):
+    """Mock mode must emit the flat node_<name>_* contract the WebUI nodes
+    table reads — regression: it previously emitted only the legacy vm-role
+    keys, so the Arena Detail nodes table rendered empty under MOCK_MODE."""
+    import providers.mock as mock_module
+
+    monkeypatch.setattr(mock_module.time, "sleep", lambda s: None)
+    config = {
+        "nodes": [
+            {"name": "kali", "role": "attacker", "image": "kali"},
+            {"name": "dvwa", "role": "victim", "image": "dvwa", "ports": [80]},
+        ]
+    }
+    outputs = MockProvider().deploy(config, "node-out")["outputs"]
+
+    assert outputs["node_kali_name"] == "kali"
+    assert outputs["node_dvwa_name"] == "dvwa"
+    assert outputs["node_kali_private_ip"]
+    assert "node_kali_ssh_command" in outputs
+    assert outputs["node_dvwa_url"].startswith("http://")  # has ports → url
+    assert "node_kali_url" not in outputs                  # no ports → no url
+
+
 def test_mock_destroy_is_idempotent():
     assert MockProvider().destroy("never-existed") == {"success": True}
 
