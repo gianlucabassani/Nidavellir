@@ -141,6 +141,86 @@ def test_agent_role_cannot_manage_credentials(agent):
     assert agent.delete("/agent/model").status_code == 403
 
 
+# --- verification ping ------------------------------------------------------
+
+def test_verify_supplied_key(operator, monkeypatch):
+    import model_verify
+
+    seen = {}
+
+    def fake(provider, model, api_key):
+        seen.update(provider=provider, model=model, api_key=api_key)
+        return {"verified": True, "detail": "ok", "checked": True}
+
+    monkeypatch.setattr(model_verify, "verify_credential", fake)
+    r = operator.post(
+        "/agent/model/verify",
+        json={"provider": "OpenAI", "model": "gpt-4o", "api_key": "sk-test"},
+    )
+    assert r.status_code == 200 and r.json()["verified"] is True
+    assert seen == {"provider": "openai", "model": "gpt-4o", "api_key": "sk-test"}
+
+
+def test_verify_uses_stored_decrypted_key_when_body_empty(operator, monkeypatch):
+    import model_verify
+
+    operator.put("/agent/model", json={"provider": "openai", "model": "gpt-4o", "api_key": "sk-stored-9"})
+    captured = {}
+
+    def fake(provider, model, api_key):
+        captured.update(provider=provider, api_key=api_key)
+        return {"verified": True, "detail": "ok", "checked": True}
+
+    monkeypatch.setattr(model_verify, "verify_credential", fake)
+    r = operator.post("/agent/model/verify", json={})
+    assert r.status_code == 200
+    assert captured["provider"] == "openai" and captured["api_key"] == "sk-stored-9"
+
+
+def test_verify_without_connection_404(operator):
+    operator.delete("/agent/model")
+    assert operator.post("/agent/model/verify", json={}).status_code == 404
+
+
+def test_verify_is_operator_only(agent):
+    assert agent.post("/agent/model/verify", json={}).status_code == 403
+
+
+def test_model_verify_classifies_provider_responses(monkeypatch):
+    import model_verify
+
+    class _Resp:
+        def __init__(self, code):
+            self.status_code = code
+
+    monkeypatch.setattr(model_verify.requests, "get", lambda *a, **k: _Resp(200))
+    assert model_verify.verify_credential("anthropic", "m", "k")["verified"] is True
+
+    monkeypatch.setattr(model_verify.requests, "get", lambda *a, **k: _Resp(401))
+    bad = model_verify.verify_credential("openai", "m", "bad")
+    assert bad["verified"] is False and bad["checked"] is True  # key rejected, but checked
+
+
+def test_model_verify_network_failure_is_unchecked(monkeypatch):
+    import requests as _requests
+
+    import model_verify
+
+    def _boom(*a, **k):
+        raise _requests.ConnectionError("no route to host")
+
+    monkeypatch.setattr(model_verify.requests, "get", _boom)
+    res = model_verify.verify_credential("openai", "m", "k")
+    assert res["verified"] is False and res["checked"] is False  # unverified, not invalid
+
+
+def test_model_verify_local_endpoint_not_checked():
+    import model_verify
+
+    res = model_verify.verify_credential("local", "m", "k")
+    assert res["checked"] is False  # base url unknown server-side
+
+
 def test_connections_are_per_operator(operator):
     operator.put("/agent/model", json={"provider": "openai", "model": "gpt-4o", "api_key": "sk-op-1111"})
     other = _client("operator", name="op2-mc")

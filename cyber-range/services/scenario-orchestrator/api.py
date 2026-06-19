@@ -15,7 +15,9 @@ from datetime import datetime, timedelta
 
 import catalog
 import config
+import model_verify
 import scenarios
+import setup_phase
 from auth import Principal, ensure_bootstrap_key, require_principal
 from database import Database
 from orchestrator import Orchestrator
@@ -593,6 +595,337 @@ def remove_model_connection(principal: Principal = Depends(require_principal)):
     """Forget the operator's stored model credential."""
     _require_operator(principal)
     return {"removed": db.delete_model_connection(principal.name)}
+
+
+class ModelVerifyRequest(BaseModel):
+    # All optional: with provider+api_key, verify the supplied credential
+    # (pre-save "test"); with an empty body, verify the operator's stored one.
+    provider: str | None = Field(default=None, max_length=32)
+    model: str | None = Field(default=None, max_length=128)
+    api_key: str | None = Field(default=None, max_length=512)
+
+
+@app.post("/agent/model/verify")
+def verify_model_connection(
+    req: ModelVerifyRequest,
+    principal: Principal = Depends(require_principal),
+):
+    """Best-effort liveness check of a model credential (lists the provider's
+    models — no inference, no agent run). With provider+api_key, checks the
+    supplied key; otherwise checks the operator's stored credential. Returns
+    {verified, detail, checked}; never blocks/stores anything. Operator-only."""
+    _require_operator(principal)
+    if req.api_key and req.provider:
+        provider, model, api_key = req.provider.lower(), req.model or "", req.api_key
+    else:
+        cred = db.get_decrypted_model_credential(principal.name)
+        if not cred:
+            raise HTTPException(status_code=404, detail="no model connection to verify")
+        provider, model, api_key = cred["provider"], cred["model"], cred["api_key"]
+    return model_verify.verify_credential(provider, model, api_key)
+
+
+# --- Configurator setup phase (SUT arenas, ADR-0007 / P2-10 increment 1) -----
+# The operator-scripted (AI-optional) path: a human operator brings an arbitrary
+# service up on the victim node through a consented, time-boxed, victim-scoped,
+# budgeted setup session — every step audited. No gateway/AI and no HITL flow yet
+# (increments 2/3). Enforcement lives here (the orchestrator), per the design.
+
+def _arena_node_outputs(record) -> dict:
+    outputs = record.get("outputs") or {}
+    if isinstance(outputs, str):
+        try:
+            outputs = json.loads(outputs)
+        except json.JSONDecodeError:
+            outputs = {}
+    return outputs
+
+
+def _nodes_and_footholds(record) -> tuple[set[str], set[str]]:
+    """All node names and the foothold (attacker) node names. A foothold is any
+    node the provider exposed a shell command for (matches the gateway). Victim
+    scope = everything that is not a foothold."""
+    outputs = _arena_node_outputs(record)
+    nodes = {
+        k[len("node_"):-len("_name")]
+        for k in outputs
+        if k.startswith("node_") and k.endswith("_name")
+    }
+    footholds = {
+        k[len("node_"):-len("_ssh_command")]
+        for k in outputs
+        if k.startswith("node_") and k.endswith("_ssh_command")
+    }
+    return nodes, footholds
+
+
+class SetupStartRequest(BaseModel):
+    # Victim scope; default = all non-foothold nodes. Foothold/attacker nodes are
+    # never configurable (the configurator is victim-scoped by design).
+    nodes: list[str] | None = Field(default=None)
+    time_box_seconds: int = Field(
+        default=setup_phase.DEFAULT_TIME_BOX_SECONDS, ge=60,
+        le=setup_phase.MAX_TIME_BOX_SECONDS,
+    )
+    command_budget: int = Field(
+        default=setup_phase.DEFAULT_COMMAND_BUDGET, ge=1, le=setup_phase.MAX_COMMAND_BUDGET
+    )
+    # Opt-in OPEN setup egress (ADR-0007). Recorded as consent here; the live
+    # network mechanism is a follow-up — egress is NOT opened yet, so the arena
+    # runtime stays egress-locked regardless.
+    setup_egress: bool = Field(default=False)
+
+
+def _setup_events(instance_id: str) -> list[dict]:
+    return db.list_events(instance_id, limit=setup_phase.MAX_COMMAND_BUDGET)
+
+
+def _open_setup_egress(instance_id: str, record: dict, nodes: list[str], session_id: str) -> bool:
+    """Open internet egress on the victim node(s) for the setup phase. On a
+    provider that can't toggle egress, or any failure, roll back and close the
+    just-opened session so nothing is left half-open. Returns True on success."""
+    orch = Orchestrator(provider_name=record.get("provider"))
+    opened: list[str] = []
+    try:
+        for node in nodes:
+            res = orch.set_node_egress(instance_id, node, True)
+            if not res.get("success"):
+                raise RuntimeError(res.get("error", "unknown error"))
+            opened.append(node)
+        return True
+    except NotImplementedError as e:
+        _rollback_setup_egress(instance_id, orch, opened, session_id, "egress_unsupported")
+        raise HTTPException(
+            status_code=501,
+            detail=(
+                "this arena's provider does not support setup egress — retry "
+                "without setup_egress (docker-local supports it)"
+            ),
+        ) from e
+    except Exception as e:
+        _rollback_setup_egress(instance_id, orch, opened, session_id, "egress_failed")
+        raise HTTPException(
+            status_code=502, detail=f"could not open setup egress: {e}"
+        ) from e
+
+
+def _rollback_setup_egress(instance_id, orch, opened, session_id, reason):
+    for node in opened:
+        try:
+            orch.set_node_egress(instance_id, node, False)
+        except Exception:  # noqa: BLE001 - best-effort rollback
+            pass
+    db.record_event(
+        instance_id, setup_phase.SETUP_FINISHED,
+        {"session_id": session_id, "reason": reason}, actor="system",
+    )
+
+
+def _close_setup_egress(instance_id: str, record: dict, session: dict) -> None:
+    """Best-effort revoke of setup egress for a session's victim nodes. Idempotent
+    (closing an already-closed node is a no-op), so it's safe to call on finish,
+    on time-box expiry, and from the reaper — derived from the session's
+    `setup_egress` consent so we never miss a revoke."""
+    if not session.get("setup_egress"):
+        return
+    orch = Orchestrator(provider_name=record.get("provider"))
+    for node in session.get("nodes") or []:
+        try:
+            orch.set_node_egress(instance_id, node, False)
+        except Exception as e:  # noqa: BLE001 - revoke is best-effort + idempotent
+            logger.warning(f"[{instance_id}] could not close setup egress on {node!r}: {e}")
+
+
+@app.post("/arenas/{instance_id}/setup/start")
+def setup_start(
+    instance_id: str,
+    req: SetupStartRequest,
+    principal: Principal = Depends(require_principal),
+):
+    """Open a consented, time-boxed, victim-scoped setup session (operator
+    consent = this operator-only call). Records a `setup_session` event."""
+    _require_operator(principal)
+    record = db.get_deployment(instance_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    if record.get("status") != "active":
+        raise HTTPException(
+            status_code=409, detail=f"Arena is '{record.get('status')}', not active"
+        )
+    if setup_phase.current_session(_setup_events(instance_id)):
+        raise HTTPException(
+            status_code=409, detail="a setup session is already open; finish it first"
+        )
+
+    nodes, footholds = _nodes_and_footholds(record)
+    scope = req.nodes if req.nodes is not None else sorted(nodes - footholds)
+    unknown = [n for n in scope if n not in nodes]
+    if unknown:
+        raise HTTPException(
+            status_code=422, detail=f"unknown node(s) {unknown}; arena nodes: {sorted(nodes)}"
+        )
+    in_scope_footholds = [n for n in scope if n in footholds]
+    if in_scope_footholds:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"victim scope cannot include foothold/attacker node(s) "
+                f"{in_scope_footholds} — the configurator is victim-scoped"
+            ),
+        )
+    if not scope:
+        raise HTTPException(
+            status_code=422, detail="no victim node to configure (scope is empty)"
+        )
+
+    now = datetime.now()
+    session_id = uuid.uuid4().hex[:12]
+    payload = {
+        "session_id": session_id,
+        "started_at": now.isoformat(timespec="seconds"),
+        "expires_at": (now + timedelta(seconds=req.time_box_seconds)).isoformat(timespec="seconds"),
+        "nodes": scope,
+        "command_budget": req.command_budget,
+        "setup_egress": req.setup_egress,
+        "actor": principal.name,
+    }
+    # Record consent/session FIRST (so the audit + reaper always see it), then
+    # open egress. Closing is derived from `setup_egress` + idempotent, so a
+    # crash after opening is still revoked by finish/expiry/reaper.
+    db.record_event(instance_id, setup_phase.SETUP_OPEN, payload, actor=principal.name)
+    egress_enforced = False
+    if req.setup_egress:
+        egress_enforced = _open_setup_egress(instance_id, record, scope, session_id)
+    logger.info(
+        f"Setup session {session_id} opened on arena {instance_id} by "
+        f"'{principal.name}': scope={scope} budget={req.command_budget} "
+        f"egress={'open' if egress_enforced else 'off'}"
+    )
+    return {
+        "started": True, "session_id": session_id, "nodes": scope,
+        "expires_at": payload["expires_at"], "command_budget": req.command_budget,
+        "setup_egress": req.setup_egress, "egress_enforced": egress_enforced,
+    }
+
+
+@app.get("/arenas/{instance_id}/setup")
+def setup_status(instance_id: str, principal: Principal = Depends(require_principal)):
+    """Current setup-session state for an arena (operator-only)."""
+    _require_operator(principal)
+    if not db.get_deployment(instance_id):
+        raise HTTPException(status_code=404, detail="Arena not found")
+    sess = setup_phase.current_session(_setup_events(instance_id))
+    if not sess:
+        return {"open": False}
+    return {
+        "open": True,
+        "expired": setup_phase.is_expired(sess, datetime.now()),
+        "budget_remaining": setup_phase.budget_remaining(sess),
+        "egress_enforced": bool(sess.get("setup_egress")),
+        **sess,
+    }
+
+
+class SetupStepRequest(BaseModel):
+    node: str = Field(min_length=1, max_length=64)
+    command: str = Field(min_length=1, max_length=4096)
+    timeout: int = Field(default=60, ge=1, le=600)
+
+
+@app.post("/arenas/{instance_id}/setup/step")
+def setup_step(
+    instance_id: str,
+    req: SetupStepRequest,
+    principal: Principal = Depends(require_principal),
+):
+    """Run one victim-scoped setup command inside the open session. Enforces
+    victim-scope, time-box (auto-revoke on expiry), and the step budget; records
+    a `setup_step` event."""
+    _require_operator(principal)
+    record = db.get_deployment(instance_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    if record.get("status") != "active":
+        raise HTTPException(
+            status_code=409, detail=f"Arena is '{record.get('status')}', not active"
+        )
+    sess = setup_phase.current_session(_setup_events(instance_id))
+    if not sess:
+        raise HTTPException(status_code=409, detail="no open setup session — call setup/start first")
+    if setup_phase.is_expired(sess, datetime.now()):
+        # Fail-safe: a lapsed time-box auto-closes the session AND revokes egress.
+        _close_setup_egress(instance_id, record, sess)
+        db.record_event(
+            instance_id, setup_phase.SETUP_FINISHED,
+            {"session_id": sess["session_id"], "reason": "expired",
+             "steps_run": sess["steps_run"]},
+            actor="system",
+        )
+        raise HTTPException(status_code=409, detail="setup session expired (time-box) — closed")
+    if setup_phase.budget_remaining(sess) <= 0:
+        raise HTTPException(status_code=429, detail="setup command budget exhausted")
+    if req.node not in sess["nodes"]:
+        raise HTTPException(
+            status_code=403,
+            detail=f"node '{req.node}' is not in the consented victim scope {sess['nodes']}",
+        )
+
+    orch = Orchestrator(provider_name=record.get("provider"))
+    try:
+        result = orch.exec_in_node(instance_id, req.node, req.command, req.timeout)
+    except NotImplementedError as e:
+        raise HTTPException(status_code=501, detail=str(e)) from e
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=502, detail=f"setup step failed: {result.get('error', 'unknown error')}"
+        )
+
+    db.record_event(
+        instance_id, setup_phase.SETUP_STEP,
+        {
+            "session_id": sess["session_id"],
+            "node": req.node,
+            "command": req.command[:512],
+            "exit_code": result.get("exit_code"),
+            "ok": result.get("exit_code") == 0,
+            "actor": principal.name,
+        },
+        actor=principal.name,
+    )
+    return {
+        "ran": True,
+        "node": req.node,
+        "exit_code": result.get("exit_code"),
+        "stdout": (result.get("stdout") or "")[:8000],
+        "stderr": (result.get("stderr") or "")[:8000],
+        "steps_run": sess["steps_run"] + 1,
+        "budget_remaining": setup_phase.budget_remaining(sess) - 1,
+    }
+
+
+@app.post("/arenas/{instance_id}/setup/finish")
+def setup_finish(instance_id: str, principal: Principal = Depends(require_principal)):
+    """Close the setup session and revoke the configurator capability before the
+    engagement. Revokes setup egress and records a `setup_finished` event."""
+    _require_operator(principal)
+    record = db.get_deployment(instance_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    sess = setup_phase.current_session(_setup_events(instance_id))
+    if not sess:
+        return {"finished": False, "detail": "no open setup session"}
+    _close_setup_egress(instance_id, record, sess)
+    db.record_event(
+        instance_id, setup_phase.SETUP_FINISHED,
+        {"session_id": sess["session_id"], "reason": "operator",
+         "steps_run": sess["steps_run"], "actor": principal.name},
+        actor=principal.name,
+    )
+    logger.info(
+        f"Setup session {sess['session_id']} finished on arena {instance_id} "
+        f"by '{principal.name}' ({sess['steps_run']} steps)"
+    )
+    return {"finished": True, "session_id": sess["session_id"], "steps_run": sess["steps_run"]}
 
 
 def _match_vuln_id(node, cwe, manifest, claimed) -> str | None:

@@ -60,3 +60,15 @@ class RangeProvider(ABC):
         raise NotImplementedError(
             f"the {self.name!r} provider does not support exec_in_node yet"
         )
+
+    def set_node_egress(self, instance_id: str, node: str, open: bool) -> dict:
+        """Open or close a node's internet egress during the SUT setup phase
+        (the configurator capability, ADR-0007 / P2-10). Opening lets the node
+        fetch arbitrary dependencies while a service is brought up; it MUST be
+        closed again before the engagement so the arena runtime stays
+        egress-locked. Result contract:
+            {"success": True, "egress": "open"|"closed"} | {"success": False, "error": ...}
+        Not every backend can toggle egress; the default refuses cleanly."""
+        raise NotImplementedError(
+            f"the {self.name!r} provider does not support setup-time egress yet"
+        )

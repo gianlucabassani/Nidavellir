@@ -52,6 +52,15 @@ class Orchestrator:
         )
         return self.provider.exec_in_node(instance_id, node, command, timeout)
 
+    def set_node_egress(self, instance_id: str, node: str, open: bool):
+        """Open/close a victim node's setup-time egress (configurator capability,
+        ADR-0007). Delegates to the provider the arena was deployed with."""
+        logger.info(
+            f"[{instance_id}] setup egress {'open' if open else 'close'} on node "
+            f"{node!r} (provider: {self.provider.name})"
+        )
+        return self.provider.set_node_egress(instance_id, node, open)
+
     def _load_scenario(self, scenario_name: str) -> dict:
         """Load scenario YAML configuration (delegates to the registry)."""
         return load_scenario(scenario_name)

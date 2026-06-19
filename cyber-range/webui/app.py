@@ -472,6 +472,28 @@ def model_connection_delete():
     return jsonify({"error": _api_error(resp)}), resp.status_code
 
 
+@app.route("/api/model-connection/verify", methods=["POST"])
+def model_connection_verify():
+    """Best-effort 'test connection' for the operator's model key (proxies
+    POST /agent/model/verify). With provider+api_key in the body, tests the
+    supplied key (pre-save); otherwise tests the stored one. CSRF-protected."""
+    body = request.get_json(silent=True) or {}
+    payload = {
+        "provider": (body.get("provider") or "").strip().lower() or None,
+        "model": (body.get("model") or "").strip() or None,
+        "api_key": body.get("api_key") or None,
+    }
+    try:
+        resp = requests.post(
+            f"{API_URL}/agent/model/verify", json=payload, headers=API_HEADERS, timeout=8
+        )
+    except requests.RequestException:
+        return jsonify({"verified": False, "checked": False, "detail": "orchestrator unreachable"}), 502
+    if resp.status_code == 200:
+        return jsonify(resp.json())
+    return jsonify({"verified": False, "checked": False, "detail": _api_error(resp)}), resp.status_code
+
+
 @app.route("/api/poll/<instance_id>")
 def poll_status(instance_id):
     try:

@@ -304,3 +304,23 @@ def test_model_connection_put_relays_unreachable_backend(client):
     )
     assert resp.status_code == 502
     assert "unreachable" in resp.get_json()["error"]
+
+
+def test_model_connection_verify_requires_csrf(client):
+    _login(client)
+    assert client.post("/api/model-connection/verify", json={}).status_code == 400
+
+
+def test_model_connection_verify_offline_is_unchecked(client):
+    """The test-connection proxy degrades to checked=False when the backend is
+    unreachable (never a false 'invalid key')."""
+    _login(client)
+    token = _csrf_token(client, "/")
+    resp = client.post(
+        "/api/model-connection/verify",
+        json={"provider": "openai", "model": "gpt-4o", "api_key": "k"},
+        headers={"X-CSRFToken": token},
+    )
+    assert resp.status_code == 502
+    body = resp.get_json()
+    assert body["verified"] is False and body["checked"] is False

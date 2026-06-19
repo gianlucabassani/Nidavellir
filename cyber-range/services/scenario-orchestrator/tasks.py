@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from celery import Celery
 
 import config
+import setup_phase
 from database import Database
 from orchestrator import Orchestrator
 from states import IllegalTransition, LabStatus
@@ -142,6 +143,46 @@ def reap_labs():
             skipped += 1
             logger.exception(f"[{lab_id}] Reap failed")
 
-    if reaped or skipped:
-        logger.info(f"Reaper run: {reaped} reaped, {skipped} skipped")
-    return {"reaped": reaped, "skipped": skipped}
+    revoked = _revoke_expired_setup_egress(db, now)
+
+    if reaped or skipped or revoked:
+        logger.info(
+            f"Reaper run: {reaped} reaped, {skipped} skipped, "
+            f"{revoked} setup-egress revoked"
+        )
+    return {"reaped": reaped, "skipped": skipped, "setup_egress_revoked": revoked}
+
+
+def _revoke_expired_setup_egress(db, now):
+    """Safety net (ADR-0007): close setup egress on any ACTIVE arena whose setup
+    session has lapsed but was never finished. Bounds the abandoned-session
+    window — the deterministic revokes are finish/expiry-on-next-step — so the
+    arena runtime can't stay open to the internet into the engagement."""
+    revoked = 0
+    for dep in db.list_deployments():
+        if dep.get("status") != LabStatus.ACTIVE:
+            continue
+        try:
+            sess = setup_phase.current_session(
+                db.list_events(dep["id"], limit=setup_phase.MAX_COMMAND_BUDGET)
+            )
+            if not sess or not sess.get("setup_egress"):
+                continue
+            if not setup_phase.is_expired(sess, now):
+                continue
+            orch = Orchestrator(provider_name=dep.get("provider"))
+            for node in sess.get("nodes") or []:
+                try:
+                    orch.set_node_egress(dep["id"], node, False)
+                except Exception:  # noqa: BLE001 - best-effort, idempotent
+                    pass
+            db.record_event(
+                dep["id"], setup_phase.SETUP_FINISHED,
+                {"session_id": sess.get("session_id"), "reason": "expired_reaped"},
+                actor="reaper",
+            )
+            revoked += 1
+            logger.info(f"[{dep['id']}] Reaper revoked lapsed setup egress")
+        except Exception:  # noqa: BLE001 - one bad arena must not abort the sweep
+            logger.exception(f"[{dep.get('id')}] setup-egress reap failed")
+    return revoked

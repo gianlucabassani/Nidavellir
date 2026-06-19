@@ -71,3 +71,7 @@ class MockProvider(RangeProvider):
             "stdout": f"[mock {node}] $ {command}\n(simulated; MOCK_MODE)\n",
             "stderr": "",
         }
+
+    def set_node_egress(self, instance_id, node, open):
+        logger.info(f"[{instance_id}] 🎭 SIMULATING setup egress {'open' if open else 'close'} on {node}")
+        return {"success": True, "egress": "open" if open else "closed"}

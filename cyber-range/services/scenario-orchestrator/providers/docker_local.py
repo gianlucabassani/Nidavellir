@@ -81,6 +81,12 @@ _NO_MASQUERADE = {"com.docker.network.bridge.enable_ip_masquerade": "false"}
 # allowlist. ON by default for locked arenas that have a foothold; opt out with
 # `requires.mirror: off`.
 _MIRROR_SEGMENT = "mirror"           # per-arena egress bridge suffix
+# Per-arena NAT bridge for SUT *setup-time* egress (ADR-0007 / P2-10): a victim
+# joins it while the configurator brings an arbitrary OSS service up (so it can
+# fetch any dependency — git/npm/go/cargo/…), and is disconnected before the
+# engagement so the arena runtime stays egress-locked. Arena-labeled → destroy()
+# reclaims it.
+_SETUP_EGRESS_SEGMENT = "setupgw"
 _MIRROR_NODE = "mirror"              # container suffix + DNS alias on segments
 _MIRROR_PORT = 3128
 _MIRROR_PROXY_URL = f"http://{_MIRROR_NODE}:{_MIRROR_PORT}"
@@ -669,6 +675,55 @@ class DockerLocalProvider(RangeProvider):
                 all=True, filters={"label": f"{LABEL_LAB_ID}={instance_id}"}
             )
             return next((c for c in matches if c.labels.get(LABEL_NODE) == node), None)
+
+    def set_node_egress(self, instance_id, node, open):
+        """Open/close a node's internet egress for the SUT setup phase (ADR-0007).
+
+        Opening connects the node to a per-arena NAT bridge — full egress, so the
+        configurator can fetch dependencies from anywhere (git, npm, go, cargo,
+        distro repos, …) for the diversity of real OSS targets. Closing
+        disconnects it. The bridge is arena-labeled, so destroy() reclaims it and
+        the arena runtime returns to egress-locked. Idempotent."""
+        import docker
+
+        container = self._find_node_container(instance_id, node)
+        if container is None:
+            return {"success": False, "error": f"node {node!r} not found in arena {instance_id}"}
+        net_name = self._network_name(instance_id, _SETUP_EGRESS_SEGMENT)
+
+        try:
+            if open:
+                net = self._ensure_setup_egress_net(instance_id, net_name)
+                try:
+                    net.connect(container)
+                except docker.errors.APIError:
+                    pass  # already attached → idempotent
+                logger.info(f"[{instance_id}] setup egress OPEN for node {node!r}")
+                return {"success": True, "egress": "open", "network": net_name}
+            # close
+            try:
+                self.client.networks.get(net_name).disconnect(container, force=True)
+            except docker.errors.NotFound:
+                pass  # bridge gone → already closed
+            except docker.errors.APIError:
+                pass  # not attached → already closed
+            logger.info(f"[{instance_id}] setup egress CLOSED for node {node!r}")
+            return {"success": True, "egress": "closed"}
+        except Exception as e:
+            logger.error(f"[{instance_id}] set_node_egress({node!r}, open={open}) failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    def _ensure_setup_egress_net(self, instance_id, net_name):
+        import docker
+
+        try:
+            return self.client.networks.get(net_name)
+        except docker.errors.NotFound:
+            logger.info(f"[{instance_id}] creating setup-egress NAT bridge {net_name}")
+            return self.client.networks.create(
+                net_name, driver="bridge", internal=False,
+                labels={LABEL_LAB_ID: instance_id},
+            )
 
     @classmethod
     def _decode(cls, raw) -> str:

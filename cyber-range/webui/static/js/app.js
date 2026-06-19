@@ -157,6 +157,7 @@
     if (!keepModel) document.getElementById("model-form-model").value = b.model || "";
     document.getElementById("model-form-key").placeholder =
       KEYLESS.includes(provider) ? "(optional for local runtimes)" : "paste your key";
+    renderVerify(null, "clear");
     showModalMeta();
   }
 
@@ -230,7 +231,10 @@
         if (!ok) { setFormError(b.error || "Save failed."); return; }
         modelConn = b.configured ? b : null;
         renderChip();
-        closeModelModal();
+        // Keep the modal open and confirm the stored key works (non-blocking).
+        document.getElementById("model-form-key").value = "";
+        showModalMeta();
+        testModel();
       })
       .catch(() => setFormError("Network error."))
       .finally(() => { save.disabled = false; });
@@ -246,6 +250,41 @@
       .then((r) => r.json().catch(() => ({})))
       .then(() => { modelConn = null; renderChip(); closeModelModal(); })
       .catch(() => {});
+  }
+
+  function renderVerify(res, phase) {
+    const el = document.getElementById("model-form-verify");
+    if (!el) return;
+    if (phase === "clear") { el.hidden = true; el.textContent = ""; el.className = "model-form__verify"; return; }
+    el.hidden = false;
+    if (phase === "pending") { el.textContent = "Testing connection…"; el.className = "model-form__verify is-pending"; return; }
+    if (res && res.verified) {
+      el.textContent = "✓ " + (res.detail || "key accepted");
+      el.className = "model-form__verify is-ok";
+    } else if (res && res.checked === false) {
+      el.textContent = "⚠ " + (res.detail || "couldn't verify (no egress?)");
+      el.className = "model-form__verify is-warn";
+    } else {
+      el.textContent = "✗ " + ((res && res.detail) || "the provider rejected the key");
+      el.className = "model-form__verify is-bad";
+    }
+  }
+
+  // "Test connection" — ping the provider to confirm the key works. If the key
+  // field is filled, tests that key (pre-save); otherwise tests the stored one.
+  function testModel() {
+    const key = document.getElementById("model-form-key").value;
+    const model = document.getElementById("model-form-model").value.trim();
+    const body = key ? { provider: pickProvider, model: model, api_key: key } : {};
+    renderVerify(null, "pending");
+    fetch("/api/model-connection/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken() },
+      body: JSON.stringify(body),
+    })
+      .then((r) => r.json().catch(() => ({ verified: false, checked: false })))
+      .then((res) => renderVerify(res))
+      .catch(() => renderVerify({ verified: false, checked: false, detail: "network error" }));
   }
 
   /* ---- status → badge markup (mirrors _macros.html) ------------------- */
@@ -402,7 +441,7 @@
 
   window.CyberGuard = {
     initArena, renderTopology,
-    openModelModal, closeModelModal, openModelConfig, saveModel, removeModel,
+    openModelModal, closeModelModal, openModelConfig, saveModel, removeModel, testModel,
     fit: function () { if (topoCy) topoCy.fit(null, 30); },
   };
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModelModal(); });

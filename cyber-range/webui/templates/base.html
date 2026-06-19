@@ -133,8 +133,10 @@
         <div class="help" id="model-form-keyhint">Encrypted at rest — never shown again.</div>
       </div>
       <div class="model-form__err" id="model-form-err" hidden></div>
+      <div class="model-form__verify" id="model-form-verify" hidden></div>
       <div class="model-form__actions">
         <button type="submit" class="btn btn-primary" id="model-form-save">Connect</button>
+        <button type="button" class="btn" id="model-form-test" onclick="CyberGuard.testModel()">Test connection</button>
         <button type="button" class="btn btn-danger" id="model-form-remove" hidden onclick="CyberGuard.removeModel()">Remove</button>
       </div>
     </form>

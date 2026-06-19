@@ -263,6 +263,11 @@ code, .mono { font-family: var(--mono); }
 .model-form__err {
   color: var(--danger); font-size: 12.5px; margin-bottom: 10px;
 }
+.model-form__verify { font-size: 12.5px; margin-bottom: 10px; }
+.model-form__verify.is-ok { color: var(--ok); }
+.model-form__verify.is-warn { color: var(--warn); }
+.model-form__verify.is-bad { color: var(--danger); }
+.model-form__verify.is-pending { color: var(--muted); }
 #model-modal-kv:not(:empty) { margin-top: 16px; }
 
 .dot--standby { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
