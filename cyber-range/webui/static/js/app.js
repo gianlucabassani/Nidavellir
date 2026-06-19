@@ -439,15 +439,206 @@
       .catch((e) => alert("Error: " + e.message));
   };
 
+  /* ---- co-pilot chat (connected model + arena context) ---------------- */
+  let copilotHistory = [];
+  let copilotBusy = false;
+  const currentArena = () => window.CYBERGUARD_ARENA || null;
+
+  function toggleCopilot() {
+    const el = document.getElementById("copilot");
+    if (!el) return;
+    const opening = el.hidden;
+    el.hidden = !opening;
+    document.body.classList.toggle("copilot-open", opening);
+    if (opening) {
+      const arena = currentArena();
+      const ctx = document.getElementById("copilot-ctx");
+      if (ctx) ctx.textContent = arena ? ("arena · " + arena.slice(0, 12)) : "no arena selected";
+      const inp = document.getElementById("copilot-input");
+      if (inp) setTimeout(() => inp.focus(), 50);
+    }
+  }
+
+  function appendCopilotMsg(role, text) {
+    const log = document.getElementById("copilot-log");
+    const hint = log.querySelector(".copilot__hint");
+    if (hint) hint.remove();
+    const msg = document.createElement("div");
+    msg.className = "copilot__msg copilot__msg--" + role;
+    msg.textContent = text;
+    log.appendChild(msg);
+    log.scrollTop = log.scrollHeight;
+    return msg;
+  }
+
+  function sendCopilot(e) {
+    if (e) e.preventDefault();
+    if (copilotBusy) return false;
+    const input = document.getElementById("copilot-input");
+    const text = (input.value || "").trim();
+    if (!text) return false;
+    appendCopilotMsg("user", text);
+    copilotHistory.push({ role: "user", content: text });
+    input.value = "";
+    copilotBusy = true;
+    document.getElementById("copilot-send").disabled = true;
+    const bubble = appendCopilotMsg("assistant", "…");
+    fetch("/api/copilot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken() },
+      body: JSON.stringify({ arena_id: currentArena(), messages: copilotHistory }),
+    })
+      .then((resp) => {
+        if (!resp.body || !resp.body.getReader) {
+          return resp.text().then((t) => { bubble.textContent = t; });
+        }
+        const reader = resp.body.getReader();
+        const dec = new TextDecoder();
+        let acc = "";
+        const log = document.getElementById("copilot-log");
+        const pump = () => reader.read().then(({ done, value }) => {
+          if (done) { copilotHistory.push({ role: "assistant", content: acc }); return; }
+          acc += dec.decode(value, { stream: true });
+          bubble.textContent = acc || "…";
+          log.scrollTop = log.scrollHeight;
+          return pump();
+        });
+        return pump();
+      })
+      .catch(() => { bubble.textContent = "[co-pilot] connection error."; })
+      .finally(() => {
+        copilotBusy = false;
+        document.getElementById("copilot-send").disabled = false;
+      });
+    return false;
+  }
+
+  /* ---- configurator setup-phase panel (arena detail) ------------------ */
+  let cfgArena = null;
+  let cfgTimer = null;
+
+  function cfgApi(path, method, body) {
+    const opts = { method: method || "GET", headers: {} };
+    if (body) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
+    if (method && method !== "GET") opts.headers["X-CSRFToken"] = csrfToken();
+    return fetch("/api/setup/" + cfgArena + path, opts).then((r) => r.json());
+  }
+
+  function initConfigurator(arena) {
+    cfgArena = arena;
+    refreshConfigurator();
+    if (cfgTimer) clearInterval(cfgTimer);
+    cfgTimer = setInterval(refreshConfigurator, 5000);
+  }
+  function refreshConfigurator() { cfgApi("").then(renderConfigurator).catch(() => {}); }
+
+  function cfgErr(msg) {
+    const e = document.getElementById("cfg-err");
+    if (e) { e.textContent = msg || ""; e.hidden = !msg; }
+  }
+
+  function renderConfigurator(s) {
+    const body = document.getElementById("cfg-body");
+    const state = document.getElementById("cfg-state");
+    if (!body) return;
+    if (!s || !s.open) {
+      state.className = "badge badge--idle"; state.textContent = "idle";
+      body.innerHTML =
+        '<div class="cfg-note">No setup session. Start one to bring the service up on the victim ' +
+        'before the engagement — under a consented, time-boxed, victim-scoped session.</div>' +
+        '<div class="cfg-start">' +
+        '<label class="cfg-fld"><span>Mode</span><select class="select" id="cfg-mode">' +
+        '<option value="operator">operator-scripted (you run steps)</option>' +
+        '<option value="hitl">HITL (agent proposes, you approve)</option>' +
+        '<option value="autonomous">autonomous (agent runs directly — needs platform flag)</option>' +
+        '</select></label>' +
+        '<label class="cfg-fld"><span>Time-box (s)</span><input class="input" id="cfg-tb" type="number" value="1800" min="60"></label>' +
+        '<label class="cfg-fld"><span>Step budget</span><input class="input" id="cfg-budget" type="number" value="50" min="1"></label>' +
+        '<label class="cfg-check"><input type="checkbox" id="cfg-egress"> open setup egress (victim can fetch dependencies)</label>' +
+        '<button class="btn btn-primary btn-sm" onclick="CyberGuard.cfgStart()">Start setup</button>' +
+        '</div><div class="cfg-err" id="cfg-err" hidden></div>';
+      return;
+    }
+    state.className = "badge " + (s.expired ? "badge--danger" : "badge--ok");
+    state.textContent = (s.mode || "setup") + (s.expired ? " · expired" : " · open");
+    let html =
+      '<div class="cfg-meta">' +
+      '<span><b>mode</b> ' + escapeHtml(s.mode) + '</span>' +
+      '<span><b>scope</b> ' + escapeHtml((s.nodes || []).join(", ")) + '</span>' +
+      '<span><b>steps</b> ' + s.steps_run + '/' + s.command_budget + '</span>' +
+      '<span><b>egress</b> ' + (s.egress_enforced ? "open" : "off") + '</span>' +
+      '</div>';
+    if (s.mode === "operator") {
+      const opts = (s.nodes || []).map((n) => '<option value="' + escapeHtml(n) + '">' + escapeHtml(n) + '</option>').join("");
+      html +=
+        '<div class="cfg-step"><select class="select" id="cfg-node" style="max-width:150px">' + opts + '</select>' +
+        '<input class="input mono" id="cfg-cmd" placeholder="setup command, e.g. apt-get install -y nginx">' +
+        '<button class="btn btn-sm" onclick="CyberGuard.cfgRunStep()">Run</button></div>' +
+        '<pre class="cfg-out" id="cfg-out" hidden></pre>';
+    } else if (s.mode === "hitl") {
+      const pend = s.pending_proposals || [];
+      html += pend.length
+        ? '<div class="cfg-props">' + pend.map((p) =>
+            '<div class="cfg-prop"><div class="mono">' + escapeHtml(p.command) + '</div>' +
+            (p.rationale ? '<div class="muted" style="font-size:12px;margin-top:3px">' + escapeHtml(p.rationale) + '</div>' : '') +
+            '<div class="cfg-prop__act"><span class="muted" style="font-size:12px">' + escapeHtml(p.node) + '</span>' +
+            '<button class="btn btn-primary btn-sm" onclick="CyberGuard.cfgDecide(\'' + p.step_id + '\',\'approve\')">Approve</button>' +
+            '<button class="btn btn-danger btn-sm" onclick="CyberGuard.cfgDecide(\'' + p.step_id + '\',\'reject\')">Reject</button>' +
+            '</div></div>').join("") + '</div>'
+        : '<div class="cfg-note">No pending proposals. The connected agent (configurator stance) proposes steps via the gateway; approve them here.</div>';
+    } else if (s.mode === "autonomous") {
+      html += '<div class="cfg-note">Autonomous: the connected agent runs setup steps directly through the gateway (double-locked). Watch progress in Activity below.</div>';
+    }
+    html += '<div class="cfg-actions"><button class="btn btn-danger btn-sm" onclick="CyberGuard.cfgFinish()">Finish setup</button></div>' +
+            '<div class="cfg-err" id="cfg-err" hidden></div>';
+    body.innerHTML = html;
+  }
+
+  function cfgStart() {
+    cfgApi("/start", "POST", {
+      mode: document.getElementById("cfg-mode").value,
+      time_box_seconds: +document.getElementById("cfg-tb").value || 1800,
+      command_budget: +document.getElementById("cfg-budget").value || 50,
+      setup_egress: document.getElementById("cfg-egress").checked,
+    }).then((r) => { if (r.error) cfgErr(r.error); else refreshConfigurator(); });
+  }
+  function cfgRunStep() {
+    const command = document.getElementById("cfg-cmd").value.trim();
+    if (!command) return;
+    cfgApi("/step", "POST", { node: document.getElementById("cfg-node").value, command }).then((r) => {
+      if (r.error) { cfgErr(r.error); return; }
+      cfgErr("");
+      const out = document.getElementById("cfg-out");
+      if (out) { out.hidden = false; out.textContent = "$ " + command + "\n" + (r.stdout || "") + (r.stderr || ""); }
+      document.getElementById("cfg-cmd").value = "";
+      refreshConfigurator();
+    });
+  }
+  function cfgDecide(stepId, decision) {
+    cfgApi("/proposals/" + stepId + "/" + decision, "POST").then((r) => { if (r.error) cfgErr(r.error); refreshConfigurator(); });
+  }
+  function cfgFinish() {
+    if (!confirm("Finish setup and revoke the configurator capability?")) return;
+    cfgApi("/finish", "POST").then(() => refreshConfigurator());
+  }
+
   window.CyberGuard = {
     initArena, renderTopology,
     openModelModal, closeModelModal, openModelConfig, saveModel, removeModel, testModel,
+    toggleCopilot, sendCopilot,
+    initConfigurator, cfgStart, cfgRunStep, cfgDecide, cfgFinish,
     fit: function () { if (topoCy) topoCy.fit(null, 30); },
   };
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModelModal(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { closeModelModal(); }
+  });
   document.addEventListener("DOMContentLoaded", function () {
     pollHealth();
     buildProviderMenu();
     pollModel();
+    const cin = document.getElementById("copilot-input");
+    if (cin) cin.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendCopilot(); }
+    });
   });
 })();

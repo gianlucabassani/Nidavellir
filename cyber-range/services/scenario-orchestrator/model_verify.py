@@ -22,15 +22,17 @@ logger = logging.getLogger("API")
 
 _VERIFY_TIMEOUT = 6  # seconds — fail fast; this is a liveness ping, not a job
 
-# provider -> (base_url, models_path). None base_url => host not known to the
-# orchestrator (generic local/self-hosted) -> we can't check it here.
-_OPENAI_COMPAT = {
+# provider -> base_url for OpenAI-compatible providers. None => host not known to
+# the orchestrator (generic local/self-hosted). Shared with model_chat so verify
+# and chat agree on where each provider lives. Mirrors the harness presets.
+OPENAI_COMPAT_BASE = {
     "openai": "https://api.openai.com/v1",
     "deepseek": "https://api.deepseek.com",
     "gemini": "https://generativelanguage.googleapis.com/v1beta/openai",
     "ollama": "http://localhost:11434/v1",
     "local": None,
 }
+ANTHROPIC_BASE = "https://api.anthropic.com/v1"
 
 
 def _result(verified, detail, *, checked=True):
@@ -55,7 +57,7 @@ def verify_credential(provider: str, model: str, api_key: str) -> dict:
         if provider == "anthropic":
             return _classify_status(
                 requests.get(
-                    "https://api.anthropic.com/v1/models",
+                    f"{ANTHROPIC_BASE}/models",
                     headers={
                         "x-api-key": api_key,
                         "anthropic-version": "2023-06-01",
@@ -63,8 +65,8 @@ def verify_credential(provider: str, model: str, api_key: str) -> dict:
                     timeout=_VERIFY_TIMEOUT,
                 ).status_code
             )
-        if provider in _OPENAI_COMPAT:
-            base = _OPENAI_COMPAT[provider]
+        if provider in OPENAI_COMPAT_BASE:
+            base = OPENAI_COMPAT_BASE[provider]
             if not base:  # generic local: base url isn't known server-side
                 return _result(
                     False, "local/self-hosted endpoint — not checked here", checked=False

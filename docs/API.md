@@ -199,6 +199,11 @@ over HTTP).
   `{verified, detail, checked}` — `checked:false` means *couldn't reach a verdict*
   (no egress / unknown host), distinct from `verified:false` (key rejected). Never
   blocks or stores anything.
+- `POST /agent/chat` `{arena_id?, messages:[{role,content}]}` — the **co-pilot**:
+  streams a reply from the operator's connected model (decrypted in-process, never
+  logged) with the arena's context injected (scenario, topology, setup state,
+  recent activity, benchmark progress). **Advise-only** (no tools), operator-only,
+  `text/plain` chunked stream. `409` if no model is connected.
 
 ### Configurator setup phase (SUT arenas)
 

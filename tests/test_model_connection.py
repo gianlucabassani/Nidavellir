@@ -221,6 +221,64 @@ def test_model_verify_local_endpoint_not_checked():
     assert res["checked"] is False  # base url unknown server-side
 
 
+# --- co-pilot chat ----------------------------------------------------------
+
+def test_chat_streams_using_the_connected_model(operator, monkeypatch):
+    import model_chat
+
+    operator.put("/agent/model", json={"provider": "openai", "model": "gpt-4o", "api_key": "sk-chat-1"})
+    seen = {}
+
+    def fake_stream(provider, model, api_key, system, messages, max_tokens=1024):
+        seen.update(provider=provider, api_key=api_key, system=system, messages=messages)
+        yield "Hello "
+        yield "operator."
+
+    monkeypatch.setattr(model_chat, "stream_chat", fake_stream)
+    r = operator.post("/agent/chat", json={"messages": [{"role": "user", "content": "hi"}]})
+    assert r.status_code == 200
+    assert r.text == "Hello operator."          # streamed body, in order
+    assert seen["provider"] == "openai" and seen["api_key"] == "sk-chat-1"
+    assert seen["messages"][-1]["content"] == "hi"
+
+
+def test_chat_context_includes_arena_details(operator, monkeypatch):
+    import model_chat
+    from database import Database
+
+    db = Database()
+    iid = "chat-ctx"
+    db.create_deployment(iid, iid, "container_web_pentest", provider=None, actor="test")
+    db.update_deployment(iid, status="deploying", actor="test")
+    db.update_deployment(
+        iid, status="active",
+        outputs={"node_victim_name": "v", "node_kali_name": "k",
+                 "node_kali_ssh_command": "sh"},
+        actor="test",
+    )
+    operator.put("/agent/model", json={"provider": "openai", "model": "gpt-4o", "api_key": "sk-ctx"})
+    holder = {}
+    monkeypatch.setattr(
+        model_chat, "stream_chat",
+        lambda p, m, k, system, msgs, max_tokens=1024: (holder.update(s=system), iter(["ok"]))[1],
+    )
+    operator.post("/agent/chat", json={"arena_id": iid, "messages": [{"role": "user", "content": "?"}]}).text
+    assert iid in holder["s"] and "container_web_pentest" in holder["s"]
+    assert "foothold" in holder["s"]            # kali (has a shell cmd) marked foothold
+
+
+def test_chat_requires_a_connected_model(operator):
+    operator.delete("/agent/model")
+    r = operator.post("/agent/chat", json={"messages": [{"role": "user", "content": "hi"}]})
+    assert r.status_code == 409
+
+
+def test_chat_is_operator_only(agent):
+    assert agent.post(
+        "/agent/chat", json={"messages": [{"role": "user", "content": "x"}]}
+    ).status_code == 403
+
+
 def test_connections_are_per_operator(operator):
     operator.put("/agent/model", json={"provider": "openai", "model": "gpt-4o", "api_key": "sk-op-1111"})
     other = _client("operator", name="op2-mc")

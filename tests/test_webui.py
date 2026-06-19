@@ -324,3 +324,48 @@ def test_model_connection_verify_offline_is_unchecked(client):
     assert resp.status_code == 502
     body = resp.get_json()
     assert body["verified"] is False and body["checked"] is False
+
+
+def test_copilot_requires_csrf(client):
+    _login(client)
+    assert client.post("/api/copilot", json={"messages": []}).status_code == 400
+
+
+def test_copilot_offline_streams_error(client):
+    """With the orchestrator at a closed port, the co-pilot proxy streams a clear
+    error rather than 500-ing (the stream still has status 200)."""
+    _login(client)
+    token = _csrf_token(client, "/")
+    resp = client.post(
+        "/api/copilot",
+        json={"messages": [{"role": "user", "content": "hi"}], "arena_id": None},
+        headers={"X-CSRFToken": token},
+    )
+    assert resp.status_code == 200
+    assert b"unreachable" in resp.data
+
+
+def test_setup_status_proxy_offline(client):
+    _login(client)
+    resp = client.get("/api/setup/some-arena")
+    assert resp.status_code == 200 and resp.get_json() == {"open": False}
+
+
+def test_setup_start_requires_csrf(client):
+    _login(client)
+    assert client.post("/api/setup/a/start", json={"mode": "operator"}).status_code == 400
+
+
+def test_setup_start_relays_unreachable_backend(client):
+    _login(client)
+    token = _csrf_token(client, "/")
+    resp = client.post("/api/setup/a/start", json={"mode": "operator"},
+                       headers={"X-CSRFToken": token})
+    assert resp.status_code == 502 and "unreachable" in resp.get_json()["error"]
+
+
+def test_setup_decision_proxy_validates_decision(client):
+    _login(client)
+    token = _csrf_token(client, "/")
+    bad = client.post("/api/setup/a/proposals/x/sideways", headers={"X-CSRFToken": token})
+    assert bad.status_code == 400

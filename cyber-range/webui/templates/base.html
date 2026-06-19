@@ -69,6 +69,11 @@
       </button>
       <div class="crumb">{% block crumb %}{% endblock %}</div>
       <div class="spacer"></div>
+      <button class="iconbtn" id="copilot-toggle" type="button"
+              title="Co-pilot — chat with your connected model about this arena"
+              onclick="CyberGuard.toggleCopilot()">
+        <i class="fa-solid fa-comments"></i><span class="iconbtn__label">Co-pilot</span>
+      </button>
       <div class="model-chip-wrap" id="model-chip-wrap">
         <button class="model-chip" id="model-chip" type="button"
                 title="Model connection — hover to pick a provider, click to manage"
@@ -150,6 +155,27 @@
     </p>
   </div>
 </div>
+
+<!-- co-pilot: chat with the connected model, arena context injected (app.js) -->
+<aside class="copilot" id="copilot" hidden aria-label="Co-pilot">
+  <div class="copilot__head">
+    <span class="copilot__title"><i class="fa-solid fa-robot"></i> Co-pilot</span>
+    <span class="copilot__ctx" id="copilot-ctx">no arena</span>
+    <button class="copilot__x" type="button" onclick="CyberGuard.toggleCopilot()" title="Close">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  </div>
+  <div class="copilot__log" id="copilot-log">
+    <div class="copilot__hint">
+      Ask your connected model about this arena — it sees the scenario, topology,
+      setup state, and recent activity. Advise-only: it can't act, you drive the console.
+    </div>
+  </div>
+  <form class="copilot__form" id="copilot-form" onsubmit="return CyberGuard.sendCopilot(event)">
+    <textarea id="copilot-input" rows="2" placeholder="Ask about this arena…  (Enter to send, Shift+Enter for newline)"></textarea>
+    <button class="btn btn-primary btn-sm" type="submit" id="copilot-send">Send</button>
+  </form>
+</aside>
 
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 {% block scripts %}{% endblock %}

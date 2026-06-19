@@ -2,6 +2,7 @@
 FastAPI REST Layer - Production Architecture (Redis/Celery)
 """
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -15,6 +16,7 @@ from datetime import datetime, timedelta
 
 import catalog
 import config
+import model_chat
 import model_verify
 import scenarios
 import setup_phase
@@ -623,6 +625,108 @@ def verify_model_connection(
             raise HTTPException(status_code=404, detail="no model connection to verify")
         provider, model, api_key = cred["provider"], cred["model"], cred["api_key"]
     return model_verify.verify_credential(provider, model, api_key)
+
+
+# --- Co-pilot chat (operator's connected model + arena context) -------------
+# The console co-pilot: the operator converses with their own connected model;
+# CyberGuard injects the current arena's context and streams the reply. Advise-
+# only (no tools), operator-only, key decrypted in-process and never logged.
+
+def _build_copilot_context(arena_id: str | None) -> str:
+    parts = [
+        "You are CyberGuard Co-pilot, a security-testing assistant embedded in an "
+        "operator's arena console. Be concise, concrete, and practical. You ADVISE "
+        "ONLY — you cannot run commands or change anything; the operator acts through "
+        "the console (deploy, run setup steps, approve agent proposals, submit "
+        "findings). Help them reason about the target, plan steps, and interpret "
+        "results.",
+    ]
+    if not arena_id:
+        parts.append("\nNo specific arena is selected right now.")
+        return "\n".join(parts)
+    record = db.get_deployment(arena_id)
+    if not record:
+        parts.append(f"\n(Arena {arena_id} not found.)")
+        return "\n".join(parts)
+
+    parts.append(
+        f"\nCurrent arena: {arena_id}\n"
+        f"- scenario: {record.get('scenario')}\n"
+        f"- status: {record.get('status')}  provider: {record.get('provider') or 'default'}"
+    )
+    nodes, footholds = _nodes_and_footholds(record)
+    if nodes:
+        outputs = _arena_node_outputs(record)
+        desc = []
+        for n in sorted(nodes):
+            tags = []
+            if n in footholds:
+                tags.append("foothold")
+            url = outputs.get(f"node_{n}_url")
+            if url:
+                tags.append(url)
+            desc.append(f"{n}" + (f" ({', '.join(tags)})" if tags else ""))
+        parts.append("- nodes: " + "; ".join(desc))
+
+    sess = setup_phase.current_session(_setup_events(arena_id))
+    if sess:
+        parts.append(
+            f"- setup phase OPEN (mode={sess['mode']}, scope={sess['nodes']}, "
+            f"steps_run={sess['steps_run']}/{sess['command_budget']}, "
+            f"egress={'on' if sess.get('setup_egress') else 'off'})"
+        )
+
+    manifest = scenarios.scenario_manifest(record.get("scenario"))
+    if manifest:
+        found = {
+            (e.get("payload") or {}).get("matched_vuln_id")
+            for e in _finding_events(arena_id)
+        }
+        found.discard(None)
+        parts.append(
+            f"- benchmark: {len(found)}/{len(manifest)} known vulnerabilities discovered "
+            "(operator-only ground truth — don't parrot the answer key to a tester)."
+        )
+
+    recent = [
+        f"{e.get('type')}({(e.get('payload') or {}).get('node') or ''})"
+        for e in db.list_events(arena_id, limit=15)
+    ]
+    if recent:
+        parts.append("- recent activity (newest first): " + ", ".join(recent))
+    return "\n".join(parts)
+
+
+class ChatRequest(BaseModel):
+    arena_id: str | None = Field(default=None, max_length=64)
+    messages: list[dict] = Field(min_length=1, max_length=40)
+
+
+@app.post("/agent/chat")
+def agent_chat(req: ChatRequest, principal: Principal = Depends(require_principal)):
+    """Stream a co-pilot reply from the operator's connected model with the
+    arena's context injected. Operator-only; advise-only (no tools)."""
+    _require_operator(principal)
+    cred = db.get_decrypted_model_credential(principal.name)
+    if not cred:
+        raise HTTPException(
+            status_code=409,
+            detail="no model connected — configure one via the model bubble first",
+        )
+    system = _build_copilot_context(req.arena_id)
+    messages = [
+        {"role": m.get("role", "user"), "content": str(m.get("content", ""))[:8000]}
+        for m in req.messages if m.get("role") in ("user", "assistant")
+    ][-30:]
+    if not messages:
+        raise HTTPException(status_code=422, detail="no user/assistant messages")
+
+    def gen():
+        yield from model_chat.stream_chat(
+            cred["provider"], cred["model"], cred["api_key"], system, messages
+        )
+
+    return StreamingResponse(gen(), media_type="text/plain; charset=utf-8")
 
 
 # --- Configurator setup phase (SUT arenas, ADR-0007 / P2-10 increment 1) -----

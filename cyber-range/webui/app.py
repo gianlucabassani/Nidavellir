@@ -5,12 +5,14 @@ import re
 import requests
 from flask import (
     Flask,
+    Response,
     flash,
     jsonify,
     redirect,
     render_template,
     request,
     session,
+    stream_with_context,
     url_for,
 )
 from flask_wtf import CSRFProtect
@@ -50,6 +52,24 @@ def _api_error(resp):
     if isinstance(detail, list):  # pydantic validation errors
         detail = "; ".join(e.get("msg", "invalid") for e in detail)
     return detail or f"HTTP {resp.status_code}"
+
+
+def _api_post(path, payload=None, timeout=15):
+    """POST JSON to the orchestrator; returns (json, status_code). On a non-200
+    the json is normalized to {"error": <message>}."""
+    try:
+        resp = requests.post(
+            f"{API_URL}{path}", json=payload or {}, headers=API_HEADERS, timeout=timeout
+        )
+    except requests.RequestException:
+        return {"error": "orchestrator unreachable"}, 502
+    try:
+        data = resp.json()
+    except ValueError:
+        data = {}
+    if resp.status_code != 200:
+        data = {"error": _api_error(resp)}
+    return data, resp.status_code
 
 
 def _api_get(path, timeout=5):
@@ -492,6 +512,76 @@ def model_connection_verify():
     if resp.status_code == 200:
         return jsonify(resp.json())
     return jsonify({"verified": False, "checked": False, "detail": _api_error(resp)}), resp.status_code
+
+
+@app.route("/api/copilot", methods=["POST"])
+def copilot():
+    """Stream a co-pilot reply (proxies the orchestrator's streaming /agent/chat).
+    The model + key live in the orchestrator's custody; the webui only relays the
+    text stream. CSRF-protected (the JS sends X-CSRFToken)."""
+    body = request.get_json(silent=True) or {}
+    payload = {"arena_id": body.get("arena_id"), "messages": body.get("messages") or []}
+
+    def generate():
+        try:
+            with requests.post(
+                f"{API_URL}/agent/chat", json=payload, headers=API_HEADERS,
+                stream=True, timeout=125,
+            ) as r:
+                if r.status_code != 200:
+                    yield f"[co-pilot] {_api_error(r)}".encode()
+                    return
+                for chunk in r.iter_content(chunk_size=None):
+                    if chunk:
+                        yield chunk
+        except requests.RequestException:
+            yield b"[co-pilot] orchestrator unreachable"
+
+    return Response(stream_with_context(generate()), mimetype="text/plain; charset=utf-8")
+
+
+@app.route("/api/setup/<instance_id>", methods=["GET"])
+def setup_status_proxy(instance_id):
+    """Configurator setup-session status for the arena-detail panel."""
+    data, _ = _api_get(f"/arenas/{instance_id}/setup")
+    return jsonify(data or {"open": False})
+
+
+@app.route("/api/setup/<instance_id>/start", methods=["POST"])
+def setup_start_proxy(instance_id):
+    body = request.get_json(silent=True) or {}
+    payload = {
+        "mode": body.get("mode", "operator"),
+        "time_box_seconds": int(body.get("time_box_seconds", 1800)),
+        "command_budget": int(body.get("command_budget", 50)),
+        "setup_egress": bool(body.get("setup_egress", False)),
+    }
+    data, code = _api_post(f"/arenas/{instance_id}/setup/start", payload)
+    return jsonify(data), code
+
+
+@app.route("/api/setup/<instance_id>/step", methods=["POST"])
+def setup_step_proxy(instance_id):
+    body = request.get_json(silent=True) or {}
+    data, code = _api_post(
+        f"/arenas/{instance_id}/setup/step",
+        {"node": body.get("node", ""), "command": body.get("command", "")},
+    )
+    return jsonify(data), code
+
+
+@app.route("/api/setup/<instance_id>/finish", methods=["POST"])
+def setup_finish_proxy(instance_id):
+    data, code = _api_post(f"/arenas/{instance_id}/setup/finish")
+    return jsonify(data), code
+
+
+@app.route("/api/setup/<instance_id>/proposals/<step_id>/<decision>", methods=["POST"])
+def setup_decision_proxy(instance_id, step_id, decision):
+    if decision not in ("approve", "reject"):
+        return jsonify({"error": "bad decision"}), 400
+    data, code = _api_post(f"/arenas/{instance_id}/setup/proposals/{step_id}/{decision}")
+    return jsonify(data), code
 
 
 @app.route("/api/poll/<instance_id>")
