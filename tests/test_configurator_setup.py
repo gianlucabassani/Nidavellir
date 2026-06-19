@@ -226,9 +226,130 @@ def test_reaper_revokes_lapsed_setup_egress(monkeypatch):
     assert setup_phase.current_session(db.list_events(iid, limit=100)) is None
 
 
-def test_setup_is_operator_only(agent):
+def test_setup_controls_are_operator_only(agent):
+    # The operator's controls reject an agent key; the configurator *tools*
+    # (brief/propose/await/run/upload/finish) are agent-callable (gated by session).
     _arena("cfg-authz")
     assert agent.post("/arenas/cfg-authz/setup/start", json={}).status_code == 403
     assert agent.get("/arenas/cfg-authz/setup").status_code == 403
     assert agent.post("/arenas/cfg-authz/setup/step", json={"node": "victim", "command": "id"}).status_code == 403
-    assert agent.post("/arenas/cfg-authz/setup/finish").status_code == 403
+    assert agent.get("/arenas/cfg-authz/setup/proposals").status_code == 403
+    assert agent.post("/arenas/cfg-authz/setup/proposals/x/approve").status_code == 403
+    assert agent.post("/arenas/cfg-authz/setup/proposals/x/reject").status_code == 403
+
+
+# --- increment 2: HITL (propose / approve / await) --------------------------
+
+def test_hitl_propose_approve_await_flow(operator, agent):
+    _arena("cfg-hitl")
+    operator.post("/arenas/cfg-hitl/setup/start", json={"mode": "hitl", "command_budget": 5})
+    pr = agent.post(
+        "/arenas/cfg-hitl/setup/propose",
+        json={"node": "victim", "command": "echo build", "rationale": "build the app"},
+    )
+    assert pr.status_code == 200
+    step_id = pr.json()["step_id"]
+    # await → pending; nothing ran yet
+    assert agent.get(f"/arenas/cfg-hitl/setup/proposals/{step_id}").json()["status"] == "pending"
+    assert operator.get("/arenas/cfg-hitl/setup").json()["steps_run"] == 0
+    # operator sees it in the pending list, then approves → it runs
+    pend = operator.get("/arenas/cfg-hitl/setup/proposals").json()["pending"]
+    assert any(p["step_id"] == step_id for p in pend)
+    ap = operator.post(f"/arenas/cfg-hitl/setup/proposals/{step_id}/approve")
+    assert ap.status_code == 200 and ap.json()["approved"] is True
+    # await now reports approved with the captured result; budget consumed
+    st = agent.get(f"/arenas/cfg-hitl/setup/proposals/{step_id}").json()
+    assert st["status"] == "approved" and st["exit_code"] == 0
+    assert operator.get("/arenas/cfg-hitl/setup").json()["steps_run"] == 1
+
+
+def test_hitl_reject_never_runs(operator, agent):
+    _arena("cfg-reject")
+    operator.post("/arenas/cfg-reject/setup/start", json={"mode": "hitl"})
+    step_id = agent.post(
+        "/arenas/cfg-reject/setup/propose", json={"node": "victim", "command": "rm -rf /"}
+    ).json()["step_id"]
+    assert operator.post(f"/arenas/cfg-reject/setup/proposals/{step_id}/reject").status_code == 200
+    assert agent.get(f"/arenas/cfg-reject/setup/proposals/{step_id}").json()["status"] == "rejected"
+    assert operator.get("/arenas/cfg-reject/setup").json()["steps_run"] == 0
+    # a decided proposal can't be approved
+    assert operator.post(f"/arenas/cfg-reject/setup/proposals/{step_id}/approve").status_code == 409
+
+
+def test_propose_requires_hitl_mode(operator, agent):
+    _arena("cfg-pmode")
+    operator.post("/arenas/cfg-pmode/setup/start", json={})  # operator mode
+    assert agent.post(
+        "/arenas/cfg-pmode/setup/propose", json={"node": "victim", "command": "id"}
+    ).status_code == 409
+
+
+def test_propose_out_of_scope_rejected(operator, agent):
+    _arena("cfg-pscope")
+    operator.post("/arenas/cfg-pscope/setup/start", json={"mode": "hitl"})
+    assert agent.post(
+        "/arenas/cfg-pscope/setup/propose", json={"node": "kali", "command": "id"}
+    ).status_code == 403
+
+
+def test_setup_brief_and_upload(operator, agent):
+    import base64
+
+    _arena("cfg-brief")
+    operator.post("/arenas/cfg-brief/setup/start", json={"mode": "hitl"})
+    brief = agent.get("/arenas/cfg-brief/setup/brief").json()
+    assert brief["victim_nodes"] == ["victim"] and brief["mode"] == "hitl"
+    content = base64.b64encode(b"hello config").decode()
+    up = agent.post(
+        "/arenas/cfg-brief/setup/upload",
+        json={"node": "victim", "path": "/app/config.env", "content_b64": content},
+    )
+    assert up.status_code == 200 and up.json()["uploaded"] is True and up.json()["bytes"] == 12
+
+
+def test_finish_is_callable_by_the_configurator_agent(operator, agent):
+    _arena("cfg-finagent")
+    operator.post("/arenas/cfg-finagent/setup/start", json={"mode": "hitl"})
+    assert agent.post("/arenas/cfg-finagent/setup/finish").json()["finished"] is True
+
+
+# --- increment 3: autonomous behind the double lock -------------------------
+
+def test_autonomous_blocked_without_platform_flag(operator):
+    _arena("cfg-auto-off")
+    r = operator.post("/arenas/cfg-auto-off/setup/start", json={"mode": "autonomous"})
+    assert r.status_code == 403 and "platform policy" in r.text
+
+
+def test_autonomous_run_with_double_lock(operator, agent, monkeypatch):
+    import config
+
+    monkeypatch.setattr(config, "ALLOW_AUTONOMOUS_CONFIGURATOR", True)
+    _arena("cfg-auto-on")
+    s = operator.post("/arenas/cfg-auto-on/setup/start", json={"mode": "autonomous", "command_budget": 3})
+    assert s.status_code == 200 and s.json()["mode"] == "autonomous"
+    r = agent.post("/arenas/cfg-auto-on/setup/run", json={"node": "victim", "command": "make"})
+    assert r.status_code == 200 and r.json()["ran"] is True
+    assert operator.get("/arenas/cfg-auto-on/setup").json()["steps_run"] == 1
+
+
+def test_run_requires_autonomous_mode(operator, agent, monkeypatch):
+    import config
+
+    monkeypatch.setattr(config, "ALLOW_AUTONOMOUS_CONFIGURATOR", True)
+    _arena("cfg-run-mode")
+    operator.post("/arenas/cfg-run-mode/setup/start", json={"mode": "hitl"})
+    assert agent.post(
+        "/arenas/cfg-run-mode/setup/run", json={"node": "victim", "command": "id"}
+    ).status_code == 409
+
+
+def test_run_rejects_out_of_scope_even_in_autonomous(operator, agent, monkeypatch):
+    import config
+
+    monkeypatch.setattr(config, "ALLOW_AUTONOMOUS_CONFIGURATOR", True)
+    _arena("cfg-run-scope")
+    operator.post("/arenas/cfg-run-scope/setup/start", json={"mode": "autonomous"})
+    assert agent.post(
+        "/arenas/cfg-run-scope/setup/run", json={"node": "kali", "command": "id"}
+    ).status_code == 403

@@ -4,9 +4,10 @@ The **only** path a bring-your-own agent has into a running arena. An
 [MCP](https://modelcontextprotocol.io) server (official Python SDK / `FastMCP`)
 that exposes the arena **lifecycle** under `agent`-principal auth and a bound
 **stance**, with an append-only audit trace. The per-stance execution toolsets
-(attacker `run_command`, MITM intercept, defender detect) and their containment
-guardrails land in a later, separately-reviewed increment — see
-[ADR-0005](../../../docs/adr/0005-mcp-agent-gateway.md).
+(attacker `run_command`/`report_finding`, defender `query_events`, configurator
+SUT-setup) are implemented and gated by the bound stance; MITM intercept is the
+next increment — see [ADR-0005](../../../docs/adr/0005-mcp-agent-gateway.md) and
+the stance tables below.
 
 This service is **not an AI.** The agent (model + key) is the user's; the
 gateway is the integration surface (scope boundary in `VISION.md`).
@@ -32,6 +33,24 @@ gateway is the integration surface (scope boundary in `VISION.md`).
 | `list_targets(arena_id)` | `GET /status` | in-scope targets (non-foothold nodes) + how to reach them |
 | `run_command(arena_id, command, node?, timeout?)` | `POST /arenas/{id}/exec` | shell on the **foothold only**; budget-charged; audited + traced |
 | `report_finding(arena_id, title, cwe?, node?, evidence?)` | `POST /arenas/{id}/findings` | report a discovered vulnerability; scored by CWE+node vs the hidden manifest; neutral ack (no oracle) |
+
+**Defender stance** (`CYBERGUARD_STANCE=defender`):
+
+| Tool | Backend | Notes |
+|------|---------|-------|
+| `get_topology(arena_id)` | `GET /status` | what to watch |
+| `query_events(arena_id, limit?, type?)` | `GET /deployments/{id}/events` | the audit/detection feed; filter by type (e.g. `agent_exec`) |
+
+**Configurator stance** (`CYBERGUARD_STANCE=configurator`) — SUT setup, gated (ADR-0007). Time-boxed, **victim-scoped**, write-capable, revoked before the engagement. **No attacker tools.** The orchestrator enforces consent/scope/time-box/budget; an open setup session (started by the operator with a `mode`) must exist.
+
+| Tool | Backend | Notes |
+|------|---------|-------|
+| `get_setup_brief(arena_id)` | `GET /arenas/{id}/setup/brief` | victim node(s) in scope, white-box source path, mode, budget |
+| `propose_setup_step(arena_id, node, command, rationale?)` | `POST .../setup/propose` | **HITL**: propose a step → operator must approve before it runs |
+| `await_setup_step(arena_id, step_id)` | `GET .../setup/proposals/{id}` | poll a proposal: pending \| approved (+result) \| rejected |
+| `run_setup_step(arena_id, node, command, timeout?)` | `POST .../setup/run` | **autonomous** only — double-locked (platform flag + `mode=autonomous`) |
+| `upload_file(arena_id, node, path, content_b64)` | `POST .../setup/upload` | write a config/seed/patch file on the victim (gated exec) |
+| `finish_setup(arena_id)` | `POST .../setup/finish` | revoke the configurator capability + setup egress before the engagement |
 
 The MITM toolset is the next increment (see the resume plan in `.agent/STATE.md`).
 
@@ -64,7 +83,7 @@ CYBERGUARD_AGENT_KEY=cg_... python -m gateway.server
 |---------|---------|---------|
 | `CYBERGUARD_API_URL` | `http://localhost:8000` | orchestrator REST base URL |
 | `CYBERGUARD_AGENT_KEY` | — (required) | the agent principal's API key (secret) |
-| `CYBERGUARD_STANCE` | unbound | `attacker` \| `mitm` \| `defender` |
+| `CYBERGUARD_STANCE` | unbound | `attacker` \| `defender` \| `configurator` \| `mitm` |
 | `CYBERGUARD_GATEWAY_TRANSPORT` | `stdio` | `stdio` \| `streamable-http` \| `sse` |
 | `CYBERGUARD_GATEWAY_HOST` / `_PORT` | `127.0.0.1` / `9000` | HTTP bind |
 | `CYBERGUARD_TRACE_DIR` | unset (off) | dir for `<arena_id>.jsonl` traces |

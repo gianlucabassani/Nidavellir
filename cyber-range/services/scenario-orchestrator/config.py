@@ -85,6 +85,15 @@ ALLOW_SOURCE_BUILD = os.getenv("CYBERGUARD_ALLOW_SOURCE_BUILD", "false").lower()
 )
 SOURCE_BUILD_TIMEOUT = int(os.getenv("SOURCE_BUILD_TIMEOUT", "1200"))
 
+# Autonomous SUT configurator (ADR-0007 / P2-10 increment 3) — the most dangerous
+# mode: an agent runs write/config commands on the victim WITHOUT per-step operator
+# approval. OFF by default behind a DOUBLE LOCK — this platform flag AND explicit
+# per-arena operator consent (mode="autonomous" at setup/start). HITL (per-step
+# approval) and operator-scripted modes need neither.
+ALLOW_AUTONOMOUS_CONFIGURATOR = os.getenv(
+    "CYBERGUARD_ALLOW_AUTONOMOUS_CONFIGURATOR", "false"
+).lower() in ("true", "1", "yes", "on")
+
 # API CONFIGURATION
 API_HOST = os.getenv("API_HOST", "0.0.0.0")  # nosec B104 - container default, mapped by compose
 API_PORT = int(os.getenv("API_PORT", "8000"))

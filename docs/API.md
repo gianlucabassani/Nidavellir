@@ -202,28 +202,49 @@ over HTTP).
 
 ### Configurator setup phase (SUT arenas)
 
-The operator-scripted, **AI-optional** path to bring an arbitrary OSS service up on
-the victim node before an engagement (ADR-0007 / P2-10 increment 1). The
-orchestrator is the single enforcement point: **consent** (operator-only `start`),
-**victim-scope** (foothold/attacker nodes can never be targeted), **time-box**
-(auto-revoked on expiry), **step budget**, and full **audit** (`setup_session` /
-`setup_step` / `setup_finished` events — no migration). All four are **operator/admin
-only** (`agent`-role → 403). The phase is an event-backed overlay on an ACTIVE arena
-(`provisioning → setup → ready → engagement`).
+Bring an arbitrary OSS service up on the victim node before an engagement
+(ADR-0007 / P2-10). The orchestrator is the single enforcement point: **consent**
+(operator-only `start`, which picks the `mode`), **victim-scope** (foothold/attacker
+nodes can never be targeted), **time-box** (auto-revoked on expiry), **step budget**,
+and full **audit** (`setup_session` / `setup_step` / `setup_proposal` /
+`setup_proposal_decision` / `setup_finished` events — no migration). The phase is an
+event-backed overlay on an ACTIVE arena (`provisioning → setup → ready → engagement`).
+Three **modes** (the consent choice): `operator` (the operator scripts steps — the
+**AI-optional** path), `hitl` (an agent proposes each step, the operator approves), and
+`autonomous` (an agent runs steps directly — **double-locked**, see below).
 
-- `POST /arenas/{id}/setup/start` `{nodes?, time_box_seconds?, command_budget?, setup_egress?}`
+**Operator controls** (operator/admin only; `agent` → 403):
+
+- `POST /arenas/{id}/setup/start` `{nodes?, time_box_seconds?, command_budget?, setup_egress?, mode?}`
   — open a session. `nodes` defaults to all non-foothold nodes; a foothold in scope
   → `422`. `setup_egress:true` opens **real internet egress** on the victim for the
   session (so any dependency — git/npm/go/cargo/distro — can be fetched), via a
   per-arena NAT bridge; it is **revoked before the engagement** (on finish, on
-  expiry, and by the reaper) so the runtime stays egress-locked. `501` if the
-  provider can't toggle egress (docker-local can).
-- `GET /arenas/{id}/setup` — `{open, expired, nodes, steps_run, budget_remaining, egress_enforced, …}`.
-- `POST /arenas/{id}/setup/step` `{node, command, timeout?}` — run one victim-scoped
-  setup command. Enforces scope (`403`), budget (`429`), and time-box (`409` +
-  auto-close on expiry). Recorded as a `setup_step` event.
-- `POST /arenas/{id}/setup/finish` — close the session, revoke egress, end the
-  configurator capability before the engagement.
+  expiry, and by the reaper) so the runtime stays egress-locked. `501` if the provider
+  can't toggle egress (docker-local can). `mode:"autonomous"` → `403` unless the
+  platform flag `CYBERGUARD_ALLOW_AUTONOMOUS_CONFIGURATOR` is set (the **double lock**:
+  flag + this explicit per-arena consent).
+- `GET /arenas/{id}/setup` — `{open, expired, mode, nodes, steps_run, budget_remaining, egress_enforced, pending_proposals, …}`.
+- `POST /arenas/{id}/setup/step` `{node, command, timeout?}` — operator-scripted direct
+  step. Enforces scope (`403`), budget (`429`), time-box (`409` + auto-close on expiry).
+- `GET /arenas/{id}/setup/proposals` — list HITL proposals awaiting a decision.
+- `POST /arenas/{id}/setup/proposals/{step_id}/approve` — **approve** a proposed step →
+  it runs on the victim and the result is recorded (the load-bearing HITL gate).
+- `POST /arenas/{id}/setup/proposals/{step_id}/reject` — reject (it never runs).
+
+**Configurator-agent tools** (the gateway `stance=configurator` backend; reachable by an
+`agent` key but gated by an open session + mode + scope + budget + time-box):
+
+- `GET /arenas/{id}/setup/brief` — victim node(s) in scope, white-box source path, mode, budget.
+- `POST /arenas/{id}/setup/propose` `{node, command, rationale?}` — **HITL**: propose a step
+  (pending until the operator approves). `409` unless `mode='hitl'`; `403` out-of-scope.
+- `GET /arenas/{id}/setup/proposals/{step_id}` — await a proposal: `pending | approved` (with the exec result) `| rejected`.
+- `POST /arenas/{id}/setup/run` `{node, command, timeout?}` — **autonomous**: run a step
+  directly. Double-locked (`409` unless `mode='autonomous'`; `403` unless the platform flag is set).
+- `POST /arenas/{id}/setup/upload` `{node, path, content_b64}` — write a file on the victim
+  (config/seed/patch) via the gated exec path (scoped + budgeted + audited).
+- `POST /arenas/{id}/setup/finish` — close the session, revoke egress + the configurator
+  capability (callable by the operator or the configurator agent).
 
 ### Known-vulnerability manifest, findings & scoring
 

@@ -670,10 +670,21 @@ class SetupStartRequest(BaseModel):
     command_budget: int = Field(
         default=setup_phase.DEFAULT_COMMAND_BUDGET, ge=1, le=setup_phase.MAX_COMMAND_BUDGET
     )
-    # Opt-in OPEN setup egress (ADR-0007). Recorded as consent here; the live
-    # network mechanism is a follow-up — egress is NOT opened yet, so the arena
-    # runtime stays egress-locked regardless.
+    # Opt-in OPEN setup egress (ADR-0007): real internet on the victim during
+    # setup so any dependency can be fetched; revoked before the engagement.
     setup_egress: bool = Field(default=False)
+    # How the service is brought up — the consent choice:
+    #   operator    — the operator runs steps directly (AI-optional; increment 1)
+    #   hitl        — an agent proposes each step, the operator approves (inc. 2)
+    #   autonomous  — an agent runs steps directly (inc. 3; double-locked)
+    mode: str = Field(default=setup_phase.MODE_OPERATOR)
+
+    @field_validator("mode")
+    @classmethod
+    def _known_mode(cls, value: str) -> str:
+        if value not in setup_phase.MODES:
+            raise ValueError(f"unknown setup mode '{value}'; expected one of {setup_phase.MODES}")
+        return value
 
 
 def _setup_events(instance_id: str) -> list[dict]:
@@ -778,6 +789,18 @@ def setup_start(
             status_code=422, detail="no victim node to configure (scope is empty)"
         )
 
+    # Double lock for the autonomous mode (increment 3): the platform flag must
+    # be set AND the operator must explicitly choose mode=autonomous (this call).
+    if req.mode == setup_phase.MODE_AUTONOMOUS and not config.ALLOW_AUTONOMOUS_CONFIGURATOR:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "autonomous configurator is disabled by platform policy — set "
+                "CYBERGUARD_ALLOW_AUTONOMOUS_CONFIGURATOR=true to allow it, or use "
+                "mode='hitl' (per-step approval) / 'operator'"
+            ),
+        )
+
     now = datetime.now()
     session_id = uuid.uuid4().hex[:12]
     payload = {
@@ -787,6 +810,7 @@ def setup_start(
         "nodes": scope,
         "command_budget": req.command_budget,
         "setup_egress": req.setup_egress,
+        "mode": req.mode,
         "actor": principal.name,
     }
     # Record consent/session FIRST (so the audit + reaper always see it), then
@@ -805,6 +829,7 @@ def setup_start(
         "started": True, "session_id": session_id, "nodes": scope,
         "expires_at": payload["expires_at"], "command_budget": req.command_budget,
         "setup_egress": req.setup_egress, "egress_enforced": egress_enforced,
+        "mode": req.mode,
     }
 
 
@@ -814,7 +839,8 @@ def setup_status(instance_id: str, principal: Principal = Depends(require_princi
     _require_operator(principal)
     if not db.get_deployment(instance_id):
         raise HTTPException(status_code=404, detail="Arena not found")
-    sess = setup_phase.current_session(_setup_events(instance_id))
+    events = _setup_events(instance_id)
+    sess = setup_phase.current_session(events)
     if not sess:
         return {"open": False}
     return {
@@ -822,7 +848,79 @@ def setup_status(instance_id: str, principal: Principal = Depends(require_princi
         "expired": setup_phase.is_expired(sess, datetime.now()),
         "budget_remaining": setup_phase.budget_remaining(sess),
         "egress_enforced": bool(sess.get("setup_egress")),
+        "pending_proposals": setup_phase.pending_proposals(events, sess["session_id"]),
         **sess,
+    }
+
+
+def _active_arena_or_error(instance_id: str) -> dict:
+    record = db.get_deployment(instance_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    if record.get("status") != "active":
+        raise HTTPException(
+            status_code=409, detail=f"Arena is '{record.get('status')}', not active"
+        )
+    return record
+
+
+def _open_session_or_409(instance_id: str) -> dict:
+    sess = setup_phase.current_session(_setup_events(instance_id))
+    if not sess:
+        raise HTTPException(
+            status_code=409, detail="no open setup session — call setup/start first"
+        )
+    return sess
+
+
+def _exec_setup_command(instance_id, record, sess, node, command, timeout, actor, via):
+    """Shared gated exec for every setup mode (operator-scripted step / HITL
+    approval / autonomous run): enforces the time-box (fail-safe auto-revoke),
+    the step budget, and victim-scope, runs it on the victim, and records a
+    `setup_step` event. The single choke point keeps every mode equally fenced."""
+    if setup_phase.is_expired(sess, datetime.now()):
+        _close_setup_egress(instance_id, record, sess)
+        db.record_event(
+            instance_id, setup_phase.SETUP_FINISHED,
+            {"session_id": sess["session_id"], "reason": "expired",
+             "steps_run": sess["steps_run"]},
+            actor="system",
+        )
+        raise HTTPException(status_code=409, detail="setup session expired (time-box) — closed")
+    if setup_phase.budget_remaining(sess) <= 0:
+        raise HTTPException(status_code=429, detail="setup command budget exhausted")
+    if node not in sess["nodes"]:
+        raise HTTPException(
+            status_code=403,
+            detail=f"node '{node}' is not in the consented victim scope {sess['nodes']}",
+        )
+    orch = Orchestrator(provider_name=record.get("provider"))
+    try:
+        result = orch.exec_in_node(instance_id, node, command, timeout)
+    except NotImplementedError as e:
+        raise HTTPException(status_code=501, detail=str(e)) from e
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=502, detail=f"setup step failed: {result.get('error', 'unknown error')}"
+        )
+    db.record_event(
+        instance_id, setup_phase.SETUP_STEP,
+        {"session_id": sess["session_id"], "node": node, "command": command[:512],
+         "exit_code": result.get("exit_code"), "ok": result.get("exit_code") == 0,
+         "via": via, "actor": actor},
+        actor=actor,
+    )
+    return result
+
+
+def _step_response(result: dict, sess: dict) -> dict:
+    return {
+        "ran": True,
+        "exit_code": result.get("exit_code"),
+        "stdout": (result.get("stdout") or "")[:8000],
+        "stderr": (result.get("stderr") or "")[:8000],
+        "steps_run": sess["steps_run"] + 1,
+        "budget_remaining": setup_phase.budget_remaining(sess) - 1,
     }
 
 
@@ -838,76 +936,249 @@ def setup_step(
     req: SetupStepRequest,
     principal: Principal = Depends(require_principal),
 ):
-    """Run one victim-scoped setup command inside the open session. Enforces
-    victim-scope, time-box (auto-revoke on expiry), and the step budget; records
-    a `setup_step` event."""
+    """Operator-scripted direct step (the AI-optional path). Operator-only — an
+    agent uses propose (HITL) or run (autonomous)."""
     _require_operator(principal)
-    record = db.get_deployment(instance_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Arena not found")
-    if record.get("status") != "active":
+    record = _active_arena_or_error(instance_id)
+    sess = _open_session_or_409(instance_id)
+    result = _exec_setup_command(
+        instance_id, record, sess, req.node, req.command, req.timeout,
+        actor=principal.name, via="operator",
+    )
+    return {"node": req.node, **_step_response(result, sess)}
+
+
+# --- Configurator stance endpoints (agent-driven: HITL + autonomous) --------
+# These back the gateway's stance=configurator tools. Reachable by an `agent`
+# principal but GATED by an open setup session in the right mode + victim-scope
+# + time-box + budget — the orchestrator stays the single enforcement point.
+
+@app.get("/arenas/{instance_id}/setup/brief")
+def setup_brief(instance_id: str, principal: Principal = Depends(require_principal)):
+    """What the configurator needs to bring the service up: the victim node(s) in
+    scope, any white-box source mount path, the mode, and remaining budget."""
+    record = _active_arena_or_error(instance_id)
+    sess = _open_session_or_409(instance_id)
+    outputs = _arena_node_outputs(record)
+    whitebox = {
+        n: outputs.get(f"node_{n}_whitebox_source")
+        for n in sess["nodes"] if outputs.get(f"node_{n}_whitebox_source")
+    }
+    return {
+        "arena_id": instance_id,
+        "mode": sess["mode"],
+        "victim_nodes": sess["nodes"],
+        "whitebox_source": whitebox,
+        "budget_remaining": setup_phase.budget_remaining(sess),
+        "expires_at": sess["expires_at"],
+        "instructions": (
+            "Bring the service up on the victim node(s) following the project's "
+            "own documented build/run steps. In HITL mode, propose each step and "
+            "wait for operator approval; in autonomous mode, run steps directly. "
+            "Call finish_setup when the service is ready."
+        ),
+    }
+
+
+class SetupProposeRequest(BaseModel):
+    node: str = Field(min_length=1, max_length=64)
+    command: str = Field(min_length=1, max_length=4096)
+    rationale: str = Field(default="", max_length=1024)
+
+
+@app.post("/arenas/{instance_id}/setup/propose")
+def setup_propose(
+    instance_id: str,
+    req: SetupProposeRequest,
+    principal: Principal = Depends(require_principal),
+):
+    """HITL: the agent proposes a setup step; the operator must approve it before
+    it runs. Records a pending `setup_proposal`. Valid only in mode='hitl'."""
+    _active_arena_or_error(instance_id)
+    sess = _open_session_or_409(instance_id)
+    if sess["mode"] != setup_phase.MODE_HITL:
         raise HTTPException(
-            status_code=409, detail=f"Arena is '{record.get('status')}', not active"
+            status_code=409, detail=f"propose requires mode='hitl' (session is '{sess['mode']}')"
         )
-    sess = setup_phase.current_session(_setup_events(instance_id))
-    if not sess:
-        raise HTTPException(status_code=409, detail="no open setup session — call setup/start first")
     if setup_phase.is_expired(sess, datetime.now()):
-        # Fail-safe: a lapsed time-box auto-closes the session AND revokes egress.
-        _close_setup_egress(instance_id, record, sess)
-        db.record_event(
-            instance_id, setup_phase.SETUP_FINISHED,
-            {"session_id": sess["session_id"], "reason": "expired",
-             "steps_run": sess["steps_run"]},
-            actor="system",
-        )
-        raise HTTPException(status_code=409, detail="setup session expired (time-box) — closed")
-    if setup_phase.budget_remaining(sess) <= 0:
-        raise HTTPException(status_code=429, detail="setup command budget exhausted")
+        raise HTTPException(status_code=409, detail="setup session expired (time-box)")
     if req.node not in sess["nodes"]:
         raise HTTPException(
             status_code=403,
-            detail=f"node '{req.node}' is not in the consented victim scope {sess['nodes']}",
+            detail=f"node '{req.node}' is not in the victim scope {sess['nodes']}",
         )
-
-    orch = Orchestrator(provider_name=record.get("provider"))
-    try:
-        result = orch.exec_in_node(instance_id, req.node, req.command, req.timeout)
-    except NotImplementedError as e:
-        raise HTTPException(status_code=501, detail=str(e)) from e
-    if not result.get("success"):
-        raise HTTPException(
-            status_code=502, detail=f"setup step failed: {result.get('error', 'unknown error')}"
-        )
-
+    step_id = uuid.uuid4().hex[:12]
     db.record_event(
-        instance_id, setup_phase.SETUP_STEP,
-        {
-            "session_id": sess["session_id"],
-            "node": req.node,
-            "command": req.command[:512],
-            "exit_code": result.get("exit_code"),
-            "ok": result.get("exit_code") == 0,
-            "actor": principal.name,
-        },
+        instance_id, setup_phase.SETUP_PROPOSAL,
+        {"session_id": sess["session_id"], "step_id": step_id, "node": req.node,
+         "command": req.command[:1024], "rationale": req.rationale[:1024],
+         "actor": principal.name},
         actor=principal.name,
     )
+    return {"proposed": True, "step_id": step_id, "status": "pending"}
+
+
+@app.get("/arenas/{instance_id}/setup/proposals/{step_id}")
+def setup_proposal_status(
+    instance_id: str, step_id: str, principal: Principal = Depends(require_principal)
+):
+    """Await a proposal's outcome (the agent polls this): pending | approved (with
+    the captured exec result) | rejected."""
+    if not db.get_deployment(instance_id):
+        raise HTTPException(status_code=404, detail="Arena not found")
+    status = setup_phase.proposal_status(_setup_events(instance_id), step_id)
+    if status is None:
+        raise HTTPException(status_code=404, detail="unknown proposal")
+    return status
+
+
+@app.get("/arenas/{instance_id}/setup/proposals")
+def setup_proposals_list(
+    instance_id: str, principal: Principal = Depends(require_principal)
+):
+    """Pending HITL proposals awaiting the operator's decision. Operator-only."""
+    _require_operator(principal)
+    if not db.get_deployment(instance_id):
+        raise HTTPException(status_code=404, detail="Arena not found")
+    events = _setup_events(instance_id)
+    sess = setup_phase.current_session(events)
+    if not sess:
+        return {"pending": []}
+    return {"pending": setup_phase.pending_proposals(events, sess["session_id"])}
+
+
+@app.post("/arenas/{instance_id}/setup/proposals/{step_id}/approve")
+def setup_proposal_approve(
+    instance_id: str, step_id: str, principal: Principal = Depends(require_principal)
+):
+    """Operator approves a proposed step → it runs on the victim and the result is
+    recorded. Operator-only — the load-bearing HITL gate."""
+    _require_operator(principal)
+    record = _active_arena_or_error(instance_id)
+    sess = _open_session_or_409(instance_id)
+    status = setup_phase.proposal_status(_setup_events(instance_id), step_id)
+    if status is None:
+        raise HTTPException(status_code=404, detail="unknown proposal")
+    if status["status"] != "pending":
+        raise HTTPException(status_code=409, detail=f"proposal already {status['status']}")
+    result = _exec_setup_command(
+        instance_id, record, sess, status["node"], status["command"], 60,
+        actor=principal.name, via="hitl",
+    )
+    db.record_event(
+        instance_id, setup_phase.SETUP_PROPOSAL_DECISION,
+        {"session_id": sess["session_id"], "step_id": step_id, "decision": "approved",
+         "exit_code": result.get("exit_code"),
+         "stdout": (result.get("stdout") or "")[:4000],
+         "stderr": (result.get("stderr") or "")[:4000],
+         "actor": principal.name},
+        actor=principal.name,
+    )
+    return {"approved": True, "step_id": step_id, "node": status["node"], **_step_response(result, sess)}
+
+
+@app.post("/arenas/{instance_id}/setup/proposals/{step_id}/reject")
+def setup_proposal_reject(
+    instance_id: str, step_id: str, principal: Principal = Depends(require_principal)
+):
+    """Operator rejects a proposed step — it never runs. Operator-only."""
+    _require_operator(principal)
+    _active_arena_or_error(instance_id)
+    sess = _open_session_or_409(instance_id)
+    status = setup_phase.proposal_status(_setup_events(instance_id), step_id)
+    if status is None:
+        raise HTTPException(status_code=404, detail="unknown proposal")
+    if status["status"] != "pending":
+        raise HTTPException(status_code=409, detail=f"proposal already {status['status']}")
+    db.record_event(
+        instance_id, setup_phase.SETUP_PROPOSAL_DECISION,
+        {"session_id": sess["session_id"], "step_id": step_id, "decision": "rejected",
+         "actor": principal.name},
+        actor=principal.name,
+    )
+    return {"rejected": True, "step_id": step_id}
+
+
+class SetupRunRequest(BaseModel):
+    node: str = Field(min_length=1, max_length=64)
+    command: str = Field(min_length=1, max_length=4096)
+    timeout: int = Field(default=60, ge=1, le=600)
+
+
+@app.post("/arenas/{instance_id}/setup/run")
+def setup_run(
+    instance_id: str,
+    req: SetupRunRequest,
+    principal: Principal = Depends(require_principal),
+):
+    """Autonomous: the agent runs a setup step directly (no per-step approval).
+    DOUBLE-LOCKED — requires mode='autonomous' AND the platform flag
+    CYBERGUARD_ALLOW_AUTONOMOUS_CONFIGURATOR. Still victim-scoped + budgeted +
+    time-boxed + audited."""
+    record = _active_arena_or_error(instance_id)
+    sess = _open_session_or_409(instance_id)
+    if sess["mode"] != setup_phase.MODE_AUTONOMOUS:
+        raise HTTPException(
+            status_code=409, detail=f"run requires mode='autonomous' (session is '{sess['mode']}')"
+        )
+    if not config.ALLOW_AUTONOMOUS_CONFIGURATOR:
+        # Defense in depth: even a session opened as autonomous won't run if the
+        # platform flag was turned off in the meantime.
+        raise HTTPException(
+            status_code=403, detail="autonomous configurator disabled by platform policy"
+        )
+    result = _exec_setup_command(
+        instance_id, record, sess, req.node, req.command, req.timeout,
+        actor=principal.name, via="autonomous",
+    )
+    return {"node": req.node, **_step_response(result, sess)}
+
+
+class SetupUploadRequest(BaseModel):
+    node: str = Field(min_length=1, max_length=64)
+    path: str = Field(min_length=1, max_length=1024)
+    content_b64: str = Field(min_length=0, max_length=700_000)  # ~512KB decoded
+
+
+@app.post("/arenas/{instance_id}/setup/upload")
+def setup_upload(
+    instance_id: str,
+    req: SetupUploadRequest,
+    principal: Principal = Depends(require_principal),
+):
+    """Victim-scoped file upload during setup (a config/seed/patch file). Decodes
+    base64 and writes it on the victim via the gated exec path — so it's scoped,
+    budgeted, time-boxed, and audited like any other setup step."""
+    import base64
+    import shlex
+
+    record = _active_arena_or_error(instance_id)
+    sess = _open_session_or_409(instance_id)
+    try:
+        raw = base64.b64decode(req.content_b64, validate=True)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail="content_b64 is not valid base64") from e
+    qpath = shlex.quote(req.path)
+    command = (
+        f'mkdir -p "$(dirname {qpath})" && '
+        f"printf %s {shlex.quote(req.content_b64)} | base64 -d > {qpath}"
+    )
+    result = _exec_setup_command(
+        instance_id, record, sess, req.node, command, 60,
+        actor=principal.name, via="upload",
+    )
     return {
-        "ran": True,
-        "node": req.node,
-        "exit_code": result.get("exit_code"),
-        "stdout": (result.get("stdout") or "")[:8000],
-        "stderr": (result.get("stderr") or "")[:8000],
-        "steps_run": sess["steps_run"] + 1,
-        "budget_remaining": setup_phase.budget_remaining(sess) - 1,
+        "uploaded": result.get("exit_code") == 0, "node": req.node, "path": req.path,
+        "bytes": len(raw), "budget_remaining": setup_phase.budget_remaining(sess) - 1,
     }
 
 
 @app.post("/arenas/{instance_id}/setup/finish")
 def setup_finish(instance_id: str, principal: Principal = Depends(require_principal)):
     """Close the setup session and revoke the configurator capability before the
-    engagement. Revokes setup egress and records a `setup_finished` event."""
-    _require_operator(principal)
+    engagement. Revokes setup egress and records a `setup_finished` event. Callable
+    by the operator OR the configurator agent (its `finish_setup` tool) — gated by
+    an open session existing."""
     record = db.get_deployment(instance_id)
     if not record:
         raise HTTPException(status_code=404, detail="Arena not found")

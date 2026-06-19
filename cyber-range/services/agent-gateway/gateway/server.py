@@ -127,6 +127,48 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
             `type` (e.g. 'agent_exec' for attacker commands)."""
             return tools.query_events(ctx(), arena_id=arena_id, limit=limit, type=type)
 
+    elif stance is Stance.configurator:
+        @mcp.tool()
+        def get_setup_brief(arena_id: str) -> dict:
+            """What you need to bring the service up: victim node(s) in scope, any
+            white-box source path, the mode, and remaining budget."""
+            return tools.get_setup_brief(ctx(), arena_id=arena_id)
+
+        @mcp.tool()
+        def propose_setup_step(arena_id: str, node: str, command: str,
+                               rationale: str = "") -> dict:
+            """HITL: propose a setup command on the victim; returns a step_id. It
+            runs only after the operator approves — poll await_setup_step."""
+            return tools.propose_setup_step(
+                ctx(), arena_id=arena_id, node=node, command=command, rationale=rationale
+            )
+
+        @mcp.tool()
+        def await_setup_step(arena_id: str, step_id: str) -> dict:
+            """Poll a proposed step: pending | approved (with result) | rejected."""
+            return tools.await_setup_step(ctx(), arena_id=arena_id, step_id=step_id)
+
+        @mcp.tool()
+        def run_setup_step(arena_id: str, node: str, command: str, timeout: int = 60) -> dict:
+            """Autonomous only (double-locked): run a setup command on the victim
+            directly, no per-step approval."""
+            return tools.run_setup_step(
+                ctx(), arena_id=arena_id, node=node, command=command, timeout=timeout
+            )
+
+        @mcp.tool()
+        def upload_file(arena_id: str, node: str, path: str, content_b64: str) -> dict:
+            """Write a base64 file onto the victim during setup (config/seed/patch)."""
+            return tools.upload_file(
+                ctx(), arena_id=arena_id, node=node, path=path, content_b64=content_b64
+            )
+
+        @mcp.tool()
+        def finish_setup(arena_id: str) -> dict:
+            """End setup: revoke the configurator capability + egress before the
+            engagement."""
+            return tools.finish_setup(ctx(), arena_id=arena_id)
+
     return mcp
 
 

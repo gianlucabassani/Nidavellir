@@ -17,11 +17,19 @@ from datetime import datetime
 SETUP_OPEN = "setup_session"
 SETUP_STEP = "setup_step"
 SETUP_FINISHED = "setup_finished"
+SETUP_PROPOSAL = "setup_proposal"            # HITL: an agent-proposed step (pending)
+SETUP_PROPOSAL_DECISION = "setup_proposal_decision"  # operator approve/reject + result
 
 DEFAULT_TIME_BOX_SECONDS = 1800          # 30 min
 MAX_TIME_BOX_SECONDS = 6 * 3600          # hard ceiling
 DEFAULT_COMMAND_BUDGET = 50
 MAX_COMMAND_BUDGET = 500                 # also the events fetch window
+
+# Setup modes — how the service is brought up (consent recorded at setup/start).
+MODE_OPERATOR = "operator"        # operator runs steps directly (AI-optional, inc. 1)
+MODE_HITL = "hitl"                # agent proposes, operator approves each (inc. 2)
+MODE_AUTONOMOUS = "autonomous"    # agent runs directly — double-locked (inc. 3)
+MODES = (MODE_OPERATOR, MODE_HITL, MODE_AUTONOMOUS)
 
 
 def current_session(events: list[dict]) -> dict | None:
@@ -53,9 +61,61 @@ def current_session(events: list[dict]) -> dict | None:
         "nodes": list(p.get("nodes") or []),
         "command_budget": p.get("command_budget", DEFAULT_COMMAND_BUDGET),
         "setup_egress": bool(p.get("setup_egress")),
+        "mode": p.get("mode", MODE_OPERATOR),
         "actor": p.get("actor"),
         "steps_run": steps_run,
         "open_event_id": open_id,
+    }
+
+
+def pending_proposals(events: list[dict], session_id: str) -> list[dict]:
+    """HITL proposals for the current session that have not been decided yet."""
+    decided = {
+        (e.get("payload") or {}).get("step_id")
+        for e in events
+        if e.get("type") == SETUP_PROPOSAL_DECISION
+    }
+    out = []
+    for e in events:  # newest-first
+        if e.get("type") != SETUP_PROPOSAL:
+            continue
+        p = e.get("payload") or {}
+        if p.get("session_id") != session_id or p.get("step_id") in decided:
+            continue
+        out.append({
+            "step_id": p.get("step_id"), "node": p.get("node"),
+            "command": p.get("command"), "rationale": p.get("rationale"),
+            "actor": p.get("actor"), "ts": e.get("ts"),
+        })
+    return out
+
+
+def proposal_status(events: list[dict], step_id: str) -> dict | None:
+    """The lifecycle of one proposal: pending, or the operator's decision +
+    (for an approved step) the captured exec result. None if no such proposal."""
+    proposal = None
+    decision = None
+    for e in events:  # newest-first
+        p = e.get("payload") or {}
+        if p.get("step_id") != step_id:
+            continue
+        if e.get("type") == SETUP_PROPOSAL_DECISION and decision is None:
+            decision = p
+        elif e.get("type") == SETUP_PROPOSAL and proposal is None:
+            proposal = p
+    if proposal is None:
+        return None
+    if decision is None:
+        return {"step_id": step_id, "status": "pending", "node": proposal.get("node"),
+                "command": proposal.get("command")}
+    return {
+        "step_id": step_id,
+        "status": decision.get("decision", "decided"),  # approved | rejected
+        "node": proposal.get("node"),
+        "command": proposal.get("command"),
+        "exit_code": decision.get("exit_code"),
+        "stdout": decision.get("stdout"),
+        "stderr": decision.get("stderr"),
     }
 
 

@@ -79,6 +79,31 @@ class _FakeRestClient:
              "payload": {"from": "pending", "to": "active"}},
         ]}
 
+    # configurator stance
+    def setup_brief(self, api_key, arena_id):
+        self.calls.append(("setup_brief", api_key, arena_id))
+        return {"arena_id": arena_id, "mode": "hitl", "victim_nodes": ["web"], "whitebox_source": {}}
+
+    def setup_propose(self, api_key, arena_id, node, command, rationale=""):
+        self.calls.append(("setup_propose", api_key, arena_id, node, command, rationale))
+        return {"proposed": True, "step_id": "step-1", "status": "pending"}
+
+    def setup_proposal_status(self, api_key, arena_id, step_id):
+        self.calls.append(("setup_proposal_status", api_key, arena_id, step_id))
+        return {"step_id": step_id, "status": "approved", "exit_code": 0}
+
+    def setup_run(self, api_key, arena_id, node, command, timeout=60):
+        self.calls.append(("setup_run", api_key, arena_id, node, command, timeout))
+        return {"ran": True, "node": node, "exit_code": 0}
+
+    def setup_upload(self, api_key, arena_id, node, path, content_b64):
+        self.calls.append(("setup_upload", api_key, arena_id, node, path, content_b64))
+        return {"uploaded": True, "node": node, "path": path, "bytes": 5}
+
+    def setup_finish(self, api_key, arena_id):
+        self.calls.append(("setup_finish", api_key, arena_id))
+        return {"finished": True}
+
 
 def _ctx(stance=Stance.attacker, trace_dir=None, client=None):
     return GatewayContext(
@@ -374,3 +399,49 @@ def test_defender_session_registers_query_events_not_run_command():
     names = {t.name for t in asyncio.run(mcp.list_tools())}
     assert {"query_events", "get_topology"} <= names
     assert "run_command" not in names
+
+
+# --- configurator stance (SUT setup phase) -----------------------------------
+
+
+def test_configurator_stance_owns_only_setup_tools():
+    cfg = Session("k", Stance.configurator)
+    for t in ("get_setup_brief", "propose_setup_step", "await_setup_step",
+              "run_setup_step", "upload_file", "finish_setup"):
+        assert cfg.can_use(t)
+    # NO attacker tools — the configurator is victim-scoped, not offensive
+    assert not cfg.can_use("run_command")
+    assert not cfg.can_use("report_finding")
+    # ...and other stances don't get the configurator toolset
+    assert not Session("k", Stance.attacker).can_use("run_setup_step")
+    assert not Session("k", Stance.defender).can_use("propose_setup_step")
+
+
+def test_configurator_session_registers_its_tools():
+    import asyncio
+
+    from gateway.server import build_server
+
+    mcp = build_server(GatewayConfig(env={"CYBERGUARD_STANCE": "configurator",
+                                          "CYBERGUARD_GATEWAY_HOST": "127.0.0.1"}))
+    names = {t.name for t in asyncio.run(mcp.list_tools())}
+    assert {"get_setup_brief", "propose_setup_step", "await_setup_step",
+            "run_setup_step", "upload_file", "finish_setup"} <= names
+    # no attacker tools leak into the configurator stance
+    assert "run_command" not in names and "report_finding" not in names
+
+
+def test_configurator_tools_proxy_rest_and_are_gated():
+    ctx = _ctx(stance=Stance.configurator)
+    assert tools.get_setup_brief(ctx, "a1")["mode"] == "hitl"
+    assert tools.propose_setup_step(ctx, "a1", "web", "make", "build")["step_id"] == "step-1"
+    assert tools.await_setup_step(ctx, "a1", "step-1")["status"] == "approved"
+    assert tools.run_setup_step(ctx, "a1", "web", "make")["ran"] is True
+    assert tools.upload_file(ctx, "a1", "web", "/app/x", "aGk=")["uploaded"] is True
+    assert tools.finish_setup(ctx, "a1")["finished"] is True
+    kinds = {c[0] for c in ctx.client.calls}
+    assert {"setup_brief", "setup_propose", "setup_proposal_status",
+            "setup_run", "setup_upload", "setup_finish"} <= kinds
+    # an attacker session cannot reach a configurator tool
+    with pytest.raises(ToolNotAllowed):
+        tools.run_setup_step(_ctx(stance=Stance.attacker), "a1", "web", "make")

@@ -102,3 +102,37 @@ class RestClient:
         if stance:
             body["stance"] = stance
         return self._request("POST", f"/arenas/{arena_id}/agent-session", api_key, json=body)
+
+    # --- configurator stance (SUT setup phase) --------------------------------
+
+    def setup_brief(self, api_key: str, arena_id: str) -> dict:
+        return self._request("GET", f"/arenas/{arena_id}/setup/brief", api_key)
+
+    def setup_propose(self, api_key: str, arena_id: str, node: str, command: str,
+                      rationale: str = "") -> dict:
+        return self._request(
+            "POST", f"/arenas/{arena_id}/setup/propose", api_key,
+            json={"node": node, "command": command, "rationale": rationale},
+        )
+
+    def setup_proposal_status(self, api_key: str, arena_id: str, step_id: str) -> dict:
+        return self._request(
+            "GET", f"/arenas/{arena_id}/setup/proposals/{step_id}", api_key
+        )
+
+    def setup_run(self, api_key: str, arena_id: str, node: str, command: str,
+                  timeout: int = 60) -> dict:
+        return self._request(
+            "POST", f"/arenas/{arena_id}/setup/run", api_key,
+            json={"node": node, "command": command, "timeout": timeout},
+        )
+
+    def setup_upload(self, api_key: str, arena_id: str, node: str, path: str,
+                     content_b64: str) -> dict:
+        return self._request(
+            "POST", f"/arenas/{arena_id}/setup/upload", api_key,
+            json={"node": node, "path": path, "content_b64": content_b64},
+        )
+
+    def setup_finish(self, api_key: str, arena_id: str) -> dict:
+        return self._request("POST", f"/arenas/{arena_id}/setup/finish", api_key)

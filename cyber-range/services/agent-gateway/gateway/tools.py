@@ -300,3 +300,89 @@ def query_events(
         events = [e for e in events if e.get("type") == type]
     _trace(ctx, "query_events", {"limit": limit, "type": type}, ok=True, arena_id=arena_id)
     return {"arena_id": arena_id, "count": len(events), "events": events}
+
+
+# --- configurator stance (SUT setup phase, ADR-0007 / P2-10) -----------------
+# Bring an arbitrary OSS service up on the victim during a consented, time-boxed,
+# victim-scoped setup session. The orchestrator enforces scope/budget/time-box;
+# these tools are thin proxies + trace. NO attacker tools are exposed.
+
+
+def get_setup_brief(ctx: GatewayContext, arena_id: str) -> dict:
+    """What you need to bring the service up: the victim node(s) in scope, any
+    white-box source mount path, the mode (hitl/autonomous), and remaining
+    budget. Follow the project's own documented build/run steps."""
+    _guard(ctx, "get_setup_brief")
+    res = ctx.client.setup_brief(ctx.session.api_key, arena_id)
+    _trace(ctx, "get_setup_brief", {}, ok=True, arena_id=arena_id)
+    return res
+
+
+def propose_setup_step(ctx: GatewayContext, arena_id: str, node: str, command: str,
+                       rationale: str = "") -> dict:
+    """HITL: propose a setup command on the victim node and return its `step_id`.
+    It does NOT run until the operator approves — poll `await_setup_step`."""
+    _guard(ctx, "propose_setup_step")
+    try:
+        res = ctx.client.setup_propose(ctx.session.api_key, arena_id, node, command, rationale)
+    except Exception:
+        _trace(ctx, "propose_setup_step",
+               {"node": node, "command": command[:512]}, ok=False, arena_id=arena_id)
+        raise
+    _trace(ctx, "propose_setup_step",
+           {"node": node, "command": command[:512], "step_id": res.get("step_id")},
+           ok=True, arena_id=arena_id)
+    return res
+
+
+def await_setup_step(ctx: GatewayContext, arena_id: str, step_id: str) -> dict:
+    """Poll a proposed step's outcome: pending | approved (with the exec result) |
+    rejected. Call until it is no longer pending."""
+    _guard(ctx, "await_setup_step")
+    res = ctx.client.setup_proposal_status(ctx.session.api_key, arena_id, step_id)
+    _trace(ctx, "await_setup_step",
+           {"step_id": step_id, "status": res.get("status")}, ok=True, arena_id=arena_id)
+    return res
+
+
+def run_setup_step(ctx: GatewayContext, arena_id: str, node: str, command: str,
+                   timeout: int = 60) -> dict:
+    """Autonomous mode only (double-locked): run a setup command on the victim
+    directly, no per-step approval. Returns its output."""
+    _guard(ctx, "run_setup_step")
+    _charge_step(ctx)
+    try:
+        res = ctx.client.setup_run(ctx.session.api_key, arena_id, node, command, timeout)
+    except Exception:
+        _trace(ctx, "run_setup_step",
+               {"node": node, "command": command[:512]}, ok=False, arena_id=arena_id)
+        raise
+    _trace(ctx, "run_setup_step",
+           {"node": node, "command": command[:512], "exit_code": res.get("exit_code")},
+           ok=True, arena_id=arena_id)
+    return res
+
+
+def upload_file(ctx: GatewayContext, arena_id: str, node: str, path: str,
+                content_b64: str) -> dict:
+    """Write a file (base64) onto the victim node during setup — a config/seed/
+    patch file. Victim-scoped + budgeted + audited like any setup step."""
+    _guard(ctx, "upload_file")
+    _charge_step(ctx)
+    try:
+        res = ctx.client.setup_upload(ctx.session.api_key, arena_id, node, path, content_b64)
+    except Exception:
+        _trace(ctx, "upload_file", {"node": node, "path": path}, ok=False, arena_id=arena_id)
+        raise
+    _trace(ctx, "upload_file",
+           {"node": node, "path": path, "bytes": res.get("bytes")}, ok=True, arena_id=arena_id)
+    return res
+
+
+def finish_setup(ctx: GatewayContext, arena_id: str) -> dict:
+    """End the setup phase: revoke the configurator capability + setup egress
+    before the engagement begins."""
+    _guard(ctx, "finish_setup")
+    res = ctx.client.setup_finish(ctx.session.api_key, arena_id)
+    _trace(ctx, "finish_setup", {}, ok=True, arena_id=arena_id)
+    return res

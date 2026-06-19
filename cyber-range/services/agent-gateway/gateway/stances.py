@@ -16,6 +16,7 @@ class Stance(str, Enum):
     attacker = "attacker"
     mitm = "mitm"
     defender = "defender"
+    configurator = "configurator"
 
 
 # Shared lifecycle tools — available to every authenticated session.
@@ -29,12 +30,20 @@ LIFECYCLE_TOOLS = frozenset(
 # Per-stance execution/recon toolsets, gated by stance.
 #   attacker — recon the arena and run commands from the foothold (offensive).
 #   defender — read the arena's audit/event stream to detect activity (blue).
+#   configurator — bring a SUT service up on the victim during the setup phase,
+#     time-boxed + victim-scoped + revoked before the engagement (ADR-0007 /
+#     P2-10). NO attacker tools. HITL: propose/await; autonomous (double-locked):
+#     run. The orchestrator is the enforcement point.
 #   MITM — lands in a later increment (in-path intercept).
 STANCE_TOOLS: dict[Stance, frozenset[str]] = {
     Stance.attacker: frozenset(
         {"get_topology", "list_targets", "run_command", "report_finding"}
     ),
     Stance.defender: frozenset({"get_topology", "query_events"}),
+    Stance.configurator: frozenset(
+        {"get_setup_brief", "propose_setup_step", "await_setup_step",
+         "run_setup_step", "upload_file", "finish_setup"}
+    ),
     Stance.mitm: frozenset(),
 }
 
