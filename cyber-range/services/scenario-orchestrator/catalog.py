@@ -175,6 +175,67 @@ def build_custom_scenario(
     return raw
 
 
+# --- software-under-test (SUT) arena (the launch wizard, P2-10) --------------
+# A fresh Ubuntu box with an arbitrary OSS repo cloned in, brought up during the
+# setup phase by a human (or a HITL agent). Distinct from a catalog custom arena
+# (curated images) — here the workload is the operator's GitHub project.
+SUT_VICTIM_NODE = "sut"
+SUT_VICTIM_IMAGE = "ubuntu:22.04"
+SUT_CLONE_PATH = "/opt/sut"
+SUT_ATTACKER = "kali-cli"
+
+
+def build_sut_scenario(
+    name: str,
+    repo: str,
+    ref: str | None = None,
+    *,
+    ports: list[int] | None = None,
+    include_attacker: bool = True,
+    segment: str = DEFAULT_SEGMENT,
+) -> dict:
+    """Compile a software-under-test arena: a fresh Ubuntu victim with ``repo``
+    cloned **read-write** into it (`/opt/sut`) for the configurator to build/run,
+    plus an optional Kali attacker foothold for the engagement that follows.
+
+    The victim runs ``sleep infinity`` so the bare Ubuntu box stays up with no
+    service yet — the service is brought up during the setup phase. Validated
+    before return (the ``sut_clone`` field is provider metadata, ignored by the
+    schema)."""
+    victim = {
+        "name": SUT_VICTIM_NODE,
+        "role": "victim",
+        "image": SUT_VICTIM_IMAGE,
+        "segments": [segment],
+        "command": "sleep infinity",
+        "sut_clone": {"repo": repo, "ref": ref, "path": SUT_CLONE_PATH},
+        "services": ["software-under-test (brought up during the setup phase)"],
+    }
+    if ports:
+        victim["ports"] = list(ports)
+
+    nodes = [victim]
+    agents: list[dict] = []
+    if include_attacker:
+        atk = get(SUT_ATTACKER)
+        _require_container(atk)
+        nodes.append(atk.to_node(segment))
+        agents.append({"stance": "attacker", "node": atk.id})
+
+    raw = {
+        "schema": "cyberguard/v3",
+        "name": name,
+        "title": name,
+        "difficulty": "custom",
+        "requires": {"provider_class": "container"},
+        "network": {"segments": [{"name": segment}]},
+        "nodes": nodes,
+        "agents": agents,
+    }
+    ScenarioSpec.from_raw(raw)  # fail fast on a malformed topology
+    return raw
+
+
 def _require_container(img: CatalogImage) -> None:
     if not img.available or img.provider_class != "container":
         raise CatalogError(

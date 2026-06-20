@@ -247,10 +247,16 @@ class DockerLocalProvider(RangeProvider):
                     "mount the source on — skipping white-box source provisioning"
                 )
 
+            # SUT clone-into-box (P2-10 wizard): clone each declared repo read-WRITE
+            # into a per-arena volume, mounted into the victim so the configurator
+            # (human or HITL agent) can build/run the project in place.
+            sut_sources = self._prepare_sut_sources(instance_id, nodes, labels)
+
             records = []
             for node in nodes:
                 container = self._run_node(
-                    instance_id, node, networks, ingress, labels, locked, mirror, whitebox
+                    instance_id, node, networks, ingress, labels, locked,
+                    mirror, whitebox, sut_sources,
                 )
                 records.append((node, container))
 
@@ -293,7 +299,8 @@ class DockerLocalProvider(RangeProvider):
             self.destroy(instance_id)
             return {"success": False, "error": str(e)}
 
-    def _run_node(self, instance_id, node, networks, ingress, labels, locked, mirror=None, whitebox=None):
+    def _run_node(self, instance_id, node, networks, ingress, labels, locked,
+                  mirror=None, whitebox=None, sut_sources=None):
         role = node.get("role", "node")
         segments = self._node_segments(node)
         # Resolve the workload image. Packaged-first (SUT arenas, P1-6): `image`
@@ -354,6 +361,12 @@ class DockerLocalProvider(RangeProvider):
                 vol: {"bind": f"{_WHITEBOX_MOUNT_BASE}/{victim}", "mode": "ro"}
                 for victim, vol in whitebox.items()
             }
+
+        # Mount this node's SUT source read-WRITE so the configurator can build
+        # and run the open-source project in place (SUT clone-into-box wizard).
+        if sut_sources and node["name"] in sut_sources:
+            vol, path = sut_sources[node["name"]]
+            run_kwargs.setdefault("volumes", {})[vol] = {"bind": path, "mode": "rw"}
 
         # Publish declared service ports on random host ports so the operator's
         # browser can reach e.g. DVWA (via the ingress bridge when locked).
@@ -522,6 +535,27 @@ class DockerLocalProvider(RangeProvider):
             mounts[node["name"]] = vol_name
         return mounts
 
+    def _prepare_sut_sources(self, instance_id, nodes, labels) -> dict:
+        """Clone each SUT node's repo read-WRITE into a per-arena volume (P2-10
+        wizard). Returns ``{node_name: (volume_name, mount_path)}`` for `_run_node`
+        to mount. Unlike white-box (read-only into the foothold), the SUT source is
+        mounted **into the victim itself** so the configurator builds/runs it in
+        place. `git clone` runs nothing from the repo (read, not execution), so the
+        clone itself is ungated — the same reasoning as white-box source."""
+        mounts: dict[str, tuple[str, str]] = {}
+        for node in nodes:
+            clone = node.get("sut_clone")
+            if not clone or not clone.get("repo"):
+                continue
+            vol_name = f"cg-{self._short(instance_id)}-sut-{node['name']}"
+            self._clone_source_into_volume(
+                instance_id, vol_name,
+                {"repo": clone["repo"], "ref": clone.get("ref")}, labels,
+            )
+            path = clone.get("path") or f"/opt/{node['name']}"
+            mounts[node["name"]] = (vol_name, path)
+        return mounts
+
     def _clone_source_into_volume(self, instance_id, vol_name, source, labels):
         """Clone a repo (read-only, pinned to `ref`) into a labeled docker volume
         via a short-lived helper. The helper runs on the default bridge (egress
@@ -605,6 +639,14 @@ class DockerLocalProvider(RangeProvider):
             outputs[f"node_{name}_private_ip"] = ip
             if node.get("whitebox"):
                 outputs[f"node_{name}_whitebox"] = True
+            # SUT victim: surface the clone path + a connect command so a human
+            # operator can `docker exec` in to build the project (the box is a
+            # victim, not a foothold — `_setup_shell` is a distinct key so it is
+            # NOT mistaken for an attacker foothold by the scope derivation).
+            if node.get("sut_clone"):
+                clone = node["sut_clone"]
+                outputs[f"node_{name}_sut_source"] = clone.get("path") or f"/opt/{name}"
+                outputs[f"node_{name}_setup_shell"] = f"docker exec -it {container.name} /bin/bash"
             if is_foothold:
                 outputs[f"node_{name}_ssh_command"] = ssh
             if floating:

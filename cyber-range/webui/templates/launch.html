@@ -88,4 +88,60 @@
     </form>
   </div>
 </div>
+
+<!-- software-under-test wizard -->
+<div class="card" style="margin-top:18px">
+  <div class="flexrow" style="margin-bottom:6px">
+    <span class="badge badge--accent"><i class="fa-brands fa-github"></i> Software under test</span>
+    <h3 style="margin:0">Point CyberGuard at an open-source project</h3>
+  </div>
+  <p class="muted" style="margin-top:0;font-size:13px">
+    A fresh <b>Ubuntu</b> box is provisioned and your repository is cloned into
+    <span class="mono">/opt/sut</span>. The service is brought up during the
+    <b>setup phase</b> — by you (connect and follow the README) or by a HITL agent
+    (it proposes each step, you approve). Setup config is locked in here, at launch.
+  </p>
+  <form action="{{ url_for('build_sut') }}" method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="grid cols-2">
+      <div class="field">
+        <label class="label">Instance name</label>
+        <input class="input mono" type="text" name="instance_id" placeholder="juice-shop-sut" required
+               pattern="[a-z0-9][a-z0-9-]{0,39}" title="Lowercase letters, digits and hyphens (max 40)">
+      </div>
+      <div class="field">
+        <label class="label">GitHub repository URL</label>
+        <input class="input mono" type="url" name="repo" required
+               placeholder="https://github.com/org/project"
+               pattern="https://.+" title="An https:// git URL">
+      </div>
+      <div class="field">
+        <label class="label">Ref <span class="muted">(branch / tag / commit — optional)</span></label>
+        <input class="input mono" type="text" name="ref" placeholder="main">
+      </div>
+      <div class="field">
+        <label class="label">Service port(s) <span class="muted">(optional, to open in a browser)</span></label>
+        <input class="input mono" type="text" name="ports" placeholder="3000, 8080">
+      </div>
+      <div class="field">
+        <label class="label">Who sets it up?</label>
+        <select class="select" name="setup_mode">
+          <option value="operator">You — connect to the box and run the README steps</option>
+          <option value="hitl">AI (HITL) — a connected agent proposes each step, you approve</option>
+        </select>
+        <div class="help">Autonomous (no approval) is not offered here — use HITL or do it yourself.</div>
+      </div>
+      <div class="field">
+        <label class="label">Options</label>
+        <label class="cfg-check" style="display:block;margin-bottom:6px">
+          <input type="checkbox" name="setup_egress" checked> Allow internet during setup (fetch dependencies)</label>
+        <label class="cfg-check" style="display:block">
+          <input type="checkbox" name="include_attacker" checked> Add a Kali foothold for the engagement</label>
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:6px">
+      <i class="fa-brands fa-github"></i> Clone &amp; provision
+    </button>
+  </form>
+</div>
 {% endblock %}

@@ -1,5 +1,6 @@
 import os
 import logging
+import uuid
 from datetime import datetime, timedelta
 
 from celery import Celery
@@ -39,13 +40,16 @@ logger = logging.getLogger(__name__)
 
 @app.task(name="deploy_lab", bind=True)
 def deploy_lab(self, instance_id, scenario_name, user_id, variables=None, provider=None,
-               scenario_config=None):
+               scenario_config=None, setup_prearm=None):
     """
     Async Task: Deploys a laboratory environment.
     bind=True allows access to the task instance (e.g., self.request.id).
     `provider` is the per-request provider name (None -> install default).
     `scenario_config` is an optional inline v3 topology (a custom/generated
     arena built from the catalog); when absent the named scenario is loaded.
+    `setup_prearm` is an optional SUT setup config captured at creation (review
+    1.1): once the arena is active, the configurator setup session is opened
+    automatically from it instead of the operator wiring it up after the fact.
     """
     db = Database()
     orch = Orchestrator(provider_name=provider)
@@ -57,20 +61,66 @@ def deploy_lab(self, instance_id, scenario_name, user_id, variables=None, provid
 
     # 2. Execute Deployment
     result = orch.deploy(scenario_name, instance_id, variables, scenario_config=scenario_config)
-    
+
     # 3. Handle Result
     if result["success"]:
         logger.info(f"[{instance_id}] Deployment successful. Updating DB.")
         db.update_deployment(
             instance_id, status="active", outputs=result["outputs"], actor="worker"
         )
+        # SUT arenas: apply the setup config captured at creation. Best-effort —
+        # a failure here must not fail the (successful) deploy; the operator can
+        # still open setup manually.
+        if setup_prearm:
+            try:
+                _open_prearmed_setup(db, provider, instance_id, result["outputs"], setup_prearm)
+            except Exception:  # noqa: BLE001 - never fail an active deploy on this
+                logger.exception(f"[{instance_id}] pre-armed setup auto-open failed")
     else:
         logger.error(f"[{instance_id}] Deployment failed. Error: {result['error']}")
         db.update_deployment(
             instance_id, status="failed", error=result["error"], actor="worker"
         )
-        
+
     return result
+
+
+def _open_prearmed_setup(db, provider, instance_id, outputs, prearm):
+    """Open the configurator setup session for a freshly-active SUT arena from the
+    config captured at creation. Scope = the victim (non-foothold) nodes; egress is
+    opened best-effort (a provider that can't toggle it just runs setup locked)."""
+    nodes, footholds = setup_phase.derive_nodes_footholds(outputs or {})
+    scope = sorted(nodes - footholds)
+    if not scope:
+        logger.warning(f"[{instance_id}] pre-armed setup skipped: no victim node in scope")
+        return
+    now = datetime.now()
+    session_id = uuid.uuid4().hex[:12]
+    payload = setup_phase.make_session_payload(
+        session_id, now, prearm["time_box_seconds"], scope,
+        prearm["command_budget"], prearm["setup_egress"], prearm["mode"],
+        prearm.get("actor", "operator"),
+    )
+    db.record_event(instance_id, setup_phase.SETUP_OPEN, payload, actor="worker")
+    egress_open = False
+    if prearm["setup_egress"]:
+        orch = Orchestrator(provider_name=provider)
+        opened = []
+        for node in scope:
+            try:
+                res = orch.set_node_egress(instance_id, node, True)
+                if res.get("success"):
+                    opened.append(node)
+            except NotImplementedError:
+                logger.info(f"[{instance_id}] provider can't toggle egress — setup runs locked")
+                break
+            except Exception as e:  # noqa: BLE001 - best-effort; revoke is idempotent
+                logger.warning(f"[{instance_id}] pre-armed setup egress on {node!r} failed: {e}")
+        egress_open = bool(opened)
+    logger.info(
+        f"[{instance_id}] pre-armed setup session {session_id} opened "
+        f"(mode={prearm['mode']} scope={scope} egress={'open' if egress_open else 'off'})"
+    )
 
 @app.task(name="destroy_lab")
 def destroy_lab(instance_id):

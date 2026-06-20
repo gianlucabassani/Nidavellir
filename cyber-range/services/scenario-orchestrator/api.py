@@ -10,6 +10,7 @@ from slowapi.util import get_remote_address
 import logging
 import json
 import os
+import re
 import uuid
 import sys
 from datetime import datetime, timedelta
@@ -205,6 +206,143 @@ async def deploy_custom_arena(
         variables={},
         provider=req.provider,
         scenario_config=spec,
+    )
+    return {"status": "accepted", "instance_id": system_id}
+
+
+# --- Software-under-test (SUT) arena (the launch wizard, P2-10) --------------
+# A separate launch mode from a named scenario / catalog custom arena: point
+# CyberGuard at a GitHub repo, it spins up a fresh Ubuntu victim with the repo
+# cloned in, and the service is brought up during the setup phase by a human
+# (operator-scripted) or a HITL agent (gateway configurator stance). The setup
+# config is captured HERE, at creation (review 1.1), and auto-applied when the
+# arena reaches `active`. Autonomous is intentionally NOT offered in the wizard.
+SUT_SETUP_MODES = (setup_phase.MODE_OPERATOR, setup_phase.MODE_HITL)
+_GIT_URL_RE = re.compile(r"^https://[A-Za-z0-9._~%-]+(?::\d+)?/[A-Za-z0-9._~:@!$&'()*+,;=%/-]+$")
+_GIT_REF_RE = re.compile(r"^[A-Za-z0-9._/-]+$")
+
+
+class SutArenaRequest(BaseModel):
+    instance_id: str = Field(pattern=INSTANCE_NAME_PATTERN)
+    repo: str = Field(min_length=8, max_length=400)
+    ref: str | None = Field(default=None, max_length=120)
+    ports: list[int] = Field(default_factory=list, max_length=8)
+    include_attacker: bool = Field(default=True)
+    setup_mode: str = Field(default=setup_phase.MODE_OPERATOR)
+    time_box_seconds: int = Field(
+        default=setup_phase.DEFAULT_TIME_BOX_SECONDS, ge=60,
+        le=setup_phase.MAX_TIME_BOX_SECONDS,
+    )
+    command_budget: int = Field(
+        default=setup_phase.DEFAULT_COMMAND_BUDGET, ge=1, le=setup_phase.MAX_COMMAND_BUDGET
+    )
+    setup_egress: bool = Field(default=True)  # SUT setup almost always needs deps
+    provider: str | None = Field(default="docker-local", max_length=32)
+
+    @field_validator("repo")
+    @classmethod
+    def _repo_is_https_git(cls, value: str) -> str:
+        value = value.strip()
+        if not _GIT_URL_RE.match(value):
+            raise ValueError(
+                "repo must be an https:// git URL (e.g. https://github.com/org/project)"
+            )
+        return value
+
+    @field_validator("ref")
+    @classmethod
+    def _ref_is_safe(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if value and not _GIT_REF_RE.match(value):
+            raise ValueError("ref may contain only letters, digits, '.', '_', '/', '-'")
+        return value or None
+
+    @field_validator("setup_mode")
+    @classmethod
+    def _mode_in_wizard(cls, value: str) -> str:
+        if value not in SUT_SETUP_MODES:
+            raise ValueError(
+                f"setup_mode must be one of {SUT_SETUP_MODES} "
+                "(autonomous is not offered in the SUT wizard)"
+            )
+        return value
+
+    @field_validator("ports")
+    @classmethod
+    def _ports_in_range(cls, value: list[int]) -> list[int]:
+        for p in value:
+            if not 1 <= p <= 65535:
+                raise ValueError(f"port {p} out of range 1-65535")
+        return value
+
+    @field_validator("provider")
+    @classmethod
+    def _provider_must_exist(cls, value: str | None) -> str | None:
+        if value is not None and value not in available_providers():
+            raise ValueError(f"unknown provider '{value}' — see GET /providers")
+        return value
+
+
+@app.post("/arenas/sut")
+@limiter.limit(RATE_LIMIT_DEPLOY)
+async def deploy_sut_arena(
+    request: Request,
+    req: SutArenaRequest,
+    principal: Principal = Depends(require_principal),
+):
+    """Provision a software-under-test arena from a GitHub repo (the wizard).
+
+    A fresh Ubuntu victim gets the repo cloned read-write into ``/opt/sut`` and an
+    optional Kali foothold is added for the engagement. The setup config (mode +
+    time-box + budget + egress) is recorded NOW as operator consent and the worker
+    opens the setup session automatically once the arena is active. Operator-only.
+    """
+    _require_operator(principal)
+    try:
+        spec = catalog.build_sut_scenario(
+            req.instance_id, req.repo, req.ref,
+            ports=req.ports, include_attacker=req.include_attacker,
+        )
+    except catalog.CatalogError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+    offered = infra_class_of(req.provider) if req.provider else "any"
+    if offered not in ("any", "container"):
+        raise HTTPException(
+            status_code=422,
+            detail=f"provider '{req.provider}' provides {offered}-class infra, not container",
+        )
+
+    system_id = str(uuid.uuid4())
+    label = f"sut:{req.repo}"[:64]
+    expires_at = datetime.now() + timedelta(minutes=config.LAB_TTL_MINUTES)
+    db.create_deployment(
+        system_id, req.instance_id, label,
+        provider=req.provider, actor=principal.name, expires_at=expires_at,
+    )
+
+    prearm = {
+        "mode": req.setup_mode,
+        "time_box_seconds": req.time_box_seconds,
+        "command_budget": req.command_budget,
+        "setup_egress": req.setup_egress,
+        "actor": principal.name,
+    }
+    # Capture the setup config at CREATION (review 1.1 fix): an audit breadcrumb
+    # now; the worker applies it (opens the session) when the arena is active.
+    db.record_event(
+        system_id, "setup_prearm", {**prearm, "repo": req.repo, "ref": req.ref},
+        actor=principal.name,
+    )
+    logger.info(
+        f"Queuing SUT arena '{req.instance_id}' ({system_id}): repo={req.repo} "
+        f"ref={req.ref or 'default'} mode={req.setup_mode} by '{principal.name}'"
+    )
+    deploy_lab.delay(
+        instance_id=system_id, scenario_name=label, user_id=req.instance_id,
+        variables={}, provider=req.provider, scenario_config=spec, setup_prearm=prearm,
     )
     return {"status": "accepted", "instance_id": system_id}
 
@@ -749,18 +887,7 @@ def _nodes_and_footholds(record) -> tuple[set[str], set[str]]:
     """All node names and the foothold (attacker) node names. A foothold is any
     node the provider exposed a shell command for (matches the gateway). Victim
     scope = everything that is not a foothold."""
-    outputs = _arena_node_outputs(record)
-    nodes = {
-        k[len("node_"):-len("_name")]
-        for k in outputs
-        if k.startswith("node_") and k.endswith("_name")
-    }
-    footholds = {
-        k[len("node_"):-len("_ssh_command")]
-        for k in outputs
-        if k.startswith("node_") and k.endswith("_ssh_command")
-    }
-    return nodes, footholds
+    return setup_phase.derive_nodes_footholds(_arena_node_outputs(record))
 
 
 class SetupStartRequest(BaseModel):
@@ -907,16 +1034,10 @@ def setup_start(
 
     now = datetime.now()
     session_id = uuid.uuid4().hex[:12]
-    payload = {
-        "session_id": session_id,
-        "started_at": now.isoformat(timespec="seconds"),
-        "expires_at": (now + timedelta(seconds=req.time_box_seconds)).isoformat(timespec="seconds"),
-        "nodes": scope,
-        "command_budget": req.command_budget,
-        "setup_egress": req.setup_egress,
-        "mode": req.mode,
-        "actor": principal.name,
-    }
+    payload = setup_phase.make_session_payload(
+        session_id, now, req.time_box_seconds, scope, req.command_budget,
+        req.setup_egress, req.mode, principal.name,
+    )
     # Record consent/session FIRST (so the audit + reaper always see it), then
     # open egress. Closing is derived from `setup_egress` + idempotent, so a
     # crash after opening is still revoked by finish/expiry/reaper.
@@ -941,18 +1062,28 @@ def setup_start(
 def setup_status(instance_id: str, principal: Principal = Depends(require_principal)):
     """Current setup-session state for an arena (operator-only)."""
     _require_operator(principal)
-    if not db.get_deployment(instance_id):
+    record = db.get_deployment(instance_id)
+    if not record:
         raise HTTPException(status_code=404, detail="Arena not found")
     events = _setup_events(instance_id)
     sess = setup_phase.current_session(events)
     if not sess:
         return {"open": False}
+    # Connect command per scoped victim so a human operator can shell in and run
+    # the README steps (SUT arenas surface `_setup_shell`; fall back to ssh).
+    outputs = _arena_node_outputs(record)
+    connect = {
+        n: outputs.get(f"node_{n}_setup_shell") or outputs.get(f"node_{n}_ssh_command")
+        for n in sess["nodes"]
+        if outputs.get(f"node_{n}_setup_shell") or outputs.get(f"node_{n}_ssh_command")
+    }
     return {
         "open": True,
         "expired": setup_phase.is_expired(sess, datetime.now()),
         "budget_remaining": setup_phase.budget_remaining(sess),
         "egress_enforced": bool(sess.get("setup_egress")),
         "pending_proposals": setup_phase.pending_proposals(events, sess["session_id"]),
+        "connect": connect,
         **sess,
     }
 

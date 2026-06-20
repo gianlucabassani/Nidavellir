@@ -12,7 +12,7 @@ Increment 1 is the **operator-scripted** mode — the AI-optional human path: a
 human operator drives the steps through the orchestrator API; no gateway, no AI,
 no HITL approval flow (those are increments 2/3).
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 
 SETUP_OPEN = "setup_session"
 SETUP_STEP = "setup_step"
@@ -116,6 +116,43 @@ def proposal_status(events: list[dict], step_id: str) -> dict | None:
         "exit_code": decision.get("exit_code"),
         "stdout": decision.get("stdout"),
         "stderr": decision.get("stderr"),
+    }
+
+
+def derive_nodes_footholds(outputs: dict) -> tuple[set[str], set[str]]:
+    """All node names and the foothold (attacker/entrypoint) node names from a
+    provider's flat ``node_<name>_*`` outputs. A foothold is any node the provider
+    exposed a shell command for (``_ssh_command``); victim scope = the rest. Shared
+    by the API setup-scope check and the worker's pre-armed auto-open so both
+    derive scope the same way."""
+    outputs = outputs or {}
+    nodes = {
+        k[len("node_"):-len("_name")]
+        for k in outputs
+        if k.startswith("node_") and k.endswith("_name")
+    }
+    footholds = {
+        k[len("node_"):-len("_ssh_command")]
+        for k in outputs
+        if k.startswith("node_") and k.endswith("_ssh_command")
+    }
+    return nodes, footholds
+
+
+def make_session_payload(session_id, now, time_box_seconds, scope, command_budget,
+                         setup_egress, mode, actor) -> dict:
+    """The ``setup_session`` event payload — the single source of the session
+    shape, used by the operator's ``setup/start`` and the worker's pre-armed
+    auto-open so a session opened either way is byte-for-byte the same."""
+    return {
+        "session_id": session_id,
+        "started_at": now.isoformat(timespec="seconds"),
+        "expires_at": (now + timedelta(seconds=time_box_seconds)).isoformat(timespec="seconds"),
+        "nodes": list(scope),
+        "command_budget": command_budget,
+        "setup_egress": bool(setup_egress),
+        "mode": mode,
+        "actor": actor,
     }
 
 

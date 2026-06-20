@@ -189,7 +189,10 @@ def login():
             session["logged_in"] = True
             session["username"] = username
             target = request.args.get("next") or url_for("overview")
-            if not target.startswith("/"):
+            # Same-site relative paths only. `startswith("/")` alone still admits
+            # protocol-relative ("//evil.com") and backslash-tricked ("/\evil.com")
+            # URLs that browsers resolve as absolute → open redirect after login.
+            if not target.startswith("/") or target[1:2] in ("/", "\\"):
                 target = url_for("overview")
             return redirect(target)
         flash("Invalid credentials", "danger")
@@ -367,6 +370,38 @@ def build_custom():
             flash(f"Build failed (HTTP {resp.status_code})", "danger")
     except requests.RequestException as e:
         flash(f"Build failed: {e}", "danger")
+    return redirect(url_for("arenas"))
+
+
+@app.route("/build-sut", methods=["POST"])
+def build_sut():
+    """Launch a software-under-test arena from the wizard (proxies POST
+    /arenas/sut). Clone a GitHub repo onto a fresh Ubuntu box; the service is
+    brought up during the setup phase by you or a HITL agent."""
+    f = request.form
+    ports = [int(p) for p in re.findall(r"\d+", f.get("ports", ""))][:8]
+    payload = {
+        "instance_id": f.get("instance_id"),
+        "repo": (f.get("repo") or "").strip(),
+        "ref": (f.get("ref") or "").strip() or None,
+        "ports": ports,
+        "include_attacker": f.get("include_attacker") == "on",
+        "setup_mode": f.get("setup_mode", "operator"),
+        "setup_egress": f.get("setup_egress") == "on",
+    }
+    try:
+        resp = requests.post(
+            f"{API_URL}/arenas/sut", json=payload, headers=API_HEADERS, timeout=10
+        )
+        if resp.status_code == 200:
+            flash(
+                f"Building SUT arena '{payload['instance_id']}' from {payload['repo']} — "
+                "setup opens automatically once it's active.", "info",
+            )
+        else:
+            flash(f"SUT launch rejected: {_api_error(resp)}", "warning")
+    except requests.RequestException as e:
+        flash(f"SUT launch failed: {e}", "danger")
     return redirect(url_for("arenas"))
 
 

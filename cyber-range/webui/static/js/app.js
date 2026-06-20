@@ -516,6 +516,7 @@
   /* ---- configurator setup-phase panel (arena detail) ------------------ */
   let cfgArena = null;
   let cfgTimer = null;
+  let cfgSig = null; // structural signature of the last full render
 
   function cfgApi(path, method, body) {
     const opts = { method: method || "GET", headers: {} };
@@ -526,6 +527,7 @@
 
   function initConfigurator(arena) {
     cfgArena = arena;
+    cfgSig = null; // force a full render on (re)init
     refreshConfigurator();
     if (cfgTimer) clearInterval(cfgTimer);
     cfgTimer = setInterval(refreshConfigurator, 5000);
@@ -537,14 +539,37 @@
     if (e) { e.textContent = msg || ""; e.hidden = !msg; }
   }
 
+  // The panel's structural shape. A full innerHTML rebuild happens ONLY when this
+  // changes (idle⇄open, mode switch, scope change); within one shape we patch the
+  // live counters/proposal list in place — so a half-typed command, its focus,
+  // and the last step's output survive the 5s poll instead of being wiped.
+  function cfgSignature(s) {
+    if (!s || !s.open) return "idle";
+    return "open|" + (s.mode || "") + "|" + (s.nodes || []).join(",");
+  }
+
   function renderConfigurator(s) {
     const body = document.getElementById("cfg-body");
     const state = document.getElementById("cfg-state");
     if (!body) return;
+    // The status badge lives outside #cfg-body and holds no input — safe to set
+    // on every poll so expiry/mode changes still show promptly.
+    if (state) {
+      if (!s || !s.open) { state.className = "badge badge--idle"; state.textContent = "idle"; }
+      else {
+        state.className = "badge " + (s.expired ? "badge--danger" : "badge--ok");
+        state.textContent = (s.mode || "setup") + (s.expired ? " · expired" : " · open");
+      }
+    }
+    const sig = cfgSignature(s);
+    if (sig === cfgSig) { patchConfigurator(s); return; } // same shape → patch, don't rebuild
+    cfgSig = sig;
+    body.innerHTML = buildConfigurator(s);
+  }
+
+  function buildConfigurator(s) {
     if (!s || !s.open) {
-      state.className = "badge badge--idle"; state.textContent = "idle";
-      body.innerHTML =
-        '<div class="cfg-note">No setup session. Start one to bring the service up on the victim ' +
+      return '<div class="cfg-note">No setup session. Start one to bring the service up on the victim ' +
         'before the engagement — under a consented, time-boxed, victim-scoped session.</div>' +
         '<div class="cfg-start">' +
         '<label class="cfg-fld"><span>Mode</span><select class="select" id="cfg-mode">' +
@@ -557,17 +582,22 @@
         '<label class="cfg-check"><input type="checkbox" id="cfg-egress"> open setup egress (victim can fetch dependencies)</label>' +
         '<button class="btn btn-primary btn-sm" onclick="CyberGuard.cfgStart()">Start setup</button>' +
         '</div><div class="cfg-err" id="cfg-err" hidden></div>';
-      return;
     }
-    state.className = "badge " + (s.expired ? "badge--danger" : "badge--ok");
-    state.textContent = (s.mode || "setup") + (s.expired ? " · expired" : " · open");
     let html =
       '<div class="cfg-meta">' +
       '<span><b>mode</b> ' + escapeHtml(s.mode) + '</span>' +
       '<span><b>scope</b> ' + escapeHtml((s.nodes || []).join(", ")) + '</span>' +
-      '<span><b>steps</b> ' + s.steps_run + '/' + s.command_budget + '</span>' +
-      '<span><b>egress</b> ' + (s.egress_enforced ? "open" : "off") + '</span>' +
+      '<span><b>steps</b> <span id="cfg-steps">' + s.steps_run + '/' + s.command_budget + '</span></span>' +
+      '<span><b>egress</b> <span id="cfg-egress-v">' + (s.egress_enforced ? "open" : "off") + '</span></span>' +
       '</div>';
+    // SUT/setup: how to shell into the box and run the project's README steps.
+    const conn = s.connect || {};
+    const connKeys = Object.keys(conn);
+    if (connKeys.length) {
+      html += '<div class="cfg-note" style="margin-bottom:8px"><b>Connect to set up the box:</b> ' +
+        connKeys.map((n) => escapeHtml(n) + ' → <span class="mono">' + escapeHtml(conn[n]) + '</span>').join(" · ") +
+        '</div>';
+    }
     if (s.mode === "operator") {
       const opts = (s.nodes || []).map((n) => '<option value="' + escapeHtml(n) + '">' + escapeHtml(n) + '</option>').join("");
       html +=
@@ -576,22 +606,43 @@
         '<button class="btn btn-sm" onclick="CyberGuard.cfgRunStep()">Run</button></div>' +
         '<pre class="cfg-out" id="cfg-out" hidden></pre>';
     } else if (s.mode === "hitl") {
-      const pend = s.pending_proposals || [];
-      html += pend.length
-        ? '<div class="cfg-props">' + pend.map((p) =>
-            '<div class="cfg-prop"><div class="mono">' + escapeHtml(p.command) + '</div>' +
-            (p.rationale ? '<div class="muted" style="font-size:12px;margin-top:3px">' + escapeHtml(p.rationale) + '</div>' : '') +
-            '<div class="cfg-prop__act"><span class="muted" style="font-size:12px">' + escapeHtml(p.node) + '</span>' +
-            '<button class="btn btn-primary btn-sm" onclick="CyberGuard.cfgDecide(\'' + p.step_id + '\',\'approve\')">Approve</button>' +
-            '<button class="btn btn-danger btn-sm" onclick="CyberGuard.cfgDecide(\'' + p.step_id + '\',\'reject\')">Reject</button>' +
-            '</div></div>').join("") + '</div>'
-        : '<div class="cfg-note">No pending proposals. The connected agent (configurator stance) proposes steps via the gateway; approve them here.</div>';
+      html += '<div id="cfg-props-wrap">' + renderProposals(s) + '</div>';
     } else if (s.mode === "autonomous") {
       html += '<div class="cfg-note">Autonomous: the connected agent runs setup steps directly through the gateway (double-locked). Watch progress in Activity below.</div>';
     }
     html += '<div class="cfg-actions"><button class="btn btn-danger btn-sm" onclick="CyberGuard.cfgFinish()">Finish setup</button></div>' +
             '<div class="cfg-err" id="cfg-err" hidden></div>';
-    body.innerHTML = html;
+    return html;
+  }
+
+  function renderProposals(s) {
+    const pend = s.pending_proposals || [];
+    return pend.length
+      ? '<div class="cfg-props">' + pend.map((p) =>
+          '<div class="cfg-prop"><div class="mono">' + escapeHtml(p.command) + '</div>' +
+          (p.rationale ? '<div class="muted" style="font-size:12px;margin-top:3px">' + escapeHtml(p.rationale) + '</div>' : '') +
+          '<div class="cfg-prop__act"><span class="muted" style="font-size:12px">' + escapeHtml(p.node) + '</span>' +
+          '<button class="btn btn-primary btn-sm" onclick="CyberGuard.cfgDecide(\'' + p.step_id + '\',\'approve\')">Approve</button>' +
+          '<button class="btn btn-danger btn-sm" onclick="CyberGuard.cfgDecide(\'' + p.step_id + '\',\'reject\')">Reject</button>' +
+          '</div></div>').join("") + '</div>'
+      : '<div class="cfg-note">No pending proposals. The connected agent (configurator stance) proposes steps via the gateway; approve them here.</div>';
+  }
+
+  // Patch only the live bits within the current shape — never touches the command
+  // input or its output (preserving typing/focus), and skips the proposal list
+  // while the operator is interacting with it.
+  function patchConfigurator(s) {
+    if (!s || !s.open) return;
+    const steps = document.getElementById("cfg-steps");
+    if (steps) steps.textContent = s.steps_run + "/" + s.command_budget;
+    const egr = document.getElementById("cfg-egress-v");
+    if (egr) egr.textContent = s.egress_enforced ? "open" : "off";
+    if (s.mode === "hitl") {
+      const wrap = document.getElementById("cfg-props-wrap");
+      if (wrap && !(document.activeElement && wrap.contains(document.activeElement))) {
+        wrap.innerHTML = renderProposals(s);
+      }
+    }
   }
 
   function cfgStart() {

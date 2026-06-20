@@ -50,10 +50,19 @@ class MockProvider(RangeProvider):
             if not name:
                 continue
             ip = f"192.168.50.{10 + i}"
+            is_foothold = node.get("role") == "attacker" or bool(node.get("entrypoint"))
             fake_outputs[f"node_{name}_name"] = name
             fake_outputs[f"node_{name}_private_ip"] = ip
-            fake_outputs[f"node_{name}_ssh_command"] = f"ssh user@{ip}  # simulated"
             fake_outputs[f"node_{name}_state"] = "running"
+            # Foothold-only shell command — mirrors docker-local so the victim-scope
+            # derivation (footholds excluded) behaves the same in mock and for real.
+            if is_foothold:
+                fake_outputs[f"node_{name}_ssh_command"] = f"ssh user@{ip}  # simulated"
+            # SUT victim: surface the clone path + a (simulated) connect command.
+            if node.get("sut_clone"):
+                clone = node["sut_clone"]
+                fake_outputs[f"node_{name}_sut_source"] = clone.get("path") or f"/opt/{name}"
+                fake_outputs[f"node_{name}_setup_shell"] = f"docker exec -it cg-mock-{name} /bin/bash  # simulated"
             if node.get("ports"):
                 fake_outputs[f"node_{name}_url"] = f"http://{ip}"
 

@@ -469,6 +469,10 @@ def _canonical_node(node: dict) -> dict:
         "service": service,
         "whitebox": whitebox,
         "needs_build": needs_build,
+        # SUT arenas (clone-into-Ubuntu, P2-10 wizard): clone a repo read-WRITE
+        # into the running box at `path` for the configurator to build/run — NOT
+        # a from-source image build. Carried through verbatim for the provider.
+        "sut_clone": node.get("sut_clone"),
     }
     if node.get("flavor"):
         canonical["flavor"] = node["flavor"]
