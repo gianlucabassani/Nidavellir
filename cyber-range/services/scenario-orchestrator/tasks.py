@@ -213,8 +213,15 @@ def _revoke_expired_setup_egress(db, now):
         if dep.get("status") != LabStatus.ACTIVE:
             continue
         try:
+            # Setup-lifecycle events only (not the newest-N of everything), so a
+            # busy arena's engagement noise can't hide a lapsed-but-open session
+            # from the reaper and leave its egress open (H1 — same fix as
+            # api._setup_events).
             sess = setup_phase.current_session(
-                db.list_events(dep["id"], limit=setup_phase.MAX_COMMAND_BUDGET)
+                db.list_events(
+                    dep["id"], limit=setup_phase.SETUP_EVENT_WINDOW,
+                    types=setup_phase.SETUP_EVENT_TYPES,
+                )
             )
             if not sess or not sess.get("setup_egress"):
                 continue
