@@ -51,12 +51,15 @@ def _trace(ctx: GatewayContext, tool: str, args: dict, ok: bool, arena_id: str |
     )
 
 
-def _charge_step(ctx: GatewayContext) -> None:
+def _check_budget(ctx: GatewayContext) -> None:
+    """Raise if the step budget is exhausted. The budget is *consumed* only after
+    a successful action (the tool bodies increment ``steps_used`` post-exec), so a
+    transient failure — orchestrator down, foothold-resolution error — does not
+    permanently burn the agent's budget on a command that never ran."""
     if ctx.step_budget and ctx.steps_used >= ctx.step_budget:
         raise BudgetExceeded(
             f"command/step budget ({ctx.step_budget}) exhausted for this session"
         )
-    ctx.steps_used += 1
 
 
 def _node_names(outputs: dict) -> set[str]:
@@ -238,14 +241,18 @@ def run_command(
     arena has more than one. Every command is also audited server-side (it
     feeds the future defender stance)."""
     _guard(ctx, "run_command")
-    _charge_step(ctx)
-    foothold = _resolve_foothold(ctx, arena_id, node)
+    _check_budget(ctx)
+    # Resolve the foothold INSIDE the try so a status-lookup failure is traced
+    # (ok=False) instead of escaping untraced, and so it doesn't run after budget
+    # has been consumed.
     try:
+        foothold = _resolve_foothold(ctx, arena_id, node)
         res = ctx.client.exec_command(ctx.session.api_key, arena_id, foothold, command, timeout)
     except Exception:
         _trace(ctx, "run_command",
-               {"node": foothold, "command": command[:512]}, ok=False, arena_id=arena_id)
+               {"node": node, "command": command[:512]}, ok=False, arena_id=arena_id)
         raise
+    ctx.steps_used += 1  # consume budget only on a command that actually ran
     _trace(
         ctx, "run_command",
         {"node": foothold, "command": command[:512], "exit_code": res.get("exit_code")},
@@ -350,13 +357,14 @@ def run_setup_step(ctx: GatewayContext, arena_id: str, node: str, command: str,
     """Autonomous mode only (double-locked): run a setup command on the victim
     directly, no per-step approval. Returns its output."""
     _guard(ctx, "run_setup_step")
-    _charge_step(ctx)
+    _check_budget(ctx)
     try:
         res = ctx.client.setup_run(ctx.session.api_key, arena_id, node, command, timeout)
     except Exception:
         _trace(ctx, "run_setup_step",
                {"node": node, "command": command[:512]}, ok=False, arena_id=arena_id)
         raise
+    ctx.steps_used += 1  # consume budget only on a step that actually ran
     _trace(ctx, "run_setup_step",
            {"node": node, "command": command[:512], "exit_code": res.get("exit_code")},
            ok=True, arena_id=arena_id)
@@ -368,12 +376,13 @@ def upload_file(ctx: GatewayContext, arena_id: str, node: str, path: str,
     """Write a file (base64) onto the victim node during setup — a config/seed/
     patch file. Victim-scoped + budgeted + audited like any setup step."""
     _guard(ctx, "upload_file")
-    _charge_step(ctx)
+    _check_budget(ctx)
     try:
         res = ctx.client.setup_upload(ctx.session.api_key, arena_id, node, path, content_b64)
     except Exception:
         _trace(ctx, "upload_file", {"node": node, "path": path}, ok=False, arena_id=arena_id)
         raise
+    ctx.steps_used += 1  # consume budget only on a successful write
     _trace(ctx, "upload_file",
            {"node": node, "path": path, "bytes": res.get("bytes")}, ok=True, arena_id=arena_id)
     return res

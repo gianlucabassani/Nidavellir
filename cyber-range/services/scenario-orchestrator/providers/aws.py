@@ -154,6 +154,9 @@ class AWSProvider(TerraformDriver):
 
         seen_roles = set()
         for name, ip in ips.items():
+            # The WebUI discovers nodes ONLY via `node_<name>_name` — without it an
+            # AWS arena renders an empty nodes table/topology despite captured IPs.
+            flat[f"node_{name}_name"] = ids.get(name, name)
             flat[f"node_{name}_private_ip"] = ip
             if name in ids:
                 flat[f"node_{name}_instance_id"] = ids[name]

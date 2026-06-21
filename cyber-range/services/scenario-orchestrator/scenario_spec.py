@@ -263,6 +263,13 @@ class Requires(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     provider_class: ProviderClass = ProviderClass.any
+    #: ``open`` opts a scenario OUT of egress containment (docker-local). Modeled
+    #: explicitly so it survives validation/serialization — a spec deployed from
+    #: ``model_dump()`` (not raw YAML) would otherwise silently drop the opt-out
+    #: and the arena would be locked/unlocked contrary to the author's intent.
+    egress: str | None = None
+    #: ``off`` disables the allowlisted package mirror on a locked arena.
+    mirror: str | None = None
 
 
 class Network(BaseModel):

@@ -276,11 +276,18 @@ class Database:
             self._append_event(session, lab_id, actor, type, payload)
             session.commit()
 
-    def list_events(self, lab_id=None, limit=100):
+    def list_events(self, lab_id=None, limit=100, types=None):
+        """Recent events (newest first), optionally for one lab and/or restricted
+        to a set of event ``types``. The type filter lets the setup-phase derive
+        the current session from setup-lifecycle events alone, so high-volume
+        engagement noise (agent_exec/status/finding) can't push the open session
+        out of the fetch window (the 500-event window bug)."""
         with self._session() as session:
             query = select(Event).order_by(Event.id.desc()).limit(limit)
             if lab_id is not None:
                 query = query.where(Event.lab_id == lab_id)
+            if types is not None:
+                query = query.where(Event.type.in_(list(types)))
             return [
                 {
                     "id": e.id,

@@ -22,6 +22,7 @@ import os
 
 import config
 import images
+import netguard
 from providers.base import RangeProvider
 from redaction import redact_mapping
 from scenario_spec import normalized_nodes
@@ -421,6 +422,7 @@ class DockerLocalProvider(RangeProvider):
         repo = source.get("repo")
         if not repo:
             raise ValueError(f"node {node['name']!r}: service.source needs a `repo`")
+        netguard.assert_public_host(repo)  # SSRF guard before the daemon fetches it
         ref = source.get("ref")
         subdir = source.get("context")
         dockerfile = source.get("dockerfile") or "Dockerfile"
@@ -564,6 +566,9 @@ class DockerLocalProvider(RangeProvider):
         quoted, so an odd value cannot inject into the helper shell."""
         repo = source["repo"]
         ref = source.get("ref") or ""
+        # SSRF guard (authoritative, resolves the host): the repo is user-supplied
+        # and the clone helper has egress — reject internal/metadata/loopback hosts.
+        netguard.assert_public_host(repo)
         logger.info(
             f"[{instance_id}] Cloning white-box source {repo}"
             f"{('@' + ref) if ref else ''} into volume {vol_name}"
@@ -746,9 +751,25 @@ class DockerLocalProvider(RangeProvider):
             try:
                 self.client.networks.get(net_name).disconnect(container, force=True)
             except docker.errors.NotFound:
-                pass  # bridge gone → already closed
-            except docker.errors.APIError:
-                pass  # not attached → already closed
+                pass  # bridge (or container's attachment) gone → already closed
+            except docker.errors.APIError as e:
+                # Could be a benign "not attached" OR a real failure. Don't assume
+                # success — a false "closed" leaves the victim on the egress bridge
+                # with full internet into the engagement (a containment hole). Verify.
+                logger.info(f"[{instance_id}] disconnect APIError on {node!r}: {e} — verifying")
+            # Verify the node is genuinely off the egress bridge before reporting closed.
+            try:
+                container.reload()
+                attached = net_name in (
+                    (container.attrs.get("NetworkSettings") or {}).get("Networks") or {}
+                )
+            except Exception as e:  # noqa: BLE001 - if we can't verify, fail closed (report failure)
+                return {"success": False, "error": f"could not verify egress revoke on {node!r}: {e}"}
+            if attached:
+                return {
+                    "success": False,
+                    "error": f"egress revoke failed: {node!r} is still attached to {net_name}",
+                }
             logger.info(f"[{instance_id}] setup egress CLOSED for node {node!r}")
             return {"success": True, "egress": "closed"}
         except Exception as e:

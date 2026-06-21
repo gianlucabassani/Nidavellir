@@ -69,6 +69,36 @@ security findings; all the load-bearing ones are fixed. Kept for the record.
 
 See [`docs/SECURITY.md`](docs/SECURITY.md) for the threat model.
 
+### 2.1 Security hardening pass (June 2026 — review + SUT-wizard follow-up)
+
+A second audit (logic errors plus a focused **authorization** and **SSRF** review)
+after the SUT launch wizard landed. Load-bearing logic / SSRF / data-leak findings
+are fixed; three **structural authorization** findings are deferred to their phases
+(they need a model change, not a patch) and tracked here so they aren't lost.
+
+**Fixed ✅**
+
+| # | Sev | Issue | Where | Fix |
+|---|-----|-------|-------|-----|
+| H1 | 🔴 | Setup session derived from the newest **500** events → a busy arena silently "closes" it → egress reaper never revokes + step-budget bypass | `setup_phase.py`, `api.py`, `tasks.py` | Fetch only setup-lifecycle event **types** within a 3×budget window (`list_events(types=)`) |
+| H2 | 🔴 | `set_node_egress` close swallowed real Docker `APIError` → reported `closed` while the victim kept full internet egress | `providers/docker_local.py` | Verify the node is off the egress bridge before reporting `closed`; fail otherwise |
+| H3 | 🔴 | AWS provider emitted no `node_<name>_name` → WebUI rendered **zero nodes** | `providers/aws.py` | Emit `node_<name>_name` |
+| H4 | 🔴 | **SSRF**: a user `repo` URL (SUT wizard / white-box / build) could target `169.254.169.254`, loopback, or RFC1918; the clone helper has full egress | `netguard.py` (new), `api.py`, `providers/docker_local.py` | `assert_public_host()` blocks metadata/link-local/loopback/private/CGNAT — at request-time (literal) and provider-time (resolved) |
+| H5 | 🔴 | `/events` leaked `matched_vuln_id` (hidden-manifest match) to **agent**-role callers → defeats the benchmark | `api.py` | Strip ground truth from `finding` events for non-operators |
+| M1 | 🟠 | `setup/propose` had no budget check; cross-session proposal approval | `api.py`, `setup_phase.py` | 429 on exhausted budget; reject a proposal from a different session (`session_id` carried) |
+| M2 | 🟠 | Gateway charged the step budget **before** exec; resolve-failure left no failure trace | `agent-gateway/gateway/tools.py` | Consume budget only after a successful action; resolve the foothold inside the traced `try` |
+| M3 | 🟠 | `Requires.egress/mirror` dropped on validation; webui `poll_status` swallowed non-200; `_catalog` `KeyError`; co-pilot chat-history corruption | `scenario_spec.py`, `webui/app.py`, `webui/static/js/app.js` | Modeled the fields; normalized status; `.get`; error replies kept out of history |
+
+**Deferred — security backlog (needs a design change; tracked to a phase):**
+
+| # | Sev | Issue | Target |
+|---|-----|-------|--------|
+| D1 | 🔴 | **No key↔arena/session binding** — any valid `agent` key can drive *any* arena (`/exec`, setup `propose`/`run`/`finish`). The gateway stance gate is **client-side only**; the orchestrator never sees the stance, so a direct REST call bypasses foothold-scope. | **Phase 2** — server-enforced per-arena binding on the agent key (claimed at deploy / `setup/start`; orchestrator-side node-scope) → **ADR-0005**. Precondition for any shared/hosted use. |
+| D2 | 🟠 | **WebUI collapses all operators into one orchestrator identity** (shared `ORCHESTRATOR_API_KEY`); `principal.name` (the model-connection key) isn't unique → operators share one BYO model credential. | **Phase 5** — ownership/RBAC + multi-tenant workspaces + SSO; per-operator orchestrator identity. |
+| D3 | 🟠 | **Bootstrap key role defaults to `admin`**; `dev-insecure-key` is the default WebUI↔orchestrator key (a log warning is the only guard). | **Phase 5 hardening** — refuse a privileged role on the well-known dev key; default bootstrap to least privilege. Quick win; can land earlier. |
+
+Full detail + live verification are in `.agent/STATE.md` (2026-06-21 entries).
+
 ---
 
 ## 3. Phased plan
@@ -205,7 +235,10 @@ Key work:
   - **defender** — `query_events` / `get_alerts` / `submit_detection`.
 - **Guardrails (server-enforced):** provider-enforced **egress lockdown** (no
   internet from arena segments — verified by a CI containment test), best-effort
-  scope screen, per-key **step/time/token budgets**, per-command timeout,
+  scope screen, **per-arena key↔session binding** so an agent key can only act on
+  its assigned arena and the orchestrator (not just the gateway) enforces stance/
+  node-scope (§2.1 D1 — the current gate is gateway-side only), per-key
+  **step/time/token budgets**, per-command timeout,
   operator **kill switch / pause** — **two-scope** (per-arena and per-workspace):
   a paused scope rejects new agent tool-calls and the worker stops enqueuing
   while an **in-flight command completes** (no half-state, nothing lost), with a

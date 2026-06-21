@@ -98,8 +98,10 @@ def _scenarios():
 def _catalog():
     data, _ = _api_get("/catalog")
     images = (data or {}).get("images", [])
-    attackers = [i for i in images if i["kind"] == "attacker" and i["available"]]
-    victims = [i for i in images if i["kind"] == "victim" and i["available"]]
+    # .get(), not bare subscript: a catalog item missing 'kind'/'available' must
+    # not 500 the Overview/Launch/Scenarios pages (they all call _catalog).
+    attackers = [i for i in images if i.get("kind") == "attacker" and i.get("available")]
+    victims = [i for i in images if i.get("kind") == "victim" and i.get("available")]
     return images, attackers, victims
 
 
@@ -623,9 +625,15 @@ def setup_decision_proxy(instance_id, step_id, decision):
 def poll_status(instance_id):
     try:
         resp = requests.get(f"{API_URL}/status/{instance_id}", headers=API_HEADERS, timeout=5)
-        return jsonify(resp.json())
-    except requests.RequestException:
+        data = resp.json()
+    except (requests.RequestException, ValueError):
         return jsonify({"status": "offline"})
+    # A non-200 (404 destroyed/unknown, 5xx) carries no `status` key — the poller
+    # reads d.status, so normalize it instead of handing back {"detail": ...} that
+    # would render a permanent UNKNOWN and stall the active-state transition.
+    if resp.status_code != 200:
+        return jsonify({"status": data.get("status", "unknown")})
+    return jsonify(data)
 
 
 if __name__ == "__main__":

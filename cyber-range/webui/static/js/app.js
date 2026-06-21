@@ -483,6 +483,7 @@
     copilotBusy = true;
     document.getElementById("copilot-send").disabled = true;
     const bubble = appendCopilotMsg("assistant", "…");
+    let acc = "";
     fetch("/api/copilot", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken() },
@@ -490,14 +491,13 @@
     })
       .then((resp) => {
         if (!resp.body || !resp.body.getReader) {
-          return resp.text().then((t) => { bubble.textContent = t; });
+          return resp.text().then((t) => { acc = t; bubble.textContent = t || "…"; });
         }
         const reader = resp.body.getReader();
         const dec = new TextDecoder();
-        let acc = "";
         const log = document.getElementById("copilot-log");
         const pump = () => reader.read().then(({ done, value }) => {
-          if (done) { copilotHistory.push({ role: "assistant", content: acc }); return; }
+          if (done) return;
           acc += dec.decode(value, { stream: true });
           bubble.textContent = acc || "…";
           log.scrollTop = log.scrollHeight;
@@ -505,7 +505,24 @@
         });
         return pump();
       })
-      .catch(() => { bubble.textContent = "[co-pilot] connection error."; })
+      .then(() => {
+        // Record the assistant turn ONLY on a real reply. The proxy streams errors
+        // as a "[co-pilot] …" line at HTTP 200, so on that sentinel (or an empty
+        // reply) drop the just-sent user turn instead — keeping the history
+        // strictly alternating so the next request isn't two consecutive user
+        // turns (which the provider rejects).
+        if (acc && !acc.startsWith("[co-pilot]")) {
+          copilotHistory.push({ role: "assistant", content: acc });
+        } else {
+          copilotHistory.pop();
+          bubble.classList.add("copilot__msg--error");
+        }
+      })
+      .catch(() => {
+        bubble.textContent = "[co-pilot] connection error.";
+        bubble.classList.add("copilot__msg--error");
+        copilotHistory.pop();
+      })
       .finally(() => {
         copilotBusy = false;
         document.getElementById("copilot-send").disabled = false;

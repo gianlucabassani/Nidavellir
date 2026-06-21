@@ -19,6 +19,7 @@ import catalog
 import config
 import model_chat
 import model_verify
+import netguard
 import scenarios
 import setup_phase
 from auth import Principal, ensure_bootstrap_key, require_principal
@@ -247,6 +248,13 @@ class SutArenaRequest(BaseModel):
             raise ValueError(
                 "repo must be an https:// git URL (e.g. https://github.com/org/project)"
             )
+        # SSRF guard: reject literal internal/metadata hosts up front (no DNS in
+        # the request path — the authoritative resolve happens provider-side
+        # before the clone). https:// to 169.254.169.254 is still SSRF.
+        try:
+            netguard.assert_public_host(value, resolve=False)
+        except netguard.UnsafeHostError as e:
+            raise ValueError(str(e)) from e
         return value
 
     @field_validator("ref")
@@ -598,11 +606,28 @@ async def exec_in_arena(
 EVENTS_MAX_LIMIT = 500
 
 
+def _redact_findings_for_agent(principal: Principal, events: list[dict]) -> list[dict]:
+    """Strip the hidden-manifest match signal (`matched_vuln_id`) from `finding`
+    events for non-operator callers. The audit/event stream is readable by the
+    defender stance (agent role), but `report_finding` is deliberately neutral so
+    the attacker can't enumerate the manifest — leaving `matched_vuln_id` in the
+    event feed would hand the agent-under-test exactly that ground truth."""
+    if principal.role in OPERATOR_ROLES:
+        return events
+    redacted = []
+    for e in events:
+        payload = e.get("payload")
+        if e.get("type") == "finding" and isinstance(payload, dict) and "matched_vuln_id" in payload:
+            e = {**e, "payload": {k: v for k, v in payload.items() if k != "matched_vuln_id"}}
+        redacted.append(e)
+    return redacted
+
+
 @app.get("/events")
 def list_events(limit: int = 100, principal: Principal = Depends(require_principal)):
     """Recent audit events across all arenas (newest first)."""
     limit = max(1, min(limit, EVENTS_MAX_LIMIT))
-    return {"events": db.list_events(limit=limit)}
+    return {"events": _redact_findings_for_agent(principal, db.list_events(limit=limit))}
 
 
 @app.get("/deployments/{instance_id}/events")
@@ -613,7 +638,11 @@ def list_arena_events(
     if not db.get_deployment(instance_id):
         raise HTTPException(status_code=404, detail="Instance not found")
     limit = max(1, min(limit, EVENTS_MAX_LIMIT))
-    return {"events": db.list_events(lab_id=instance_id, limit=limit)}
+    return {
+        "events": _redact_findings_for_agent(
+            principal, db.list_events(lab_id=instance_id, limit=limit)
+        )
+    }
 
 
 class AgentSessionRequest(BaseModel):
@@ -919,7 +948,11 @@ class SetupStartRequest(BaseModel):
 
 
 def _setup_events(instance_id: str) -> list[dict]:
-    return db.list_events(instance_id, limit=setup_phase.MAX_COMMAND_BUDGET)
+    # Only setup-lifecycle events, so engagement noise (agent_exec/status/finding)
+    # can't push the open session out of the window (the 500-event window bug).
+    return db.list_events(
+        instance_id, limit=setup_phase.SETUP_EVENT_WINDOW, types=setup_phase.SETUP_EVENT_TYPES
+    )
 
 
 def _open_setup_egress(instance_id: str, record: dict, nodes: list[str], session_id: str) -> bool:
@@ -1237,6 +1270,11 @@ def setup_propose(
         )
     if setup_phase.is_expired(sess, datetime.now()):
         raise HTTPException(status_code=409, detail="setup session expired (time-box)")
+    # Enforce the command budget at PROPOSE time too — otherwise an agent could
+    # flood the event stream with unbounded pending proposals (each a DB write)
+    # regardless of the budget, which is only checked at approve/exec.
+    if setup_phase.budget_remaining(sess) <= 0:
+        raise HTTPException(status_code=429, detail="setup command budget exhausted")
     if req.node not in sess["nodes"]:
         raise HTTPException(
             status_code=403,
@@ -1294,6 +1332,10 @@ def setup_proposal_approve(
     status = setup_phase.proposal_status(_setup_events(instance_id), step_id)
     if status is None:
         raise HTTPException(status_code=404, detail="unknown proposal")
+    if status.get("session_id") != sess["session_id"]:
+        raise HTTPException(
+            status_code=409, detail="proposal belongs to a different setup session"
+        )
     if status["status"] != "pending":
         raise HTTPException(status_code=409, detail=f"proposal already {status['status']}")
     result = _exec_setup_command(

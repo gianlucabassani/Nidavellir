@@ -23,7 +23,20 @@ SETUP_PROPOSAL_DECISION = "setup_proposal_decision"  # operator approve/reject +
 DEFAULT_TIME_BOX_SECONDS = 1800          # 30 min
 MAX_TIME_BOX_SECONDS = 6 * 3600          # hard ceiling
 DEFAULT_COMMAND_BUDGET = 50
-MAX_COMMAND_BUDGET = 500                 # also the events fetch window
+MAX_COMMAND_BUDGET = 500
+
+# The setup-lifecycle event types. Deriving the current session by fetching only
+# these (newest-first) means high-volume engagement events (agent_exec, status,
+# finding) can NEVER push the open `setup_session` out of the fetch window — the
+# bug that let a busy arena silently "close" an open session and skip the egress
+# revoke. The window covers one maxed HITL session (open + budget steps + up to
+# 2x budget proposal/decision events) with headroom; older sessions scrolling
+# out is harmless since `current_session` reads newest-first and stops at the
+# current session's boundary.
+SETUP_EVENT_TYPES = (
+    SETUP_OPEN, SETUP_STEP, SETUP_FINISHED, SETUP_PROPOSAL, SETUP_PROPOSAL_DECISION,
+)
+SETUP_EVENT_WINDOW = 3 * MAX_COMMAND_BUDGET + 16
 
 # Setup modes — how the service is brought up (consent recorded at setup/start).
 MODE_OPERATOR = "operator"        # operator runs steps directly (AI-optional, inc. 1)
@@ -107,12 +120,14 @@ def proposal_status(events: list[dict], step_id: str) -> dict | None:
         return None
     if decision is None:
         return {"step_id": step_id, "status": "pending", "node": proposal.get("node"),
-                "command": proposal.get("command")}
+                "command": proposal.get("command"),
+                "session_id": proposal.get("session_id")}
     return {
         "step_id": step_id,
         "status": decision.get("decision", "decided"),  # approved | rejected
         "node": proposal.get("node"),
         "command": proposal.get("command"),
+        "session_id": proposal.get("session_id"),
         "exit_code": decision.get("exit_code"),
         "stdout": decision.get("stdout"),
         "stderr": decision.get("stderr"),
