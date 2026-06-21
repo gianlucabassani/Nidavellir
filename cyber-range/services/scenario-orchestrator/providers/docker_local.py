@@ -19,6 +19,7 @@ Notes:
 """
 import logging
 import os
+import re
 
 import config
 import images
@@ -91,6 +92,14 @@ _SETUP_EGRESS_SEGMENT = "setupgw"
 _MIRROR_NODE = "mirror"              # container suffix + DNS alias on segments
 _MIRROR_PORT = 3128
 _MIRROR_PROXY_URL = f"http://{_MIRROR_NODE}:{_MIRROR_PORT}"
+# A foothold points its apt/pip at the mirror proxy — but the attacker's own HTTP
+# tools (curl/wget) must reach in-arena victim services DIRECTLY, not via squid
+# (which denies anything that isn't a package repo → a confusing 403 on the
+# target). Exclude the private ranges (all arena nodes live in 172.16/12, plus
+# 10/8 and 192.168/16 for other providers) so target traffic bypasses the proxy
+# while external package repos (public IPs) still go through it. curl ≥ 7.86
+# matches CIDRs in no_proxy; wget needs `--no-proxy` for the target (documented).
+_FOOTHOLD_NO_PROXY = "localhost,127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 _MIRROR_IMAGE = "cyberguard/arena-mirror:latest"
 # Build context baked into the orchestrator/worker image at /app/infra/...
 _MIRROR_CONTEXT = os.path.join(
@@ -351,8 +360,10 @@ class DockerLocalProvider(RangeProvider):
                 "https_proxy": _MIRROR_PROXY_URL,
                 "HTTP_PROXY": _MIRROR_PROXY_URL,
                 "HTTPS_PROXY": _MIRROR_PROXY_URL,
-                "no_proxy": "localhost,127.0.0.1,::1",
-                "NO_PROXY": "localhost,127.0.0.1,::1",
+                # In-arena (private-range) targets bypass the proxy → the attacker
+                # reaches victim services directly; external repos still proxied.
+                "no_proxy": _FOOTHOLD_NO_PROXY,
+                "NO_PROXY": _FOOTHOLD_NO_PROXY,
             }
 
         # Mount white-box source read-only into the foothold so the agent can
@@ -745,6 +756,11 @@ class DockerLocalProvider(RangeProvider):
                     net.connect(container)
                 except docker.errors.APIError:
                     pass  # already attached → idempotent
+                # Make the NAT bridge the DEFAULT route. A victim that publishes a
+                # port runs primary on the no-masquerade ingress bridge, whose
+                # gateway otherwise wins the default route — so the NAT bridge is
+                # attached but never carries outbound traffic (apt/npm time out).
+                self._set_default_route(container, self._net_gateway(net))
                 logger.info(f"[{instance_id}] setup egress OPEN for node {node!r}")
                 return {"success": True, "egress": "open", "network": net_name}
             # close
@@ -770,6 +786,11 @@ class DockerLocalProvider(RangeProvider):
                     "success": False,
                     "error": f"egress revoke failed: {node!r} is still attached to {net_name}",
                 }
+            # Restore the default route to the (no-egress) ingress bridge so the
+            # arena runtime returns to its locked state with inbound still working.
+            # A victim with no ingress bridge is simply left without a default
+            # route — pure containment, intra-arena reachable via direct routes.
+            self._set_default_route(container, self._ingress_gateway(container))
             logger.info(f"[{instance_id}] setup egress CLOSED for node {node!r}")
             return {"success": True, "egress": "closed"}
         except Exception as e:
@@ -787,6 +808,65 @@ class DockerLocalProvider(RangeProvider):
                 net_name, driver="bridge", internal=False,
                 labels={LABEL_LAB_ID: instance_id},
             )
+
+    # --- default-route management for setup egress ---------------------------
+    # The SUT base image (ubuntu) ships no `iproute2`, and a port-publishing
+    # victim runs primary on the no-masquerade ingress bridge whose gateway wins
+    # the default route. So we set the route from a short-lived privileged sidecar
+    # that shares the victim's network namespace (busybox `ip` from the already-
+    # present git-helper image). Inbound published-port traffic is unaffected —
+    # replies follow the directly-connected ingress subnet, not the default route.
+    _IPV4_RE = re.compile(r"^\d{1,3}(?:\.\d{1,3}){3}$")
+
+    @classmethod
+    def _is_ipv4(cls, value) -> bool:
+        return isinstance(value, str) and bool(cls._IPV4_RE.match(value))
+
+    def _net_gateway(self, net) -> str | None:
+        """The IPv4 gateway of a docker network (its NAT bridge gateway)."""
+        try:
+            net.reload()
+        except Exception:  # noqa: BLE001 - best-effort
+            pass
+        for cfg in ((net.attrs.get("IPAM") or {}).get("Config") or []):
+            gw = cfg.get("Gateway")
+            if self._is_ipv4(gw):
+                return gw
+        return None
+
+    def _ingress_gateway(self, container) -> str | None:
+        """The container's no-egress ingress-bridge gateway (where published ports
+        live), to restore as the default route when setup egress is revoked."""
+        try:
+            container.reload()
+            nets = (container.attrs.get("NetworkSettings") or {}).get("Networks") or {}
+        except Exception:  # noqa: BLE001
+            return None
+        for name, cfg in nets.items():
+            if name.endswith(f"-{_INGRESS_SEGMENT}") and self._is_ipv4(cfg.get("Gateway")):
+                return cfg["Gateway"]
+        return next((c.get("Gateway") for c in nets.values() if self._is_ipv4(c.get("Gateway"))), None)
+
+    def _set_default_route(self, container, gateway) -> None:
+        """Replace the container's default route via `gateway` from a privileged
+        netns-sharing sidecar (the victim image has no `ip`). Best-effort: a
+        failure leaves the NAT bridge attached, so egress may still work if the
+        bridge already won the default route. `gateway` is a docker-assigned IP
+        (not user input); validated as IPv4 before use."""
+        if not self._is_ipv4(gateway):
+            return
+        try:
+            self.client.containers.run(
+                image=_GIT_HELPER_IMAGE,
+                entrypoint="sh",
+                command=["-c", f"ip route del default 2>/dev/null; ip route add default via {gateway}"],
+                network_mode=f"container:{container.id}",
+                cap_add=["NET_ADMIN"],
+                remove=True,
+                detach=False,
+            )
+        except Exception as e:  # noqa: BLE001 - best-effort route fix
+            logger.warning(f"could not set default route via {gateway} on {container.name}: {e}")
 
     @classmethod
     def _decode(cls, raw) -> str:

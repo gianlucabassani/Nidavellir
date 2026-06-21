@@ -379,6 +379,50 @@ VulnHub importer to make this real is a Phase-1 item (audit #10).
 
 
 
+## 🔌 Bring your own tooling (external monitoring / testing stacks)
+
+You don't have to rebuild a testing tool inside CyberGuard to use it against an
+arena. **Any tool that already ships as its own `docker compose`** — a capturing
+reverse proxy, a DAST scanner, a traffic monitor, an AI pentest pipeline — can be
+run unchanged and simply **pointed at the arena's published port**. The arena is
+the target environment; your tool stays a black box, keeping its own
+Redis/Postgres/UI/etc. The two stacks never integrate at the data layer.
+
+**How it works.** When an arena node publishes a service port, CyberGuard maps it
+to a host port, reachable at `http://127.0.0.1:<hostport>`. That address is shown
+on the arena-detail page (the node's **Open** link) and in the deployment record:
+
+```bash
+# the published URL of a victim/service node
+curl -s -H "X-API-Key: $KEY" http://localhost:8000/status/<arena-id> \
+  | python3 -c 'import sys,json;o=json.load(sys.stdin)["outputs"];print(o.get("node_<node>_url"))'
+# e.g. http://127.0.0.1:38080
+```
+
+**Point your tool at it.** Run your tool's compose as you normally would, and set
+its target/upstream to that published address. For example, with a Kong-based
+stack you set the **service UPSTREAM** to the arena's published port:
+
+```bash
+# in your tool's own docker-compose / declarative config
+upstream_url: http://127.0.0.1:38080   # the arena victim's published port
+# then drive traffic at your tool's proxy — it forwards to the arena victim and
+# applies its existing capture / analysis / scoring capabilities.
+```
+
+Notes:
+- **Egress:** the arena enforces egress containment on its *own* nodes, but your
+  tool runs **outside** the arena, so its egress (e.g. to a model provider) is
+  unaffected — it works exactly as it does standalone.
+- **In-path by configuration, not interception:** because your traffic is aimed at
+  the tool's proxy and the proxy forwards to the arena, the tool sees everything
+  without any MITM/interception inside the arena.
+- For a **self-contained, shippable** arena with the tool baked in as an
+  attacker-side appliance (rather than running alongside), see the SUT /
+  tooling-node direction in [ROADMAP.md](../ROADMAP.md).
+
+
+
 ## 🔍 Troubleshooting
 
 ### Worker Not Processing Tasks
