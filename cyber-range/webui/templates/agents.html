@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Agents{% endblock %}
+{% block crumb %}<b>Agents</b>{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Agents</h1>
+    <div class="sub">Bring-your-own agents connected through the MCP gateway — live connections and per-step traces, derived from the arena audit stream.</div>
+  </div>
+  <div class="actions"><span class="badge badge--idle" id="agents-count">…</span></div>
+</div>
+
+<div class="card pad-0">
+  <div class="card-head"><h3><i class="fa-solid fa-plug"></i> Connections</h3>
+    <div class="spacer"></div>
+    <span class="muted" style="font-size:12px">stance · model · arena</span>
+  </div>
+  <div id="agents-connections" style="padding:14px">
+    <div class="muted" style="font-size:13px">Loading…</div>
+  </div>
+</div>
+
+<div class="card pad-0" style="margin-top:18px">
+  <div class="card-head"><h3><i class="fa-solid fa-timeline"></i> Activity trace</h3>
+    <div class="spacer"></div>
+    <a href="{{ url_for('audit') }}" class="muted" style="font-size:12.5px">Full audit <i class="fa-solid fa-arrow-right"></i></a>
+  </div>
+  <div id="agents-timeline"><div class="empty" style="padding:24px">Loading…</div></div>
+</div>
+
+<p class="faint" style="margin-top:14px;font-size:12.5px">
+  <i class="fa-solid fa-circle-info"></i>
+  Derived from the append-only audit stream (an attribution signal, not a live socket).
+  Per-step trace replay, kill-switch, and red-vs-blue views are Phase 7.
+</p>
+
+<script id="agents-data" type="application/json">{{ overview | tojson | safe }}</script>
+{% endblock %}
+
+{% block scripts %}
+<script>CyberGuard.initAgents();</script>
+{% endblock %}

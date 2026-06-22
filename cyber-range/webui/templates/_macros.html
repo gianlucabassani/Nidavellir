@@ -23,7 +23,9 @@
 
 {% macro event_badge(type) %}
   {%- set m = {'created':'ok','status':'info','agent_exec':'accent','reaped':'idle',
-               'record_deleted':'idle','failed':'danger'} -%}
+               'record_deleted':'idle','failed':'danger','agent_session':'accent',
+               'setup_session':'info','setup_step':'accent','setup_proposal':'warn',
+               'setup_proposal_decision':'info','setup_finished':'idle','finding':'ok'} -%}
   <span class="badge badge--{{ m.get(type, 'idle') }}">{{ (type or '?') | replace('_',' ') }}</span>
 {% endmacro %}
 
@@ -35,6 +37,18 @@
     <span class="mono">{{ (p.command or '') | truncate(80) }}</span>
   {%- elif e.type == 'status' -%}
     <span class="mono">{{ p.get('from','?') }} → {{ p.get('to', p.get('status','?')) }}</span>
+  {%- elif e.type == 'agent_session' -%}
+    <span class="mono">{{ p.model }}</span> · {{ p.provider }}{% if p.stance %} · {{ p.stance }}{% endif %}
+  {%- elif e.type == 'setup_step' -%}
+    <span class="mono faint">{{ p.node }}</span> · exit {{ p.exit_code }} ·
+    <span class="mono">{{ (p.command or '') | truncate(70) }}</span>
+  {%- elif e.type == 'setup_proposal' -%}
+    proposed <span class="mono faint">{{ p.node }}</span> ·
+    <span class="mono">{{ (p.command or '') | truncate(70) }}</span>
+  {%- elif e.type == 'setup_proposal_decision' -%}
+    <b>{{ p.decision }}</b>{% if p.exit_code is not none %} · exit {{ p.exit_code }}{% endif %}
+  {%- elif e.type == 'finding' -%}
+    <span class="mono">{{ (p.title or '') | truncate(50) }}</span> · {{ p.cwe or '—' }} · {{ p.node or 'any' }}
   {%- elif p -%}
     <span class="mono faint">{{ p | tojson | truncate(90) }}</span>
   {%- else -%}<span class="faint">—</span>{%- endif -%}

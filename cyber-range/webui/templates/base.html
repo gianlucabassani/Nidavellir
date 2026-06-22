@@ -25,6 +25,7 @@
         ('arenas',    'arenas',    'fa-layer-group',    'Arenas'),
         ('launch',    'launch',    'fa-rocket',         'Launch'),
         ('scenarios', 'scenarios', 'fa-cubes',          'Scenarios'),
+        ('agents',    'agents',    'fa-robot',          'Agents'),
         ('audit',     'audit',     'fa-clipboard-list', 'Audit')
       ] %}
       {% for key, ep, icon, label in nav %}
@@ -35,7 +36,6 @@
 
       <div class="nav-section">Planned</div>
       {% set planned = [
-        ('agents',   'agents',   'fa-robot', 'Agents'),
         ('settings', 'settings', 'fa-gear',  'Settings')
       ] %}
       {% for key, ep, icon, label in planned %}

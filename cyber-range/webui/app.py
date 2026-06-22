@@ -1,6 +1,7 @@
 import hmac
 import os
 import re
+from datetime import datetime, timedelta
 
 import requests
 from flask import (
@@ -129,6 +130,106 @@ def _current_agent():
                 "actor": p.get("actor") or e.get("actor"),
             }
     return None
+
+
+# --- agents overview (the Agents console) -----------------------------------
+# Bring-your-own agents reach an arena through the MCP gateway and surface in the
+# append-only audit stream: an `agent_session` event = a connection (model /
+# provider / stance) and agent_exec / setup_* / finding events are its per-step
+# trace. This aggregates them into live connections + a recent activity timeline
+# (an attribution view over `events`, not a live socket).
+_AGENT_EVENT_TYPES = (
+    "agent_session", "agent_exec", "setup_step", "setup_proposal",
+    "setup_proposal_decision", "setup_finished", "finding",
+)
+
+
+def _ev_dt(ts):
+    try:
+        return datetime.fromisoformat(str(ts))
+    except (TypeError, ValueError):
+        try:
+            return datetime.strptime(str(ts)[:19], "%Y-%m-%d %H:%M:%S")
+        except (TypeError, ValueError):
+            return None
+
+
+def _agent_summary(e):
+    """A short human line for one agent-trace event (so the JS view stays dumb)."""
+    p = e.get("payload") or {}
+    t = e.get("type")
+    cmd = (p.get("command") or "")[:80]
+    if t == "agent_session":
+        return f"connected · {p.get('model') or '?'} ({p.get('provider') or '?'})"
+    if t in ("agent_exec", "setup_step"):
+        return f"{p.get('node', '?')} · exit {p.get('exit_code')} · {cmd}"
+    if t == "setup_proposal":
+        return f"proposed on {p.get('node', '?')} · {cmd}"
+    if t == "setup_proposal_decision":
+        ex = p.get("exit_code")
+        return p.get("decision", "decided") + (f" · exit {ex}" if ex is not None else "")
+    if t == "setup_finished":
+        return f"setup finished ({p.get('reason', '')})"
+    if t == "finding":
+        matched = " · ✓ matched" if p.get("matched_vuln_id") else ""
+        return f"{(p.get('title') or '')[:60]} · {p.get('cwe') or '—'} · {p.get('node') or 'any'}{matched}"
+    return ""
+
+
+def _agent_overview(limit=200):
+    """Connections + activity timeline aggregated from the audit stream."""
+    events = _events(limit=limit)            # newest-first across all arenas
+    deployments, _ = _deployments()
+    name_of = {k: (v.get("user_id") or k) for k, v in deployments.items()}
+    status_of = {k: v.get("status") for k, v in deployments.items()}
+    now = datetime.now()
+
+    cmds, finds, last_act = {}, {}, {}
+    for e in events:
+        a, t = e.get("lab_id"), e.get("type")
+        if t in _AGENT_EVENT_TYPES and a not in last_act:
+            last_act[a] = e.get("ts")        # newest agent event per arena
+        if t in ("agent_exec", "setup_step"):
+            cmds[a] = cmds.get(a, 0) + 1
+        elif t == "finding":
+            finds[a] = finds.get(a, 0) + 1
+
+    conns = {}
+    for e in events:                          # newest-first → first per key wins
+        if e.get("type") != "agent_session":
+            continue
+        p = e.get("payload") or {}
+        a = e.get("lab_id")
+        stance = p.get("stance") or "agent"
+        if (a, stance) in conns:
+            continue
+        seen = last_act.get(a)
+        dt = _ev_dt(seen)
+        active = bool(
+            status_of.get(a) == "active" and dt and (now - dt) < timedelta(minutes=10)
+        )
+        conns[(a, stance)] = {
+            "arena_id": a, "arena_name": name_of.get(a, (a or "")[:8]),
+            "status": status_of.get(a), "stance": stance,
+            "model": p.get("model"), "provider": (p.get("provider") or "").lower(),
+            "actor": p.get("actor") or e.get("actor"),
+            "last_seen": seen, "active": active,
+            "commands": cmds.get(a, 0), "findings": finds.get(a, 0),
+        }
+
+    timeline = [
+        {
+            "ts": e.get("ts"), "arena_id": e.get("lab_id"),
+            "arena_name": name_of.get(e.get("lab_id"), (e.get("lab_id") or "")[:8]),
+            "type": e.get("type"), "actor": e.get("actor"),
+            "stance": (e.get("payload") or {}).get("stance"),
+            "summary": _agent_summary(e),
+        }
+        for e in events if e.get("type") in _AGENT_EVENT_TYPES
+    ][:80]
+
+    connections = sorted(conns.values(), key=lambda c: (not c["active"], c["arena_name"] or ""))
+    return {"connections": connections, "timeline": timeline, "total": len(connections)}
 
 
 def _score(instance_id):
@@ -282,19 +383,6 @@ def arena_detail(instance_id):
 
 # --- planned (TODO) sections -------------------------------------------------
 _STUBS = {
-    "agents": {
-        "feature": "Agents", "icon": "fa-robot",
-        "summary": "Connect and observe bring-your-own AI agents through the MCP gateway.",
-        "blurb": "Agents reach an arena only through the MCP gateway, wired in as "
-                 "attacker, MITM, or defender. This page will manage those connections "
-                 "and replay what each agent did, step by step.",
-        "todo": [
-            {"title": "Gateway connections", "note": "attacker / MITM / defender stances"},
-            {"title": "Live agent traces", "note": "per-step command + output timeline"},
-            {"title": "Budgets & kill switch", "note": "step / time / token limits per agent"},
-        ],
-        "roadmap": "Phase 2 — MCP agent gateway & stances",
-    },
     "settings": {
         "feature": "Settings", "icon": "fa-gear",
         "summary": "Operator profile, API keys and console preferences.",
@@ -312,7 +400,7 @@ _STUBS = {
 
 @app.route("/agents")
 def agents():
-    return render_template("stub.html", active="agents", **_STUBS["agents"])
+    return render_template("agents.html", active="agents", overview=_agent_overview())
 
 
 @app.route("/audit")
@@ -481,6 +569,12 @@ def current_agent():
     if not agent:
         return jsonify({"connected": False})
     return jsonify({"connected": True, **agent})
+
+
+@app.route("/api/agents")
+def api_agents():
+    """JSON for the Agents console poller — connections + activity trace."""
+    return jsonify(_agent_overview())
 
 
 @app.route("/api/model-connection", methods=["GET"])

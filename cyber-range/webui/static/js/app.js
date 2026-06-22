@@ -690,11 +690,89 @@
     cfgApi("/finish", "POST").then(() => refreshConfigurator());
   }
 
+  /* ---- agents console (live connections + activity trace) ------------- */
+  let agentsTimer = null;
+
+  function initAgents() {
+    let data = {};
+    try { data = JSON.parse(document.getElementById("agents-data").textContent || "{}"); } catch (e) {}
+    renderAgents(data);                       // first paint from embedded JSON (no flash)
+    if (agentsTimer) clearInterval(agentsTimer);
+    agentsTimer = setInterval(refreshAgents, 8000);
+  }
+  function refreshAgents() {
+    fetch("/api/agents").then((r) => r.json()).then(renderAgents).catch(() => {});
+  }
+
+  function renderAgents(d) {
+    d = d || {};
+    const conns = d.connections || [];
+    const tl = d.timeline || [];
+    const count = document.getElementById("agents-count");
+    if (count) count.textContent = conns.length + " connection" + (conns.length === 1 ? "" : "s");
+
+    const cw = document.getElementById("agents-connections");
+    if (cw) {
+      cw.innerHTML = conns.length
+        ? '<div class="agent-grid">' + conns.map(agentCard).join("") + "</div>"
+        : '<div class="muted" style="font-size:13px">No agents connected yet. Connect a bring-your-own agent through the MCP gateway (stance <b>attacker</b> or <b>configurator</b>); it appears here once it announces itself or runs a command.</div>';
+    }
+    const tw = document.getElementById("agents-timeline");
+    if (tw) {
+      tw.innerHTML = tl.length
+        ? agentTimeline(tl)
+        : '<div class="empty" style="padding:24px">No agent activity yet.</div>';
+    }
+  }
+
+  function agentCard(c) {
+    const b = brandOf(c.provider);
+    const dot = c.active ? "dot--active" : "dot--standby";
+    const arena = encodeURIComponent(c.arena_id || "");
+    return '<div class="agent-card">' +
+      '<div class="agent-card__top">' +
+        '<span class="badge badge--accent">' + escapeHtml(c.stance || "agent") + "</span>" +
+        '<span class="dot ' + dot + '" title="' + (c.active ? "recent activity" : "idle") + '"></span>' +
+      "</div>" +
+      '<div class="agent-card__model">' +
+        '<span class="agent-card__logo" style="background:' + b.color + '">' + b.svg + "</span>" +
+        '<span class="mono">' + escapeHtml(c.model || b.name) + "</span></div>" +
+      '<div class="muted" style="font-size:12px;margin:2px 0 8px">' + escapeHtml(b.name) + "</div>" +
+      '<a class="agent-card__arena mono" href="/arena/' + arena + '">' +
+        escapeHtml(c.arena_name || "") + ' <span class="faint">' + escapeHtml((c.arena_id || "").slice(0, 8)) + "</span></a>" +
+      '<div class="agent-card__stats">' +
+        "<span><b>" + (c.commands || 0) + "</b> cmds</span>" +
+        "<span><b>" + (c.findings || 0) + "</b> findings</span>" +
+        '<span class="faint" title="last seen">' + escapeHtml(c.last_seen || "—") + "</span>" +
+      "</div></div>";
+  }
+
+  function agentTimeline(tl) {
+    return '<table class="table"><thead><tr><th>Time</th><th>Arena</th><th>Action</th><th>Actor</th><th>Detail</th></tr></thead><tbody>' +
+      tl.map((e) =>
+        '<tr><td class="mono faint" style="white-space:nowrap">' + escapeHtml(e.ts || "") + "</td>" +
+        '<td class="mono faint"><a href="/arena/' + encodeURIComponent(e.arena_id || "") + '">' + escapeHtml((e.arena_id || "").slice(0, 8)) + "</a></td>" +
+        "<td>" + agentTypeBadge(e.type) + "</td>" +
+        "<td>" + escapeHtml(e.actor || "") + (e.stance ? ' <span class="faint">(' + escapeHtml(e.stance) + ")</span>" : "") + "</td>" +
+        '<td class="mono" style="font-size:12px">' + escapeHtml(e.summary || "") + "</td></tr>"
+      ).join("") + "</tbody></table>";
+  }
+
+  function agentTypeBadge(t) {
+    const m = {
+      agent_session: "accent", agent_exec: "ok", setup_step: "accent",
+      setup_proposal: "warn", setup_proposal_decision: "info",
+      setup_finished: "idle", finding: "ok",
+    };
+    return '<span class="badge badge--' + (m[t] || "idle") + '">' + escapeHtml((t || "?").replace(/_/g, " ")) + "</span>";
+  }
+
   window.CyberGuard = {
     initArena, renderTopology,
     openModelModal, closeModelModal, openModelConfig, saveModel, removeModel, testModel,
     toggleCopilot, sendCopilot,
     initConfigurator, cfgStart, cfgRunStep, cfgDecide, cfgFinish,
+    initAgents,
     fit: function () { if (topoCy) topoCy.fit(null, 30); },
   };
   document.addEventListener("keydown", (e) => {
