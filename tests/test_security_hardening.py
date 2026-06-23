@@ -19,7 +19,7 @@ def _client(role, name=None):
     return c
 
 
-def _active_arena(iid, scenario="container_web_pentest"):
+def _active_arena(iid, scenario="container_web_pentest", bind_configurator=None):
     from database import Database
 
     db = Database()
@@ -34,6 +34,12 @@ def _active_arena(iid, scenario="container_web_pentest"):
         },
         actor="test",
     )
+    # D1: agent keys that drive the configurator setup phase must be bound.
+    if bind_configurator:
+        db.record_event(
+            iid, "agent_binding",
+            {"agent_name": bind_configurator, "stance": "configurator"}, actor="test",
+        )
     return iid
 
 
@@ -105,7 +111,7 @@ def test_events_redact_matched_vuln_id_for_agent_not_operator():
 def test_propose_rejected_when_budget_exhausted():
     op = _client("operator", "cfg-op-b")
     ag = _client("agent", "cfg-ag-b")
-    iid = _active_arena("sec-budget")
+    iid = _active_arena("sec-budget", bind_configurator="cfg-ag-b")
     assert op.post(f"/arenas/{iid}/setup/start",
                    json={"mode": "hitl", "command_budget": 1}).status_code == 200
     # propose + approve consumes the only budget slot
@@ -120,7 +126,7 @@ def test_propose_rejected_when_budget_exhausted():
 def test_approve_rejects_cross_session_proposal():
     op = _client("operator", "cfg-op-x")
     ag = _client("agent", "cfg-ag-x")
-    iid = _active_arena("sec-xsession")
+    iid = _active_arena("sec-xsession", bind_configurator="cfg-ag-x")
     op.post(f"/arenas/{iid}/setup/start", json={"mode": "hitl", "command_budget": 10})
     sid = ag.post(f"/arenas/{iid}/setup/propose",
                   json={"node": "victim", "command": "echo old"}).json()["step_id"]

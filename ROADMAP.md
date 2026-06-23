@@ -88,12 +88,12 @@ are fixed; three **structural authorization** findings are deferred to their pha
 | M1 | 🟠 | `setup/propose` had no budget check; cross-session proposal approval | `api.py`, `setup_phase.py` | 429 on exhausted budget; reject a proposal from a different session (`session_id` carried) |
 | M2 | 🟠 | Gateway charged the step budget **before** exec; resolve-failure left no failure trace | `agent-gateway/gateway/tools.py` | Consume budget only after a successful action; resolve the foothold inside the traced `try` |
 | M3 | 🟠 | `Requires.egress/mirror` dropped on validation; webui `poll_status` swallowed non-200; `_catalog` `KeyError`; co-pilot chat-history corruption | `scenario_spec.py`, `webui/app.py`, `webui/static/js/app.js` | Modeled the fields; normalized status; `.get`; error replies kept out of history |
+| D1 | 🔴 | **No key↔arena/session binding** — any valid `agent` key could drive *any* arena (`/exec`, `/findings`, setup `propose`/`run`/`finish`); the gateway stance gate was client-side only, so a direct REST call bypassed foothold-scope. | `bindings.py` (new), `api.py` | Server-enforced **per-arena key↔arena binding**: an `agent` key may drive an arena only with an active `agent_binding`, whose **stance** scopes the capability orchestrator-side (attacker → foothold-only exec; configurator → setup only). Granted auto-on-self-deploy / by operator (`POST /arenas/{id}/bindings`) / named at `setup/start` (revoked at finish). Operators bypass. → ADR-0005 guardrail #6. |
 
 **Deferred — security backlog (needs a design change; tracked to a phase):**
 
 | # | Sev | Issue | Target |
 |---|-----|-------|--------|
-| D1 | 🔴 | **No key↔arena/session binding** — any valid `agent` key can drive *any* arena (`/exec`, setup `propose`/`run`/`finish`). The gateway stance gate is **client-side only**; the orchestrator never sees the stance, so a direct REST call bypasses foothold-scope. | **Phase 2** — server-enforced per-arena binding on the agent key (claimed at deploy / `setup/start`; orchestrator-side node-scope) → **ADR-0005**. Precondition for any shared/hosted use. |
 | D2 | 🟠 | **WebUI collapses all operators into one orchestrator identity** (shared `ORCHESTRATOR_API_KEY`); `principal.name` (the model-connection key) isn't unique → operators share one BYO model credential. | **Phase 5** — ownership/RBAC + multi-tenant workspaces + SSO; per-operator orchestrator identity. |
 | D3 | 🟠 | **Bootstrap key role defaults to `admin`**; `dev-insecure-key` is the default WebUI↔orchestrator key (a log warning is the only guard). | **Phase 5 hardening** — refuse a privileged role on the well-known dev key; default bootstrap to least privilege. Quick win; can land earlier. |
 

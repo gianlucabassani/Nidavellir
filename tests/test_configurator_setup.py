@@ -50,6 +50,12 @@ def _arena(iid):
         },
         actor="test",
     )
+    # D1: the configurator agent (key="agent-cfg") must be bound to drive setup.
+    # (The agent_name-at-setup/start grant path is covered in test_agent_binding.)
+    db.record_event(
+        iid, "agent_binding",
+        {"agent_name": "agent-cfg", "stance": "configurator"}, actor="test",
+    )
     return iid
 
 

@@ -136,8 +136,7 @@ status, not a silent success.
 
 `POST /arenas/{instance_id}/exec` — run a command inside an arena node and get
 its output. This is the backend the MCP gateway's attacker-stance `run_command`
-tool proxies (foothold-scope is enforced at the gateway; this endpoint is the
-raw infra primitive). Synchronous; provider-enforced (`docker exec`, SSH for VM
+tool proxies. Synchronous; provider-enforced (`docker exec`, SSH for VM
 providers once wired). **Every exec is written to the `events` audit trail.**
 
 ```json
@@ -145,9 +144,16 @@ providers once wired). **Every exec is written to the `events` audit trail.**
 → { "node": "jump", "exit_code": 0, "stdout": "...", "stderr": "" }
 ```
 
-`404` unknown arena/node · `409` arena not `active` · `501` provider has no exec
-(VM providers, for now) · `422` empty command or out-of-range timeout (1–120s).
-Output is capped; the command is bounded to 4096 chars.
+**Authorization (D1):** an `agent`-role key may exec only on an arena it is
+**bound** to (see *Agent ↔ arena bindings* below) — `403` otherwise. Foothold
+node-scope is now **enforced server-side** for an `attacker`-stance binding (not
+just at the gateway): an attacker may exec only on a foothold node, `403` on a
+victim. Operators/admins bypass (they manage every arena).
+
+`403` unbound agent / out-of-stance node · `404` unknown arena/node · `409` arena
+not `active` · `501` provider has no exec (VM providers, for now) · `422` empty
+command or out-of-range timeout (1–120s). Output is capped; the command is
+bounded to 4096 chars.
 
 ### Connected-agent telemetry
 
@@ -166,6 +172,37 @@ ground truth, not scored.
 `404` unknown arena · `422` missing `model`/`provider`. Any authenticated
 principal may call it (the agent announces itself). The latest `agent_session`
 event (via `GET /events`) drives the console chip.
+
+### Agent ↔ arena bindings (server-enforced, D1)
+
+The orchestrator — not just the gateway — decides whether an `agent` key may
+**drive** an arena (exec / report findings / configure the victim), and in what
+stance. Without a binding an agent key cannot touch an arena it has no
+relationship to (the gateway's stance gate was client-side only). State is
+event-backed (`agent_binding` / `agent_binding_revoked` — no migration).
+
+A binding is created three ways:
+- **auto on self-deploy** — when an `agent` key deploys an arena (`/deploy`,
+  `/arenas/custom`) it is auto-bound with an unrestricted (`stance: null`)
+  binding — its own sandbox;
+- **operator grant** — `POST /arenas/{id}/bindings` (below);
+- **named at `setup/start`** — `agent_name` grants a `configurator` binding for
+  the session, revoked at `setup/finish` (the write/config capability is dropped
+  before the engagement).
+
+A binding's **stance** scopes what it permits (server-side): `null` →
+unrestricted within the arena; `attacker` → exec (foothold-only) + findings;
+`configurator` → setup steps; `defender`/`mitm` → reads only. Operators/admins
+are never bound and bypass every check.
+
+- `POST /arenas/{id}/bindings` `{ "agent_name": "redteam", "stance": "attacker" }`
+  → `{ "bound": true, … }`. Operator-only. Re-granting updates the stance.
+- `GET /arenas/{id}/bindings` → `{ "bindings": [ … ] }` (active bindings).
+  Operator-only.
+- `DELETE /arenas/{id}/bindings/{agent_name}` → `{ "revoked": true|false }`.
+  Operator-only; idempotent.
+
+`403` for an `agent` caller · `404` unknown arena · `422` unknown stance.
 
 ### Model connection (operator's bring-your-own key)
 
@@ -220,15 +257,18 @@ Three **modes** (the consent choice): `operator` (the operator scripts steps —
 
 **Operator controls** (operator/admin only; `agent` → 403):
 
-- `POST /arenas/{id}/setup/start` `{nodes?, time_box_seconds?, command_budget?, setup_egress?, mode?}`
+- `POST /arenas/{id}/setup/start` `{nodes?, time_box_seconds?, command_budget?, setup_egress?, mode?, agent_name?}`
   — open a session. `nodes` defaults to all non-foothold nodes; a foothold in scope
-  → `422`. `setup_egress:true` opens **real internet egress** on the victim for the
-  session (so any dependency — git/npm/go/cargo/distro — can be fetched), via a
-  per-arena NAT bridge; it is **revoked before the engagement** (on finish, on
-  expiry, and by the reaper) so the runtime stays egress-locked. `501` if the provider
-  can't toggle egress (docker-local can). `mode:"autonomous"` → `403` unless the
-  platform flag `CYBERGUARD_ALLOW_AUTONOMOUS_CONFIGURATOR` is set (the **double lock**:
-  flag + this explicit per-arena consent).
+  → `422`. `agent_name` **binds that agent key** to the arena as `configurator` for
+  the session (D1 — the agent must be bound to drive HITL/autonomous setup); the
+  binding is **revoked at `finish`**. `setup_egress:true` opens **real internet
+  egress** on the victim for the session (so any dependency — git/npm/go/cargo/distro
+  — can be fetched), via a per-arena NAT bridge; it is **revoked before the
+  engagement** (on finish, on expiry, and by the reaper) so the runtime stays
+  egress-locked. `501` if the provider can't toggle egress (docker-local can).
+  `mode:"autonomous"` → `403` unless the platform flag
+  `CYBERGUARD_ALLOW_AUTONOMOUS_CONFIGURATOR` is set (the **double lock**: flag +
+  this explicit per-arena consent).
 - `GET /arenas/{id}/setup` — `{open, expired, mode, nodes, steps_run, budget_remaining, egress_enforced, pending_proposals, …}`.
 - `POST /arenas/{id}/setup/step` `{node, command, timeout?}` — operator-scripted direct
   step. Enforces scope (`403`), budget (`429`), time-box (`409` + auto-close on expiry).
@@ -238,7 +278,8 @@ Three **modes** (the consent choice): `operator` (the operator scripts steps —
 - `POST /arenas/{id}/setup/proposals/{step_id}/reject` — reject (it never runs).
 
 **Configurator-agent tools** (the gateway `stance=configurator` backend; reachable by an
-`agent` key but gated by an open session + mode + scope + budget + time-box):
+`agent` key but gated by a **`configurator` binding** to the arena (D1) + an open session
++ mode + scope + budget + time-box):
 
 - `GET /arenas/{id}/setup/brief` — victim node(s) in scope, white-box source path, mode, budget.
 - `POST /arenas/{id}/setup/propose` `{node, command, rationale?}` — **HITL**: propose a step

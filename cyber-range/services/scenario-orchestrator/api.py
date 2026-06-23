@@ -15,6 +15,7 @@ import uuid
 import sys
 from datetime import datetime, timedelta
 
+import bindings
 import catalog
 import config
 import model_chat
@@ -196,6 +197,7 @@ async def deploy_custom_arena(
         system_id, req.instance_id, label,
         provider=req.provider, actor=principal.name, expires_at=expires_at,
     )
+    _autobind_deployer(principal, system_id)  # D1: the deployer owns its sandbox
     logger.info(
         f"Queuing custom arena '{req.instance_id}' ({system_id}): "
         f"{label} provider={req.provider} by '{principal.name}'"
@@ -419,6 +421,7 @@ async def deploy(
         actor=principal.name,
         expires_at=expires_at,
     )
+    _autobind_deployer(principal, system_id)  # D1: the deployer owns its sandbox
 
     # 4. Dispatch Async Task using the UUID
     deploy_lab.delay(
@@ -560,6 +563,24 @@ async def exec_in_arena(
             outputs = json.loads(outputs)
         except json.JSONDecodeError:
             outputs = {}
+
+    # D1: an agent may only exec on an arena it is bound to. Checked before node
+    # enumeration so an unbound agent can't probe another arena's node names.
+    binding = _require_binding(principal, instance_id, bindings.CAP_EXEC)
+    # Server-side foothold-scope for the attacker stance (the gateway also screens
+    # this client-side; the orchestrator is now authoritative — D1). A None-stance
+    # (own-sandbox) binding and operator callers are unrestricted.
+    if binding is not None and binding.get("stance") == "attacker":
+        _, footholds = setup_phase.derive_nodes_footholds(outputs)
+        if footholds and req.node not in footholds:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"the attacker stance may only exec on a foothold node "
+                    f"{sorted(footholds)}, not '{req.node}'"
+                ),
+            )
+
     known = {
         k[len("node_"):-len("_name")]
         for k in outputs
@@ -690,6 +711,130 @@ def _require_operator(principal: Principal) -> None:
         raise HTTPException(
             status_code=403, detail="operator or admin role required"
         )
+
+
+# --- Agent ↔ arena bindings (server-enforced key↔arena binding, D1) ----------
+# An `agent` key may only DRIVE an arena (exec / report findings / configure the
+# victim) it holds an active binding to, and only within the stance the binding
+# grants. Operators/admins manage every arena and bypass. State is event-backed
+# (bindings.py derives it from agent_binding / agent_binding_revoked events).
+# See ROADMAP §2.1 D1 + ADR-0005.
+
+def _arena_binding_events(instance_id: str) -> list[dict]:
+    return db.list_events(
+        instance_id, limit=bindings.BINDING_EVENT_WINDOW, types=bindings.BINDING_EVENT_TYPES
+    )
+
+
+def _require_binding(principal: Principal, instance_id: str, capability: str) -> dict | None:
+    """Gate an agent-driven arena action. Operators/admins bypass (return None);
+    an `agent` principal must hold an active binding to `instance_id` whose stance
+    permits `capability`, else 403. Returns the binding so the caller can apply
+    stance-specific node-scope (e.g. attacker → foothold-only exec)."""
+    if principal.role in OPERATOR_ROLES:
+        return None
+    binding = bindings.binding_for(_arena_binding_events(instance_id), principal.name)
+    if binding is None:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "this agent key is not bound to this arena — an operator must grant "
+                "a binding (POST /arenas/{id}/bindings) or the agent must have "
+                "deployed the arena itself"
+            ),
+        )
+    if not bindings.stance_permits(binding.get("stance"), capability):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"the bound stance {binding.get('stance')!r} may not "
+                f"{capability!r} on this arena"
+            ),
+        )
+    return binding
+
+
+def _autobind_deployer(principal: Principal, instance_id: str) -> None:
+    """Bind the deploying agent to the arena it just created (its own sandbox),
+    with an unrestricted (stance=None) binding. No-op for operators/admins — they
+    are never bound. This is the 'claimed at deploy' half of D1."""
+    if principal.role in OPERATOR_ROLES:
+        return
+    db.record_event(
+        instance_id, bindings.BINDING_GRANT,
+        {"agent_name": principal.name, "stance": None, "auto": True,
+         "granted_by": principal.name},
+        actor=principal.name,
+    )
+
+
+class BindingRequest(BaseModel):
+    agent_name: str = Field(min_length=1, max_length=128)
+    # The stance the agent is allowed to take on this arena. None = unrestricted.
+    stance: str | None = Field(default=None, max_length=32)
+
+    @field_validator("stance")
+    @classmethod
+    def _known_stance(cls, value: str | None) -> str | None:
+        if value is not None and value not in bindings.STANCES:
+            raise ValueError(
+                f"unknown stance {value!r}; expected one of {bindings.STANCES} or null"
+            )
+        return value
+
+
+@app.post("/arenas/{instance_id}/bindings")
+def grant_binding(
+    instance_id: str,
+    req: BindingRequest,
+    principal: Principal = Depends(require_principal),
+):
+    """Authorize an agent key (by name) to drive this arena in a given stance.
+    Operator-only — the operator decides which BYO agent is the system-under-test
+    for which arena. Re-granting updates the stance."""
+    _require_operator(principal)
+    if not db.get_deployment(instance_id):
+        raise HTTPException(status_code=404, detail="Arena not found")
+    db.record_event(
+        instance_id, bindings.BINDING_GRANT,
+        {"agent_name": req.agent_name, "stance": req.stance, "auto": False,
+         "granted_by": principal.name},
+        actor=principal.name,
+    )
+    logger.info(
+        f"Bound agent '{req.agent_name}' (stance={req.stance}) to arena "
+        f"{instance_id} by '{principal.name}'"
+    )
+    return {"bound": True, "agent_name": req.agent_name, "stance": req.stance}
+
+
+@app.get("/arenas/{instance_id}/bindings")
+def list_bindings(instance_id: str, principal: Principal = Depends(require_principal)):
+    """The arena's active agent bindings. Operator-only."""
+    _require_operator(principal)
+    if not db.get_deployment(instance_id):
+        raise HTTPException(status_code=404, detail="Arena not found")
+    return {"bindings": bindings.active_bindings(_arena_binding_events(instance_id))}
+
+
+@app.delete("/arenas/{instance_id}/bindings/{agent_name}")
+def revoke_binding(
+    instance_id: str, agent_name: str, principal: Principal = Depends(require_principal)
+):
+    """Revoke an agent's binding to this arena — it can no longer drive it.
+    Operator-only. Idempotent (revoking a non-bound agent is a no-op)."""
+    _require_operator(principal)
+    if not db.get_deployment(instance_id):
+        raise HTTPException(status_code=404, detail="Arena not found")
+    if bindings.binding_for(_arena_binding_events(instance_id), agent_name) is None:
+        return {"revoked": False, "detail": "no active binding for that agent"}
+    db.record_event(
+        instance_id, bindings.BINDING_REVOKE,
+        {"agent_name": agent_name, "reason": "operator", "granted_by": principal.name},
+        actor=principal.name,
+    )
+    logger.info(f"Revoked agent '{agent_name}' binding on arena {instance_id} by '{principal.name}'")
+    return {"revoked": True, "agent_name": agent_name}
 
 
 # --- BYO model connection (operator's session-bound agent credential) -------
@@ -938,6 +1083,11 @@ class SetupStartRequest(BaseModel):
     #   hitl        — an agent proposes each step, the operator approves (inc. 2)
     #   autonomous  — an agent runs steps directly (inc. 3; double-locked)
     mode: str = Field(default=setup_phase.MODE_OPERATOR)
+    # The agent key (by name) that may drive this setup session via the gateway's
+    # configurator stance. Naming it here grants that agent a `configurator`
+    # binding to the arena for the session (D1 "claimed at setup/start"); it is
+    # revoked at setup/finish so the capability is dropped before the engagement.
+    agent_name: str | None = Field(default=None, max_length=128)
 
     @field_validator("mode")
     @classmethod
@@ -1075,6 +1225,16 @@ def setup_start(
     # open egress. Closing is derived from `setup_egress` + idempotent, so a
     # crash after opening is still revoked by finish/expiry/reaper.
     db.record_event(instance_id, setup_phase.SETUP_OPEN, payload, actor=principal.name)
+    # D1: if a configurator agent is named, bind it to the arena for this session.
+    # Revoked at setup/finish so the write/config capability is dropped before the
+    # engagement (ADR-0007 hard privilege boundary).
+    if req.agent_name:
+        db.record_event(
+            instance_id, bindings.BINDING_GRANT,
+            {"agent_name": req.agent_name, "stance": "configurator", "auto": False,
+             "granted_by": principal.name, "session_id": session_id},
+            actor=principal.name,
+        )
     egress_enforced = False
     if req.setup_egress:
         egress_enforced = _open_setup_egress(instance_id, record, scope, session_id)
@@ -1226,6 +1386,7 @@ def setup_brief(instance_id: str, principal: Principal = Depends(require_princip
     """What the configurator needs to bring the service up: the victim node(s) in
     scope, any white-box source mount path, the mode, and remaining budget."""
     record = _active_arena_or_error(instance_id)
+    _require_binding(principal, instance_id, bindings.CAP_SETUP)  # D1
     sess = _open_session_or_409(instance_id)
     outputs = _arena_node_outputs(record)
     whitebox = {
@@ -1263,6 +1424,7 @@ def setup_propose(
     """HITL: the agent proposes a setup step; the operator must approve it before
     it runs. Records a pending `setup_proposal`. Valid only in mode='hitl'."""
     _active_arena_or_error(instance_id)
+    _require_binding(principal, instance_id, bindings.CAP_SETUP)  # D1
     sess = _open_session_or_409(instance_id)
     if sess["mode"] != setup_phase.MODE_HITL:
         raise HTTPException(
@@ -1299,6 +1461,7 @@ def setup_proposal_status(
     the captured exec result) | rejected."""
     if not db.get_deployment(instance_id):
         raise HTTPException(status_code=404, detail="Arena not found")
+    _require_binding(principal, instance_id, bindings.CAP_SETUP)  # D1
     status = setup_phase.proposal_status(_setup_events(instance_id), step_id)
     if status is None:
         raise HTTPException(status_code=404, detail="unknown proposal")
@@ -1393,6 +1556,7 @@ def setup_run(
     CYBERGUARD_ALLOW_AUTONOMOUS_CONFIGURATOR. Still victim-scoped + budgeted +
     time-boxed + audited."""
     record = _active_arena_or_error(instance_id)
+    _require_binding(principal, instance_id, bindings.CAP_SETUP)  # D1
     sess = _open_session_or_409(instance_id)
     if sess["mode"] != setup_phase.MODE_AUTONOMOUS:
         raise HTTPException(
@@ -1430,6 +1594,7 @@ def setup_upload(
     import shlex
 
     record = _active_arena_or_error(instance_id)
+    _require_binding(principal, instance_id, bindings.CAP_SETUP)  # D1
     sess = _open_session_or_409(instance_id)
     try:
         raw = base64.b64decode(req.content_b64, validate=True)
@@ -1459,10 +1624,21 @@ def setup_finish(instance_id: str, principal: Principal = Depends(require_princi
     record = db.get_deployment(instance_id)
     if not record:
         raise HTTPException(status_code=404, detail="Arena not found")
+    _require_binding(principal, instance_id, bindings.CAP_SETUP)  # D1 (operator bypasses)
     sess = setup_phase.current_session(_setup_events(instance_id))
     if not sess:
         return {"finished": False, "detail": "no open setup session"}
     _close_setup_egress(instance_id, record, sess)
+    # Drop the configurator capability before the engagement: revoke any binding
+    # granted for this session (ADR-0007 hard privilege boundary, D1).
+    for b in bindings.active_bindings(_arena_binding_events(instance_id)):
+        if b.get("stance") == "configurator" and b.get("session_id") == sess["session_id"]:
+            db.record_event(
+                instance_id, bindings.BINDING_REVOKE,
+                {"agent_name": b["agent_name"], "reason": "setup_finished",
+                 "session_id": sess["session_id"]},
+                actor=principal.name,
+            )
     db.record_event(
         instance_id, setup_phase.SETUP_FINISHED,
         {"session_id": sess["session_id"], "reason": "operator",
@@ -1533,6 +1709,7 @@ async def report_finding(
     record = db.get_deployment(instance_id)
     if not record:
         raise HTTPException(status_code=404, detail="Arena not found")
+    _require_binding(principal, instance_id, bindings.CAP_EXEC)  # D1
 
     # Custom/SUT arenas store a synthetic label (e.g. "custom:kali-cli+dvwa")
     # that is not a registered scenario id, so there is no manifest to match

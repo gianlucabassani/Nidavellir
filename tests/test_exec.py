@@ -45,13 +45,20 @@ def client():
     return c
 
 
-def _make_active_arena(db, instance_id="exec-arena", outputs=None):
+def _make_active_arena(db, instance_id="exec-arena", outputs=None, bind="exec-tests"):
     db.create_deployment(instance_id, instance_id, "custom", provider=None, actor="test")
     db.update_deployment(instance_id, status="deploying", actor="test")  # legal path
     db.update_deployment(
         instance_id, status="active",
         outputs=outputs or {"node_jump_name": "cg-x-jump"}, actor="test",
     )
+    # D1: the agent driving exec must be bound to the arena. The test agent key is
+    # named "exec-tests"; an unrestricted (stance=None) binding mirrors the
+    # self-deploy "own sandbox" grant.
+    if bind:
+        db.record_event(
+            instance_id, "agent_binding", {"agent_name": bind, "stance": None}, actor="test"
+        )
 
 
 def test_exec_runs_and_is_audited(client):

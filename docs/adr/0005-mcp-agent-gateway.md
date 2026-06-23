@@ -10,8 +10,10 @@
   per-arena squid sidecar (dual-homed: egress bridge + each internal segment as
   `mirror`) that lets a contained foothold `apt`/`pip install` tooling from
   package repos ONLY, with no general egress (live-verified: nmap installs and
-  scans in-scope while the internet stays unreachable). **Deferred:** MITM
-  stance, per-request HTTP auth, token budget, operator kill switch.)
+  scans in-scope while the internet stays unreachable); and **server-enforced
+  per-arena key↔arena binding** — guardrail #6 below, the orchestrator-side
+  authorization that closes audit finding D1. **Deferred:** MITM stance,
+  per-request HTTP auth, token budget, operator kill switch.)
 - **Date:** 2026-06-14
 - **Deciders:** CyberGuard maintainers
 
@@ -65,6 +67,26 @@ toolsets are gated by an allow-list (`stances.allowed_tools`):
    trace (+ the orchestrator `events` table). The raw API key is never logged or
    traced (a derived `agent_id` is used).
 5. **Kill switch** — an operator can freeze/destroy any agent arena.
+6. **Per-arena key↔arena binding (server-enforced — closes D1).** The gateway's
+   stance gate is client-side only, so a direct REST call to the orchestrator
+   bypassed it: any valid `agent` key could `exec` / configure / report findings
+   on **any** arena. The orchestrator now requires that an `agent` principal hold
+   an active **binding** to an arena before it may drive it, and the binding's
+   **stance** scopes the capability *server-side* (e.g. `attacker` → exec is
+   foothold-only; `configurator` → setup steps only). Bindings are event-backed
+   (`agent_binding` / `agent_binding_revoked`, no migration; derived newest-first
+   like the setup phase) and granted three ways: **auto on self-deploy** (the
+   agent that deploys an arena owns that sandbox, `stance=null` unrestricted),
+   an **operator grant** (`POST /arenas/{id}/bindings`, stance-scoped — the
+   operator decides which BYO agent is the system-under-test), or **named at
+   `setup/start`** (`agent_name` → a `configurator` binding revoked at `finish`,
+   so the write/config capability is dropped before the engagement — the
+   ADR-0007 hard privilege boundary). Operators/admins author and run engagements
+   and manage every arena, so they are never bound and bypass the check. Reads
+   (status / event feed) are intentionally **not** capability-gated — D1 is about
+   *driving* an arena, and the finding feed is already ground-truth-redacted for
+   agents. Residual: a multi-tenant per-operator orchestrator identity + token
+   budget remain follow-ups (§2.1 D2/D3).
 
 **Command execution** is *command-at-a-time* (no raw PTY in v1) into the
 **foothold/entrypoint node only**, with a per-command timeout.
