@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Launch{% endblock %}
 {% block crumb %}<a href="{{ url_for('arenas') }}">Arenas</a> / <b>Launch</b>{% endblock %}
+{% block head %}<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>{% endblock %}
 
 {% block content %}
 <div class="page-head">
@@ -46,6 +47,13 @@
         <i class="fa-solid fa-rocket"></i> Launch scenario
       </button>
     </form>
+    <div class="topo-preview" id="scenario-preview"></div>
+    <div class="topo-legend">
+      <span><i class="fa-solid fa-laptop-code" style="color:var(--danger)"></i> attacker</span>
+      <span><i class="fa-solid fa-server" style="color:var(--warn)"></i> target</span>
+      <span><i class="fa-solid fa-display" style="color:var(--muted)"></i> host</span>
+      <span><i class="fa-solid fa-network-wired" style="color:var(--accent)"></i> segment</span>
+    </div>
   </div>
 
   <!-- custom lab builder -->
@@ -55,7 +63,8 @@
       <h3 style="margin:0">Build a custom lab</h3>
     </div>
     <p class="muted" style="margin-top:0;font-size:13px">
-      Pick an attacker box and one or more targets. Images are pulled on first launch (docker-local).
+      Pick one or more attacker boxes and one or more targets — the topology
+      previews live as you choose. Images are pulled on first launch (docker-local).
     </p>
     <form action="{{ url_for('build_custom') }}" method="POST">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -65,10 +74,10 @@
                pattern="[a-z0-9][a-z0-9-]{0,39}" title="Lowercase letters, digits and hyphens (max 40)">
       </div>
       <div class="field">
-        <label class="label">Attacker</label>
-        <select class="select" name="attacker" required>
+        <label class="label">Attacker(s) — ctrl / ⌘-click for several</label>
+        <select class="select" name="attackers" multiple size="4" required>
           {% for a in attackers %}
-          <option value="{{ a.id }}" title="{{ a.description }}">{{ a.name }} ({{ a.access }})</option>
+          <option value="{{ a.id }}" title="{{ a.description }}" {{ 'selected' if loop.first }}>{{ a.name }} ({{ a.access }})</option>
           {% else %}
           <option disabled>catalog unavailable</option>
           {% endfor %}
@@ -78,7 +87,7 @@
         <label class="label">Target(s) — ctrl / ⌘-click for several</label>
         <select class="select" name="victims" multiple size="4" required>
           {% for v in victims %}
-          <option value="{{ v.id }}" title="{{ v.description }}">{{ v.name }}{% if v.access == 'web' %} · web{% endif %}</option>
+          <option value="{{ v.id }}" title="{{ v.description }}" {{ 'selected' if loop.first }}>{{ v.name }}{% if v.access == 'web' %} · web{% endif %}</option>
           {% endfor %}
         </select>
       </div>
@@ -86,6 +95,49 @@
         <i class="fa-solid fa-screwdriver-wrench"></i> Build lab
       </button>
     </form>
+    <div class="topo-preview" id="custom-preview"></div>
+    <div class="topo-foot"><span class="muted" id="custom-msg"></span></div>
+  </div>
+</div>
+
+<!-- import an existing scenario spec -->
+<div class="card" style="margin-top:18px">
+  <div class="flexrow" style="margin-bottom:6px">
+    <span class="badge badge--accent"><i class="fa-solid fa-file-import"></i> Import</span>
+    <h3 style="margin:0">Import an existing scenario</h3>
+  </div>
+  <p class="muted" style="margin-top:0;font-size:13px">
+    Paste a v3 topology spec (YAML or JSON) — validate it, preview the topology,
+    then save it as a reusable pack. It then appears under <b>Scenarios</b> beside
+    the built-ins. (Same shape a generator would emit — the import seam, P1-7.)
+  </p>
+  <div class="grid cols-2">
+    <div>
+      <div class="field">
+        <label class="label">Scenario id <span class="muted">(optional — derived from the name)</span></label>
+        <input class="input mono" type="text" id="import-id" placeholder="my-scenario"
+               pattern="[a-z0-9][a-z0-9_-]{0,63}">
+      </div>
+      <div class="field">
+        <label class="label">Spec (YAML or JSON)</label>
+        <textarea class="input mono" id="import-spec" rows="14" spellcheck="false"
+          placeholder="schema: cyberguard/v3&#10;name: my-scenario&#10;network:&#10;  segments: [{name: lab}]&#10;nodes:&#10;  - {name: kali, role: attacker, image: kali, segments: [lab], entrypoint: true}&#10;  - {name: web, role: victim, image: dvwa, segments: [lab], ports: [80]}&#10;agents:&#10;  - {stance: attacker, node: kali}"></textarea>
+      </div>
+      <div class="flexrow">
+        <button type="button" class="btn" id="import-preview-btn"><i class="fa-solid fa-eye"></i> Validate &amp; preview</button>
+        <button type="button" class="btn btn-primary" id="import-do-btn"><i class="fa-solid fa-file-import"></i> Import</button>
+      </div>
+      <div class="import-msg" id="import-msg" style="margin-top:10px"></div>
+    </div>
+    <div>
+      <div class="topo-preview" id="import-preview"></div>
+      <div class="topo-legend">
+        <span><i class="dotsq dotsq--danger"></i> foothold</span>
+        <span><i class="dotsq dotsq--warn"></i> target</span>
+        <span><i class="dotsq dotsq--muted"></i> host</span>
+        <span><i class="dashbox"></i> segment</span>
+      </div>
+    </div>
   </div>
 </div>
 

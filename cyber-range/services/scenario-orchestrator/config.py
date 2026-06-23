@@ -36,6 +36,14 @@ DATA_DIR = Path(os.getenv("DATA_DIR", str(BASE_DIR / "data")))
 KEYS_DIR = Path(os.getenv("KEYS_DIR", str(BASE_DIR / "keys")))
 CACHE_DIR = Path(os.getenv("CACHE_DIR", str(BASE_DIR / "cache")))
 
+# Imported scenario packs (ROADMAP P1-7, Classic-range authoring track). The
+# built-in templates live in TEMPLATES_DIR (baked into the image, read-only);
+# operator-imported scenarios are persisted here, under the writable DATA_DIR
+# volume (mounted + shared between the orchestrator and worker, so an imported
+# pack is visible to the worker that deploys it and survives a restart). The
+# registry (scenarios.py) discovers both directories.
+SCENARIOS_DIR = Path(os.getenv("SCENARIOS_DIR", str(DATA_DIR / "scenarios")))
+
 # OPENSTACK CREDENTIALS
 OS_USERNAME = os.getenv("OS_USERNAME")
 OS_PASSWORD = os.getenv("OS_PASSWORD")
@@ -162,7 +170,7 @@ def validate_config():
         raise ValueError(error_msg)
     
     # Create runtime directories if they don't exist
-    for dir_path in [RUNS_DIR, DATA_DIR, KEYS_DIR, CACHE_DIR]:
+    for dir_path in [RUNS_DIR, DATA_DIR, KEYS_DIR, CACHE_DIR, SCENARIOS_DIR]:
         dir_path.mkdir(parents=True, exist_ok=True)
         print(f"✅ Directory ready: {dir_path}")
     

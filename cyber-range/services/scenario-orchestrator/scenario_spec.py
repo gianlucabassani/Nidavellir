@@ -507,6 +507,62 @@ def primary_cidr(scenario_config: dict) -> str | None:
     return None
 
 
+def topology_view(spec: ScenarioSpec) -> dict:
+    """A render-friendly topology graph derived from a validated spec (P7-9).
+
+    Powers the **pre-deploy** preview in the WebUI (the post-deploy view is built
+    from provider outputs). Each node carries a display ``kind`` (foothold /
+    target / host) and any bound agent ``stance``; ``segments`` are the grouping
+    and ``edges`` connect each node to the segment(s) it joins. No ground truth
+    (the vuln manifest) is included — this is just the shape of the arena."""
+    stance_by_node: dict = {}
+    for binding in spec.agents:
+        stance_by_node.setdefault(binding.node, binding.stance.value)
+
+    def _kind(n: Node) -> str:
+        if n.entrypoint or stance_by_node.get(n.name) == Stance.attacker.value:
+            return "foothold"
+        if n.role in ("victim", "web") or n.ports:
+            return "target"
+        return "host"
+
+    nodes = [
+        {
+            "name": n.name,
+            "role": n.role,
+            "kind": _kind(n),
+            "image": n.effective_image,
+            "ports": list(n.ports),
+            "entrypoint": bool(n.entrypoint),
+            "stance": stance_by_node.get(n.name),
+            "segments": list(n.segments),
+            "access": "web" if n.ports else "cli",
+            "whitebox": bool(n.service.whitebox) if n.service else False,
+            "sut": n.service is not None,
+        }
+        for n in spec.nodes
+    ]
+    segments = [
+        {
+            "name": s.name,
+            "cidr": s.cidr,
+            "nodes": [n.name for n in spec.nodes if s.name in n.segments],
+        }
+        for s in spec.network.segments
+    ]
+    edges = [
+        {"node": n.name, "segment": s} for n in spec.nodes for s in n.segments
+    ]
+    return {
+        "nodes": nodes,
+        "segments": segments,
+        "edges": edges,
+        # nodes that declared no segment still render (kept connected client-side)
+        "unsegmented": [n.name for n in spec.nodes if not n.segments],
+        "egress": "open" if spec.requires.egress == "open" else "blocked",
+    }
+
+
 def json_schema() -> dict:
     """The published JSON Schema for v3 scenarios (keyed by alias, so the
     top-level ``schema`` field appears as authors write it)."""

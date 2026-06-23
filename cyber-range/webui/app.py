@@ -439,15 +439,19 @@ def create_lab():
 @app.route("/build-custom", methods=["POST"])
 def build_custom():
     instance_id = request.form.get("instance_id")
-    attacker = request.form.get("attacker")
+    # Multiple attack machines (P1-7): the form sends `attackers` (multi-select);
+    # fall back to a single `attacker` for older markup.
+    attackers = request.form.getlist("attackers") or (
+        [request.form.get("attacker")] if request.form.get("attacker") else []
+    )
     victims = request.form.getlist("victims")
     try:
         resp = requests.post(f"{API_URL}/arenas/custom", json={
-            "instance_id": instance_id, "attacker": attacker, "victims": victims,
+            "instance_id": instance_id, "attackers": attackers, "victims": victims,
         }, headers=API_HEADERS, timeout=10)
         if resp.status_code == 200:
-            flash(f"Building '{instance_id}': {attacker} vs {', '.join(victims)} "
-                  "(images pulled on first use)", "info")
+            flash(f"Building '{instance_id}': {' + '.join(attackers)} vs "
+                  f"{', '.join(victims)} (images pulled on first use)", "info")
         elif resp.status_code == 422:
             try:
                 detail = resp.json()["detail"]
@@ -713,6 +717,57 @@ def setup_decision_proxy(instance_id, step_id, decision):
         return jsonify({"error": "bad decision"}), 400
     data, code = _api_post(f"/arenas/{instance_id}/setup/proposals/{step_id}/{decision}")
     return jsonify(data), code
+
+
+# --- scenario authoring & import (P1-7) + topology preview (P7-9) -----------
+@app.route("/api/scenarios/preview", methods=["POST"])
+def scenario_preview_proxy():
+    """Dry-run validate + topology for the launch / import previews (proxies
+    POST /scenarios/preview). CSRF-protected."""
+    body = request.get_json(silent=True) or {}
+    payload = {}
+    if body.get("picks") is not None:
+        payload["picks"] = body.get("picks")
+    if body.get("spec") is not None:
+        payload["spec"] = body.get("spec")
+    data, code = _api_post("/scenarios/preview", payload)
+    return jsonify(data), code
+
+
+@app.route("/api/scenarios/import", methods=["POST"])
+def scenario_import_proxy():
+    """Persist an operator-pasted scenario as a reusable pack (proxies
+    POST /scenarios). CSRF-protected."""
+    body = request.get_json(silent=True) or {}
+    payload = {
+        "spec": body.get("spec"),
+        "id": body.get("id") or None,
+        "overwrite": bool(body.get("overwrite")),
+    }
+    data, code = _api_post("/scenarios", payload)
+    return jsonify(data), code
+
+
+@app.route("/api/scenarios/<scenario_id>/topology", methods=["GET"])
+def scenario_topology_proxy(scenario_id):
+    """Topology graph of a registered scenario for the pre-deploy preview."""
+    data, ok = _api_get(f"/scenarios/{scenario_id}/topology")
+    return jsonify(data or {"topology": None}), (200 if ok else 404)
+
+
+@app.route("/api/scenarios/<scenario_id>", methods=["DELETE"])
+def scenario_delete_proxy(scenario_id):
+    """Delete an imported scenario pack (proxies DELETE /scenarios/<id>).
+    CSRF-protected."""
+    try:
+        resp = requests.delete(
+            f"{API_URL}/scenarios/{scenario_id}", headers=API_HEADERS, timeout=10
+        )
+    except requests.RequestException:
+        return jsonify({"error": "orchestrator unreachable"}), 502
+    if resp.status_code == 200:
+        return jsonify(resp.json())
+    return jsonify({"error": _api_error(resp)}), resp.status_code
 
 
 @app.route("/api/poll/<instance_id>")

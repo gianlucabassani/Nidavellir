@@ -130,26 +130,41 @@ def get(image_id: str) -> CatalogImage:
 
 def build_custom_scenario(
     name: str,
-    attacker: str,
+    attackers: "str | list[str]",
     victims: list[str],
     *,
     segment: str = DEFAULT_SEGMENT,
 ) -> dict:
     """Compile an operator's picks into a validated v3 scenario dict.
 
+    ``attackers`` accepts a single id or a list — each becomes an entrypoint node
+    bound as the attacker stance, so a custom arena can field **several attack
+    machines** (the schema already allows N entrypoints / bindings; P1-7). Every
+    pick (attackers + victims) must be unique.
+
     Raises CatalogError on an unknown id, a wrong-kind pick, a duplicate, or an
     image that isn't deployable on docker-local (VM-only / unavailable).
     """
+    if isinstance(attackers, str):
+        attackers = [attackers]
+    if not attackers:
+        raise CatalogError("pick at least one attacker image")
     if not victims:
         raise CatalogError("pick at least one victim image")
 
-    atk = get(attacker)
-    if atk.kind != "attacker":
-        raise CatalogError(f"'{attacker}' is not an attacker image")
-    _require_container(atk)
+    seen: set[str] = set()
+    attacker_imgs = []
+    for aid in attackers:
+        if aid in seen:
+            raise CatalogError(f"duplicate image '{aid}' in the selection")
+        seen.add(aid)
+        atk = get(aid)
+        if atk.kind != "attacker":
+            raise CatalogError(f"'{aid}' is not an attacker image")
+        _require_container(atk)
+        attacker_imgs.append(atk)
 
     victim_imgs = []
-    seen = {atk.id}
     for vid in victims:
         if vid in seen:
             raise CatalogError(f"duplicate image '{vid}' in the selection")
@@ -167,8 +182,9 @@ def build_custom_scenario(
         "difficulty": "custom",
         "requires": {"provider_class": "container"},
         "network": {"segments": [{"name": segment}]},
-        "nodes": [atk.to_node(segment)] + [v.to_node(segment) for v in victim_imgs],
-        "agents": [{"stance": "attacker", "node": atk.id}],
+        "nodes": [a.to_node(segment) for a in attacker_imgs]
+        + [v.to_node(segment) for v in victim_imgs],
+        "agents": [{"stance": "attacker", "node": a.id} for a in attacker_imgs],
     }
     # Validate now so a bad selection fails fast (before anything is queued).
     ScenarioSpec.from_raw(raw)

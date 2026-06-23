@@ -3,7 +3,7 @@ FastAPI REST Layer - Production Architecture (Redis/Celery)
 """
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -13,6 +13,7 @@ import os
 import re
 import uuid
 import sys
+import yaml
 from datetime import datetime, timedelta
 
 import bindings
@@ -27,7 +28,7 @@ from auth import Principal, ensure_bootstrap_key, require_principal
 from database import Database
 from orchestrator import Orchestrator
 from providers import available_providers, default_provider_name, infra_class_of
-from scenario_spec import normalize_cwe
+from scenario_spec import ScenarioSpec, normalize_cwe, topology_view
 from states import IllegalTransition, LabStatus
 from tasks import deploy_lab, destroy_lab
 from config import validate_config
@@ -136,13 +137,31 @@ def _check_provider_compatibility(scenario_id: str, provider_name: str | None):
 
 
 class CustomArenaRequest(BaseModel):
-    """Build a custom arena from curated catalog picks (manual scenario creator)."""
+    """Build a custom arena from curated catalog picks (manual scenario creator).
+
+    Supports **multiple attack machines** (P1-7): pass ``attackers`` (a list); the
+    legacy single ``attacker`` field is still accepted and merged in for
+    backward compatibility."""
 
     instance_id: str = Field(pattern=INSTANCE_NAME_PATTERN)
-    attacker: str = Field(min_length=1, max_length=64)
+    attackers: list[str] = Field(default_factory=list, max_length=8)
+    attacker: str | None = Field(default=None, max_length=64)
     victims: list[str] = Field(min_length=1, max_length=8)
     # Custom arenas are container topologies → docker-local by default.
     provider: str | None = Field(default="docker-local", max_length=32)
+
+    @model_validator(mode="after")
+    def _merge_attackers(self) -> "CustomArenaRequest":
+        merged = ([self.attacker] if self.attacker else []) + list(self.attackers)
+        seen, out = set(), []
+        for a in merged:
+            if a and a not in seen:
+                seen.add(a)
+                out.append(a)
+        if not out:
+            raise ValueError("pick at least one attacker image")
+        self.attackers = out
+        return self
 
     @field_validator("provider")
     @classmethod
@@ -154,8 +173,187 @@ class CustomArenaRequest(BaseModel):
 
 @app.get("/scenarios")
 def list_scenarios(principal: Principal = Depends(require_principal)):
-    """Registry of deployable scenarios (id + display metadata)."""
+    """Registry of deployable scenarios (id + display metadata + source)."""
     return {"scenarios": scenarios.list_scenarios()}
+
+
+# --- scenario authoring & import (Classic-range track A, P1-7) ---------------
+# A scenario can be brought IN as a reusable pack (not just dropped on disk):
+# `POST /scenarios` validates a v3 spec and persists it under SCENARIOS_DIR;
+# `POST /scenarios/preview` is a no-deploy dry-run (validate + topology) backing
+# the WebUI preview; `GET /scenarios/{id}/topology` renders a registered pack.
+
+
+def _parse_scenario_spec(spec) -> dict:
+    """Coerce an imported spec (a JSON object, or a YAML/JSON document string)
+    into a dict — 422 on anything else. YAML is a superset of JSON, so one
+    parser handles both text forms."""
+    if isinstance(spec, dict):
+        return spec
+    if isinstance(spec, str):
+        try:
+            parsed = yaml.safe_load(spec)
+        except yaml.YAMLError as e:
+            raise HTTPException(
+                status_code=422, detail=f"could not parse spec: {e}"
+            ) from e
+        if not isinstance(parsed, dict):
+            raise HTTPException(
+                status_code=422, detail="spec must be a YAML/JSON object"
+            )
+        return parsed
+    raise HTTPException(
+        status_code=422, detail="spec must be an object or a YAML/JSON string"
+    )
+
+
+def _derive_scenario_id(raw: dict) -> str:
+    """A registry id slugified from the spec's name/title."""
+    base = str(raw.get("name") or raw.get("title") or "").strip().lower()
+    slug = re.sub(r"[^a-z0-9_-]+", "-", base).strip("-_")[:64]
+    if not slug or not scenarios.is_valid_scenario_id(slug):
+        raise HTTPException(
+            status_code=422,
+            detail="could not derive a scenario id from the spec — pass an explicit 'id'",
+        )
+    return slug
+
+
+def _spec_errors(e: ValidationError) -> list[str]:
+    """Flatten pydantic validation errors into short human lines."""
+    out = []
+    for err in e.errors(include_url=False):
+        loc = ".".join(str(p) for p in err.get("loc", []) if p != "__root__")
+        msg = err.get("msg", "invalid")
+        out.append(f"{loc}: {msg}" if loc else msg)
+    return out or ["spec failed v3 validation"]
+
+
+class ScenarioImportRequest(BaseModel):
+    """Import a v3 scenario as a reusable pack (P1-7). ``spec`` is the topology as
+    a JSON object or a YAML/JSON document string; ``id`` overrides the id derived
+    from the spec name."""
+
+    spec: dict | str
+    id: str | None = Field(default=None, max_length=64)
+    overwrite: bool = False
+
+
+@app.post("/scenarios")
+@limiter.limit(RATE_LIMIT_DEPLOY)
+async def import_scenario(
+    request: Request,
+    req: ScenarioImportRequest,
+    principal: Principal = Depends(require_principal),
+):
+    """Validate a v3 scenario spec and persist it as a reusable pack
+    (operator-only). Never deploys — the pack then appears in GET /scenarios and
+    can be previewed / launched like a built-in."""
+    _require_operator(principal)
+    raw = _parse_scenario_spec(req.spec)
+    scenario_id = (req.id or "").strip().lower() or _derive_scenario_id(raw)
+    try:
+        summary = scenarios.save_scenario(scenario_id, raw, overwrite=req.overwrite)
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=_spec_errors(e)) from e
+    except FileExistsError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    logger.info("Imported scenario '%s' by '%s'", scenario_id, principal.name)
+    return {"status": "imported", "id": scenario_id, "scenario": summary}
+
+
+@app.delete("/scenarios/{scenario_id}")
+async def delete_scenario(
+    scenario_id: str,
+    principal: Principal = Depends(require_principal),
+):
+    """Delete an imported scenario pack (operator-only). Built-ins are read-only."""
+    _require_operator(principal)
+    try:
+        removed = scenarios.delete_scenario(scenario_id)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    if not removed:
+        raise HTTPException(
+            status_code=404, detail=f"no imported scenario '{scenario_id}'"
+        )
+    return {"status": "deleted", "id": scenario_id}
+
+
+class ScenarioPreviewRequest(BaseModel):
+    """A no-deploy dry-run: validate a candidate scenario and return its topology.
+    Provide exactly one of ``spec`` (a v3 spec, object or YAML/JSON string) or
+    ``picks`` (catalog ids, the custom builder's live preview)."""
+
+    spec: dict | str | None = None
+    picks: dict | None = None  # {"attackers": [...], "victims": [...]}
+
+
+@app.post("/scenarios/preview")
+async def preview_scenario(
+    request: Request,
+    req: ScenarioPreviewRequest,
+    principal: Principal = Depends(require_principal),
+):
+    """Validate a candidate scenario (a pasted spec or catalog picks) and return
+    ``{valid, errors, warnings, summary, topology}`` WITHOUT deploying — backs the
+    WebUI launch/import previews. Operator-only (an authoring action)."""
+    _require_operator(principal)
+    if req.picks is not None:
+        attackers = req.picks.get("attackers") or req.picks.get("attacker") or []
+        victims = req.picks.get("victims") or []
+        try:
+            raw = catalog.build_custom_scenario("preview", attackers, victims)
+        except catalog.CatalogError as e:
+            return {"valid": False, "errors": [str(e)], "warnings": [], "topology": None}
+    elif req.spec is not None:
+        raw = _parse_scenario_spec(req.spec)
+    else:
+        raise HTTPException(status_code=422, detail="provide a 'spec' or 'picks'")
+
+    try:
+        spec = ScenarioSpec.from_raw(raw)
+    except ValidationError as e:
+        return {"valid": False, "errors": _spec_errors(e), "warnings": [], "topology": None}
+
+    suggested = None
+    try:
+        suggested = _derive_scenario_id(raw)
+    except HTTPException:
+        pass
+    return {
+        "valid": True,
+        "errors": [],
+        "warnings": spec.warnings(),
+        "suggested_id": suggested,
+        "summary": {
+            "name": spec.name,
+            "title": spec.title,
+            "difficulty": spec.difficulty,
+            "provider_class": spec.requires.provider_class.value,
+            "nodes": len(spec.nodes),
+        },
+        "topology": topology_view(spec),
+    }
+
+
+@app.get("/scenarios/{scenario_id}/topology")
+def scenario_topology(
+    scenario_id: str,
+    principal: Principal = Depends(require_principal),
+):
+    """The render-friendly topology graph of a REGISTERED scenario (no ground
+    truth). Backs the WebUI pre-deploy preview. 404 if unknown/invalid."""
+    spec = scenarios.load_scenario_spec(scenario_id)
+    if spec is None:
+        raise HTTPException(status_code=404, detail=f"unknown scenario '{scenario_id}'")
+    return {
+        "id": scenario_id,
+        "warnings": spec.warnings(),
+        "topology": topology_view(spec),
+    }
 
 
 @app.get("/catalog")
@@ -178,7 +376,7 @@ async def deploy_custom_arena(
     arena never touches the scenario registry/filesystem.
     """
     try:
-        spec = catalog.build_custom_scenario(req.instance_id, req.attacker, req.victims)
+        spec = catalog.build_custom_scenario(req.instance_id, req.attackers, req.victims)
     except catalog.CatalogError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
 
@@ -191,7 +389,7 @@ async def deploy_custom_arena(
         )
 
     system_id = str(uuid.uuid4())
-    label = f"custom:{req.attacker}+{'+'.join(req.victims)}"[:64]
+    label = f"custom:{'+'.join(req.attackers)}+{'+'.join(req.victims)}"[:64]
     expires_at = datetime.now() + timedelta(minutes=config.LAB_TTL_MINUTES)
     db.create_deployment(
         system_id, req.instance_id, label,

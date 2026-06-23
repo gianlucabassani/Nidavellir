@@ -2,8 +2,6 @@
 (function () {
   "use strict";
 
-  let topoCy = null; // Cytoscape instance (NOT window.cy — an #id creates a global)
-
   const C = {
     bg: "#1c2030", text: "#e6e8ee", muted: "#8b91a3", border: "#323848",
     accent: "#22d3ee", danger: "#f87171", warn: "#f59e0b", ok: "#34d399",
@@ -320,69 +318,31 @@
     return { nodes, nets };
   }
 
-  function buildElements(o) {
+  // Post-deploy view (/arena): adapt the provider's flat outputs into the SAME
+  // topology model the spec preview uses, so the live arena renders with the
+  // identical Packet-Tracer aesthetic (icons + switch-star). Flat outputs carry
+  // no per-node segment membership, so every node hangs off one arena switch —
+  // the live IPs / state / links live in the Nodes table beside the diagram.
+  function outputsToTopology(o) {
     const { nodes, nets } = parseTopology(o);
-    const els = [];
-    const primary = nets[0];
-    nets.forEach((net, i) =>
-      els.push({ data: { id: "net_" + i, label: net, kind: "net" } })
-    );
-    let anyWeb = false;
-    nodes.forEach((nd, i) => {
-      const role = nd.ssh ? "foothold" : nd.url ? "target" : "host";
-      if (nd.url) anyWeb = true;
-      const dead = nd.state && nd.state !== "running";
-      els.push({
-        data: {
-          id: "n_" + i, kind: role, dead: dead ? "1" : "0",
-          label: nd.key + (nd.ip ? "\n" + nd.ip : ""),
-        },
-      });
-      els.push({ data: { source: "net_0", target: "n_" + i } });
-    });
-    if (anyWeb && primary) {
-      els.push({ data: { id: "inet", label: "host", kind: "inet" } });
-      els.push({ data: { source: "inet", target: "net_0" } });
-    }
-    return els;
+    const seg = nets[0] || "arena-net";
+    return {
+      segments: [{ name: seg, cidr: null }],
+      nodes: nodes.map((nd) => ({
+        name: nd.key,
+        kind: nd.ssh ? "foothold" : nd.url ? "target" : "host",
+        stance: nd.ssh ? "attacker" : null,
+        entrypoint: !!nd.ssh,
+        ports: [],
+        segments: [seg],
+        dead: !!(nd.state && nd.state !== "running"),
+      })),
+      egress: o && o.egress === "open" ? "open" : "blocked",
+    };
   }
 
-  const CY_STYLE = [
-    { selector: "node", style: {
-        label: "data(label)", "text-wrap": "wrap", "text-valign": "bottom",
-        "text-margin-y": 7, "font-size": "10px", "font-family": "monospace",
-        color: C.text, "background-color": C.bg, "border-width": 2,
-        "border-color": C.border, width: 38, height: 38, shape: "round-rectangle",
-    }},
-    { selector: 'node[kind="net"]', style: {
-        shape: "ellipse", "background-color": "#0f1117", "border-color": C.accent,
-        color: C.accent, width: 30, height: 30, "font-size": "9px",
-    }},
-    { selector: 'node[kind="inet"]', style: {
-        shape: "diamond", "border-color": C.muted, color: C.muted, "background-color": "#0f1117",
-    }},
-    { selector: 'node[kind="foothold"]', style: { "border-color": C.danger, color: C.danger } },
-    { selector: 'node[kind="target"]', style: { "border-color": C.warn, color: C.warn } },
-    { selector: 'node[dead="1"]', style: { "border-color": C.muted, opacity: 0.5 } },
-    { selector: "edge", style: {
-        width: 1.5, "line-color": C.border, "curve-style": "bezier", "target-arrow-shape": "none",
-    }},
-  ];
-
   function renderTopology(o) {
-    const container = document.getElementById("topo");
-    if (!container || typeof cytoscape === "undefined") return;
-    const els = buildElements(o);
-    if (topoCy) {
-      topoCy.elements().remove();
-      topoCy.add(els);
-      topoCy.layout({ name: "cose", padding: 30, animate: false }).run();
-    } else {
-      topoCy = cytoscape({
-        container, elements: els, style: CY_STYLE,
-        layout: { name: "cose", padding: 30, animate: false, nodeRepulsion: 8000 },
-      });
-    }
+    renderSpecTopology("topo", outputsToTopology(o));
   }
 
   /* ---- arena detail page ---------------------------------------------- */
@@ -767,13 +727,293 @@
     return '<span class="badge badge--' + (m[t] || "idle") + '">' + escapeHtml((t || "?").replace(/_/g, " ")) + "</span>";
   }
 
+  /* ---- scenario topology PREVIEW (pre-deploy, from the spec) ---------- */
+  // The post-deploy #topo is built from provider outputs; this renders the
+  // authored shape (nodes + segments + agent stances) BEFORE deploy — used on
+  // the launch preview, the custom-builder live preview, the paste-to-import
+  // preview, and the scenarios browser. Packet-Tracer style: each segment is a
+  // network SWITCH, devices hang off their switch (laptop = attacker, server =
+  // target, desktop = host, cloud = internet), with a deterministic star layout
+  // (no force-directed overlap).
+  const specCy = {}; // containerId -> cytoscape instance
+
+  function postJson(path, body) {
+    return fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken() },
+      body: JSON.stringify(body || {}),
+    }).then((r) =>
+      r.json().then((d) => ({ status: r.status, data: d })).catch(() => ({ status: r.status, data: {} }))
+    );
+  }
+
+  // device icons — inline 2D line-art (Packet-Tracer flavour). Colour is baked
+  // per kind because a Cytoscape background-image can't be tinted by CSS.
+  function _icon(body, color) {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" ' +
+      'stroke="' + color + '" stroke-width="2.3" stroke-linecap="round" ' +
+      'stroke-linejoin="round">' + body + "</svg>";
+    return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+  }
+  const HOST_COLOR = "#9aa6bd";
+  const EDGE_COLOR = "#46506a";
+  const ICON = {
+    foothold: _icon('<rect x="9" y="11" width="30" height="19" rx="2"/><path d="M4 37h40l-3.5-7H7.5z"/><path d="M19.5 16.5l-3 3 3 3M28.5 16.5l3 3-3 3"/>', C.danger),
+    target: _icon('<rect x="11" y="6" width="26" height="14" rx="2"/><rect x="11" y="24" width="26" height="14" rx="2"/><path d="M16 13h2M16 31h2"/><circle cx="31" cy="13" r="1.5"/><circle cx="31" cy="31" r="1.5"/>', C.warn),
+    host: _icon('<rect x="7" y="9" width="34" height="22" rx="2"/><path d="M18.5 36h11M24 31v5M15 40h18"/>', HOST_COLOR),
+    switch: _icon('<rect x="4" y="17" width="40" height="13" rx="2"/><path d="M12 30v5M20 30v5M28 30v5M36 30v5"/><path d="M14 23.5h6M28 23.5h6M22 20.5l-4 3 4 3M26 20.5l4 3-4 3"/>', C.accent),
+    cloud: _icon('<path d="M14.5 35h18a7.5 7.5 0 0 0 .8-15A9.5 9.5 0 0 0 15 17a6.8 6.8 0 0 0-.5 18z"/>', C.muted),
+  };
+
+  const SPEC_STYLE = [
+    { selector: "node", style: {
+        label: "data(label)", "text-wrap": "wrap", "text-max-width": "108px",
+        "text-valign": "bottom", "text-halign": "center", "text-margin-y": 6,
+        "font-size": "10.5px", "font-family": "monospace", color: C.text,
+        // a faint pill behind every label so a line passing near it never makes
+        // the text unreadable (the labels read as chips, not "text on wires").
+        "text-background-color": C.bg, "text-background-opacity": 0.82,
+        "text-background-padding": "2px", "text-background-shape": "round-rectangle",
+        "background-color": "transparent", "background-opacity": 0,
+        "background-image": "data(icon)", "background-fit": "contain",
+        "background-clip": "none", "border-width": 0, shape: "rectangle",
+        width: 44, height: 44,
+    }},
+    // hubs sit at the TOP of their star with edges fanning DOWN — put their
+    // label ABOVE the icon so the (blue) segment/IP text never lies on the lines.
+    { selector: "node.switch", style: { width: 58, height: 30, color: C.accent,
+        "font-family": "inherit", "font-size": "10px",
+        "text-valign": "top", "text-margin-y": -7 } },
+    { selector: "node.cloud", style: { width: 58, height: 40, color: C.muted,
+        "font-size": "10px", "text-valign": "top", "text-margin-y": -6 } },
+    // a foothold that bridges segments sits above the switches (edges go down) →
+    // its label goes above too; leaf devices keep their label below.
+    { selector: "node.bridge", style: { "text-valign": "top", "text-margin-y": -7 } },
+    { selector: "node.foothold", style: { color: C.danger } },
+    { selector: "node.target", style: { color: C.warn } },
+    { selector: "node.host", style: { color: HOST_COLOR } },
+    { selector: "node.dead", style: { opacity: 0.4 } },
+    { selector: "edge", style: {
+        width: 2, "line-color": EDGE_COLOR, "curve-style": "straight",
+        "target-arrow-shape": "none",
+    }},
+    { selector: "edge.wan", style: { "line-style": "dashed", "line-color": C.muted, opacity: 0.5, width: 1.6 } },
+  ];
+
+  // geometry (graph units; Cytoscape fits + zooms to the container)
+  const ROW = 4, HOST_GAP = 128, SEG_GAP = 64;
+  const SWITCH_Y = 0, HOST_Y = 152, ROW_STEP = 116, BRIDGE_Y = -150, CLOUD_Y = -300;
+
+  function specModel(topo) {
+    let segments = (topo.segments || []).slice();
+    const segSet = new Set(segments.map((s) => s.name));
+    const nodes = (topo.nodes || []).map((n) => ({
+      name: n.name, kind: n.kind, entrypoint: n.entrypoint, stance: n.stance,
+      ports: n.ports || [], dead: !!n.dead,
+      segs: (n.segments || []).filter((s) => segSet.has(s)),
+    }));
+    if (!segments.length && nodes.length) { // no segments declared → one LAN
+      segments = [{ name: "lan", cidr: null }];
+      nodes.forEach((n) => { n.segs = ["lan"]; });
+    }
+    return { segments, nodes };
+  }
+
+  function specElements(topo) {
+    const { segments, nodes } = specModel(topo);
+    const bridge = new Set(nodes.filter((n) => n.segs.length >= 2).map((n) => n.name));
+    const leavesBySeg = {};
+    segments.forEach((s) => (leavesBySeg[s.name] = []));
+    nodes.forEach((n) => {
+      if (bridge.has(n.name)) return;
+      const seg = n.segs[0] || (segments[0] && segments[0].name);
+      if (seg && leavesBySeg[seg]) leavesBySeg[seg].push(n);
+    });
+
+    const pos = {}, switchX = {};
+    let cursorX = 0;
+    segments.forEach((s) => {
+      const leaves = leavesBySeg[s.name] || [];
+      const perRow = Math.min(Math.max(leaves.length, 1), ROW);
+      const cx = cursorX + ((perRow - 1) * HOST_GAP) / 2;
+      switchX[s.name] = cx;
+      pos["seg_" + s.name] = { x: cx, y: SWITCH_Y };
+      leaves.forEach((n, i) => {
+        const row = Math.floor(i / ROW);
+        const inRow = Math.min(leaves.length - row * ROW, ROW);
+        const x = cx - ((inRow - 1) * HOST_GAP) / 2 + (i % ROW) * HOST_GAP;
+        pos["node_" + n.name] = { x, y: HOST_Y + row * ROW_STEP };
+      });
+      cursorX += Math.max(perRow, 1) * HOST_GAP + SEG_GAP;
+    });
+
+    const bridges = nodes.filter((n) => bridge.has(n.name));
+    bridges.forEach((n, i) => {
+      const xs = n.segs.map((s) => switchX[s]).filter((x) => x != null);
+      const mx = xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+      pos["node_" + n.name] = { x: mx + (i - (bridges.length - 1) / 2) * HOST_GAP, y: BRIDGE_Y };
+    });
+
+    const sub = (n) =>
+      n.kind === "foothold" ? (n.stance || "attacker")
+      : (n.kind === "target" && n.ports.length ? ":" + n.ports.join(",") : "");
+
+    const els = [];
+    segments.forEach((s) => els.push({
+      group: "nodes", classes: "switch",
+      data: { id: "seg_" + s.name, label: s.name + (s.cidr ? "\n" + s.cidr : ""), icon: ICON.switch },
+      position: pos["seg_" + s.name], grabbable: false,
+    }));
+    nodes.forEach((n) => {
+      const s = sub(n);
+      els.push({
+        group: "nodes",
+        classes: "device " + n.kind + (bridge.has(n.name) ? " bridge" : "") + (n.dead ? " dead" : ""),
+        data: { id: "node_" + n.name, label: n.name + (s ? "\n" + s : ""), icon: ICON[n.kind] || ICON.host },
+        position: pos["node_" + n.name], grabbable: false,
+      });
+      (n.segs.length ? n.segs : [segments[0] && segments[0].name]).forEach((sg) => {
+        if (sg) els.push({ group: "edges", data: { source: "node_" + n.name, target: "seg_" + sg } });
+      });
+    });
+    if (topo.egress === "open" && segments.length) {
+      const allX = Object.values(switchX);
+      const midX = allX.reduce((a, b) => a + b, 0) / allX.length;
+      els.push({ group: "nodes", classes: "cloud", grabbable: false,
+        data: { id: "inet", label: "internet", icon: ICON.cloud }, position: { x: midX, y: CLOUD_Y } });
+      segments.forEach((s) =>
+        els.push({ group: "edges", classes: "wan", data: { source: "inet", target: "seg_" + s.name } }));
+    }
+    return els;
+  }
+
+  function renderSpecTopology(containerId, topo) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    if (typeof cytoscape === "undefined") {
+      container.innerHTML = '<div class="topo-empty">topology viewer unavailable</div>';
+      return;
+    }
+    if (specCy[containerId]) { specCy[containerId].destroy(); delete specCy[containerId]; }
+    if (!topo || !(topo.nodes || []).length) {
+      container.innerHTML = '<div class="topo-empty"><i class="fa-solid fa-diagram-project"></i> Nothing to preview yet</div>';
+      return;
+    }
+    container.innerHTML = "";
+    specCy[containerId] = cytoscape({
+      container, elements: specElements(topo), style: SPEC_STYLE,
+      layout: { name: "preset", padding: 36, fit: true },
+      autoungrabify: true, boxSelectionEnabled: false,
+      minZoom: 0.3, maxZoom: 2.2, wheelSensitivity: 0.25,
+    });
+  }
+
+  /* ---- launch page: scenario / custom / import previews --------------- */
+  function initScenarioPreview() {
+    const selected = (el) => (el ? Array.from(el.selectedOptions).map((o) => o.value) : []);
+
+    // predefined scenario → topology of the registered scenario
+    const sel = document.querySelector('select[name="scenario"]');
+    const loadScenario = () => {
+      const id = sel && sel.value;
+      if (!id) { renderSpecTopology("scenario-preview", null); return; }
+      fetch("/api/scenarios/" + encodeURIComponent(id) + "/topology")
+        .then((r) => r.json())
+        .then((d) => renderSpecTopology("scenario-preview", d && d.topology))
+        .catch(() => renderSpecTopology("scenario-preview", null));
+    };
+    if (sel) { sel.addEventListener("change", loadScenario); loadScenario(); }
+
+    // custom builder → live preview from catalog picks
+    const atk = document.querySelector('select[name="attackers"]');
+    const vic = document.querySelector('select[name="victims"]');
+    const cMsg = document.getElementById("custom-msg");
+    const loadCustom = () => {
+      const attackers = selected(atk), victims = selected(vic);
+      if (!attackers.length || !victims.length) {
+        renderSpecTopology("custom-preview", null);
+        if (cMsg) cMsg.textContent = "Pick an attacker and at least one target to preview.";
+        return;
+      }
+      postJson("/api/scenarios/preview", { picks: { attackers, victims } }).then(({ data }) => {
+        if (data.valid) { renderSpecTopology("custom-preview", data.topology); if (cMsg) cMsg.textContent = ""; }
+        else { renderSpecTopology("custom-preview", null); if (cMsg) cMsg.textContent = (data.errors || ["invalid selection"])[0]; }
+      });
+    };
+    if (atk) atk.addEventListener("change", loadCustom);
+    if (vic) vic.addEventListener("change", loadCustom);
+
+    // import: paste a v3 spec → validate/preview → persist
+    const ta = document.getElementById("import-spec");
+    const idIn = document.getElementById("import-id");
+    const iMsg = document.getElementById("import-msg");
+    const pv = document.getElementById("import-preview-btn");
+    const imp = document.getElementById("import-do-btn");
+    if (pv) pv.addEventListener("click", () => {
+      const spec = ta ? ta.value.trim() : "";
+      if (!spec) { if (iMsg) { iMsg.className = "import-msg err"; iMsg.textContent = "Paste a scenario spec (YAML or JSON) first."; } return; }
+      postJson("/api/scenarios/preview", { spec }).then(({ data }) => {
+        if (data.valid) {
+          renderSpecTopology("import-preview", data.topology);
+          const w = (data.warnings || []).length ? "  ⚠ " + data.warnings.join("; ") : "";
+          if (iMsg) { iMsg.className = "import-msg ok"; iMsg.textContent = "Valid ✓ " + (data.summary ? data.summary.nodes + " node(s)" : "") + w; }
+          if (idIn && !idIn.value && data.suggested_id) idIn.value = data.suggested_id;
+        } else {
+          renderSpecTopology("import-preview", null);
+          if (iMsg) { iMsg.className = "import-msg err"; iMsg.textContent = "Invalid: " + (data.errors || ["spec rejected"]).join("; "); }
+        }
+      });
+    });
+    if (imp) imp.addEventListener("click", () => {
+      const spec = ta ? ta.value.trim() : "";
+      if (!spec) return;
+      const id = idIn ? idIn.value.trim() : "";
+      postJson("/api/scenarios/import", { spec, id: id || null }).then(({ status, data }) => {
+        if (status === 200) { window.location.href = "/scenarios"; }
+        else if (iMsg) { iMsg.className = "import-msg err"; iMsg.textContent = "Import failed: " + (data.error || ("HTTP " + status)); }
+      });
+    });
+  }
+
+  /* ---- scenarios page: click a row to preview its topology ------------ */
+  function initScenariosBrowser() {
+    const rows = Array.prototype.slice.call(document.querySelectorAll("[data-scenario-id]"));
+    const show = (id, name) => {
+      const title = document.getElementById("scenario-topo-title");
+      if (title) title.textContent = name || id;
+      rows.forEach((r) => r.classList.toggle("is-selected", r.dataset.scenarioId === id));
+      fetch("/api/scenarios/" + encodeURIComponent(id) + "/topology")
+        .then((r) => r.json())
+        .then((d) => renderSpecTopology("scenario-topo", d && d.topology))
+        .catch(() => renderSpecTopology("scenario-topo", null));
+    };
+    rows.forEach((r) => r.addEventListener("click", (e) => {
+      if (e.target.closest("[data-del]")) return;
+      show(r.dataset.scenarioId, r.dataset.scenarioName);
+    }));
+    document.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = b.dataset.del;
+      if (!window.confirm("Delete imported scenario '" + id + "'?")) return;
+      fetch("/api/scenarios/" + encodeURIComponent(id), {
+        method: "DELETE", headers: { "X-CSRFToken": csrfToken() },
+      }).then((r) => {
+        if (r.ok) window.location.reload();
+        else r.json().then((d) => window.alert(d.error || "delete failed")).catch(() => {});
+      });
+    }));
+    if (rows.length) show(rows[0].dataset.scenarioId, rows[0].dataset.scenarioName);
+  }
+
   window.CyberGuard = {
-    initArena, renderTopology,
+    initArena, renderTopology, renderSpecTopology,
+    initScenarioPreview, initScenariosBrowser,
     openModelModal, closeModelModal, openModelConfig, saveModel, removeModel, testModel,
     toggleCopilot, sendCopilot,
     initConfigurator, cfgStart, cfgRunStep, cfgDecide, cfgFinish,
     initAgents,
-    fit: function () { if (topoCy) topoCy.fit(null, 30); },
+    fit: function () { const cy = specCy["topo"]; if (cy) cy.fit(null, 36); },
   };
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { closeModelModal(); }
@@ -786,5 +1026,9 @@
     if (cin) cin.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendCopilot(); }
     });
+    // Per-page wiring (topology previews live on launch + scenarios).
+    const page = document.body.dataset.page;
+    if (page === "launch") initScenarioPreview();
+    if (page === "scenarios") initScenariosBrowser();
   });
 })();

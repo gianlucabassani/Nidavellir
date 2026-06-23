@@ -369,3 +369,71 @@ def test_setup_decision_proxy_validates_decision(client):
     token = _csrf_token(client, "/")
     bad = client.post("/api/setup/a/proposals/x/sideways", headers={"X-CSRFToken": token})
     assert bad.status_code == 400
+
+
+# --- scenario authoring & import proxies (P1-7) + topology preview (P7-9) ----
+
+
+def test_scenario_preview_proxy_requires_csrf(client):
+    _login(client)
+    assert client.post("/api/scenarios/preview", json={"spec": "x"}).status_code == 400
+
+
+def test_scenario_import_proxy_requires_csrf(client):
+    _login(client)
+    assert client.post("/api/scenarios/import", json={"spec": "x"}).status_code == 400
+
+
+def test_scenario_delete_proxy_requires_csrf(client):
+    _login(client)
+    assert client.delete("/api/scenarios/some-id").status_code == 400
+
+
+def test_scenario_preview_proxy_relays_unreachable_backend(client):
+    _login(client)
+    token = _csrf_token(client, "/")
+    resp = client.post("/api/scenarios/preview", json={"spec": "x"},
+                       headers={"X-CSRFToken": token})
+    assert resp.status_code == 502 and "error" in resp.get_json()
+
+
+def test_scenario_topology_proxy_offline_is_404(client):
+    _login(client)
+    resp = client.get("/api/scenarios/whatever/topology")
+    # backend is a closed port → _api_get fails → proxy returns 404 + null topology
+    assert resp.status_code == 404
+    assert resp.get_json()["topology"] is None
+
+
+def test_build_custom_posts_multiple_attackers(client, monkeypatch):
+    """The custom-build form relays an `attackers` list to the orchestrator."""
+    import app as webui_module
+
+    captured = {}
+
+    class _FakeResp:
+        status_code = 200
+
+        def json(self):
+            return {}
+
+    def fake_post(url, json=None, **kwargs):
+        captured["url"] = url
+        captured["json"] = json
+        return _FakeResp()
+
+    from werkzeug.datastructures import MultiDict
+
+    monkeypatch.setattr(webui_module.requests, "post", fake_post)
+    _login(client)
+    token = _csrf_token(client, "/")
+    resp = client.post("/build-custom", data=MultiDict([
+        ("instance_id", "multi"),
+        ("attackers", "kali-cli"),
+        ("attackers", "ubuntu"),
+        ("victims", "dvwa"),
+        ("csrf_token", token),
+    ]))
+    assert resp.status_code == 302
+    assert captured["url"].endswith("/arenas/custom")
+    assert captured["json"]["attackers"] == ["kali-cli", "ubuntu"]

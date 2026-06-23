@@ -164,6 +164,45 @@ the operator's key**, exercising a gated capability CyberGuard provides; CyberGu
 ships the provisioner, sandbox, monitor, and consent gate, not the AI. Decision
 record: **ADR-0007**.
 
+### Classic-range authoring & import (operator track)
+
+The pivot put most of the build behind the **MCP gateway** (Phase 2). The
+"classic cyber-range" surface — *authoring, importing and visualizing the
+target topology itself* — lagged: the schema/validator/compiler are real, but
+the front-half (getting a topology **in**, seeing it, and persisting it) is thin.
+This is an operator-facing track that **composes the existing engine**, sequenced
+across the phases below in four steps that build on each other:
+
+- **A — Authoring & import seam (Phase 1).** A scenario today is discovered only
+  by dropping a YAML file on the orchestrator's disk; custom/SUT arenas compile a
+  spec but **deploy it inline and never persist a reusable pack**. Add a
+  first-class **import/registry write** path: `POST /scenarios` validates a v3
+  spec (JSON/YAML) via the existing `ScenarioSpec` and saves it as a pack under a
+  writable, mounted dir (`DATA_DIR/scenarios/`) alongside the built-in templates;
+  `DELETE /scenarios/{id}` removes imported packs (built-ins are read-only). Same
+  step generalizes the **custom builder to multiple attacker machines** (the
+  schema already allows N entrypoints + N attacker bindings — only the builder/UI
+  hard-code one). This seam is also the landing zone for steps C and D. → **P1-7**.
+- **B — Topology visualization (Phase 7, pulled forward).** Render a scenario's
+  topology **before** it is deployed (from the spec: nodes + segments + agent
+  stances), not only post-deploy from provider outputs. A modern, minimal
+  segment-grouped graph, reused for the launch preview, the import preview, the
+  scenarios page, and (restyled) the live arena. → **P7-9**.
+- **C — Community import → v3 pack (Phase 1).** A deterministic converter from
+  public sources that lands a ready-to-run pack in the registry (step A). Targets
+  **both** **Vulhub** (container CVE environments — native to docker-local) and
+  **VulnHub** (full VM disks — VM providers; modernizes the orphaned legacy
+  importer). Complementary to SUT provisioning, not replaced by it. → **P1-5**.
+- **D — Zero-to-prompt generation (Phase 3).** The LLM (BYO key) emits a v3 spec →
+  validate → **preview (B)** → review-gate → **import (A)** → compile (existing).
+  The capstone "generate JSON → parsed into docker/Terraform targets"; it depends
+  on A + B existing first. → **P3-1/P3-2**.
+
+> Note: `docs/tmp_basic_codebase_review.md` is a **stale** audit (its findings were
+> addressed June 2026 — see §2.1); archive it. One finding remains open *by design*:
+> custom/SUT arenas carry no vuln manifest, so findings don't score (discovery-mode;
+> tracked to **P4-7**).
+
 ### 🟠 Phase 0 — Repositioning & hygiene · **S** *(complete)*
 
 **Goal:** the whole project reads as the enterprise arena; the school/ITS
