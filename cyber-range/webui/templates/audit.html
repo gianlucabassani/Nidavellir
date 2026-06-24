@@ -1,44 +1,54 @@
 {% extends "base.html" %}
 {% import "_macros.html" as ui %}
-{% block title %}Audit{% endblock %}
-{% block crumb %}<b>Audit</b>{% endblock %}
+{% block title %}Logs{% endblock %}
+{% block crumb %}Logs{% endblock %}
 
 {% block content %}
 <div class="page-head">
   <div>
-    <h1>Audit trail</h1>
-    <div class="sub">Append-only event stream across every arena — deploys, lifecycle changes, and agent commands.</div>
+    <div class="eyebrow">Audit trail</div>
+    <h1>Activity logs</h1>
+    <div class="sub">Append-only and attributed — split by who acted: agents, humans, or the system.</div>
   </div>
-  <div class="actions">
-    <span class="badge badge--idle">{{ events|length }} event{{ 's' if events|length != 1 }}</span>
+  <div class="head-actions"><span class="badge badge--idle">{{ events|length }} event{{ 's' if events|length != 1 }}</span></div>
+</div>
+
+<div style="display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap">
+  <div class="seg" id="logs-seg" style="padding:3px">
+    <button class="on" data-f="all">All sources</button>
+    <button data-f="agent"><span class="dot" style="background:var(--attacker)"></span> Agents</button>
+    <button data-f="human"><span class="dot" style="background:var(--defender)"></span> Human</button>
+    <button data-f="system"><span class="dot" style="background:var(--muted)"></span> System</button>
+  </div>
+  <div style="position:relative; min-width:200px; flex:1; max-width:300px">
+    <i class="fa-solid fa-magnifying-glass" style="position:absolute; left:12px; top:11px; color:var(--faint); font-size:13px"></i>
+    <input class="input" id="logs-search" style="padding-left:34px" placeholder="Filter by arena or text…">
   </div>
 </div>
 
 <div class="card pad-0">
   {% if events %}
-  <table class="table">
-    <thead><tr><th>Time</th><th>Type</th><th>Arena</th><th>Actor</th><th>Details</th></tr></thead>
-    <tbody>
-      {% for e in events %}
-      <tr>
-        <td class="mono faint" style="white-space:nowrap">{{ e.ts }}</td>
-        <td>{{ ui.event_badge(e.type) }}</td>
-        <td class="mono faint">{{ e.lab_id[:8] }}</td>
-        <td>{{ e.actor }}</td>
-        <td>{{ ui.event_detail(e) }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <div class="empty"><div class="ico"><i class="fa-solid fa-clipboard-list"></i></div>
-    No events yet. Launch an arena to start the trail.
+  <div class="rows" id="logs-feed">
+    {% for e in events %}
+    <div class="log-row" data-src="{{ e.source }}"
+         data-search="{{ ((e.lab_id or '') ~ ' ' ~ (e.type or '') ~ ' ' ~ (e.actor or '')) | lower }}">
+      <span class="ts">{{ (e.ts or '')[11:19] or (e.ts or '') }}</span>
+      <span class="src src-{{ e.source }}">{{ e.source }}</span>
+      <span class="msg">{{ ui.event_badge(e.type) }} {{ ui.event_detail(e) }}</span>
+      <span class="arena">{{ (e.lab_id or '')[:8] }}</span>
+    </div>
+    {% endfor %}
   </div>
+  <div class="empty" id="logs-empty" hidden style="padding:30px">No events match this filter.</div>
+  {% else %}
+  <div class="empty"><i class="fa-solid fa-clock-rotate-left"></i>No events yet. Launch an arena to start the trail.</div>
   {% endif %}
 </div>
 
 <p class="faint" style="margin-top:14px;font-size:12.5px">
   <i class="fa-solid fa-circle-info"></i>
-  Live streaming (SSE) and filter/export are planned (Phase 7 / Phase 4). This view refreshes on load.
+  Live streaming (SSE) is planned (Phase 7). This view refreshes on load; filters apply client-side.
 </p>
 {% endblock %}
+
+{% block scripts %}<script>CyberGuard.initLogs();</script>{% endblock %}

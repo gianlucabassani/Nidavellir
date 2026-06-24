@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Profile{% endblock %}
+{% block crumb %}Profile{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Account</div>
+    <h1>Profile</h1>
+    <div class="sub">Your operator identity and active sessions.</div>
+  </div>
+</div>
+
+<div class="grid" style="grid-template-columns:300px 1fr; gap:16px; align-items:start">
+  <div class="card card-pad" style="text-align:center">
+    <span class="avatar" style="width:72px; height:72px; border-radius:18px; font-size:30px; margin:6px auto 14px; display:grid">{{ username[0] | upper }}</span>
+    <h3 style="font-size:18px">{{ username }}</h3>
+    <span class="badge badge--accent" style="margin-top:14px">operator</span>
+    <form method="POST" action="{{ url_for('logout') }}" style="margin-top:18px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-danger" style="width:100%; justify-content:center"><i class="fa-solid fa-right-from-bracket"></i> Sign out</button>
+    </form>
+  </div>
+
+  <div class="grid" style="grid-template-columns:1fr; gap:16px">
+    <div class="card pad-0">
+      <div class="card-head"><span class="label">Details</span></div>
+      <div class="set-row"><div class="info"><div class="t">Display name</div><div class="d">{{ username }}</div></div></div>
+      <div class="set-row"><div class="info"><div class="t">Role</div><div class="d">operator — author, launch, and observe engagements</div></div></div>
+      <div class="set-row"><div class="info"><div class="t">Authentication</div><div class="d">Session cookie (httpOnly). SSO sign-in is planned for Phase 5.</div></div>
+        <span class="badge badge--idle">session</span></div>
+    </div>
+    <div class="card pad-0">
+      <div class="card-head"><span class="label">Active sessions</span></div>
+      <div class="set-row"><span class="dot dot--active"></span>
+        <div class="info"><div class="t">This browser session</div><div class="d mono">console · signed in</div></div>
+        <span class="badge badge--ok">current</span></div>
+      <div class="set-row"><div class="info"><div class="t">MCP gateway (agents)</div>
+        <div class="d">Agent sessions are API-key based and bound per arena — see <a href="{{ url_for('agents') }}" style="color:var(--accent)">Agents</a>.</div></div></div>
+    </div>
+  </div>
+</div>
+{% endblock %}

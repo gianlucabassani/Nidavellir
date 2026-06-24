@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf-token" content="{{ csrf_token() }}">
-  <title>CyberGuard · {% block title %}Console{% endblock %}</title>
+  <title>Nidavellir · {% block title %}Console{% endblock %}</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
   {% block head %}{% endblock %}
@@ -15,18 +15,18 @@
   <!-- sidebar -->
   <aside class="sidebar" id="sidebar">
     <a class="brand" href="{{ url_for('overview') }}">
-      <span class="mark"><i class="fa-solid fa-shield-halved"></i></span>
-      Cyber<b>Guard</b>
+      <span class="mark"><i class="fa-solid fa-hammer"></i></span>
+      <span class="wordmark">Nidavellir<small>arena forge</small></span>
     </a>
 
     <nav class="nav">
       {% set nav = [
-        ('overview',  'overview',  'fa-gauge-high',     'Overview'),
+        ('overview',  'overview',  'fa-gauge-high',     'Dashboard'),
         ('arenas',    'arenas',    'fa-layer-group',    'Arenas'),
         ('launch',    'launch',    'fa-rocket',         'Launch'),
-        ('scenarios', 'scenarios', 'fa-cubes',          'Scenarios'),
-        ('agents',    'agents',    'fa-robot',          'Agents'),
-        ('audit',     'audit',     'fa-clipboard-list', 'Audit')
+        ('scenarios', 'scenarios', 'fa-cubes',          'Inventory'),
+        ('audit',     'audit',     'fa-clock-rotate-left', 'Logs'),
+        ('agents',    'agents',    'fa-robot',          'Agents')
       ] %}
       {% for key, ep, icon, label in nav %}
       <a class="nav-item {{ 'active' if active == key }}" href="{{ url_for(ep) }}">
@@ -34,14 +34,14 @@
       </a>
       {% endfor %}
 
-      <div class="nav-section">Planned</div>
-      {% set planned = [
-        ('settings', 'settings', 'fa-gear',  'Settings')
+      <div class="nav-section">Account</div>
+      {% set account = [
+        ('settings', 'settings', 'fa-gear',  'Settings'),
+        ('profile',  'profile',  'fa-user',  'Profile')
       ] %}
-      {% for key, ep, icon, label in planned %}
+      {% for key, ep, icon, label in account %}
       <a class="nav-item {{ 'active' if active == key }}" href="{{ url_for(ep) }}">
         <span class="ico"><i class="fa-solid {{ icon }}"></i></span>{{ label }}
-        <span class="soon">soon</span>
       </a>
       {% endfor %}
     </nav>
@@ -49,7 +49,7 @@
     <div class="sidebar-foot">
       <div class="userbox">
         <span class="avatar">{{ (session.get('username') or 'op')[0] | upper }}</span>
-        <div>
+        <div class="grow">
           <div class="who">{{ session.get('username', 'operator') }}</div>
           <div class="role">operator</div>
         </div>
@@ -67,12 +67,12 @@
       <button class="btn btn-ghost btn-sm menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')">
         <i class="fa-solid fa-bars"></i>
       </button>
-      <div class="crumb">{% block crumb %}{% endblock %}</div>
+      <div class="crumb"><span class="sep">Nidavellir</span> <span class="sep">/</span> <b>{% block crumb %}{% endblock %}</b></div>
       <div class="spacer"></div>
-      <button class="iconbtn" id="copilot-toggle" type="button"
+      <button class="iconbtn hide-sm" id="copilot-toggle" type="button"
               title="Co-pilot — chat with your connected model about this arena"
               onclick="CyberGuard.toggleCopilot()">
-        <i class="fa-solid fa-comments"></i><span class="iconbtn__label">Co-pilot</span>
+        <i class="fa-solid fa-comments"></i><span>Co-pilot</span>
       </button>
       <div class="model-chip-wrap" id="model-chip-wrap">
         <button class="model-chip" id="model-chip" type="button"
@@ -149,7 +149,7 @@
     <dl class="kv" id="model-modal-kv"></dl>
     <p class="modal__foot">
       Your key is <strong>encrypted at rest</strong> and never returned in plaintext —
-      CyberGuard custodies it and provides the connection; the model stays yours
+      Nidavellir custodies it and provides the connection; the model stays yours
       (bring-your-own). The connection waits in <strong>standby</strong> until a
       scenario generator or an agent-mode arena needs it.
     </p>

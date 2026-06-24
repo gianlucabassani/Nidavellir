@@ -1,78 +1,113 @@
 {% extends "base.html" %}
 {% import "_macros.html" as ui %}
-{% block title %}Overview{% endblock %}
-{% block crumb %}<b>Overview</b>{% endblock %}
+{% block title %}Dashboard{% endblock %}
+{% block crumb %}Dashboard{% endblock %}
 
 {% block content %}
 <div class="page-head">
   <div>
-    <h1>Overview</h1>
-    <div class="sub">Your cyber arena fleet at a glance.</div>
+    <div class="eyebrow">Command board</div>
+    <h1>Operations overview</h1>
+    <div class="sub">Live arenas, scenario library, and host capacity — at a glance.</div>
   </div>
-  <div class="actions">
+  <div class="head-actions">
+    <a href="{{ url_for('scenarios') }}" class="btn"><i class="fa-solid fa-cubes"></i> Inventory</a>
     <a href="{{ url_for('launch') }}" class="btn btn-primary"><i class="fa-solid fa-rocket"></i> Launch arena</a>
   </div>
 </div>
 
 {% if not backend_ok %}
-<div class="notice" style="margin-bottom:18px">
-  <i class="fa-solid fa-triangle-exclamation ico"></i>
-  <span>The orchestrator API is unreachable — fleet data may be incomplete.</span>
+<div class="notice flash--warning" style="margin-bottom:18px">
+  <i class="fa-solid fa-triangle-exclamation ico" style="color:var(--warn)"></i>
+  <span>The orchestrator API is unreachable — counts and arenas may be stale. Check the <span class="mono">orchestrator</span> service.</span>
 </div>
 {% endif %}
 
-<div class="grid cols-4" style="margin-bottom:18px">
-  <div class="stat"><div class="n accent">{{ stats.total }}</div><div class="l">Total arenas</div></div>
-  <div class="stat"><div class="n ok">{{ stats.active }}</div><div class="l">Active</div></div>
-  <div class="stat"><div class="n warn">{{ stats.transient }}</div><div class="l">In progress</div></div>
-  <div class="stat"><div class="n danger">{{ stats.failed }}</div><div class="l">Failed</div></div>
+<!-- KPI strip -->
+<div class="grid cols-4" style="margin-bottom:16px">
+  <div class="card kpi"><span class="glyph"><i class="fa-solid fa-bolt"></i></span>
+    <div class="n accent">{{ stats.active }}</div>
+    <div class="l"><i class="fa-solid fa-bolt"></i> Active arenas</div>
+    <div class="delta">{{ stats.total }} total</div></div>
+  <div class="card kpi"><span class="glyph"><i class="fa-solid fa-circle-notch"></i></span>
+    <div class="n {{ 'warn' if stats.transient }}">{{ stats.transient }}</div>
+    <div class="l"><i class="fa-solid fa-circle-notch"></i> In progress</div>
+    <div class="delta">deploying / destroying</div></div>
+  <div class="card kpi"><span class="glyph"><i class="fa-solid fa-cubes"></i></span>
+    <div class="n">{{ stats.scenarios }}</div>
+    <div class="l"><i class="fa-solid fa-cubes"></i> Scenario packs</div>
+    <div class="delta">{{ stats.images }} catalog images</div></div>
+  <div class="card kpi"><span class="glyph"><i class="fa-solid fa-triangle-exclamation"></i></span>
+    <div class="n {{ 'danger' if stats.failed }}">{{ stats.failed }}</div>
+    <div class="l"><i class="fa-solid fa-triangle-exclamation"></i> Failed</div>
+    <div class="delta">needs attention</div></div>
 </div>
 
-<div class="grid cols-2">
-  <div class="card pad-0">
-    <div class="card-head"><h3>Recent arenas</h3><div class="spacer"></div>
-      <a href="{{ url_for('arenas') }}" class="muted" style="font-size:12.5px">View all <i class="fa-solid fa-arrow-right"></i></a>
+<div class="grid" style="grid-template-columns:1.1fr 1fr; margin-bottom:16px">
+  <!-- system usage -->
+  <div class="card">
+    <div class="card-head"><span class="label">Host capacity</span><span class="more">docker-local</span></div>
+    <div class="card-pad" style="padding-top:6px">
+      <div class="gauge"><div class="top"><span class="name"><i class="fa-solid fa-microchip"></i> CPU load</span><span class="val" id="sys-cpu-val">—</span></div><div class="bar"><span id="sys-cpu-bar" style="width:0"></span></div></div>
+      <div class="gauge"><div class="top"><span class="name"><i class="fa-solid fa-memory"></i> Memory</span><span class="val" id="sys-mem-val">—</span></div><div class="bar def"><span id="sys-mem-bar" style="width:0"></span></div></div>
+      <div class="gauge"><div class="top"><span class="name"><i class="fa-solid fa-hard-drive"></i> Disk</span><span class="val" id="sys-disk-val">—</span></div><div class="bar ok"><span id="sys-disk-bar" style="width:0"></span></div></div>
+      <div class="sys-foot">
+        <div class="m"><div class="v" id="sys-containers">—</div><div class="k">containers</div></div>
+        <div class="m"><div class="v" id="sys-nets">—</div><div class="k">arena nets</div></div>
+        <div class="m"><div class="v" id="sys-arenas">{{ stats.active }}</div><div class="k">active</div></div>
+        <div class="m"><div class="v" id="sys-uptime">—</div><div class="k">uptime</div></div>
+      </div>
     </div>
+  </div>
+
+  <!-- recent arenas -->
+  <div class="card">
+    <div class="card-head"><span class="label">Active &amp; recent arenas</span><a class="more" href="{{ url_for('arenas') }}">View all</a></div>
     {% if recent %}
     <div class="rows">
-      {% for id, info in recent %}
-      <div class="row-item">
-        {{ ui.status_dot(info.status) }}
+      {% for id, v in recent %}
+      <div class="row">
+        {{ ui.status_dot(v.status) }}
         <div class="grow">
-          <div class="title">{{ info.user_id }}</div>
-          <div class="meta">{{ info.scenario }}</div>
+          {% if v.status == 'active' %}<a class="title" href="{{ url_for('arena_detail', instance_id=id) }}">{{ v.user_id or id }}</a>
+          {% else %}<div class="title">{{ v.user_id or id }}</div>{% endif %}
+          <div class="meta">{{ v.scenario or '—' }}</div>
         </div>
-        {{ ui.status_badge(info.status) }}
-        {% if info.status == 'active' %}
-        <a href="{{ url_for('arena_detail', instance_id=id) }}" class="btn btn-sm btn-ghost"><i class="fa-solid fa-arrow-right"></i></a>
-        {% endif %}
+        {{ ui.status_badge(v.status) }}
       </div>
       {% endfor %}
     </div>
     {% else %}
-    <div class="empty"><div class="ico"><i class="fa-solid fa-ghost"></i></div>No arenas yet. Launch one to get started.</div>
+    <div class="empty"><i class="fa-solid fa-layer-group"></i>No arenas yet. <a href="{{ url_for('launch') }}" style="color:var(--accent)">Launch one</a>.</div>
     {% endif %}
   </div>
+</div>
 
-  <div class="stack">
-    <div class="card">
-      <h3 style="margin-bottom:6px">Quick start</h3>
-      <p class="muted" style="margin-top:0;font-size:13px">Spin up a container arena in seconds — no cloud account needed.</p>
-      <div class="flexrow" style="margin-top:14px">
-        <a href="{{ url_for('launch') }}" class="btn btn-primary"><i class="fa-solid fa-screwdriver-wrench"></i> Build a custom lab</a>
-        <a href="{{ url_for('scenarios') }}" class="btn btn-ghost"><i class="fa-solid fa-cubes"></i> Browse scenarios</a>
-      </div>
-    </div>
-    <div class="card">
-      <h3 style="margin-bottom:12px">Catalog</h3>
-      <div class="flexrow" style="justify-content:space-between">
-        <span class="muted">Ready-to-deploy scenarios</span><b>{{ stats.scenarios }}</b>
-      </div>
-      <div class="divider"></div>
-      <div class="flexrow" style="justify-content:space-between">
-        <span class="muted">Curated images</span><b>{{ stats.images }}</b>
-      </div>
+<!-- activity feed -->
+<div class="card pad-0">
+  <div class="card-head"><span class="label">Live activity</span>
+    <div class="seg" id="dash-seg" style="margin-left:auto; padding:3px">
+      <button class="on" data-f="all">All</button>
+      <button data-f="agent">Agents</button>
+      <button data-f="human">Human</button>
+      <button data-f="system">System</button>
     </div>
   </div>
+  {% if events %}
+  <div class="rows" id="dash-feed">
+    {% for e in events %}
+    <div class="log-row" data-src="{{ e.source }}">
+      <span class="ts">{{ (e.ts or '')[11:19] }}</span>
+      <span class="src src-{{ e.source }}">{{ e.source }}</span>
+      <span class="msg">{{ ui.event_badge(e.type) }} {{ ui.event_detail(e) }}</span>
+      <span class="arena">{{ (e.lab_id or '')[:8] }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty" style="padding:30px">No activity recorded yet.</div>
+  {% endif %}
 </div>
 {% endblock %}
+
+{% block scripts %}<script>CyberGuard.initDashboard();</script>{% endblock %}

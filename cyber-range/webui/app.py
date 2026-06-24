@@ -242,6 +242,103 @@ def _score(instance_id):
     return data
 
 
+# Which actor a log line belongs to — the Logs page and the Dashboard feed group
+# events into agents (the AI under test), human (operator actions), and system
+# (lifecycle/automation). Computed server-side so the templates/JS stay dumb.
+_AGENT_SRC = ("agent_session", "agent_exec", "setup_step", "setup_proposal", "finding")
+_HUMAN_SRC = ("created", "record_deleted", "setup_proposal_decision")
+
+
+def _event_source(e):
+    t = e.get("type")
+    if t in _AGENT_SRC:
+        return "agent"
+    if t in _HUMAN_SRC:
+        return "human"
+    return "system"
+
+
+def _annotate_source(events):
+    for e in events:
+        e["source"] = _event_source(e)
+    return events
+
+
+def _read_first(path):
+    try:
+        with open(path) as fh:
+            return fh.read()
+    except OSError:
+        return ""
+
+
+def _host_metrics():
+    """Best-effort host capacity from /proc (no extra dependency). Returns
+    percentages (0-100) and uptime; any unreadable metric is None so the panel
+    degrades gracefully off-Linux."""
+    cpu = mem = disk = uptime = None
+    try:
+        load1 = float(_read_first("/proc/loadavg").split()[0])
+        ncpu = os.cpu_count() or 1
+        cpu = min(100, round(load1 / ncpu * 100))
+    except (ValueError, IndexError):
+        pass
+    meminfo = {}
+    for line in _read_first("/proc/meminfo").splitlines():
+        parts = line.split(":")
+        if len(parts) == 2:
+            meminfo[parts[0]] = parts[1].strip()
+    try:
+        total_kb = int(meminfo.get("MemTotal", "0").split()[0])
+        avail_kb = int(meminfo.get("MemAvailable", "0").split()[0])
+        if total_kb:
+            mem = round((total_kb - avail_kb) / total_kb * 100)
+            mem_used_gb = round((total_kb - avail_kb) / 1048576, 1)
+            mem_total_gb = round(total_kb / 1048576, 1)
+    except (ValueError, IndexError):
+        mem_used_gb = mem_total_gb = None
+    try:
+        st = os.statvfs("/")
+        if st.f_blocks:
+            disk = round((st.f_blocks - st.f_bfree) / st.f_blocks * 100)
+    except OSError:
+        pass
+    try:
+        secs = int(float(_read_first("/proc/uptime").split()[0]))
+        d, rem = divmod(secs, 86400)
+        h = rem // 3600
+        uptime = f"{d}d {h}h" if d else f"{h}h"
+    except (ValueError, IndexError):
+        pass
+    return {
+        "cpu": cpu, "mem": mem, "disk": disk, "uptime": uptime,
+        "mem_used_gb": mem_used_gb, "mem_total_gb": mem_total_gb,
+    }
+
+
+def _system_usage():
+    """Host capacity + arena footprint for the Dashboard gauges. Container and
+    network counts are aggregated from the live deployments' provider outputs
+    (the webui has no Docker socket); host CPU/mem/disk come from /proc."""
+    deployments, ok = _deployments()
+    active = [v for v in deployments.values()
+              if v.get("status") not in ("destroyed", "failed", "error_destroying")]
+    containers = nets = 0
+    for v in active:
+        o = v.get("outputs") or {}
+        containers += sum(1 for k in o if re.match(r"^node_(.+)_name$", k))
+        labnets = o.get("lab_networks") or ([o["lab_network"]] if o.get("lab_network") else [])
+        nets += len(labnets) if isinstance(labnets, list) else 0
+    m = _host_metrics()
+    m.update({
+        "ok": ok,
+        "containers": containers,
+        "networks": nets,
+        "active_arenas": len(active),
+    })
+    return m
+
+
 def _default_infra():
     """Infra class ('container'|'vm'|'any') of the orchestrator's default provider
     — lets the UI flag scenarios the default backend can't run."""
@@ -331,7 +428,8 @@ def overview():
     recent = (current + archived)[:6]
 
     return render_template("overview.html", active="overview", stats=stats,
-                           recent=recent, backend_ok=ok)
+                           recent=recent, backend_ok=ok,
+                           events=_annotate_source(_events(limit=12)))
 
 
 @app.route("/arenas")
@@ -381,23 +479,6 @@ def arena_detail(instance_id):
     )
 
 
-# --- planned (TODO) sections -------------------------------------------------
-_STUBS = {
-    "settings": {
-        "feature": "Settings", "icon": "fa-gear",
-        "summary": "Operator profile, API keys and console preferences.",
-        "blurb": "Manage your operator identity, issue and revoke API keys for agents "
-                 "and operators, and set console defaults.",
-        "todo": [
-            {"title": "Profile", "note": "display name, password"},
-            {"title": "API keys", "note": "issue / revoke agent + operator keys"},
-            {"title": "Preferences", "note": "default provider, arena TTL"},
-        ],
-        "roadmap": "Phase 5 — ownership / RBAC & quotas",
-    },
-}
-
-
 @app.route("/agents")
 def agents():
     return render_template("agents.html", active="agents", overview=_agent_overview())
@@ -405,12 +486,25 @@ def agents():
 
 @app.route("/audit")
 def audit():
-    return render_template("audit.html", active="audit", events=_events(limit=150))
+    return render_template("audit.html", active="audit",
+                           events=_annotate_source(_events(limit=150)))
 
 
 @app.route("/settings")
 def settings():
-    return render_template("stub.html", active="settings", **_STUBS["settings"])
+    return render_template("settings.html", active="settings")
+
+
+@app.route("/profile")
+def profile():
+    return render_template("profile.html", active="profile",
+                           username=session.get("username", "operator"))
+
+
+@app.route("/api/system-usage")
+def system_usage():
+    """Host capacity + arena footprint for the Dashboard gauges."""
+    return jsonify(_system_usage())
 
 
 # --- actions -----------------------------------------------------------------

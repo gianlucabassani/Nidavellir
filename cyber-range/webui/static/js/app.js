@@ -19,12 +19,12 @@
         const ok = d.status === "ok";
         badge.className = "badge " + (ok ? "badge--ok" : "badge--danger");
         dot.className = "dot " + (ok ? "dot--active" : "dot--failed");
-        text.textContent = ok ? "Orchestrator online" : "Orchestrator offline";
+        text.textContent = ok ? "online" : "offline";
       })
       .catch(() => {
         badge.className = "badge badge--danger";
         if (dot) dot.className = "dot dot--failed";
-        if (text) text.textContent = "Orchestrator offline";
+        if (text) text.textContent = "offline";
       })
       .finally(() => setTimeout(pollHealth, 10000));
   }
@@ -1045,9 +1045,146 @@
     if (rows.length) show(rows[0].dataset.scenarioId, rows[0].dataset.scenarioName);
   }
 
+  /* ---- row filtering (logs + dashboard feed) -------------------------- */
+  function _applyRowFilter(rowSel, src, query, emptyId) {
+    const q = (query || "").toLowerCase().trim();
+    let shown = 0;
+    document.querySelectorAll(rowSel).forEach((r) => {
+      const okSrc = !src || src === "all" || r.dataset.src === src;
+      const okQ = !q || (r.dataset.search || "").indexOf(q) !== -1;
+      const vis = okSrc && okQ;
+      r.style.display = vis ? "" : "none";
+      if (vis) shown++;
+    });
+    if (emptyId) { const e = document.getElementById(emptyId); if (e) e.hidden = shown > 0; }
+  }
+  function _segWire(segId, onPick) {
+    const seg = document.getElementById(segId);
+    if (!seg) return;
+    seg.addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b || b.disabled) return;
+      Array.prototype.forEach.call(seg.querySelectorAll("button"), (x) => x.classList.remove("on"));
+      b.classList.add("on");
+      onPick(b.dataset.f || b.dataset.l, b);
+    });
+  }
+
+  /* ---- dashboard (system usage + activity filter) --------------------- */
+  function initDashboard() {
+    fetch("/api/system-usage").then((r) => r.json()).then((u) => {
+      const g = (bar, val, pct, label) => {
+        const b = document.getElementById(bar), v = document.getElementById(val);
+        if (b) b.style.width = (pct == null ? 0 : Math.min(100, pct)) + "%";
+        if (v) v.textContent = (pct == null ? "—" : (label || pct + "%"));
+      };
+      g("sys-cpu-bar", "sys-cpu-val", u.cpu, u.cpu == null ? null : u.cpu + "%");
+      const mem = (u.mem_used_gb != null && u.mem_total_gb != null)
+        ? (u.mem_used_gb + " / " + u.mem_total_gb + " GB")
+        : (u.mem == null ? null : u.mem + "%");
+      g("sys-mem-bar", "sys-mem-val", u.mem, mem);
+      g("sys-disk-bar", "sys-disk-val", u.disk, u.disk == null ? null : u.disk + "%");
+      const set = (id, x) => { const e = document.getElementById(id); if (e) e.textContent = (x == null ? "—" : x); };
+      set("sys-containers", u.containers); set("sys-nets", u.networks);
+      set("sys-arenas", u.active_arenas); set("sys-uptime", u.uptime);
+    }).catch(() => {});
+    _segWire("dash-seg", (f) => _applyRowFilter("#dash-feed .log-row", f, null, null));
+  }
+
+  /* ---- logs (source filter + search) ---------------------------------- */
+  function initLogs() {
+    const search = document.getElementById("logs-search");
+    let src = "all";
+    const apply = () => _applyRowFilter("#logs-feed .log-row", src, search ? search.value : "", "logs-empty");
+    _segWire("logs-seg", (f) => { src = f; apply(); });
+    if (search) search.addEventListener("input", apply);
+  }
+
+  /* ---- launch (single-view type selector) ----------------------------- */
+  function initLaunch() {
+    const panels = Array.prototype.slice.call(document.querySelectorAll(".launch-panel"));
+    _segWire("launch-seg", (l) => {
+      panels.forEach((p) => { p.hidden = p.dataset.l !== l; });
+      // a Cytoscape preview sized while hidden mis-renders — resize/fit on show.
+      setTimeout(() => Object.keys(specCy).forEach((k) => {
+        try { specCy[k].resize(); specCy[k].fit(null, 36); } catch (e) {}
+      }), 40);
+    });
+    initScenarioPreview();
+  }
+
+  /* ---- inventory (per-card machine line-up + topology rail) ----------- */
+  function initInventory() {
+    const cards = Array.prototype.slice.call(document.querySelectorAll(".inv-card[data-scenario-id]"));
+    const DEV = { foothold: "fa-laptop-code", target: "fa-server", host: "fa-display" };
+    const cache = {};
+    const fetchTopo = (id) => cache[id]
+      ? Promise.resolve(cache[id])
+      : fetch("/api/scenarios/" + encodeURIComponent(id) + "/topology")
+          .then((r) => r.json()).then((d) => (cache[id] = (d && d.topology) || null))
+          .catch(() => null);
+    const lineup = (thumb, topo) => {
+      const nodes = (topo && topo.nodes) || [];
+      if (!nodes.length) { thumb.innerHTML = '<span class="inv-more faint">no preview</span>'; return; }
+      thumb.innerHTML = nodes.slice(0, 4).map((n) =>
+        '<div class="inv-dev ' + (n.kind || "host") + '"><div class="d"><i class="fa-solid ' +
+        (DEV[n.kind] || "fa-display") + '"></i></div><div class="t">' + escapeHtml(n.name || "") + "</div></div>"
+      ).join("") + (nodes.length > 4 ? '<div class="inv-more">+' + (nodes.length - 4) + "</div>" : "");
+    };
+    const select = (id, name, card) => {
+      const title = document.getElementById("scenario-topo-title");
+      if (title) title.textContent = name || id;
+      cards.forEach((x) => x.classList.toggle("is-selected", x === card));
+      fetchTopo(id).then((t) => renderSpecTopology("scenario-topo", t));
+    };
+    cards.forEach((c) => {
+      const thumb = c.querySelector("[data-lineup]");
+      fetchTopo(c.dataset.scenarioId).then((t) => { if (thumb) lineup(thumb, t); });
+      c.addEventListener("click", (e) => {
+        if (e.target.closest("[data-del]")) return;
+        select(c.dataset.scenarioId, c.dataset.scenarioName, c);
+      });
+    });
+    document.querySelectorAll(".inv-card [data-del]").forEach((b) => b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = b.dataset.del;
+      if (!window.confirm("Delete imported scenario '" + id + "'?")) return;
+      fetch("/api/scenarios/" + encodeURIComponent(id), { method: "DELETE", headers: { "X-CSRFToken": csrfToken() } })
+        .then((r) => { if (r.ok) window.location.reload(); else r.json().then((d) => window.alert(d.error || "delete failed")).catch(() => {}); });
+    }));
+    const search = document.getElementById("inv-search");
+    let filt = "all";
+    const apply = () => {
+      const q = (search ? search.value : "").toLowerCase().trim();
+      cards.forEach((c) => {
+        const okF = filt === "all" || c.dataset.source === filt || c.dataset.provider === filt;
+        const okQ = !q || (c.dataset.search || "").indexOf(q) !== -1;
+        c.style.display = (okF && okQ) ? "" : "none";
+      });
+    };
+    _segWire("inv-filter", (f) => { filt = f; apply(); });
+    if (search) search.addEventListener("input", apply);
+    if (cards.length) select(cards[0].dataset.scenarioId, cards[0].dataset.scenarioName, cards[0]);
+  }
+
+  /* ---- settings (reflect the stored model connection) ----------------- */
+  function initSettings() {
+    fetch("/api/model-connection").then((r) => r.json()).then((mc) => {
+      if (!mc || !mc.configured) return;
+      const b = brandOf(mc.provider);
+      const logo = document.getElementById("set-model-logo"); if (logo) setBubble(logo, b);
+      const name = document.getElementById("set-model-name"); if (name) name.textContent = mc.model || b.name;
+      const detail = document.getElementById("set-model-detail");
+      if (detail) detail.textContent = b.name + " · key ••••" + (mc.key_last4 || "") + " · encrypted at rest";
+      const badge = document.getElementById("set-model-badge");
+      if (badge) { badge.className = "badge badge--ok"; badge.textContent = "connected"; }
+    }).catch(() => {});
+  }
+
   window.CyberGuard = {
     initArena, renderTopology, renderSpecTopology,
     initScenarioPreview, initScenariosBrowser,
+    initDashboard, initLogs, initLaunch, initInventory, initSettings,
     openModelModal, closeModelModal, openModelConfig, saveModel, removeModel, testModel,
     toggleCopilot, sendCopilot,
     initConfigurator, cfgStart, cfgRunStep, cfgDecide, cfgFinish,
@@ -1065,9 +1202,11 @@
     if (cin) cin.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendCopilot(); }
     });
-    // Per-page wiring (topology previews live on launch + scenarios).
-    const page = document.body.dataset.page;
-    if (page === "launch") initScenarioPreview();
-    if (page === "scenarios") initScenariosBrowser();
+    // Preference toggles (settings/profile) — visual, session-scoped.
+    document.addEventListener("click", (e) => {
+      const sw = e.target.closest(".switch");
+      if (sw) sw.classList.toggle("on");
+    });
+    // Per-page init is invoked from each template's {% block scripts %}.
   });
 })();

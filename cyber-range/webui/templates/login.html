@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CyberGuard · Sign in</title>
+  <title>Nidavellir · Sign in</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 </head>
@@ -11,9 +11,10 @@
 <div class="auth">
   <div class="auth-card">
     <div class="auth-brand">
-      <span class="mark"><i class="fa-solid fa-shield-halved"></i></span>
-      Cyber<b>Guard</b>
+      <span class="mark"><i class="fa-solid fa-hammer"></i></span>
+      Nidavellir
     </div>
+    <div class="auth-sub">Enterprise cyber arena · operator console</div>
 
     <div class="flashes">
       {% with messages = get_flashed_messages(with_categories=true) %}
@@ -25,24 +26,20 @@
       {% endwith %}
     </div>
 
-    <div class="card">
-      <h3 style="margin-bottom:4px">Operator sign in</h3>
-      <p class="muted" style="margin-top:0;font-size:13px">Access the cyber arena console.</p>
-      <form method="POST" style="margin-top:18px">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="field">
-          <label class="label">Username</label>
-          <input class="input" type="text" name="username" autofocus required>
-        </div>
-        <div class="field">
-          <label class="label">Password</label>
-          <input class="input" type="password" name="password" required>
-        </div>
-        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">
-          <i class="fa-solid fa-arrow-right-to-bracket"></i> Sign in
-        </button>
-      </form>
-    </div>
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field">
+        <label class="label">Username</label>
+        <input class="input" type="text" name="username" autofocus required>
+      </div>
+      <div class="field">
+        <label class="label">Password</label>
+        <input class="input" type="password" name="password" required>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">
+        <i class="fa-solid fa-arrow-right-to-bracket"></i> Sign in
+      </button>
+    </form>
   </div>
 </div>
 </body>

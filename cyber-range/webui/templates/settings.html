@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block crumb %}Settings{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Configuration</div>
+    <h1>Settings</h1>
+    <div class="sub">Model connection, console preferences, and access.</div>
+  </div>
+</div>
+
+<div class="grid" style="grid-template-columns:1fr; gap:16px; max-width:780px">
+  <!-- model connection -->
+  <div class="card pad-0">
+    <div class="card-head"><span class="label">Model connection</span>
+      <span class="badge badge--idle" id="set-model-badge" style="margin-left:auto">not connected</span></div>
+    <div class="set-row">
+      <span class="model-bubble" id="set-model-logo" style="width:38px;height:38px;background:var(--surface-3)"></span>
+      <div class="info"><div class="t" id="set-model-name">Bring your own model</div>
+        <div class="d" id="set-model-detail">Connect a provider key — Fernet-encrypted at rest, never returned in plaintext. Used on demand by scenario generation and agent-mode arenas.</div></div>
+      <button class="btn btn-sm btn-primary" onclick="CyberGuard.openModelModal()">Manage</button>
+    </div>
+  </div>
+
+  <!-- console preferences (client-side) -->
+  <div class="card pad-0">
+    <div class="card-head"><span class="label">Console preferences</span></div>
+    <div class="set-row"><div class="info"><div class="t">Theme</div><div class="d">Mission-control dark. A light theme is on the roadmap.</div></div>
+      <div class="seg" style="padding:3px"><button class="on">Dark</button><button disabled style="opacity:.5">Light</button></div></div>
+    <div class="set-row"><div class="info"><div class="t">Compact density</div><div class="d">Tighter rows and cards for larger fleets (this session).</div></div>
+      <div class="switch" data-pref="density"></div></div>
+    <div class="set-row"><div class="info"><div class="t">Confirm destructive actions</div><div class="d">Ask before destroying an arena or clearing the archive.</div></div>
+      <div class="switch on" data-pref="confirm"></div></div>
+  </div>
+
+  <!-- access -->
+  <div class="card pad-0">
+    <div class="card-head"><span class="label">Access &amp; keys</span></div>
+    <div class="set-row"><span class="badge badge--accent"><i class="fa-solid fa-key"></i> orchestrator</span>
+      <div class="info"><div class="t">API authentication</div>
+        <div class="d">The console talks to the orchestrator with a server-held API key (ADR-0002). Agent keys for the MCP gateway are issued out-of-band and bound per arena.</div></div></div>
+    <div class="set-row"><div class="info"><div class="t">Ownership &amp; RBAC</div>
+        <div class="d">Per-workspace ownership, SSO, and graduated roles (auditor / operator / admin / owner) are planned for Phase 5.</div></div>
+      <span class="badge badge--idle">planned</span></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}<script>CyberGuard.initSettings && CyberGuard.initSettings();</script>{% endblock %}

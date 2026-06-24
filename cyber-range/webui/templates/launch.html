@@ -1,251 +1,164 @@
 {% extends "base.html" %}
 {% block title %}Launch{% endblock %}
-{% block crumb %}<a href="{{ url_for('arenas') }}">Arenas</a> / <b>Launch</b>{% endblock %}
+{% block crumb %}Launch{% endblock %}
 {% block head %}<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>{% endblock %}
+
+{% macro preview(id, hint) %}
+<div class="card pad-0">
+  <div class="card-head"><span class="label">Topology preview</span></div>
+  <div class="topo-preview topo-preview--tall" id="{{ id }}"></div>
+  <div class="topo-legend">
+    <span><i class="dotsq dotsq--danger"></i> foothold</span>
+    <span><i class="dotsq dotsq--warn"></i> target</span>
+    <span><i class="dotsq dotsq--muted"></i> host</span>
+    <span><i class="dashbox"></i> segment</span>
+  </div>
+</div>
+{% endmacro %}
 
 {% block content %}
 <div class="page-head">
   <div>
+    <div class="eyebrow">Provision</div>
     <h1>Launch an arena</h1>
-    <div class="sub">Deploy a predefined scenario, or assemble a custom lab from the image catalog.</div>
+    <div class="sub">Pick what you're standing up — one configurator at a time, with a live topology preview.</div>
   </div>
 </div>
 
-<div class="grid cols-2">
+<div class="seg" id="launch-seg" style="margin-bottom:18px">
+  <button class="on" data-l="predefined"><i class="fa-solid fa-cubes"></i> Predefined</button>
+  <button data-l="custom"><i class="fa-solid fa-screwdriver-wrench"></i> Custom build</button>
+  <button data-l="vulhub"><i class="fa-solid fa-down-to-bracket"></i> Vulhub import</button>
+  <button data-l="spec"><i class="fa-solid fa-file-code"></i> Paste spec</button>
+  <button data-l="sut"><i class="fa-brands fa-github"></i> Software-under-test</button>
+</div>
 
-  <!-- predefined scenario -->
-  <div class="card">
-    <div class="flexrow" style="margin-bottom:14px">
-      <span class="badge badge--accent"><i class="fa-solid fa-cubes"></i> Scenario</span>
-      <h3 style="margin:0">Deploy a scenario</h3>
+<!-- PREDEFINED -->
+<section class="launch-panel" data-l="predefined">
+  <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; gap:18px">
+    <div class="card card-pad">
+      <h3 style="font-size:15px; margin-bottom:4px">Predefined scenario</h3>
+      <p class="help" style="margin-bottom:16px">Deploy a registered pack as-is. The preview updates as you choose.</p>
+      <form method="POST" action="{{ url_for('create_lab') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="field"><label class="label">Scenario</label>
+          <select class="select" name="scenario">
+            {% for s in scenarios %}
+            <option value="{{ s.id }}">{{ s.name }} · {{ s.provider_class }}{% if default_infra not in ('any', s.provider_class) %} (needs {{ s.provider_class }} provider){% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field"><label class="label">Instance name</label>
+          <input class="input mono" name="instance_id" placeholder="my-arena" required
+                 pattern="[a-z0-9][a-z0-9-]{0,39}" title="Lowercase letters, digits and hyphens (max 40)"></div>
+        <button class="btn btn-primary" style="width:100%; justify-content:center"><i class="fa-solid fa-rocket"></i> Launch arena</button>
+      </form>
     </div>
-    <form action="{{ url_for('create_lab') }}" method="POST">
+    {{ preview('scenario-preview') }}
+  </div>
+</section>
+
+<!-- CUSTOM BUILD -->
+<section class="launch-panel" data-l="custom" hidden>
+  <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; gap:18px">
+    <div class="card card-pad">
+      <h3 style="font-size:15px; margin-bottom:4px">Custom build</h3>
+      <p class="help" style="margin-bottom:16px">Pick attacker machines and targets from the curated catalog — compiled to a validated topology. Hold Ctrl/Cmd to multi-select.</p>
+      <form method="POST" action="{{ url_for('build_custom') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="grid cols-2" style="gap:14px">
+          <div class="field"><label class="label">Attacker machines</label>
+            <select class="select" name="attackers" multiple>
+              {% for a in attackers %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}
+            </select></div>
+          <div class="field"><label class="label">Targets</label>
+            <select class="select" name="victims" multiple>
+              {% for v in victims %}<option value="{{ v.id }}">{{ v.name }}</option>{% endfor %}
+            </select></div>
+        </div>
+        <div class="field"><label class="label">Instance name</label>
+          <input class="input mono" name="instance_id" placeholder="custom-lab" required
+                 pattern="[a-z0-9][a-z0-9-]{0,39}" title="Lowercase letters, digits and hyphens (max 40)"></div>
+        <div class="import-msg" id="custom-msg" style="margin-bottom:10px">Pick an attacker and at least one target to preview.</div>
+        <button class="btn btn-primary" style="width:100%; justify-content:center"><i class="fa-solid fa-screwdriver-wrench"></i> Build &amp; launch</button>
+      </form>
+    </div>
+    {{ preview('custom-preview') }}
+  </div>
+</section>
+
+<!-- VULHUB -->
+<section class="launch-panel" data-l="vulhub" hidden>
+  <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; gap:18px">
+    <div class="card card-pad">
+      <h3 style="font-size:15px; margin-bottom:4px">Import from Vulhub</h3>
+      <p class="help" style="margin-bottom:16px">Convert a <a href="https://github.com/vulhub/vulhub" target="_blank" rel="noopener" style="color:var(--accent)">Vulhub</a> container CVE environment into a reusable pack — deterministic, no model in the loop. (Vulhub = Docker environments, not the VulnHub VM site.)</p>
+      <div class="field"><label class="label">Vulhub environment path</label>
+        <input class="input mono" id="vh-path" placeholder="weblogic/CVE-2017-10271"></div>
+      <div class="grid cols-2" style="gap:14px">
+        <div class="field"><label class="label">Git ref</label><input class="input mono" id="vh-ref" value="master"></div>
+        <div class="field"><label class="label">Scenario id <span class="faint">(optional)</span></label>
+          <input class="input mono" id="vh-id" placeholder="auto" pattern="[a-z0-9][a-z0-9_-]{0,63}"></div>
+      </div>
+      <label class="check" style="margin:2px 0 16px"><input type="checkbox" id="vh-attacker" checked> Add a Kali attacker foothold</label>
+      <div class="import-msg" id="vh-msg" style="margin-bottom:12px"></div>
+      <div style="display:flex; gap:8px">
+        <button type="button" class="btn" id="vh-preview-btn" style="flex:1"><i class="fa-solid fa-eye"></i> Fetch &amp; preview</button>
+        <button type="button" class="btn btn-primary" id="vh-do-btn" style="flex:1"><i class="fa-solid fa-down-to-bracket"></i> Import</button>
+      </div>
+    </div>
+    {{ preview('vh-preview') }}
+  </div>
+</section>
+
+<!-- PASTE SPEC -->
+<section class="launch-panel" data-l="spec" hidden>
+  <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; gap:18px">
+    <div class="card card-pad">
+      <h3 style="font-size:15px; margin-bottom:4px">Paste a v3 spec</h3>
+      <p class="help" style="margin-bottom:16px">Validate a v3 topology (YAML or JSON), preview it, then save it as a reusable pack.</p>
+      <div class="field"><label class="label">Scenario id <span class="faint">(optional)</span></label>
+        <input class="input mono" id="import-id" placeholder="my-scenario" pattern="[a-z0-9][a-z0-9_-]{0,63}"></div>
+      <div class="field"><label class="label">Spec</label>
+        <textarea class="input" id="import-spec" rows="12" spellcheck="false"
+          placeholder="schema: cyberguard/v3&#10;name: corp-dmz&#10;network:&#10;  segments: [{name: lab}]&#10;nodes:&#10;  - {name: kali, role: attacker, image: kali, segments: [lab], entrypoint: true}&#10;  - {name: web, role: victim, image: dvwa, segments: [lab], ports: [80]}&#10;agents:&#10;  - {stance: attacker, node: kali}"></textarea></div>
+      <div class="import-msg" id="import-msg" style="margin-bottom:12px"></div>
+      <div style="display:flex; gap:8px">
+        <button type="button" class="btn" id="import-preview-btn" style="flex:1"><i class="fa-solid fa-eye"></i> Validate &amp; preview</button>
+        <button type="button" class="btn btn-primary" id="import-do-btn" style="flex:1"><i class="fa-solid fa-file-import"></i> Import</button>
+      </div>
+    </div>
+    {{ preview('import-preview') }}
+  </div>
+</section>
+
+<!-- SUT -->
+<section class="launch-panel" data-l="sut" hidden>
+  <div class="card card-pad" style="max-width:680px">
+    <h3 style="font-size:15px; margin-bottom:4px">Software-under-test</h3>
+    <p class="help" style="margin-bottom:16px">Clone any GitHub project into a fresh Ubuntu box; bring the service up in a gated setup phase (you, or a HITL agent), then pentest it.</p>
+    <form method="POST" action="{{ url_for('build_sut') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="field">
-        <label class="label">Instance name</label>
-        <input class="input mono" type="text" name="instance_id" placeholder="lab-team-1" required
-               pattern="[a-z0-9][a-z0-9-]{0,39}" title="Lowercase letters, digits and hyphens (max 40)">
+      <div class="field"><label class="label">Instance name</label>
+        <input class="input mono" name="instance_id" placeholder="juice-shop-sut" required
+               pattern="[a-z0-9][a-z0-9-]{0,39}" title="Lowercase letters, digits and hyphens (max 40)"></div>
+      <div class="field"><label class="label">Repository</label>
+        <input class="input mono" name="repo" placeholder="https://github.com/owner/project" required></div>
+      <div class="grid cols-2" style="gap:14px">
+        <div class="field"><label class="label">Ref <span class="faint">(tag/commit)</span></label><input class="input mono" name="ref" placeholder="main"></div>
+        <div class="field"><label class="label">Service ports</label><input class="input mono" name="ports" placeholder="3000"></div>
       </div>
-      <div class="field">
-        <label class="label">Scenario</label>
-        <select class="select" name="scenario">
-          {% for s in scenarios %}
-          {% set ok = default_infra in ('any', s.provider_class) %}
-          <option value="{{ s.id }}" title="{{ s.description }}" {{ 'disabled' if not ok }}>
-            {{ s.name }} · {{ s.difficulty }} · {{ s.nodes }} node{{ 's' if s.nodes != 1 }}{% if not ok %} · ⚠ needs {{ s.provider_class }} provider{% endif %}
-          </option>
-          {% else %}
-          <option value="container_web_pentest">Web Pentest Lab (Containers)</option>
-          {% endfor %}
-        </select>
-        <div class="help">
-          Default provider serves <b>{{ default_infra }}</b>-class infra. Greyed-out
-          scenarios need a different backend (e.g. VM scenarios need OpenStack/AWS).
-        </div>
-      </div>
-      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">
-        <i class="fa-solid fa-rocket"></i> Launch scenario
-      </button>
-    </form>
-    <div class="topo-preview" id="scenario-preview"></div>
-    <div class="topo-legend">
-      <span><i class="fa-solid fa-laptop-code" style="color:var(--danger)"></i> attacker</span>
-      <span><i class="fa-solid fa-server" style="color:var(--warn)"></i> target</span>
-      <span><i class="fa-solid fa-display" style="color:var(--muted)"></i> host</span>
-      <span><i class="fa-solid fa-network-wired" style="color:var(--accent)"></i> segment</span>
-    </div>
-  </div>
-
-  <!-- custom lab builder -->
-  <div class="card">
-    <div class="flexrow" style="margin-bottom:14px">
-      <span class="badge badge--accent"><i class="fa-solid fa-screwdriver-wrench"></i> Custom</span>
-      <h3 style="margin:0">Build a custom lab</h3>
-    </div>
-    <p class="muted" style="margin-top:0;font-size:13px">
-      Pick one or more attacker boxes and one or more targets — the topology
-      previews live as you choose. Images are pulled on first launch (docker-local).
-    </p>
-    <form action="{{ url_for('build_custom') }}" method="POST">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="field">
-        <label class="label">Instance name</label>
-        <input class="input mono" type="text" name="instance_id" placeholder="my-lab" required
-               pattern="[a-z0-9][a-z0-9-]{0,39}" title="Lowercase letters, digits and hyphens (max 40)">
-      </div>
-      <div class="field">
-        <label class="label">Attacker(s) — ctrl / ⌘-click for several</label>
-        <select class="select" name="attackers" multiple size="4" required>
-          {% for a in attackers %}
-          <option value="{{ a.id }}" title="{{ a.description }}" {{ 'selected' if loop.first }}>{{ a.name }} ({{ a.access }})</option>
-          {% else %}
-          <option disabled>catalog unavailable</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="field">
-        <label class="label">Target(s) — ctrl / ⌘-click for several</label>
-        <select class="select" name="victims" multiple size="4" required>
-          {% for v in victims %}
-          <option value="{{ v.id }}" title="{{ v.description }}" {{ 'selected' if loop.first }}>{{ v.name }}{% if v.access == 'web' %} · web{% endif %}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">
-        <i class="fa-solid fa-screwdriver-wrench"></i> Build lab
-      </button>
-    </form>
-    <div class="topo-preview" id="custom-preview"></div>
-    <div class="topo-foot"><span class="muted" id="custom-msg"></span></div>
-  </div>
-</div>
-
-<!-- import an existing scenario spec -->
-<div class="card" style="margin-top:18px">
-  <div class="flexrow" style="margin-bottom:6px">
-    <span class="badge badge--accent"><i class="fa-solid fa-file-import"></i> Import</span>
-    <h3 style="margin:0">Import an existing scenario</h3>
-  </div>
-  <p class="muted" style="margin-top:0;font-size:13px">
-    Paste a v3 topology spec (YAML or JSON) — validate it, preview the topology,
-    then save it as a reusable pack. It then appears under <b>Scenarios</b> beside
-    the built-ins. (Same shape a generator would emit — the import seam, P1-7.)
-  </p>
-  <div class="grid cols-2">
-    <div>
-      <div class="field">
-        <label class="label">Scenario id <span class="muted">(optional — derived from the name)</span></label>
-        <input class="input mono" type="text" id="import-id" placeholder="my-scenario"
-               pattern="[a-z0-9][a-z0-9_-]{0,63}">
-      </div>
-      <div class="field">
-        <label class="label">Spec (YAML or JSON)</label>
-        <textarea class="input mono" id="import-spec" rows="14" spellcheck="false"
-          placeholder="schema: cyberguard/v3&#10;name: my-scenario&#10;network:&#10;  segments: [{name: lab}]&#10;nodes:&#10;  - {name: kali, role: attacker, image: kali, segments: [lab], entrypoint: true}&#10;  - {name: web, role: victim, image: dvwa, segments: [lab], ports: [80]}&#10;agents:&#10;  - {stance: attacker, node: kali}"></textarea>
-      </div>
-      <div class="flexrow">
-        <button type="button" class="btn" id="import-preview-btn"><i class="fa-solid fa-eye"></i> Validate &amp; preview</button>
-        <button type="button" class="btn btn-primary" id="import-do-btn"><i class="fa-solid fa-file-import"></i> Import</button>
-      </div>
-      <div class="import-msg" id="import-msg" style="margin-top:10px"></div>
-    </div>
-    <div>
-      <div class="topo-preview" id="import-preview"></div>
-      <div class="topo-legend">
-        <span><i class="dotsq dotsq--danger"></i> foothold</span>
-        <span><i class="dotsq dotsq--warn"></i> target</span>
-        <span><i class="dotsq dotsq--muted"></i> host</span>
-        <span><i class="dashbox"></i> segment</span>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- import a Vulhub environment -->
-<div class="card" style="margin-top:18px">
-  <div class="flexrow" style="margin-bottom:6px">
-    <span class="badge badge--accent"><i class="fa-solid fa-cubes-stacked"></i> Vulhub</span>
-    <h3 style="margin:0">Import from Vulhub</h3>
-  </div>
-  <p class="muted" style="margin-top:0;font-size:13px">
-    Convert a <a href="https://github.com/vulhub/vulhub" target="_blank" rel="noopener">Vulhub</a>
-    container environment into a reusable v3 pack — deterministically, no model in the
-    loop. Give the environment path (e.g. <span class="mono">log4j/CVE-2021-44228</span>)
-    and a Kali foothold is added so it's drivable by a human or an agent. (Track C, P1-5.)
-  </p>
-  <div class="grid cols-2">
-    <div>
-      <div class="field">
-        <label class="label">Vulhub environment path</label>
-        <input class="input mono" type="text" id="vh-path"
-               placeholder="weblogic/CVE-2017-10271">
-      </div>
-      <div class="grid cols-2">
-        <div class="field">
-          <label class="label">Git ref <span class="muted">(branch/tag/commit)</span></label>
-          <input class="input mono" type="text" id="vh-ref" value="master">
-        </div>
-        <div class="field">
-          <label class="label">Scenario id <span class="muted">(optional)</span></label>
-          <input class="input mono" type="text" id="vh-id"
-                 placeholder="derived from the path" pattern="[a-z0-9][a-z0-9_-]{0,63}">
-        </div>
-      </div>
-      <label class="flexrow" style="gap:8px;font-size:13px">
-        <input type="checkbox" id="vh-attacker" checked>
-        Add a Kali attacker foothold (recommended)
-      </label>
-      <div class="flexrow" style="margin-top:10px">
-        <button type="button" class="btn" id="vh-preview-btn"><i class="fa-solid fa-eye"></i> Fetch &amp; preview</button>
-        <button type="button" class="btn btn-primary" id="vh-do-btn"><i class="fa-solid fa-file-import"></i> Import</button>
-      </div>
-      <div class="import-msg" id="vh-msg" style="margin-top:10px"></div>
-    </div>
-    <div>
-      <div class="topo-preview" id="vh-preview"></div>
-      <div class="topo-legend">
-        <span><i class="dotsq dotsq--danger"></i> foothold</span>
-        <span><i class="dotsq dotsq--warn"></i> target</span>
-        <span><i class="dotsq dotsq--muted"></i> host</span>
-        <span><i class="dashbox"></i> segment</span>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- software-under-test wizard -->
-<div class="card" style="margin-top:18px">
-  <div class="flexrow" style="margin-bottom:6px">
-    <span class="badge badge--accent"><i class="fa-brands fa-github"></i> Software under test</span>
-    <h3 style="margin:0">Point CyberGuard at an open-source project</h3>
-  </div>
-  <p class="muted" style="margin-top:0;font-size:13px">
-    A fresh <b>Ubuntu</b> box is provisioned and your repository is cloned into
-    <span class="mono">/opt/sut</span>. The service is brought up during the
-    <b>setup phase</b> — by you (connect and follow the README) or by a HITL agent
-    (it proposes each step, you approve). Setup config is locked in here, at launch.
-  </p>
-  <form action="{{ url_for('build_sut') }}" method="POST">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="grid cols-2">
-      <div class="field">
-        <label class="label">Instance name</label>
-        <input class="input mono" type="text" name="instance_id" placeholder="juice-shop-sut" required
-               pattern="[a-z0-9][a-z0-9-]{0,39}" title="Lowercase letters, digits and hyphens (max 40)">
-      </div>
-      <div class="field">
-        <label class="label">GitHub repository URL</label>
-        <input class="input mono" type="url" name="repo" required
-               placeholder="https://github.com/org/project"
-               pattern="https://.+" title="An https:// git URL">
-      </div>
-      <div class="field">
-        <label class="label">Ref <span class="muted">(branch / tag / commit — optional)</span></label>
-        <input class="input mono" type="text" name="ref" placeholder="main">
-      </div>
-      <div class="field">
-        <label class="label">Service port(s) <span class="muted">(optional, to open in a browser)</span></label>
-        <input class="input mono" type="text" name="ports" placeholder="3000, 8080">
-      </div>
-      <div class="field">
-        <label class="label">Who sets it up?</label>
+      <div class="field"><label class="label">Who configures it</label>
         <select class="select" name="setup_mode">
-          <option value="operator">You — connect to the box and run the README steps</option>
-          <option value="hitl">AI (HITL) — a connected agent proposes each step, you approve</option>
-        </select>
-        <div class="help">Autonomous (no approval) is not offered here — use HITL or do it yourself.</div>
-      </div>
-      <div class="field">
-        <label class="label">Options</label>
-        <label class="cfg-check" style="display:block;margin-bottom:6px">
-          <input type="checkbox" name="setup_egress" checked> Allow internet during setup (fetch dependencies)</label>
-        <label class="cfg-check" style="display:block">
-          <input type="checkbox" name="include_attacker" checked> Add a Kali foothold for the engagement</label>
-      </div>
-    </div>
-    <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:6px">
-      <i class="fa-brands fa-github"></i> Clone &amp; provision
-    </button>
-  </form>
-</div>
+          <option value="operator">You — operator shell</option>
+          <option value="hitl">HITL agent — proposes, you approve</option>
+        </select></div>
+      <label class="check" style="margin:2px 0 10px"><input type="checkbox" name="include_attacker" checked> Add a Kali attacker foothold for the engagement</label>
+      <label class="check" style="margin-bottom:16px"><input type="checkbox" name="setup_egress"> Open setup egress (victim can fetch dependencies during setup)</label>
+      <button class="btn btn-primary" style="width:100%; justify-content:center"><i class="fa-brands fa-github"></i> Clone &amp; provision</button>
+    </form>
+  </div>
+</section>
 {% endblock %}
+
+{% block scripts %}<script>CyberGuard.initLaunch();</script>{% endblock %}
