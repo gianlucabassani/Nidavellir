@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="170" viewBox="0 0 760 170" role="img" aria-label="Nidavellir — Enterprise Cyber Arena">
+  <defs>
+    <linearGradient id="amber" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F8B53C"/>
+      <stop offset="1" stop-color="#C97F12"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.28" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#F5A524" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#F5A524" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0C111C"/>
+      <stop offset="1" stop-color="#0A0E16"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="1" y="1" width="758" height="168" rx="20" fill="url(#panel)" stroke="#222B40" stroke-width="1.5"/>
+  <rect x="1" y="1" width="758" height="168" rx="20" fill="url(#glow)"/>
+
+  <!-- forge mark: amber tile + anvil + spark -->
+  <g transform="translate(44,43)">
+    <rect width="84" height="84" rx="20" fill="url(#amber)"/>
+    <!-- anvil -->
+    <g transform="translate(16,20)" fill="none" stroke="#1A1206" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 14 H40 a14 14 0 0 1 -10 13 v6 h7 l-4 11 H13 l-3 -11 h7 v-6 a12 12 0 0 1 -9 -10 H2"/>
+      <path d="M40 14 l11 -3 v9"/>
+    </g>
+    <!-- spark -->
+    <path d="M62 8 l3 7 7 3 -7 3 -3 7 -3 -7 -7 -3 7 -3 z" fill="#1A1206" opacity="0.9"/>
+  </g>
+
+  <!-- wordmark -->
+  <g transform="translate(156,0)" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif">
+    <text x="0" y="78" font-size="46" font-weight="800" letter-spacing="-1.5" fill="#E7EBF3">Nidavellir</text>
+    <text x="2" y="108" font-size="15" font-weight="600" letter-spacing="7" fill="#F5A524" font-family="ui-monospace,SF Mono,Menlo,monospace">ENTERPRISE CYBER ARENA</text>
+    <rect x="2" y="122" width="52" height="3" rx="1.5" fill="#F5A524"/>
+    <text x="64" y="127" font-size="13" fill="#8A93A8" font-family="ui-monospace,SF Mono,Menlo,monospace">arena forge · BYO-AI under test via MCP</text>
+  </g>
+</svg>

@@ -459,7 +459,7 @@ a webhook that feeds blue-team scoring and the defender stance.
 - [ ] No new bare `except:`; errors logged with context.
 - [ ] No secrets in code, logs, or fixtures.
 - [ ] Architecturally significant decisions have an ADR.
-- [ ] User-facing changes update `docs/README.md` / `docs/API.md`.
+- [ ] User-facing changes update `docs/OPERATIONS.md` / `docs/API.md`.
 
 ADRs: **0002** auth (roles → operator in Phase 0) · **0003** provider driver &
 scenario compilation · **0004** PostgreSQL + Alembic · **0005** MCP agent
