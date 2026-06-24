@@ -15,7 +15,7 @@ override.tf.json
 *.pub
 ssh_keys/
 id_rsa
-cyberguard_ssh_key*
+nidavellir_ssh_key*
 
 # --- PYTHON ---
 __pycache__/

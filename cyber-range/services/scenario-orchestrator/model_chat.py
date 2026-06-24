@@ -7,7 +7,7 @@ injected by the caller. This module is the **streaming client only** — it spea
 provider's HTTP streaming API with `requests` (no SDK dependency) and yields text
 deltas. It is **advise-only**: plain text in, plain text out, no tools.
 
-Scope boundary: the model + key are the operator's; CyberGuard provides the channel
+Scope boundary: the model + key are the operator's; Nidavellir provides the channel
 and the context, never its own AI. The plaintext key is passed in by the caller
 (decrypted in-process) and is never logged here.
 """

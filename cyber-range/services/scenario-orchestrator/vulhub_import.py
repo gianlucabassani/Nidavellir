@@ -4,7 +4,7 @@ Deterministic Vulhub → v3 scenario importer (ROADMAP P1-5 / Classic-range trac
 Vulhub (https://github.com/vulhub/vulhub) ships hundreds of pre-built, vulnerable
 container environments as Docker Compose files — one directory per CVE/app, e.g.
 ``weblogic/CVE-2017-10271/docker-compose.yml``. This module converts such a
-compose file into a CyberGuard **v3 scenario** that lands in the import registry
+compose file into a Nidavellir **v3 scenario** that lands in the import registry
 (``scenarios.save_scenario``) exactly like a hand-authored pack, so it can be
 previewed and deployed on docker-local — native to the container model.
 
@@ -18,7 +18,7 @@ Mapping per compose service → one v3 node (role ``victim``):
   * ``image:``        → ``node.image`` (runs as-is).
   * ``build:``        → ``node.service.source`` pointing at the Vulhub repo
                         subdir + ref. Representable and complete, but DEPLOYING it
-                        needs the source-build gate (``CYBERGUARD_ALLOW_SOURCE_BUILD``,
+                        needs the source-build gate (``NIDAVELLIR_ALLOW_SOURCE_BUILD``,
                         off by default) — surfaced as a warning.
   * ``ports:``        → ``node.ports`` (the container side; published to a random
                         host port for browser access).
@@ -160,7 +160,7 @@ def _service_to_node(
         warns.extend(bw)
         warns.append(
             f"service {svc_name!r} builds from source — deploying it requires "
-            "CYBERGUARD_ALLOW_SOURCE_BUILD=true (off by default)"
+            "NIDAVELLIR_ALLOW_SOURCE_BUILD=true (off by default)"
         )
     else:
         raise VulhubImportError(
@@ -276,7 +276,7 @@ def convert_compose(
         else "Imported from a Vulhub Docker Compose file."
     )
     raw = {
-        "schema": "cyberguard/v3",
+        "schema": "nidavellir/v3",
         "name": pack_name,
         "title": pack_name,
         "description": description,

@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-CyberGuard reference agent harness — a thin, bring-your-own-model tool-use loop
+Nidavellir reference agent harness — a thin, bring-your-own-model tool-use loop
 over MCP.
 
 This is a **wiring sample, not a product.** It shows how a bring-your-own agent
-connects to the CyberGuard MCP agent gateway (streamable HTTP) and drives a
+connects to the Nidavellir MCP agent gateway (streamable HTTP) and drives a
 contained engagement: every action goes through the gateway's scoped, audited
 tools — there is no other path into the arena.
 
 **Bring your own model and key.** One `--provider` flag picks the backend:
 Claude (native Anthropic SDK), or any OpenAI-compatible endpoint — DeepSeek,
 Gemini (its OpenAI endpoint), a local model (Ollama / vLLM / LM Studio), or
-OpenAI. CyberGuard ships no AI; the model, key, and prompt are yours
+OpenAI. Nidavellir ships no AI; the model, key, and prompt are yours
 (see `.agent/proposals/VISION.md`, scope boundary).
 
 How it works:
@@ -66,7 +66,7 @@ DEFAULT_PROVIDER = "anthropic"
 _HARNESS_ONLY_TOOLS = {"announce_agent"}
 
 SYSTEM_PROMPT = """\
-You are an autonomous offensive-security agent operating inside a CyberGuard
+You are an autonomous offensive-security agent operating inside a Nidavellir
 arena — an isolated, vulnerable network stood up for this engagement.
 
 Rules of engagement (enforced by the gateway, not optional):
@@ -240,7 +240,7 @@ async def run_engagement(args) -> int:
 
 
 def parse_args(argv=None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="CyberGuard reference agent harness (BYO model over MCP).")
+    p = argparse.ArgumentParser(description="Nidavellir reference agent harness (BYO model over MCP).")
     p.add_argument("--provider", default=DEFAULT_PROVIDER, choices=PROVIDER_CHOICES,
                    help=f"model backend / preset (default: {DEFAULT_PROVIDER})")
     p.add_argument("--model", default=None,

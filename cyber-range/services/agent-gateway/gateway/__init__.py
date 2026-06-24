@@ -1,5 +1,5 @@
 """
-CyberGuard MCP agent gateway (ROADMAP Phase 2, the priority pillar).
+Nidavellir MCP agent gateway (ROADMAP Phase 2, the priority pillar).
 
 The *only* path a bring-your-own agent has into a running arena: an MCP server
 that exposes the arena lifecycle (and, in later increments, the per-stance

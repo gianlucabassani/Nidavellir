@@ -28,7 +28,7 @@ the v3 spec below is the same regardless of how it is packaged.
 ## The v3 shape
 
 ```yaml
-schema: cyberguard/v3            # optional; defaults to cyberguard/v3
+schema: nidavellir/v3            # optional; defaults to nidavellir/v3
 name: "AD foothold (small)"      # display name (required)
 title: "AD foothold"             # optional longer title
 difficulty: medium               # free-form label
@@ -70,7 +70,7 @@ ttl_hours: 8                     # optional
 
 | Field | Required | Notes |
 |-------|----------|-------|
-| `schema` | no | `cyberguard/v3` (default) |
+| `schema` | no | `nidavellir/v3` (default) |
 | `name` | **yes** | display name |
 | `requires.provider_class` | no | `vm` \| `container` \| `any` (default `any`) |
 | `requires.egress` | no | `open` opts out of default-on egress containment (docker-local) |
@@ -113,7 +113,7 @@ nodes:
 **Build from source (`service.source`)** is built by docker-local via the daemon
 (a remote git context, pinned by `ref`), but is **OFF by default**: building an
 arbitrary repo runs third-party code at build time, so it requires
-`CYBERGUARD_ALLOW_SOURCE_BUILD=true` (see [`SECURITY.md`](SECURITY.md)). When the
+`NIDAVELLIR_ALLOW_SOURCE_BUILD=true` (see [`SECURITY.md`](SECURITY.md)). When the
 flag is unset, a `source` service fails with a clear error pointing at it — prefer
 a packaged `service.image`. Build-time network is open (apt/pip/npm); the arena
 **runtime stays egress-locked** regardless. `service.package` install is not wired
@@ -131,7 +131,7 @@ to mount). The mounted path is surfaced as `node_<victim>_whitebox_source`.
 ### Importing from Vulhub (P1-5)
 
 [Vulhub](https://github.com/vulhub/vulhub) ships hundreds of pre-built vulnerable
-container environments as Docker Compose files (one dir per CVE/app). CyberGuard
+container environments as Docker Compose files (one dir per CVE/app). Nidavellir
 **deterministically** converts one into a v3 pack and lands it in the import
 registry — no model in the loop (that is the separate prompt→spec generator):
 
@@ -143,7 +143,7 @@ curl -sX POST "$API/scenarios/import/vulhub" -H "X-API-Key: $OP" \
 
 Each compose **service** becomes one `victim` node: `image:` → `image`; a
 build-only service → a gated `service.source` rooted at the Vulhub repo subdir
-(deploying it needs `CYBERGUARD_ALLOW_SOURCE_BUILD`); `ports:` → the container
+(deploying it needs `NIDAVELLIR_ALLOW_SOURCE_BUILD`); `ports:` → the container
 ports; `environment:` (dict or `KEY=VALUE` list) → `environment`; `command:` →
 `command`. A Kali foothold is added by default (so the arena is drivable by a
 human or an agent). Keys we can't faithfully map (`volumes`, `depends_on`,
@@ -201,7 +201,7 @@ The docker-local driver realizes the topology directly: **one bridge network
 per declared `segment`** (per arena), **one container per node** named
 `cg-<arena>-<node>` and attached to the networks of every segment it declares
 (a node can straddle segments). Nodes that declare no segment share a per-arena
-default bridge (named `cyberguard-<arena>`, preserving the flat single-network
+default bridge (named `nidavellir-<arena>`, preserving the flat single-network
 behaviour). `entrypoint`/`attacker` nodes are kept alive (`sleep infinity`) and
 get a `docker exec` command; declared `ports` are published on random host ports.
 
@@ -216,7 +216,7 @@ first node of each canonical role, for dashboard/mock parity.
 The `aws` driver compiles the same v3 topology to a **per-arena VPC** via a
 generic OpenTofu module (`infra/terraform-aws/`): one `aws_subnet` per declared
 `segment`, one `aws_instance` per `node` (`for_each`), everything tagged
-`cyberguard:arena_id`. **No internet gateway/NAT is created** and the security
+`nidavellir:arena_id`. **No internet gateway/NAT is created** and the security
 group is confined to the VPC CIDR — arenas have no egress by construction
 (`associate_public_ip` defaults off; SSM is the intended access path). Node
 `size` maps to an instance type; `image` resolves through the image map to a

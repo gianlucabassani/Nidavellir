@@ -81,17 +81,17 @@ class OpenStackProvider(TerraformDriver):
 
             if role == 'victim':
                 vars['victim_image_name'] = vm.get('image', 'victim-web')
-                vars['victim_vm_name'] = vm.get('name', 'cyber_guard_victim')
+                vars['victim_vm_name'] = vm.get('name', 'nidavellir_victim')
                 if vm.get('flavor'):
                     vars['flavor_name'] = vm['flavor']
 
             elif role == 'attacker':
                 vars['image_name'] = vm.get('image', 'kali-linux-2025-cloud')
-                vars['vm_name'] = vm.get('name', 'cyber_guard_attack')
+                vars['vm_name'] = vm.get('name', 'nidavellir_attack')
 
             elif role == 'monitor':
                 vars['log_image_name'] = vm.get('image', 'ubuntu_cloud')
-                vars['log_vm_name'] = vm.get('name', 'cyber_guard_log')
+                vars['log_vm_name'] = vm.get('name', 'nidavellir_log')
                 if vm.get('flavor'):
                     vars['soc_flavor_name'] = vm['flavor']
 

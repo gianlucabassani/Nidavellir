@@ -7,7 +7,7 @@
   unchanged. `attacker`/`MITM`/`defender` are per-session agent *stances*
   chosen via the MCP gateway, not auth roles.)
 - **Date:** 2026-06-10
-- **Deciders:** CyberGuard maintainers
+- **Deciders:** Nidavellir maintainers
 
 ## Context
 

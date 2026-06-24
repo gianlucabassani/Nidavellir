@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 
 # Metadata
-LABEL description="CyberGuard Orchestrator - Backend API & Celery Worker"
+LABEL description="Nidavellir Orchestrator - Backend API & Celery Worker"
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \

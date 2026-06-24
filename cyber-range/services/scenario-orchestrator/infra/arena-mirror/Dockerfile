@@ -5,7 +5,7 @@
 # repositories. That lets an agent `apt`/`pip install` its tooling without
 # granting general egress — no C2, no exfil to arbitrary hosts.
 #
-# Built on demand by the docker-local provider as `cyberguard/arena-mirror`.
+# Built on demand by the docker-local provider as `nidavellir/arena-mirror`.
 FROM debian:bookworm-slim
 
 RUN apt-get update \

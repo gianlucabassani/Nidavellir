@@ -176,7 +176,7 @@ def build_custom_scenario(
         victim_imgs.append(vim)
 
     raw = {
-        "schema": "cyberguard/v3",
+        "schema": "nidavellir/v3",
         "name": name,
         "title": name,
         "difficulty": "custom",
@@ -239,7 +239,7 @@ def build_sut_scenario(
         agents.append({"stance": "attacker", "node": atk.id})
 
     raw = {
-        "schema": "cyberguard/v3",
+        "schema": "nidavellir/v3",
         "name": name,
         "title": name,
         "difficulty": "custom",

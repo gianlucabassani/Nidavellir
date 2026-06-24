@@ -36,7 +36,7 @@ def _arena(db, iid, scenario="container_web_pentest"):
     db.create_deployment(iid, iid, scenario, provider=None, actor="test")
     db.update_deployment(iid, status="deploying", actor="test")
     db.update_deployment(
-        iid, status="active", outputs={"node_victim_name": "cg-x-victim"}, actor="test"
+        iid, status="active", outputs={"node_victim_name": "nv-x-victim"}, actor="test"
     )
     # D1: the agent reporting findings must be bound to the arena (key="agent-findings").
     db.record_event(

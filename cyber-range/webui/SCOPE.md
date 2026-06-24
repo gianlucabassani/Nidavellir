@@ -1,6 +1,6 @@
 # WebUI — operator console
 
-**Scope:** the operator-facing console for the CyberGuard arena. Server-rendered
+**Scope:** the operator-facing console for the Nidavellir arena. Server-rendered
 Flask + Jinja, one design-token CSS system (`static/css/app.css`), vanilla JS
 (`static/js/app.js`). No build step.
 

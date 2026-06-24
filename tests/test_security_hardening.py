@@ -28,9 +28,9 @@ def _active_arena(iid, scenario="container_web_pentest", bind_configurator=None)
     db.update_deployment(
         iid, status="active",
         outputs={
-            "node_victim_name": "cg-victim",
-            "node_kali_name": "cg-kali",
-            "node_kali_ssh_command": "docker exec -it cg-kali bash",
+            "node_victim_name": "nv-victim",
+            "node_kali_name": "nv-kali",
+            "node_kali_ssh_command": "docker exec -it nv-kali bash",
         },
         actor="test",
     )
@@ -145,7 +145,7 @@ def test_requires_egress_mirror_survive_validation():
     from scenario_spec import ScenarioSpec
 
     spec = ScenarioSpec.from_raw({
-        "schema": "cyberguard/v3", "name": "x",
+        "schema": "nidavellir/v3", "name": "x",
         "requires": {"provider_class": "container", "egress": "open", "mirror": "off"},
         "nodes": [{"name": "n", "image": "alpine", "segments": []}],
     })

@@ -16,7 +16,7 @@ from states import IllegalTransition, LabStatus
 REDIS_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
 
 # Initialize Celery app
-app = Celery('cyberguard', broker=REDIS_URL, backend=REDIS_URL)
+app = Celery('nidavellir', broker=REDIS_URL, backend=REDIS_URL)
 
 # Celery Optimization Settings
 app.conf.update(

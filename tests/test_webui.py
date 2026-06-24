@@ -38,7 +38,7 @@ def _login(client):
     token = _csrf_token(client)
     return client.post(
         "/login",
-        data={"username": "admin", "password": "cyberguard", "csrf_token": token},
+        data={"username": "admin", "password": "nidavellir", "csrf_token": token},
     )
 
 
@@ -49,7 +49,7 @@ def test_routes_require_login(client):
 
 
 def test_login_rejects_missing_csrf_token(client):
-    resp = client.post("/login", data={"username": "admin", "password": "cyberguard"})
+    resp = client.post("/login", data={"username": "admin", "password": "nidavellir"})
     assert resp.status_code == 400
 
 
@@ -127,7 +127,7 @@ def test_external_redirect_target_is_ignored(client):
     token = _csrf_token(client)
     resp = client.post(
         "/login?next=https://evil.example",
-        data={"username": "admin", "password": "cyberguard", "csrf_token": token},
+        data={"username": "admin", "password": "nidavellir", "csrf_token": token},
     )
     assert resp.headers["Location"] in ("/", "http://localhost/")
 

@@ -1,6 +1,6 @@
-# 🛡️ CyberGuard Roadmap
+# 🛡️ Nidavellir Roadmap
 
-> The plan to take CyberGuard from a working lab launcher to an **enterprise
+> The plan to take Nidavellir from a working lab launcher to an **enterprise
 > cyber arena for testing skills in dynamic environments — and, above all, for
 > testing AI agents**. It provisions arbitrary multi-machine vulnerable
 > topologies and exposes them, through **MCP gateways**, to bring-your-own
@@ -111,7 +111,7 @@ Effort: S ≈ days, M ≈ 1–2 weeks, L ≈ 3–5 weeks for one dev.
 > pillars — topology engine, MCP agent gateway, prompt-to-scenario generation —
 > on top of it.
 
-> **Standing principle (all phases): AI-centered, never AI-required.** CyberGuard
+> **Standing principle (all phases): AI-centered, never AI-required.** Nidavellir
 > is built for testing AI agents and is MCP/agent-compliant throughout, but every
 > arena must remain fully usable by a **human attacker against a static vulnerable
 > target, with no model in the loop** (browser / SSH / console access to the
@@ -124,7 +124,7 @@ The data-defined model (Phase 1) exists so that **new arena *kinds* are cheap**:
 scenario is config, not code, so AD labs, service meshes, CTF-style web apps, and
 LLM-app targets are all one engine with different packs. The flagship next
 archetype — and the one that most exercises this extensibility — is the
-**software-under-test (SUT) arena**: point CyberGuard at *any* open-source project
+**software-under-test (SUT) arena**: point Nidavellir at *any* open-source project
 and have a bring-your-own agent pentest it, **white- or black-box**, with the
 service stood up on the victim node, deeply monitored, and scored.
 
@@ -160,7 +160,7 @@ exposed ports, monitoring level, scoring mode, budgets → a validated pack via 
 existing validator/compiler. Designed for scale: container-first, version-pinned,
 TTL-reaped, and runnable in parallel like every other arena. The scope boundary
 holds — when the model configures the service it is still **bring-your-own AI under
-the operator's key**, exercising a gated capability CyberGuard provides; CyberGuard
+the operator's key**, exercising a gated capability Nidavellir provides; Nidavellir
 ships the provisioner, sandbox, monitor, and consent gate, not the AI. Decision
 record: **ADR-0007**.
 
@@ -316,7 +316,7 @@ with paired traces. ADR-0005 (gateway protocol & guardrails).
 Key work:
 - `range-authoring` surface: prompt → topology spec (Terraform/JSON) → **validate
   against the v3 schema** → compile via the provider abstraction → deploy.
-- Operator supplies their own AI key/model; CyberGuard ships the schema +
+- Operator supplies their own AI key/model; Nidavellir ships the schema +
   validator + compiler + sandbox only. **Never auto-deploy unreviewed infra** —
   generated specs are diffed/reviewed before apply.
 - Exposed as an MCP authoring tool (`scaffold_scenario`) and in the WebUI.
@@ -363,7 +363,7 @@ paired dataset; benchmark runs are reproducible from pinned inputs.
 
 ### 🟤 Phase 5 — Hardening & multi-provider hosting (AWS) · **M–L**
 
-**Goal:** CyberGuard runs as a hosted platform, not just a LAN tool. (ADR-0006.)
+**Goal:** Nidavellir runs as a hosted platform, not just a LAN tool. (ADR-0006.)
 
 Key work:
 - **Ownership/RBAC + quotas** on top of the existing roles: an operator
@@ -382,7 +382,7 @@ Key work:
   public key at ingest; only the agent process decrypts) — a hardening upgrade
   to BYO-key custody over Fernet-at-rest. No Kong; the gateway owns the seam.
 - **`aws` driver**: generic `nodes[]` modules, VPC-per-arena, everything tagged
-  `cyberguard:arena_id`, private subnets with **no NAT by default**, SSM access
+  `nidavellir:arena_id`, private subnets with **no NAT by default**, SSM access
   (no inbound SSH).
 - **Hosting**: EC2 + compose behind TLS (Caddy/ALB) + RDS; secrets via SSM /
   Secrets Manager (instance role, no static keys). ECS/Fargate only when load

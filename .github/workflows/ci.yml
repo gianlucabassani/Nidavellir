@@ -46,18 +46,18 @@ jobs:
     runs-on: ubuntu-latest
     env:
       MOCK_MODE: "true"
-      DATABASE_URL: postgresql+psycopg://cyberguard:ci-only-pw@localhost:5432/cyberguard
+      DATABASE_URL: postgresql+psycopg://nidavellir:ci-only-pw@localhost:5432/nidavellir
     services:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: cyberguard
+          POSTGRES_USER: nidavellir
           POSTGRES_PASSWORD: ci-only-pw
-          POSTGRES_DB: cyberguard
+          POSTGRES_DB: nidavellir
         ports:
           - "5432:5432"
         options: >-
-          --health-cmd "pg_isready -U cyberguard"
+          --health-cmd "pg_isready -U nidavellir"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
@@ -82,10 +82,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build orchestrator image
-        run: docker build -t cyberguard-orchestrator ./cyber-range/services/scenario-orchestrator
+        run: docker build -t nidavellir-orchestrator ./cyber-range/services/scenario-orchestrator
 
       - name: Build webui image
-        run: docker build -t cyberguard-webui ./cyber-range/webui
+        run: docker build -t nidavellir-webui ./cyber-range/webui
 
       - name: Validate docker-compose config
         run: docker compose config -q

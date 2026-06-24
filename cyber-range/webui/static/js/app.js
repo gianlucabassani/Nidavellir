@@ -1,4 +1,4 @@
-/* CyberGuard console — client behavior (vanilla JS, no build step). */
+/* Nidavellir console — client behavior (vanilla JS, no build step). */
 (function () {
   "use strict";
 
@@ -402,7 +402,7 @@
   /* ---- co-pilot chat (connected model + arena context) ---------------- */
   let copilotHistory = [];
   let copilotBusy = false;
-  const currentArena = () => window.CYBERGUARD_ARENA || null;
+  const currentArena = () => window.NIDAVELLIR_ARENA || null;
 
   function toggleCopilot() {
     const el = document.getElementById("copilot");
@@ -557,7 +557,7 @@
         '<label class="cfg-fld"><span>Time-box (s)</span><input class="input" id="cfg-tb" type="number" value="1800" min="60"></label>' +
         '<label class="cfg-fld"><span>Step budget</span><input class="input" id="cfg-budget" type="number" value="50" min="1"></label>' +
         '<label class="cfg-check"><input type="checkbox" id="cfg-egress"> open setup egress (victim can fetch dependencies)</label>' +
-        '<button class="btn btn-primary btn-sm" onclick="CyberGuard.cfgStart()">Start setup</button>' +
+        '<button class="btn btn-primary btn-sm" onclick="Nidavellir.cfgStart()">Start setup</button>' +
         '</div><div class="cfg-err" id="cfg-err" hidden></div>';
     }
     let html =
@@ -580,14 +580,14 @@
       html +=
         '<div class="cfg-step"><select class="select" id="cfg-node" style="max-width:150px">' + opts + '</select>' +
         '<input class="input mono" id="cfg-cmd" placeholder="setup command, e.g. apt-get install -y nginx">' +
-        '<button class="btn btn-sm" onclick="CyberGuard.cfgRunStep()">Run</button></div>' +
+        '<button class="btn btn-sm" onclick="Nidavellir.cfgRunStep()">Run</button></div>' +
         '<pre class="cfg-out" id="cfg-out" hidden></pre>';
     } else if (s.mode === "hitl") {
       html += '<div id="cfg-props-wrap">' + renderProposals(s) + '</div>';
     } else if (s.mode === "autonomous") {
       html += '<div class="cfg-note">Autonomous: the connected agent runs setup steps directly through the gateway (double-locked). Watch progress in Activity below.</div>';
     }
-    html += '<div class="cfg-actions"><button class="btn btn-danger btn-sm" onclick="CyberGuard.cfgFinish()">Finish setup</button></div>' +
+    html += '<div class="cfg-actions"><button class="btn btn-danger btn-sm" onclick="Nidavellir.cfgFinish()">Finish setup</button></div>' +
             '<div class="cfg-err" id="cfg-err" hidden></div>';
     return html;
   }
@@ -599,8 +599,8 @@
           '<div class="cfg-prop"><div class="mono">' + escapeHtml(p.command) + '</div>' +
           (p.rationale ? '<div class="muted" style="font-size:12px;margin-top:3px">' + escapeHtml(p.rationale) + '</div>' : '') +
           '<div class="cfg-prop__act"><span class="muted" style="font-size:12px">' + escapeHtml(p.node) + '</span>' +
-          '<button class="btn btn-primary btn-sm" onclick="CyberGuard.cfgDecide(\'' + p.step_id + '\',\'approve\')">Approve</button>' +
-          '<button class="btn btn-danger btn-sm" onclick="CyberGuard.cfgDecide(\'' + p.step_id + '\',\'reject\')">Reject</button>' +
+          '<button class="btn btn-primary btn-sm" onclick="Nidavellir.cfgDecide(\'' + p.step_id + '\',\'approve\')">Approve</button>' +
+          '<button class="btn btn-danger btn-sm" onclick="Nidavellir.cfgDecide(\'' + p.step_id + '\',\'reject\')">Reject</button>' +
           '</div></div>').join("") + '</div>'
       : '<div class="cfg-note">No pending proposals. The connected agent (configurator stance) proposes steps via the gateway; approve them here.</div>';
   }
@@ -1181,7 +1181,7 @@
     }).catch(() => {});
   }
 
-  window.CyberGuard = {
+  window.Nidavellir = {
     initArena, renderTopology, renderSpecTopology,
     initScenarioPreview, initScenariosBrowser,
     initDashboard, initLogs, initLaunch, initInventory, initSettings,

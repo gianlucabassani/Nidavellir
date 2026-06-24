@@ -40,7 +40,7 @@ def _active_arena(db, iid, outputs=None):
     db.update_deployment(iid, status="deploying", actor="test")
     db.update_deployment(
         iid, status="active",
-        outputs=outputs or {"node_victim_name": "cg-victim"}, actor="test",
+        outputs=outputs or {"node_victim_name": "nv-victim"}, actor="test",
     )
     return iid
 
@@ -93,9 +93,9 @@ def test_revoke_blocks_the_agent(operator, agent):
 def test_attacker_binding_is_foothold_scoped(operator, agent):
     # kali has a shell command → it's the foothold; victim is a target.
     _active_arena(operator.db, "bind-foothold", outputs={
-        "node_victim_name": "cg-victim",
-        "node_kali_name": "cg-kali",
-        "node_kali_ssh_command": "docker exec -it cg-kali bash",
+        "node_victim_name": "nv-victim",
+        "node_kali_name": "nv-kali",
+        "node_kali_ssh_command": "docker exec -it nv-kali bash",
     })
     operator.post("/arenas/bind-foothold/bindings",
                   json={"agent_name": "binder-agent", "stance": "attacker"})
@@ -110,9 +110,9 @@ def test_attacker_binding_is_foothold_scoped(operator, agent):
 def test_unrestricted_binding_can_exec_any_node(operator, agent):
     # A stance=None (own-sandbox) binding is NOT foothold-scoped.
     _active_arena(operator.db, "bind-anynode", outputs={
-        "node_victim_name": "cg-victim",
-        "node_kali_name": "cg-kali",
-        "node_kali_ssh_command": "docker exec -it cg-kali bash",
+        "node_victim_name": "nv-victim",
+        "node_kali_name": "nv-kali",
+        "node_kali_ssh_command": "docker exec -it nv-kali bash",
     })
     operator.post("/arenas/bind-anynode/bindings", json={"agent_name": "binder-agent"})
     assert agent.post("/arenas/bind-anynode/exec",
@@ -155,9 +155,9 @@ def test_findings_require_binding(operator, agent):
 
 def _sut_like_arena(db, iid):
     return _active_arena(db, iid, outputs={
-        "node_victim_name": "cg-victim",
-        "node_kali_name": "cg-kali",
-        "node_kali_ssh_command": "docker exec -it cg-kali bash",
+        "node_victim_name": "nv-victim",
+        "node_kali_name": "nv-kali",
+        "node_kali_ssh_command": "docker exec -it nv-kali bash",
     })
 
 

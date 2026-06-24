@@ -32,6 +32,6 @@ def session_from_config(cfg) -> Session:
     """Build a Session from gateway config, validating the stance."""
     if not cfg.agent_key:
         raise GatewayAuthError(
-            "no agent API key configured (set CYBERGUARD_AGENT_KEY)"
+            "no agent API key configured (set NIDAVELLIR_AGENT_KEY)"
         )
     return Session(api_key=cfg.agent_key, stance=parse_stance(cfg.stance))

@@ -86,7 +86,7 @@ def test_convert_build_env_maps_to_gated_source():
     assert app.ports == [80]
     assert app.command == "sh -c apache2-foreground"
     assert not spec.agents  # include_attacker=False
-    assert any("CYBERGUARD_ALLOW_SOURCE_BUILD" in w for w in warns)
+    assert any("NIDAVELLIR_ALLOW_SOURCE_BUILD" in w for w in warns)
     assert any("build args" in w for w in warns)
     assert any("list-form command" in w for w in warns)
 
@@ -189,7 +189,7 @@ def test_fetch_rejects_path_traversal():
 
 def test_environment_round_trips_through_spec_and_normalizer():
     raw = {
-        "schema": "cyberguard/v3",
+        "schema": "nidavellir/v3",
         "name": "env-lab",
         "network": {"segments": [{"name": "lab"}]},
         "nodes": [{"name": "web", "role": "victim", "image": "x:1",

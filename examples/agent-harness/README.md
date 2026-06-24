@@ -1,11 +1,11 @@
 # Reference agent harness — bring your own model, over the MCP gateway
 
-A **thin wiring sample**: a bring-your-own agent that connects to the CyberGuard
+A **thin wiring sample**: a bring-your-own agent that connects to the Nidavellir
 [MCP agent gateway](../../cyber-range/services/agent-gateway/) over streamable
 HTTP and drives a contained engagement end-to-end. Every action goes through the
 gateway's scoped, audited tools — there is no other path into the arena.
 
-> **This is not "CyberGuard's AI."** CyberGuard ships the gateway and the arena;
+> **This is not "Nidavellir's AI."** Nidavellir ships the gateway and the arena;
 > the model, the key, and the prompt are yours. Reference connectors like this
 > one are samples to copy from, not a product — see the scope boundary in
 > [`.agent/proposals/VISION.md`](../../.agent/proposals/VISION.md).
@@ -49,7 +49,7 @@ By default the agent runs the whole lifecycle through the gateway:
 
 ## Prerequisites
 
-- The CyberGuard stack with the gateway profile (attacker stance, streamable
+- The Nidavellir stack with the gateway profile (attacker stance, streamable
   HTTP on `:9000`):
   ```bash
   docker compose --profile agent-gateway up -d --build
@@ -99,7 +99,7 @@ python agent.py --arena-id <id> --keep
 | `--max-steps` | `40` | max tool-use rounds |
 
 The only secret the harness needs is your model key. The gateway holds its own
-CyberGuard credential (`CYBERGUARD_AGENT_KEY`) and forwards it to the
+Nidavellir credential (`NIDAVELLIR_AGENT_KEY`) and forwards it to the
 orchestrator, which stays the authorization + audit authority.
 
 ## Connected-model indicator in the console

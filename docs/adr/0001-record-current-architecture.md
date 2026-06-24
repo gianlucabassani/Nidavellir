@@ -2,11 +2,11 @@
 
 - **Status:** Accepted
 - **Date:** 2026-06-10
-- **Deciders:** CyberGuard maintainers
+- **Deciders:** Nidavellir maintainers
 
 ## Context
 
-CyberGuard reached a working prototype (mock + OpenStack modes, Docker Compose
+Nidavellir reached a working prototype (mock + OpenStack modes, Docker Compose
 stack) without recorded design rationale. Before investing in the roadmap, we
 record the as-built architecture so future ADRs have a baseline to amend.
 

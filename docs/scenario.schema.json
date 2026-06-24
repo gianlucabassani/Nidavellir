@@ -301,7 +301,7 @@
     },
     "SourceBuild": {
       "additionalProperties": false,
-      "description": "Build a node's workload from source \u2014 e.g. a GitHub project (P1-6, SUT\narenas). Pin `ref` (commit/tag) for reproducibility. The *execution* (clone +\nbuild) runs on docker-local via the daemon, but is **OFF by default** because\nbuilding untrusted code executes it at build time: enable explicitly with\n``CYBERGUARD_ALLOW_SOURCE_BUILD=true`` (see SECURITY.md). When disabled, prefer\na packaged `Service.image`. `service.package` install is a separate follow-up.",
+      "description": "Build a node's workload from source \u2014 e.g. a GitHub project (P1-6, SUT\narenas). Pin `ref` (commit/tag) for reproducibility. The *execution* (clone +\nbuild) runs on docker-local via the daemon, but is **OFF by default** because\nbuilding untrusted code executes it at build time: enable explicitly with\n``NIDAVELLIR_ALLOW_SOURCE_BUILD=true`` (see SECURITY.md). When disabled, prefer\na packaged `Service.image`. `service.package` install is a separate follow-up.",
       "properties": {
         "repo": {
           "title": "Repo",
@@ -447,7 +447,7 @@
   "description": "A validated v3 scenario: an N-node topology over named segments.",
   "properties": {
     "schema": {
-      "default": "cyberguard/v3",
+      "default": "nidavellir/v3",
       "title": "Schema",
       "type": "string"
     },

@@ -1,4 +1,4 @@
-# 🔌 CyberGuard API Reference
+# 🔌 Nidavellir API Reference
 
 Base URL: `http://localhost:8000`
 
@@ -6,7 +6,7 @@ Base URL: `http://localhost:8000`
 
 ## 📋 Overview
 
-The CyberGuard API provides RESTful endpoints for managing arena deployments.
+The Nidavellir API provides RESTful endpoints for managing arena deployments.
  All operations are **asynchronous**.
 
 ### Authentication
@@ -15,15 +15,15 @@ All endpoints except `GET /health` require an API key in the `X-API-Key`
 header (see [ADR-0002](adr/0002-api-authentication.md)):
 
 ```bash
-export CYBERGUARD_API_KEY=cg_...   # create one: python auth.py create-key <name> <role>
-curl -H "X-API-Key: $CYBERGUARD_API_KEY" http://localhost:8000/deployments
+export NIDAVELLIR_API_KEY=cg_...   # create one: python auth.py create-key <name> <role>
+curl -H "X-API-Key: $NIDAVELLIR_API_KEY" http://localhost:8000/deployments
 ```
 
 Roles: `admin` (manage platform/keys), `operator` (author/run/observe
 engagements), `agent` (the AI under test). Recorded for auditing; per-owner
 enforcement arrives with hardening (ROADMAP Phase 5). Missing or invalid keys
 get `401`. The docker-compose stack bootstraps the key from the
-`CYBERGUARD_API_KEY` value in `.env` — the default `dev-insecure-key` is for
+`NIDAVELLIR_API_KEY` value in `.env` — the default `dev-insecure-key` is for
 the local mock demo only.
 
 > The role set is `admin` / `operator` / `agent` (the legacy
@@ -31,7 +31,7 @@ the local mock demo only.
 > issued with the old roles still authenticate). `attacker`/`MITM`/`defender`
 > are per-session agent **stances** (chosen via the MCP gateway), not auth roles.
 
-> All examples below assume `-H "X-API-Key: $CYBERGUARD_API_KEY"` is added.
+> All examples below assume `-H "X-API-Key: $NIDAVELLIR_API_KEY"` is added.
 
 ### Health Check
 
@@ -91,7 +91,7 @@ loop. Provide `path` (a Vulhub env dir, e.g. `weblogic/CVE-2017-10271`, fetched
 from GitHub at `ref`, default `master`) **or** `compose` (a pasted compose object
 or YAML string, for offline use). Each compose service → one `victim` node; a
 build-only service maps to a gated `service.source` (needs
-`CYBERGUARD_ALLOW_SOURCE_BUILD`); a Kali foothold is added unless
+`NIDAVELLIR_ALLOW_SOURCE_BUILD`); a Kali foothold is added unless
 `include_attacker: false`. Lossy conversions (dropped `volumes`/`depends_on`/…)
 are returned in `warnings`. `dry_run: true` previews (validate + topology) without
 saving; otherwise the pack is persisted and appears in `GET /scenarios`. VulnHub
@@ -179,7 +179,7 @@ bounded to 4096 chars.
 
 `POST /arenas/{instance_id}/agent-session` — a bring-your-own agent declares the
 **model + provider** driving an arena. This is the backend the MCP gateway's
-`announce_agent` tool proxies; the model/provider are self-declared (CyberGuard
+`announce_agent` tool proxies; the model/provider are self-declared (Nidavellir
 ships no AI), recorded as an append-only `agent_session` event, and surfaced as
 the operator console's *connected model* chip. Attribution/telemetry only — not
 ground truth, not scored.
@@ -230,7 +230,7 @@ The operator configures their **bring-your-own model** (provider + model + API
 key) once, from the console's model bubble. The key is **encrypted at rest**
 (Fernet) and bound to the operator principal; the connection sits in **standby**
 ("active but waiting") until a feature needs it — the scenario generator or an
-arena whose mode uses an agent in a stance. CyberGuard custodies the key and
+arena whose mode uses an agent in a stance. Nidavellir custodies the key and
 provides the connection; the model stays the operator's (scope boundary). **All
 three are operator/admin only — an `agent`-role key gets `403`** (an agent must
 never read or manage the credential; activators decrypt it server-side, never
@@ -287,7 +287,7 @@ Three **modes** (the consent choice): `operator` (the operator scripts steps —
   engagement** (on finish, on expiry, and by the reaper) so the runtime stays
   egress-locked. `501` if the provider can't toggle egress (docker-local can).
   `mode:"autonomous"` → `403` unless the platform flag
-  `CYBERGUARD_ALLOW_AUTONOMOUS_CONFIGURATOR` is set (the **double lock**: flag +
+  `NIDAVELLIR_ALLOW_AUTONOMOUS_CONFIGURATOR` is set (the **double lock**: flag +
   this explicit per-arena consent).
 - `GET /arenas/{id}/setup` — `{open, expired, mode, nodes, steps_run, budget_remaining, egress_enforced, pending_proposals, …}`.
 - `POST /arenas/{id}/setup/step` `{node, command, timeout?}` — operator-scripted direct
@@ -474,11 +474,11 @@ GET /status/{instance_id}
   "outputs": {
     "attack_vm_private_ip": "192.168.50.10",
     "attack_vm_floating_ip": "192.168.1.80",
-    "attack_vm_ssh_command": "ssh -i cyberguard_ssh_key.pem kali@192.168.1.80",
+    "attack_vm_ssh_command": "ssh -i nidavellir_ssh_key.pem kali@192.168.1.80",
     
     "log_vm_private_ip": "192.168.0.5",
     "log_vm_floating_ip": "192.168.1.50",
-    "log_vm_ssh_command": "ssh -i cyberguard_ssh_key.pem ubuntu@192.168.1.50",
+    "log_vm_ssh_command": "ssh -i nidavellir_ssh_key.pem ubuntu@192.168.1.50",
     
     "victim_vm_private_ip": "192.168.0.10",
     "victim_vm_floating_ip": "192.168.1.60",
@@ -646,7 +646,7 @@ curl http://localhost:8000/status/lab-prod-001 | jq
 curl http://localhost:8000/status/lab-prod-001 | \
   jq -r '.outputs.attack_vm_ssh_command'
 
-# Output: ssh -i cyberguard_ssh_key.pem kali@192.168.1.80
+# Output: ssh -i nidavellir_ssh_key.pem kali@192.168.1.80
 
 # 4. Access Wazuh dashboard
 curl http://localhost:8000/status/lab-prod-001 | \

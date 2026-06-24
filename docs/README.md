@@ -1,10 +1,10 @@
-# 🛡️ CyberGuard — Enterprise Cyber Arena
+# 🛡️ Nidavellir — Enterprise Cyber Arena
 
 **Dynamic, multi-machine vulnerable topologies + bring-your-own AI agents
 (attacker / MITM / defender) wired in via MCP — runnable locally, on OpenStack,
 or on AWS.**
 
-CyberGuard provisions arbitrary N-node arenas on demand and exposes them, through
+Nidavellir provisions arbitrary N-node arenas on demand and exposes them, through
 **MCP gateways**, to bring-your-own agents (agentic Claude Code or a company's
 own internal model) placed as **attacker**, **MITM**, or **defender**. Humans
 (operators) author and run engagements; the AI is the system under test. It runs
@@ -182,8 +182,8 @@ OS_USER_DOMAIN_NAME=Default
 ### Installation
 ```bash
 # 1. Clone the repository
-git clone https://github.com/gianlucabassani/CyberGuard.git
-cd CyberGuard
+git clone https://github.com/gianlucabassani/Nidavellir.git
+cd Nidavellir
 
 # 2. Create required directories
 mkdir -p data runs cache/terraform-plugins keys
@@ -273,9 +273,9 @@ OS_USER_DOMAIN_NAME=Default
 OS_PROJECT_DOMAIN_NAME=Default
 
 # Paths
-DATABASE_PATH=/absolute/path/to/CyberGuard/data/deployments.db
-RUNS_DIR=/absolute/path/to/CyberGuard/runs
-TF_PLUGIN_CACHE_DIR=/absolute/path/to/CyberGuard/cache/terraform-plugins
+DATABASE_PATH=/absolute/path/to/Nidavellir/data/deployments.db
+RUNS_DIR=/absolute/path/to/Nidavellir/runs
+TF_PLUGIN_CACHE_DIR=/absolute/path/to/Nidavellir/cache/terraform-plugins
 
 # Redis
 CELERY_BROKER_URL=redis://localhost:6379/0
@@ -322,7 +322,7 @@ python3 app.py
 
 ## 📁 Project Structure
 ```
-CyberGuard/
+Nidavellir/
 ├── cache/                          # Terraform plugin cache
 │   └── terraform-plugins/
 ├── data/                           # SQLite database
@@ -384,14 +384,14 @@ environment via `POST /scenarios/import/vulhub` (deterministic compose→v3, aud
 
 ## 🔌 Bring your own tooling (external monitoring / testing stacks)
 
-You don't have to rebuild a testing tool inside CyberGuard to use it against an
+You don't have to rebuild a testing tool inside Nidavellir to use it against an
 arena. **Any tool that already ships as its own `docker compose`** — a capturing
 reverse proxy, a DAST scanner, a traffic monitor, an AI pentest pipeline — can be
 run unchanged and simply **pointed at the arena's published port**. The arena is
 the target environment; your tool stays a black box, keeping its own
 Redis/Postgres/UI/etc. The two stacks never integrate at the data layer.
 
-**How it works.** When an arena node publishes a service port, CyberGuard maps it
+**How it works.** When an arena node publishes a service port, Nidavellir maps it
 to a host port, reachable at `http://127.0.0.1:<hostport>`. That address is shown
 on the arena-detail page (the node's **Open** link) and in the deployment record:
 

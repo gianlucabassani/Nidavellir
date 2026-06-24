@@ -1,10 +1,10 @@
-schema: cyberguard/v3
+schema: nidavellir/v3
 name: "Software-under-test (OSS project)"
 title: "Software-under-test (OSS project)"
 version: "1.0"
 difficulty: unknown
 description: >
-  Software-under-test (SUT) arena: point CyberGuard at an open-source project and
+  Software-under-test (SUT) arena: point Nidavellir at an open-source project and
   pentest it from a Kali foothold. The victim runs a service via a `service:`
   block — packaged-first (prefer an existing published image; build from source
   only for gaps). This example is black-box against a published OWASP Juice Shop
@@ -56,6 +56,6 @@ objectives:
 # version and add a `vulnerabilities:` manifest of known CVEs (ADR-0007 P4-7).
 
 metadata:
-  author: CyberGuard
+  author: Nidavellir
   tags: [sut, oss, container, blackbox, juice-shop]
   estimated_duration_hours: 2

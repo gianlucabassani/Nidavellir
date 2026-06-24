@@ -50,7 +50,7 @@ def _make_active_arena(db, instance_id="exec-arena", outputs=None, bind="exec-te
     db.update_deployment(instance_id, status="deploying", actor="test")  # legal path
     db.update_deployment(
         instance_id, status="active",
-        outputs=outputs or {"node_jump_name": "cg-x-jump"}, actor="test",
+        outputs=outputs or {"node_jump_name": "nv-x-jump"}, actor="test",
     )
     # D1: the agent driving exec must be bound to the arena. The test agent key is
     # named "exec-tests"; an unrestricted (stance=None) binding mirrors the
@@ -86,7 +86,7 @@ def test_exec_on_inactive_arena_is_409(client):
 
 
 def test_exec_unknown_node_is_404(client):
-    _make_active_arena(client.db, "node-arena", outputs={"node_jump_name": "cg-x-jump"})
+    _make_active_arena(client.db, "node-arena", outputs={"node_jump_name": "nv-x-jump"})
     resp = client.post("/arenas/node-arena/exec", json={"node": "ghost", "command": "id"})
     assert resp.status_code == 404
 

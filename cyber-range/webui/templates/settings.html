@@ -20,7 +20,7 @@
       <span class="model-bubble" id="set-model-logo" style="width:38px;height:38px;background:var(--surface-3)"></span>
       <div class="info"><div class="t" id="set-model-name">Bring your own model</div>
         <div class="d" id="set-model-detail">Connect a provider key — Fernet-encrypted at rest, never returned in plaintext. Used on demand by scenario generation and agent-mode arenas.</div></div>
-      <button class="btn btn-sm btn-primary" onclick="CyberGuard.openModelModal()">Manage</button>
+      <button class="btn btn-sm btn-primary" onclick="Nidavellir.openModelModal()">Manage</button>
     </div>
   </div>
 
@@ -48,4 +48,4 @@
 </div>
 {% endblock %}
 
-{% block scripts %}<script>CyberGuard.initSettings && CyberGuard.initSettings();</script>{% endblock %}
+{% block scripts %}<script>Nidavellir.initSettings && Nidavellir.initSettings();</script>{% endblock %}

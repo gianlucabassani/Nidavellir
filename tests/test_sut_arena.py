@@ -137,11 +137,11 @@ def test_prearmed_setup_auto_opens_scoped_to_victim():
     db.create_deployment(iid, iid, "sut:proj", provider=None, actor="test")
     db.update_deployment(iid, status="deploying", actor="test")
     outputs = {
-        "node_sut_name": "cg-sut",
-        "node_sut_setup_shell": "docker exec -it cg-sut /bin/bash",
+        "node_sut_name": "nv-sut",
+        "node_sut_setup_shell": "docker exec -it nv-sut /bin/bash",
         "node_sut_sut_source": "/opt/sut",
-        "node_kali-cli_name": "cg-kali",
-        "node_kali-cli_ssh_command": "docker exec -it cg-kali /bin/bash",
+        "node_kali-cli_name": "nv-kali",
+        "node_kali-cli_ssh_command": "docker exec -it nv-kali /bin/bash",
     }
     db.update_deployment(iid, status="active", outputs=outputs, actor="test")
 
@@ -171,10 +171,10 @@ def test_prearmed_setup_surfaces_connect_command():
     db.create_deployment(iid, iid, "sut:proj", provider=None, actor="test")
     db.update_deployment(iid, status="deploying", actor="test")
     outputs = {
-        "node_sut_name": "cg-sut",
-        "node_sut_setup_shell": "docker exec -it cg-sut /bin/bash",
-        "node_kali-cli_name": "cg-kali",
-        "node_kali-cli_ssh_command": "docker exec -it cg-kali /bin/bash",
+        "node_sut_name": "nv-sut",
+        "node_sut_setup_shell": "docker exec -it nv-sut /bin/bash",
+        "node_kali-cli_name": "nv-kali",
+        "node_kali-cli_ssh_command": "docker exec -it nv-kali /bin/bash",
     }
     db.update_deployment(iid, status="active", outputs=outputs, actor="test")
     tasks._open_prearmed_setup(
@@ -189,4 +189,4 @@ def test_prearmed_setup_surfaces_connect_command():
     c.headers["X-API-Key"] = key
     body = c.get(f"/arenas/{iid}/setup").json()
     assert body["open"] is True
-    assert body["connect"]["sut"] == "docker exec -it cg-sut /bin/bash"
+    assert body["connect"]["sut"] == "docker exec -it nv-sut /bin/bash"

@@ -1,6 +1,6 @@
 variable "arena_id" {
   type        = string
-  description = "Unique CyberGuard arena id; tags every resource as cyberguard:arena_id."
+  description = "Unique Nidavellir arena id; tags every resource as nidavellir:arena_id."
 }
 
 variable "vpc_cidr" {

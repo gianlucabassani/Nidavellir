@@ -110,7 +110,7 @@ def test_custom_arena_accepts_and_dispatches_inline_spec(client):
     assert resp.json()["status"] == "accepted"
     # the worker is handed a validated inline scenario, not a registry id
     spec = client.dispatched["scenario_config"]
-    assert spec["schema"] == "cyberguard/v3"
+    assert spec["schema"] == "nidavellir/v3"
     assert {n["name"] for n in spec["nodes"]} == {"kali-cli", "dvwa"}
     assert client.dispatched["provider"] == "docker-local"
 
@@ -152,7 +152,7 @@ def test_orchestrator_uses_inline_scenario_config_over_registry():
             return {"success": True}
 
     rec = _Recorder()
-    inline = {"schema": "cyberguard/v3", "nodes": [{"name": "n", "image": "i"}]}
+    inline = {"schema": "nidavellir/v3", "nodes": [{"name": "n", "image": "i"}]}
     # scenario_name is bogus on purpose: the inline config must win, no load.
     Orchestrator(provider=rec).deploy("no-such-scenario", "id-1", {}, scenario_config=inline)
     assert rec.got is inline

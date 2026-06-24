@@ -8,8 +8,8 @@ according to the bound stance (attacker: recon + `run_command` +
 `report_finding`; defender: `query_events`) and gated by `stances.allowed_tools`.
 
 Run:
-    CYBERGUARD_AGENT_KEY=cg_... python -m gateway.server                # stdio
-    CYBERGUARD_GATEWAY_TRANSPORT=streamable-http python -m gateway.server
+    NIDAVELLIR_AGENT_KEY=cg_... python -m gateway.server                # stdio
+    NIDAVELLIR_GATEWAY_TRANSPORT=streamable-http python -m gateway.server
 """
 import logging
 
@@ -42,7 +42,7 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
     builds even before an agent key is set — handy for introspection/tests).
     """
     cfg = cfg or GatewayConfig()
-    mcp = FastMCP("cyberguard-agent-gateway", host=cfg.host, port=cfg.port)
+    mcp = FastMCP("nidavellir-agent-gateway", host=cfg.host, port=cfg.port)
 
     holder = {"ctx": context}
 
@@ -175,7 +175,7 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     cfg = GatewayConfig()
-    logger.info("Starting CyberGuard agent gateway (transport=%s, api=%s)", cfg.transport, cfg.api_url)
+    logger.info("Starting Nidavellir agent gateway (transport=%s, api=%s)", cfg.transport, cfg.api_url)
     build_server(cfg).run(transport=cfg.transport)
 
 

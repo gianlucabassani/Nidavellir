@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 
 # --- 1. Redirect runtime state to a throwaway dir, force mock mode ---------
-_TMP = Path(tempfile.mkdtemp(prefix="cyberguard-tests-"))
+_TMP = Path(tempfile.mkdtemp(prefix="nidavellir-tests-"))
 os.environ.setdefault("MOCK_MODE", "true")
 os.environ["DATABASE_PATH"] = str(_TMP / "deployments.db")
 os.environ["RUNS_DIR"] = str(_TMP / "runs")
@@ -38,4 +38,4 @@ sys.path.insert(0, str(_SERVICES / "agent-gateway"))
 
 
 def pytest_report_header(config):
-    return f"cyberguard: MOCK_MODE={os.environ['MOCK_MODE']}  state={_TMP}"
+    return f"nidavellir: MOCK_MODE={os.environ['MOCK_MODE']}  state={_TMP}"

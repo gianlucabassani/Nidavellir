@@ -1,7 +1,7 @@
 """
 Agent-session telemetry: `POST /arenas/{id}/agent-session` records the connected
 BYO agent's model + provider as an append-only `agent_session` event. This is
-self-declared attribution (CyberGuard ships no AI) that powers the operator
+self-declared attribution (Nidavellir ships no AI) that powers the operator
 console's connected-model indicator.
 """
 from fastapi.testclient import TestClient
@@ -24,7 +24,7 @@ def _arena(db, iid, scenario="container_web_pentest"):
     db.create_deployment(iid, iid, scenario, provider=None, actor="test")
     db.update_deployment(iid, status="deploying", actor="test")
     db.update_deployment(
-        iid, status="active", outputs={"node_victim_name": "cg-x-victim"}, actor="test"
+        iid, status="active", outputs={"node_victim_name": "nv-x-victim"}, actor="test"
     )
     return iid
 

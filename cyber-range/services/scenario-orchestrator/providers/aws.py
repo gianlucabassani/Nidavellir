@@ -4,7 +4,7 @@ AWS provider: a per-arena VPC compiled from the v3 topology via a generic
 
 Unlike the legacy OpenStack driver (a frozen 3-VM template), this compiles an
 arbitrary N-node scenario: one subnet per declared network ``segment``, one EC2
-instance per ``node`` (``for_each``), everything tagged ``cyberguard:arena_id``.
+instance per ``node`` (``for_each``), everything tagged ``nidavellir:arena_id``.
 Arenas get **no internet egress by default** — no IGW/NAT is created and the
 security group is confined to the VPC CIDR — which is the Phase 2 containment
 guarantee by construction.

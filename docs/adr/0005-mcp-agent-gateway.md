@@ -15,7 +15,7 @@
   authorization that closes audit finding D1. **Deferred:** MITM stance,
   per-request HTTP auth, token budget, operator kill switch.)
 - **Date:** 2026-06-14
-- **Deciders:** CyberGuard maintainers
+- **Deciders:** Nidavellir maintainers
 
 ## Context
 
@@ -23,7 +23,7 @@ The product's priority pillar is testing **bring-your-own AI agents** against
 arenas (VISION.md, ROADMAP Phase 2). An agent is the system under test; it must
 reach an arena **only** through a controlled surface that authenticates it,
 binds it to a single **stance** (attacker / MITM / defender), scopes and meters
-what it can do, and records every action. CyberGuard builds this *integration
+what it can do, and records every action. Nidavellir builds this *integration
 surface* — never the AI itself (the model + key are the user's; scope boundary
 in VISION.md).
 

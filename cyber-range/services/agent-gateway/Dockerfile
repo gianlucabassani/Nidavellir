@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-LABEL description="CyberGuard MCP Agent Gateway"
+LABEL description="Nidavellir MCP Agent Gateway"
 
 WORKDIR /app
 
@@ -15,8 +15,8 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 # Containerized: bind all interfaces; exposure is governed by the compose port
 # mapping / network, not the bind address.
-ENV CYBERGUARD_GATEWAY_HOST=0.0.0.0
-ENV CYBERGUARD_GATEWAY_TRANSPORT=streamable-http
+ENV NIDAVELLIR_GATEWAY_HOST=0.0.0.0
+ENV NIDAVELLIR_GATEWAY_TRANSPORT=streamable-http
 
 EXPOSE 9000
 

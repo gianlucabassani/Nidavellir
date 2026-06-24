@@ -44,9 +44,9 @@ def _arena(iid):
     db.update_deployment(
         iid, status="active",
         outputs={
-            "node_victim_name": "cg-victim",
-            "node_kali_name": "cg-kali",
-            "node_kali_ssh_command": "docker exec -it cg-kali bash",
+            "node_victim_name": "nv-victim",
+            "node_kali_name": "nv-kali",
+            "node_kali_ssh_command": "docker exec -it nv-kali bash",
         },
         actor="test",
     )

@@ -1,5 +1,5 @@
 """
-Model backends for the CyberGuard reference harness — bring your own model.
+Model backends for the Nidavellir reference harness — bring your own model.
 
 One harness, any model. Two backends cover the field:
   - `anthropic`        — the native Anthropic SDK (keeps Claude's adaptive
@@ -11,7 +11,7 @@ One harness, any model. Two backends cover the field:
 Each backend converts the gateway's MCP tools to its provider's tool/function
 schema and runs a small tool-use loop, calling a shared `dispatch(name, args)`
 (provided by agent.py) to actually invoke the gateway. The model + key are
-yours — CyberGuard ships no AI (see VISION.md scope boundary).
+yours — Nidavellir ships no AI (see VISION.md scope boundary).
 """
 from __future__ import annotations
 

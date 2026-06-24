@@ -24,20 +24,20 @@ data "local_file" "victim_agent_script" {
 # ----- VM LOG (BLUE TEAM) - SOC ------------------------------------
 # -------------------------------------------------------------------
 resource "openstack_networking_port_v2" "log_vm_port" {
-  name               = "cyberguard-log-port"
-  network_id         = openstack_networking_network_v2.networkcyberguard.id
+  name               = "nidavellir-log-port"
+  network_id         = openstack_networking_network_v2.networknidavellir.id
   admin_state_up     = true
-  security_group_ids = [openstack_networking_secgroup_v2.cyberguard_sg.id]
+  security_group_ids = [openstack_networking_secgroup_v2.nidavellir_sg.id]
   fixed_ip {
-    subnet_id = openstack_networking_subnet_v2.networkcyberguard_subnet.id
+    subnet_id = openstack_networking_subnet_v2.networknidavellir_subnet.id
   }
-  depends_on = [openstack_networking_router_interface_v2.cyberguard_router_iface]
+  depends_on = [openstack_networking_router_interface_v2.nidavellir_router_iface]
 }
 
-resource "openstack_compute_instance_v2" "cyber_guard_log" {
+resource "openstack_compute_instance_v2" "nidavellir_log" {
   name        = var.log_vm_name
   flavor_name = var.soc_flavor_name 
-  key_pair    = openstack_compute_keypair_v2.cyberguard_ssh_keypair.name
+  key_pair    = openstack_compute_keypair_v2.nidavellir_ssh_keypair.name
 
   block_device {
     uuid                  = data.openstack_images_image_v2.ubuntu_cloud.id
@@ -70,8 +70,8 @@ resource "openstack_networking_floatingip_associate_v2" "log_fip_assoc" {
   floating_ip = openstack_networking_floatingip_v2.log_fip.address
   port_id     = openstack_networking_port_v2.log_vm_port.id
   depends_on  = [
-    openstack_networking_router_interface_v2.cyberguard_router_iface,
-    openstack_compute_instance_v2.cyber_guard_log
+    openstack_networking_router_interface_v2.nidavellir_router_iface,
+    openstack_compute_instance_v2.nidavellir_log
   ]
 }
 
@@ -79,20 +79,20 @@ resource "openstack_networking_floatingip_associate_v2" "log_fip_assoc" {
 # ----- VM ATTACK (RED TEAM) ----------------------------------------
 # -------------------------------------------------------------------
 resource "openstack_networking_port_v2" "vm_port" {
-  name               = "cyberguard-attack-port"
+  name               = "nidavellir-attack-port"
   network_id         = openstack_networking_network_v2.network_attack.id
   admin_state_up     = true
-  security_group_ids = [openstack_networking_secgroup_v2.cyberguard_sg.id]
+  security_group_ids = [openstack_networking_secgroup_v2.nidavellir_sg.id]
   fixed_ip {
     subnet_id = openstack_networking_subnet_v2.network_attack_subnet.id
   }
-  depends_on = [openstack_networking_router_interface_v2.cyberguard_router_attack]
+  depends_on = [openstack_networking_router_interface_v2.nidavellir_router_attack]
 }
 
-resource "openstack_compute_instance_v2" "cyber_guard_attack" {
+resource "openstack_compute_instance_v2" "nidavellir_attack" {
   name        = var.vm_name
   flavor_name = var.flavor_name 
-  key_pair    = openstack_compute_keypair_v2.cyberguard_ssh_keypair.name
+  key_pair    = openstack_compute_keypair_v2.nidavellir_ssh_keypair.name
 
   block_device {
     uuid                  = data.openstack_images_image_v2.kali.id
@@ -123,8 +123,8 @@ resource "openstack_networking_floatingip_associate_v2" "attack_fip_assoc" {
   floating_ip = openstack_networking_floatingip_v2.attack_fip.address
   port_id     = openstack_networking_port_v2.vm_port.id
   depends_on  = [
-    openstack_networking_router_interface_v2.cyberguard_router_attack,
-    openstack_compute_instance_v2.cyber_guard_attack
+    openstack_networking_router_interface_v2.nidavellir_router_attack,
+    openstack_compute_instance_v2.nidavellir_attack
   ]
 }
 
@@ -132,20 +132,20 @@ resource "openstack_networking_floatingip_associate_v2" "attack_fip_assoc" {
 # ----- VM VICTIM (TARGET) ------------------------------------------
 # -------------------------------------------------------------------
 resource "openstack_networking_port_v2" "victim_vm_port" {
-  name               = "cyberguard-victim-port"
-  network_id         = openstack_networking_network_v2.networkcyberguard.id
+  name               = "nidavellir-victim-port"
+  network_id         = openstack_networking_network_v2.networknidavellir.id
   admin_state_up     = true
-  security_group_ids = [openstack_networking_secgroup_v2.cyberguard_sg.id]
+  security_group_ids = [openstack_networking_secgroup_v2.nidavellir_sg.id]
   fixed_ip {
-    subnet_id = openstack_networking_subnet_v2.networkcyberguard_subnet.id
+    subnet_id = openstack_networking_subnet_v2.networknidavellir_subnet.id
   }
-  depends_on = [openstack_networking_router_interface_v2.cyberguard_router_iface]
+  depends_on = [openstack_networking_router_interface_v2.nidavellir_router_iface]
 }
 
-resource "openstack_compute_instance_v2" "cyber_guard_victim" {
+resource "openstack_compute_instance_v2" "nidavellir_victim" {
   name        = var.victim_vm_name
   flavor_name = var.flavor_name
-  key_pair    = openstack_compute_keypair_v2.cyberguard_ssh_keypair.name
+  key_pair    = openstack_compute_keypair_v2.nidavellir_ssh_keypair.name
 
   block_device {
     uuid                  = data.openstack_images_image_v2.victim.id
@@ -175,7 +175,7 @@ EOF
 
   depends_on = [
     openstack_networking_port_v2.victim_vm_port, 
-    openstack_compute_instance_v2.cyber_guard_log
+    openstack_compute_instance_v2.nidavellir_log
   ]
 }
 
@@ -187,7 +187,7 @@ resource "openstack_networking_floatingip_associate_v2" "victim_fip_assoc" {
   floating_ip = openstack_networking_floatingip_v2.victim_fip.address
   port_id     = openstack_networking_port_v2.victim_vm_port.id
   depends_on  = [
-    openstack_networking_router_interface_v2.cyberguard_router_iface,
-    openstack_compute_instance_v2.cyber_guard_victim
+    openstack_networking_router_interface_v2.nidavellir_router_iface,
+    openstack_compute_instance_v2.nidavellir_victim
   ]
 }

@@ -1,6 +1,6 @@
 # Architecture Decision Records (ADRs)
 
-This directory captures significant architectural decisions for CyberGuard using
+This directory captures significant architectural decisions for Nidavellir using
 the lightweight [ADR](https://adr.github.io/) format.
 
 ## Why
@@ -28,7 +28,7 @@ contributors understand the reasoning instead of re-litigating it.
 | [0006](0006-aws-topology.md) | AWS topology — generic nodes[] module & egress lockdown | Proposed (driver + module landed; real apply needs creds) |
 | [0007](0007-software-under-test-arenas.md) | Software-under-test arenas — provision/configure/monitor/score any OSS project | Proposed (roadmap archetype; ROADMAP P1-6/P2-10/P3-3/P4-6/P4-7/P7-6) |
 
-> **2026-06-13 pivot:** CyberGuard repositioned as an enterprise agent-testing
+> **2026-06-13 pivot:** Nidavellir repositioned as an enterprise agent-testing
 > arena (dynamic N-node topologies + bring-your-own agents via MCP as
 > attacker/MITM/defender). The ADRs above remain accurate as historical
 > records of their decisions; current product framing lives in

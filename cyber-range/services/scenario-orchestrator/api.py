@@ -516,7 +516,7 @@ async def deploy_custom_arena(
 
 # --- Software-under-test (SUT) arena (the launch wizard, P2-10) --------------
 # A separate launch mode from a named scenario / catalog custom arena: point
-# CyberGuard at a GitHub repo, it spins up a fresh Ubuntu victim with the repo
+# Nidavellir at a GitHub repo, it spins up a fresh Ubuntu victim with the repo
 # cloned in, and the service is brought up during the setup phase by a human
 # (operator-scripted) or a HITL agent (gateway configurator stance). The setup
 # config is captured HERE, at creation (review 1.1), and auto-applied when the
@@ -981,7 +981,7 @@ async def announce_agent_session(
 ):
     """Record that a bring-your-own agent connected to this arena, with the
     model + provider driving it. The model/provider are self-declared by the
-    agent harness (CyberGuard ships no AI) and recorded as an append-only
+    agent harness (Nidavellir ships no AI) and recorded as an append-only
     `agent_session` event — this powers the operator console's *connected model*
     indicator. Not ground truth; purely an attribution/telemetry signal."""
     if not db.get_deployment(instance_id):
@@ -1143,7 +1143,7 @@ def revoke_binding(
 # key) once, from the console's model bubble. The key is encrypted at rest and
 # the connection sits in *standby* ("active but waiting") until a feature needs
 # it — the scenario generator (P3) or an arena whose mode uses an agent in a
-# stance (P2 / white-box SUT). CyberGuard custodies the key and provides the
+# stance (P2 / white-box SUT). Nidavellir custodies the key and provides the
 # connection plumbing; the model is the operator's (scope boundary holds — the
 # platform never launches the agent on its own, and arenas stay AI-optional).
 # Operator/admin only; an agent-role key must never manage credentials.
@@ -1242,12 +1242,12 @@ def verify_model_connection(
 
 # --- Co-pilot chat (operator's connected model + arena context) -------------
 # The console co-pilot: the operator converses with their own connected model;
-# CyberGuard injects the current arena's context and streams the reply. Advise-
+# Nidavellir injects the current arena's context and streams the reply. Advise-
 # only (no tools), operator-only, key decrypted in-process and never logged.
 
 def _build_copilot_context(arena_id: str | None) -> str:
     parts = [
-        "You are CyberGuard Co-pilot, a security-testing assistant embedded in an "
+        "You are Nidavellir Co-pilot, a security-testing assistant embedded in an "
         "operator's arena console. Be concise, concrete, and practical. You ADVISE "
         "ONLY — you cannot run commands or change anything; the operator acts through "
         "the console (deploy, run setup steps, approve agent proposals, submit "
@@ -1511,7 +1511,7 @@ def setup_start(
             status_code=403,
             detail=(
                 "autonomous configurator is disabled by platform policy — set "
-                "CYBERGUARD_ALLOW_AUTONOMOUS_CONFIGURATOR=true to allow it, or use "
+                "NIDAVELLIR_ALLOW_AUTONOMOUS_CONFIGURATOR=true to allow it, or use "
                 "mode='hitl' (per-step approval) / 'operator'"
             ),
         )
@@ -1854,7 +1854,7 @@ def setup_run(
 ):
     """Autonomous: the agent runs a setup step directly (no per-step approval).
     DOUBLE-LOCKED — requires mode='autonomous' AND the platform flag
-    CYBERGUARD_ALLOW_AUTONOMOUS_CONFIGURATOR. Still victim-scoped + budgeted +
+    NIDAVELLIR_ALLOW_AUTONOMOUS_CONFIGURATOR. Still victim-scoped + budgeted +
     time-boxed + audited."""
     record = _active_arena_or_error(instance_id)
     _require_binding(principal, instance_id, bindings.CAP_SETUP)  # D1

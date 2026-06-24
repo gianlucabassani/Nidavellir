@@ -222,7 +222,7 @@ def test_deploy_creates_labeled_network_and_containers():
     assert result["success"] is True
     # One isolated network, labeled with the full lab id
     (network,) = client.networks.created
-    assert network.name == "cyberguard-abcd1234"
+    assert network.name == "nidavellir-abcd1234"
     assert network.labels[LABEL_LAB_ID] == "abcd1234-rest-of-uuid"
     # Monitor node skipped -> exactly victim + attacker
     roles = {kw["labels"][LABEL_ROLE] for kw in client.containers.run_kwargs}
@@ -241,7 +241,7 @@ def test_outputs_render_for_the_dashboard():
     assert outputs["provider"] == "docker-local"
     assert outputs["victim_vm_private_ip"] == "172.99.0.10"
     assert outputs["attack_vm_private_ip"] == "172.99.0.10"
-    assert outputs["attack_vm_ssh_command"] == "docker exec -it cg-abcd1234-attacker /bin/bash"
+    assert outputs["attack_vm_ssh_command"] == "docker exec -it nv-abcd1234-attacker /bin/bash"
     # Published victim port becomes a host-reachable URL
     assert outputs["victim_web_url"].startswith("http://127.0.0.1:")
     assert outputs["victim_vm_floating_ip"].startswith("127.0.0.1:")
@@ -304,12 +304,12 @@ def test_multi_segment_creates_one_network_per_segment_and_straddles():
 
     # One bridge per declared segment (short id "multiseg").
     names = {n.name for n in client.networks.created}
-    assert names == {"cyberguard-multiseg-corp", "cyberguard-multiseg-dmz"}
+    assert names == {"nidavellir-multiseg-corp", "nidavellir-multiseg-dmz"}
 
     # The straddling foothold is attached to both of its segments.
     jump = next(c for c in client.containers.created if c.name.endswith("-jump"))
     assert set(jump.attrs["NetworkSettings"]["Networks"]) >= {
-        "cyberguard-multiseg-dmz", "cyberguard-multiseg-corp"
+        "nidavellir-multiseg-dmz", "nidavellir-multiseg-corp"
     }
 
     # Containers are keyed/labeled by unique node name (not role).
@@ -317,9 +317,9 @@ def test_multi_segment_creates_one_network_per_segment_and_straddles():
     assert node_labels == {"web", "db", "jump"}
     # default-first then alpha → corp, dmz; the primary is the first.
     assert result["outputs"]["lab_networks"] == [
-        "cyberguard-multiseg-corp", "cyberguard-multiseg-dmz"
+        "nidavellir-multiseg-corp", "nidavellir-multiseg-dmz"
     ]
-    assert result["outputs"]["lab_network"] == "cyberguard-multiseg-corp"
+    assert result["outputs"]["lab_network"] == "nidavellir-multiseg-corp"
 
 
 def test_repeated_roles_get_per_node_outputs_without_collision():
@@ -400,20 +400,20 @@ def test_locked_arena_uses_internal_nets_and_a_no_masquerade_ingress():
     assert outputs["egress"] == "blocked"
 
     by_name = {n.name: n for n in client.networks.created}
-    seg = by_name["cyberguard-lockaaaa-lab"]
+    seg = by_name["nidavellir-lockaaaa-lab"]
     assert seg.internal is True  # hard egress block (no route to the internet)
-    ingress = by_name["cyberguard-lockaaaa-ingress"]
+    ingress = by_name["nidavellir-lockaaaa-ingress"]
     assert ingress.internal is False
     assert ingress.options.get("com.docker.network.bridge.enable_ip_masquerade") == "false"
 
     # The web node (publishes a port) runs PRIMARY on the ingress bridge so the
     # operator's browser can reach it; publishing dies on an `internal` net.
     web_kw = next(kw for kw in client.containers.run_kwargs if kw["labels"][LABEL_NODE] == "web")
-    assert web_kw["network"] == "cyberguard-lockaaaa-ingress"
+    assert web_kw["network"] == "nidavellir-lockaaaa-ingress"
     assert web_kw.get("ports")  # the published port rides the ingress net
     # The foothold (no ports) stays on the internal segment only — no ingress.
     kali_kw = next(kw for kw in client.containers.run_kwargs if kw["labels"][LABEL_NODE] == "kali")
-    assert kali_kw["network"] == "cyberguard-lockaaaa-lab"
+    assert kali_kw["network"] == "nidavellir-lockaaaa-lab"
     # The published web node still surfaces a host URL for the browser.
     assert outputs["node_web_url"].startswith("http://127.0.0.1:")
 
@@ -455,7 +455,7 @@ def test_locked_arena_with_foothold_gets_allowlisted_mirror():
     assert mirror_kw["network"] == mirror_net.name
 
     # The mirror joins each internal segment as `mirror` so footholds resolve it.
-    seg = next(n for n in client.networks.created if n.name == "cyberguard-mirroraa-lab")
+    seg = next(n for n in client.networks.created if n.name == "nidavellir-mirroraa-lab")
     assert "mirror" in seg.aliases.get(mirror_kw["name"], [])
 
     # The foothold (kali) gets its apt/pip pointed at the mirror; the victim does not.
@@ -475,7 +475,7 @@ def test_mirror_image_is_built_when_absent():
     provider = DockerLocalProvider(client=client)
     provider.deploy(LOCKED_SCENARIO, "buildimg-uuid")
     assert client.images.built, "mirror image should be built on first use"
-    assert client.images.built[0]["tag"] == "cyberguard/arena-mirror:latest"
+    assert client.images.built[0]["tag"] == "nidavellir/arena-mirror:latest"
 
 
 def test_mirror_opt_out_and_open_arena_have_no_mirror():
@@ -569,10 +569,10 @@ def test_real_container_lab_lifecycle():
         assert network.name == outputs["lab_network"]
 
         # Attacker-stance exec works against a real container.
-        exec_res = provider.exec_in_node(instance_id, "attacker", "echo cyberguard-ok")
+        exec_res = provider.exec_in_node(instance_id, "attacker", "echo nidavellir-ok")
         assert exec_res["success"] is True, exec_res.get("error")
         assert exec_res["exit_code"] == 0
-        assert "cyberguard-ok" in exec_res["stdout"]
+        assert "nidavellir-ok" in exec_res["stdout"]
     finally:
         assert provider.destroy(instance_id)["success"] is True
 
@@ -683,7 +683,7 @@ def test_sut_packaged_service_image_is_used_and_whitebox_surfaced():
 
 def test_sut_source_build_disabled_by_default_fails_clearly(monkeypatch):
     # Building untrusted source executes it at build time, so it is OFF unless
-    # CYBERGUARD_ALLOW_SOURCE_BUILD is set — a `source` service then fails with a
+    # NIDAVELLIR_ALLOW_SOURCE_BUILD is set — a `source` service then fails with a
     # clear, actionable error pointing at the flag (default-deny posture).
     monkeypatch.setattr(config, "ALLOW_SOURCE_BUILD", False)
     client = _FakeClient()
@@ -700,7 +700,7 @@ def test_sut_source_build_disabled_by_default_fails_clearly(monkeypatch):
     result = provider.deploy(scenario, "sut99999-rest-of-uuid")
     assert result["success"] is False
     assert "build-from-source" in result["error"]
-    assert "CYBERGUARD_ALLOW_SOURCE_BUILD" in result["error"]
+    assert "NIDAVELLIR_ALLOW_SOURCE_BUILD" in result["error"]
 
 
 def test_sut_source_build_runs_built_image_when_enabled(monkeypatch):
@@ -725,7 +725,7 @@ def test_sut_source_build_runs_built_image_when_enabled(monkeypatch):
     # The daemon was asked to build from a pinned, sub-dir'd remote git context,
     # tagged + arena-labeled, pulling fresh bases.
     build = next(b for b in client.images.built
-                 if str(b.get("tag", "")).startswith("cyberguard/sut:"))
+                 if str(b.get("tag", "")).startswith("nidavellir/sut:"))
     assert build["path"] == "https://github.com/o/p#v1:web"
     assert build["dockerfile"] == "Dockerfile"
     assert build["pull"] is True
@@ -777,7 +777,7 @@ def test_whitebox_source_cloned_and_mounted_readonly_on_foothold():
 
     # A per-arena, labeled source volume was created.
     (vol,) = client.volumes.created
-    assert vol.name == "cg-wbx12345-src-app"
+    assert vol.name == "nv-wbx12345-src-app"
     assert vol.labels[LABEL_LAB_ID] == "wbx12345-rest-of-uuid"
 
     # The git-clone helper ran with repo/ref via env (no shell-injection surface).

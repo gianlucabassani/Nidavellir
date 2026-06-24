@@ -271,7 +271,7 @@ def clear_screen():
 def print_banner():
     print(colored("""
     ╔══════════════════════════════════════════╗
-    ║      CYBERGUARD ARENA TOOLS v2.0         ║
+    ║      NIDAVELLIR ARENA TOOLS v2.0         ║
     ║      Automated offensive tooling         ║
     ╚══════════════════════════════════════════╝
     """, "cyan", attrs=['bold']))

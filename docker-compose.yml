@@ -4,34 +4,34 @@ services:
   # PostgreSQL (ADR-0004) — opt-in via the "postgres" profile:
   #   docker compose --profile postgres up -d
   # and point the services at it by setting in .env:
-  #   DATABASE_URL=postgresql+psycopg://cyberguard:${POSTGRES_PASSWORD}@postgres:5432/cyberguard
+  #   DATABASE_URL=postgresql+psycopg://nidavellir:${POSTGRES_PASSWORD}@postgres:5432/nidavellir
   # Without the profile / DATABASE_URL, the stack stays on the SQLite file
   # (zero extra services — the default for the local mock demo).
   postgres:
     image: postgres:16-alpine
-    container_name: cyberguard-postgres
+    container_name: nidavellir-postgres
     restart: unless-stopped
     profiles: ["postgres"]
     environment:
-      POSTGRES_DB: cyberguard
-      POSTGRES_USER: cyberguard
+      POSTGRES_DB: nidavellir
+      POSTGRES_USER: nidavellir
       # Well-known default for the local demo only — ALWAYS set
       # POSTGRES_PASSWORD in .env before exposing this profile anywhere.
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cyberguard-dev-only}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nidavellir-dev-only}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U cyberguard"]
+      test: ["CMD-SHELL", "pg_isready -U nidavellir"]
       interval: 10s
       timeout: 3s
       retries: 3
     networks:
-      - cyberguard-network
+      - nidavellir-network
 
   # Redis - Message Broker
   redis:
     image: redis:7-alpine
-    container_name: cyberguard-redis
+    container_name: nidavellir-redis
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -43,14 +43,14 @@ services:
       timeout: 3s
       retries: 3
     networks:
-      - cyberguard-network
+      - nidavellir-network
 
   # Orchestrator API
   orchestrator:
     build:
       context: ./cyber-range/services/scenario-orchestrator
       dockerfile: Dockerfile
-    container_name: cyberguard-orchestrator
+    container_name: nidavellir-orchestrator
     restart: unless-stopped
     depends_on:
       redis:
@@ -67,9 +67,9 @@ services:
       RANGE_PROVIDER: ${RANGE_PROVIDER:-docker-local}
 
       # API authentication (ADR-0002). The default is a well-known dev key for
-      # the local mock demo — ALWAYS override CYBERGUARD_API_KEY in .env for
+      # the local mock demo — ALWAYS override NIDAVELLIR_API_KEY in .env for
       # any reachable deployment.
-      BOOTSTRAP_API_KEY: ${CYBERGUARD_API_KEY:-dev-insecure-key}
+      BOOTSTRAP_API_KEY: ${NIDAVELLIR_API_KEY:-dev-insecure-key}
       BOOTSTRAP_API_KEY_ROLE: admin
       
       # OpenStack Credentials
@@ -127,7 +127,7 @@ services:
       # access — trusted/dev hosts only. Required by RANGE_PROVIDER=docker-local.
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
-      - cyberguard-network
+      - nidavellir-network
     healthcheck:
       # /health is unauthenticated by design; /deployments now requires a key.
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -140,7 +140,7 @@ services:
     build:
       context: ./cyber-range/services/scenario-orchestrator
       dockerfile: Dockerfile
-    container_name: cyberguard-worker
+    container_name: nidavellir-worker
     restart: unless-stopped
     depends_on:
       redis:
@@ -187,7 +187,7 @@ services:
       # EQUIVALENT host access — trusted/dev hosts only.
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
-      - cyberguard-network
+      - nidavellir-network
 
   # Celery Beat — ticks the lifecycle reaper (audit #9). One replica only:
   # multiple beats would double-fire the schedule. The worker runs the work.
@@ -195,7 +195,7 @@ services:
     build:
       context: ./cyber-range/services/scenario-orchestrator
       dockerfile: Dockerfile
-    container_name: cyberguard-beat
+    container_name: nidavellir-beat
     restart: unless-stopped
     depends_on:
       redis:
@@ -216,14 +216,14 @@ services:
       # reaper task reads the DB). Beat itself stores its schedule in-image.
       - ./data:/app/data
     networks:
-      - cyberguard-network
+      - nidavellir-network
 
   # Web UI
   webui:
     build:
       context: ./cyber-range/webui
       dockerfile: Dockerfile
-    container_name: cyberguard-webui
+    container_name: nidavellir-webui
     restart: unless-stopped
     depends_on:
       - orchestrator
@@ -231,16 +231,16 @@ services:
       - "5000:5000"
     environment:
       ORCHESTRATOR_URL: http://orchestrator:8000
-      ORCHESTRATOR_API_KEY: ${CYBERGUARD_API_KEY:-dev-insecure-key}
+      ORCHESTRATOR_API_KEY: ${NIDAVELLIR_API_KEY:-dev-insecure-key}
       # Lets the UI label simulated data (mock badge, disabled dead links).
       # Defaults to false now that the stack provisions real arenas.
       MOCK_MODE: ${MOCK_MODE:-false}
       FLASK_ENV: ${FLASK_ENV:-production}
       SECRET_KEY: ${SECRET_KEY:-change-me}
       WEBUI_USERNAME: ${WEBUI_USERNAME:-admin}
-      WEBUI_PASSWORD: ${WEBUI_PASSWORD:-cyberguard}
+      WEBUI_PASSWORD: ${WEBUI_PASSWORD:-nidavellir}
     networks:
-      - cyberguard-network
+      - nidavellir-network
     healthcheck:
       # Probe the (unauthenticated) login page. Uses python because the slim
       # webui image ships no curl.
@@ -255,7 +255,7 @@ services:
     build:
       context: ./cyber-range/services/agent-gateway
       dockerfile: Dockerfile
-    container_name: cyberguard-agent-gateway
+    container_name: nidavellir-agent-gateway
     profiles: ["agent-gateway"]
     restart: unless-stopped
     depends_on:
@@ -263,22 +263,22 @@ services:
     ports:
       - "9000:9000"
     environment:
-      CYBERGUARD_API_URL: http://orchestrator:8000
+      NIDAVELLIR_API_URL: http://orchestrator:8000
       # The agent principal's key (role=agent). Defaults to the dev key for the
       # local mock demo; set a real agent key for any reachable deployment.
-      CYBERGUARD_AGENT_KEY: ${CYBERGUARD_AGENT_KEY:-dev-insecure-key}
-      CYBERGUARD_STANCE: ${CYBERGUARD_STANCE:-attacker}
-      CYBERGUARD_GATEWAY_TRANSPORT: streamable-http
-      CYBERGUARD_GATEWAY_HOST: 0.0.0.0
-      CYBERGUARD_GATEWAY_PORT: 9000
-      CYBERGUARD_TRACE_DIR: /app/traces
+      NIDAVELLIR_AGENT_KEY: ${NIDAVELLIR_AGENT_KEY:-dev-insecure-key}
+      NIDAVELLIR_STANCE: ${NIDAVELLIR_STANCE:-attacker}
+      NIDAVELLIR_GATEWAY_TRANSPORT: streamable-http
+      NIDAVELLIR_GATEWAY_HOST: 0.0.0.0
+      NIDAVELLIR_GATEWAY_PORT: 9000
+      NIDAVELLIR_TRACE_DIR: /app/traces
     volumes:
       - ./traces:/app/traces
     networks:
-      - cyberguard-network
+      - nidavellir-network
 
 networks:
-  cyberguard-network:
+  nidavellir-network:
     driver: bridge
 
 volumes:

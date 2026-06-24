@@ -6,7 +6,7 @@
 
 ## Context
 
-CyberGuard's arenas today run **pre-built** victim workloads — a curated catalog
+Nidavellir's arenas today run **pre-built** victim workloads — a curated catalog
 image (DVWA, Juice Shop, …) or a fixed scenario pack. A high-value use case is the
 opposite: point the platform at *an arbitrary open-source project* and have a
 bring-your-own agent pentest it — find real bugs in real software, **white-box**
@@ -28,7 +28,7 @@ Four forces make this more than "add another image":
    (ADR-0005 / report_finding) assumes the operator already knows the planted
    bugs. For a fresh OSS target there may be *no* manifest — yet "the agent made
    the service crash" is still a real, scorable result.
-4. **Human-without-AI usability.** CyberGuard is AI-centered and MCP/agent-compliant,
+4. **Human-without-AI usability.** Nidavellir is AI-centered and MCP/agent-compliant,
    but it must **not require** an agent: a human pentester must be able to operate
    any arena — including a SUT arena — against a static vulnerable target with no
    model in the loop. The SUT machinery (provisioner, monitor, attacker-node access)
@@ -80,7 +80,7 @@ We will support **software-under-test arenas** via the following, fronted by an
    engagement`). Decided forks:
    - **Build order:** ship **operator-scripted + HITL first**; **autonomous-opt-in**
      comes later behind a **double lock** — a platform flag
-     (`CYBERGUARD_ALLOW_AUTONOMOUS_CONFIGURATOR=true`) **and** explicit per-arena
+     (`NIDAVELLIR_ALLOW_AUTONOMOUS_CONFIGURATOR=true`) **and** explicit per-arena
      operator consent (defense in depth for the most dangerous mode).
    - **Privilege boundary = HARD:** the configurator and the attacker are **separate
      sessions/keys** — the attacker key never holds write/config; at
@@ -112,7 +112,7 @@ We will support **software-under-test arenas** via the following, fronted by an
 
 The **scope boundary holds**: when the model configures or tests the service it is
 still bring-your-own AI under the operator's key, exercising a capability
-CyberGuard *provides and gates*. CyberGuard ships the provisioner, the sandbox
+Nidavellir *provides and gates*. Nidavellir ships the provisioner, the sandbox
 (egress lockdown), the monitor, and the consent gate — never the AI.
 
 The **arena wizard and monitor UI live in the current console, which is a temporary

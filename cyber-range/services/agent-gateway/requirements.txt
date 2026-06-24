@@ -1,4 +1,4 @@
-# CyberGuard MCP agent gateway (ROADMAP Phase 2).
+# Nidavellir MCP agent gateway (ROADMAP Phase 2).
 # Official MCP Python SDK (FastMCP server, stdio + streamable-HTTP transports).
 mcp>=1.2
 

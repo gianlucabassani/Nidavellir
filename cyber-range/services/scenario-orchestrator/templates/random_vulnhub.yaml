@@ -1,4 +1,4 @@
-schema: cyberguard/v3
+schema: nidavellir/v3
 name: random_vulnhub
 title: "Random VulnHub"
 version: "2.0"
@@ -39,7 +39,7 @@ objectives:
   - description: "Adapt exploitation techniques"
 
 metadata:
-  author: CyberGuard
+  author: Nidavellir
   tags: ["vulnhub", "random", "practice"]
   max_users: 2
   estimated_duration_hours: 4

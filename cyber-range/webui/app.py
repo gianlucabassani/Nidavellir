@@ -30,9 +30,9 @@ API_HEADERS = {"X-API-Key": API_KEY}
 
 # Operator login for the dashboard itself.
 WEBUI_USERNAME = os.getenv("WEBUI_USERNAME", "admin")
-WEBUI_PASSWORD = os.getenv("WEBUI_PASSWORD", "cyberguard")
+WEBUI_PASSWORD = os.getenv("WEBUI_PASSWORD", "nidavellir")
 
-if WEBUI_PASSWORD == "cyberguard":  # noqa: S105 - detecting the default, not setting it
+if WEBUI_PASSWORD == "nidavellir":  # noqa: S105 - detecting the default, not setting it
     app.logger.warning(
         "WEBUI_PASSWORD is the well-known default — fine for the local demo, "
         "NEVER for a reachable deployment."

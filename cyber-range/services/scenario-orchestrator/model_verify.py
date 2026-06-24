@@ -3,7 +3,7 @@ Best-effort verification that a bring-your-own model credential actually works.
 
 A lightweight **auth check** — list the provider's models (`GET .../models`) with
 the supplied key. It validates the credential without spending any inference
-tokens, and is deliberately *not* an agent run (scope boundary: CyberGuard never
+tokens, and is deliberately *not* an agent run (scope boundary: Nidavellir never
 operates the model, it only confirms the connection).
 
 This is best-effort by design: the orchestrator may have no egress to the

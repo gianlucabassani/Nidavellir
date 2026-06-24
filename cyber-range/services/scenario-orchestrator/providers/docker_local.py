@@ -5,7 +5,7 @@ Compiles a v3 scenario topology to Docker (ROADMAP Phase 1, P1-2): one bridge
 network per declared network segment (per arena), one container per node,
 attached to the networks of the segments it declares. A node may straddle
 several segments; nodes that declare none share a per-arena default bridge.
-Everything is tagged with `cyberguard.lab_id` so destroy() can find and remove
+Everything is tagged with `nidavellir.lab_id` so destroy() can find and remove
 an arena without any local state. Deploys take seconds and cost nothing — the
 workhorse for laptops, CI end-to-end tests, and cheap agent-test iteration.
 
@@ -30,13 +30,13 @@ from scenario_spec import normalized_nodes
 
 logger = logging.getLogger(__name__)
 
-LABEL_LAB_ID = "cyberguard.lab_id"
-LABEL_ROLE = "cyberguard.role"
-LABEL_NODE = "cyberguard.node"
+LABEL_LAB_ID = "nidavellir.lab_id"
+LABEL_ROLE = "nidavellir.role"
+LABEL_NODE = "nidavellir.node"
 
 # Sentinel segment for nodes that declare none — realized as the per-arena
 # default bridge, named WITHOUT a segment suffix so legacy/flat single-network
-# scenarios keep their original `cyberguard-<short>` network name.
+# scenarios keep their original `nidavellir-<short>` network name.
 _DEFAULT_SEGMENT = "_default"
 
 # Keeps tool containers (kali etc.) alive when the scenario doesn't say how.
@@ -45,7 +45,7 @@ DEFAULT_ATTACKER_COMMAND = "sleep infinity"
 # Software-under-test (SUT) arenas, P1-6: a node may build its workload from
 # source (ADR-0007). The built image is tagged + labeled per arena so destroy()
 # can reclaim it — otherwise a from-source build leaks one image per arena.
-_SUT_IMAGE_PREFIX = "cyberguard/sut"
+_SUT_IMAGE_PREFIX = "nidavellir/sut"
 
 # White-box source access (SUT arenas, P2-10 safe half; ADR-0007). When a victim
 # node's service is `whitebox: true` AND has a `source`, the repo is cloned
@@ -55,7 +55,7 @@ _SUT_IMAGE_PREFIX = "cyberguard/sut"
 # repo (a `git clone` is not code execution — that's why read access is ungated,
 # unlike build-from-source). The clone helper has egress only to the git host
 # during deploy; the volume is arena-labeled and reclaimed on destroy.
-_GIT_HELPER_IMAGE = os.getenv("CYBERGUARD_GIT_HELPER_IMAGE", "alpine/git:latest")
+_GIT_HELPER_IMAGE = os.getenv("NIDAVELLIR_GIT_HELPER_IMAGE", "alpine/git:latest")
 _WHITEBOX_MOUNT_BASE = "/whitebox"
 
 # Canonical roles get stable, dashboard-facing output key prefixes (the mock
@@ -100,7 +100,7 @@ _MIRROR_PROXY_URL = f"http://{_MIRROR_NODE}:{_MIRROR_PORT}"
 # while external package repos (public IPs) still go through it. curl ≥ 7.86
 # matches CIDRs in no_proxy; wget needs `--no-proxy` for the target (documented).
 _FOOTHOLD_NO_PROXY = "localhost,127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
-_MIRROR_IMAGE = "cyberguard/arena-mirror:latest"
+_MIRROR_IMAGE = "nidavellir/arena-mirror:latest"
 # Build context baked into the orchestrator/worker image at /app/infra/...
 _MIRROR_CONTEXT = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "infra", "arena-mirror"
@@ -131,11 +131,11 @@ class DockerLocalProvider(RangeProvider):
         return instance_id[:8]
 
     def _network_name(self, instance_id: str, segment: str) -> str:
-        base = f"cyberguard-{self._short(instance_id)}"
+        base = f"nidavellir-{self._short(instance_id)}"
         return base if segment == _DEFAULT_SEGMENT else f"{base}-{segment}"
 
     def _container_name(self, instance_id: str, node_name: str) -> str:
-        return f"cg-{self._short(instance_id)}-{node_name}"
+        return f"nv-{self._short(instance_id)}-{node_name}"
 
     @staticmethod
     def _supports(scenario_config: dict) -> bool:
@@ -316,7 +316,7 @@ class DockerLocalProvider(RangeProvider):
         # Resolve the workload image. Packaged-first (SUT arenas, P1-6): `image`
         # is the effective image from normalized_nodes (a service's published
         # image wins). A build-from-source service (`needs_build`) is built here
-        # via the daemon — gated by CYBERGUARD_ALLOW_SOURCE_BUILD (ADR-0007).
+        # via the daemon — gated by NIDAVELLIR_ALLOW_SOURCE_BUILD (ADR-0007).
         if node.get("needs_build"):
             image = self._build_service_image(instance_id, node, labels)
         elif not node.get("image"):
@@ -411,7 +411,7 @@ class DockerLocalProvider(RangeProvider):
 
         **OFF by default** — building an arbitrary repo runs third-party code at
         BUILD time (Dockerfile RUN), strictly more dangerous than pulling a
-        published image — so it requires CYBERGUARD_ALLOW_SOURCE_BUILD=true.
+        published image — so it requires NIDAVELLIR_ALLOW_SOURCE_BUILD=true.
 
         Builds via the daemon (BuildKit) with a **remote git context**, so there
         is no local checkout and no `git` binary needed here; the ``#<ref>``
@@ -424,7 +424,7 @@ class DockerLocalProvider(RangeProvider):
             raise ValueError(
                 f"node {node['name']!r} declares a build-from-source service, but "
                 "source builds are disabled (building untrusted code executes it "
-                "at build time). Enable explicitly with CYBERGUARD_ALLOW_SOURCE_"
+                "at build time). Enable explicitly with NIDAVELLIR_ALLOW_SOURCE_"
                 "BUILD=true (see SECURITY.md), or supply a packaged `service.image`"
             )
         service = node.get("service") or {}
@@ -549,7 +549,7 @@ class DockerLocalProvider(RangeProvider):
                     "service.source repo — no source mounted for the agent"
                 )
                 continue
-            vol_name = f"cg-{self._short(instance_id)}-src-{node['name']}"
+            vol_name = f"nv-{self._short(instance_id)}-src-{node['name']}"
             self._clone_source_into_volume(instance_id, vol_name, source, labels)
             mounts[node["name"]] = vol_name
         return mounts
@@ -566,7 +566,7 @@ class DockerLocalProvider(RangeProvider):
             clone = node.get("sut_clone")
             if not clone or not clone.get("repo"):
                 continue
-            vol_name = f"cg-{self._short(instance_id)}-sut-{node['name']}"
+            vol_name = f"nv-{self._short(instance_id)}-sut-{node['name']}"
             self._clone_source_into_volume(
                 instance_id, vol_name,
                 {"repo": clone["repo"], "ref": clone.get("ref")}, labels,

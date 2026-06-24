@@ -22,7 +22,7 @@ from scenario_spec import (
 # --- a minimal valid v3 scenario --------------------------------------------
 
 V3 = {
-    "schema": "cyberguard/v3",
+    "schema": "nidavellir/v3",
     "name": "two-node",
     "difficulty": "easy",
     "requires": {"provider_class": "container"},
@@ -39,7 +39,7 @@ V3 = {
 
 def test_valid_v3_spec_parses():
     spec = ScenarioSpec.from_raw(V3)
-    assert spec.schema_version == "cyberguard/v3"
+    assert spec.schema_version == "nidavellir/v3"
     assert spec.requires.provider_class is ProviderClass.container
     assert [n.name for n in spec.nodes] == ["web", "jump"]
     assert spec.agents[0].stance is Stance.attacker
@@ -234,7 +234,7 @@ def test_json_schema_uses_alias_and_marks_nodes_required():
 # --- software-under-test `service:` block (P1-6, packaged-first) -------------
 
 _SUT_BASE = {
-    "schema": "cyberguard/v3",
+    "schema": "nidavellir/v3",
     "name": "sut",
     "requires": {"provider_class": "container"},
     "network": {"segments": [{"name": "lab"}]},

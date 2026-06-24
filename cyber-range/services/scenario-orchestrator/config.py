@@ -21,7 +21,7 @@ if IN_DOCKER:
 else:
     # Local development paths (relative)
     # DIRECTORIES - Corrected Path Resolution
-    BASE_DIR = Path(__file__).parent.parent.parent.parent  # Goes up to ~/Projects/CyberGuard/
+    BASE_DIR = Path(__file__).parent.parent.parent.parent  # Goes up to ~/Projects/Nidavellir/
     CYBER_RANGE_DIR = BASE_DIR / "cyber-range"
 
     # Code directories (inside cyber-range/)
@@ -54,7 +54,7 @@ OS_USER_DOMAIN_NAME = os.getenv("OS_USER_DOMAIN_NAME", "Default")
 OS_PROJECT_DOMAIN_NAME = os.getenv("OS_PROJECT_DOMAIN_NAME", "Default")
 
 # OPENSTACK RESOURCES
-KEYPAIR_NAME = os.getenv("KEYPAIR_NAME", "cyberguard-key")
+KEYPAIR_NAME = os.getenv("KEYPAIR_NAME", "nidavellir-key")
 VICTIM_IMAGE_NAME = os.getenv("VICTIM_IMAGE_NAME", "Ubuntu-22.04")
 ATTACKER_IMAGE_NAME = os.getenv("ATTACKER_IMAGE_NAME", "Kali-Linux")
 SOC_IMAGE_NAME = os.getenv("SOC_IMAGE_NAME", "Ubuntu-22.04")
@@ -88,7 +88,7 @@ SECRETS_ENCRYPTION_KEY = os.getenv("SECRETS_ENCRYPTION_KEY")
 # image — so it is OFF by default and must be enabled explicitly. Build-time
 # network is open (apt/pip/npm/go mod); the arena RUNTIME stays egress-locked
 # regardless. SOURCE_BUILD_TIMEOUT bounds the build request. See SECURITY.md.
-ALLOW_SOURCE_BUILD = os.getenv("CYBERGUARD_ALLOW_SOURCE_BUILD", "false").lower() in (
+ALLOW_SOURCE_BUILD = os.getenv("NIDAVELLIR_ALLOW_SOURCE_BUILD", "false").lower() in (
     "true", "1", "yes", "on"
 )
 SOURCE_BUILD_TIMEOUT = int(os.getenv("SOURCE_BUILD_TIMEOUT", "1200"))
@@ -99,7 +99,7 @@ SOURCE_BUILD_TIMEOUT = int(os.getenv("SOURCE_BUILD_TIMEOUT", "1200"))
 # per-arena operator consent (mode="autonomous" at setup/start). HITL (per-step
 # approval) and operator-scripted modes need neither.
 ALLOW_AUTONOMOUS_CONFIGURATOR = os.getenv(
-    "CYBERGUARD_ALLOW_AUTONOMOUS_CONFIGURATOR", "false"
+    "NIDAVELLIR_ALLOW_AUTONOMOUS_CONFIGURATOR", "false"
 ).lower() in ("true", "1", "yes", "on")
 
 # API CONFIGURATION

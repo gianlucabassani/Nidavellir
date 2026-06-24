@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 
 # Metadata
-LABEL description="CyberGuard WebUI - Flask Dashboard"
+LABEL description="Nidavellir WebUI - Flask Dashboard"
 
 # Set working directory
 WORKDIR /app

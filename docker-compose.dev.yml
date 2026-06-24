@@ -5,7 +5,7 @@
 #   make dev            # == docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 #   make dev-down
 #
-# Then open http://localhost:5000  (login: admin / cyberguard)
+# Then open http://localhost:5000  (login: admin / nidavellir)
 # API:      http://localhost:8000  (header: X-API-Key: dev-insecure-key)
 #
 # DEV ONLY: this enables the Flask/Werkzeug debugger (interactive console =
@@ -44,7 +44,7 @@ services:
       MOCK_MODE: "true"
       ORCHESTRATOR_API_KEY: dev-insecure-key
       WEBUI_USERNAME: admin
-      WEBUI_PASSWORD: cyberguard
+      WEBUI_PASSWORD: nidavellir
       # Enables the Werkzeug reloader + debugger (see warning above)
       FLASK_DEBUG: "true"
     volumes:

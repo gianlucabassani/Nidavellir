@@ -62,7 +62,7 @@ class MockProvider(RangeProvider):
             if node.get("sut_clone"):
                 clone = node["sut_clone"]
                 fake_outputs[f"node_{name}_sut_source"] = clone.get("path") or f"/opt/{name}"
-                fake_outputs[f"node_{name}_setup_shell"] = f"docker exec -it cg-mock-{name} /bin/bash  # simulated"
+                fake_outputs[f"node_{name}_setup_shell"] = f"docker exec -it nv-mock-{name} /bin/bash  # simulated"
             if node.get("ports"):
                 fake_outputs[f"node_{name}_url"] = f"http://{ip}"
 

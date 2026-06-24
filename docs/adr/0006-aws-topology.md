@@ -2,7 +2,7 @@
 
 - **Status:** Proposed
 - **Date:** 2026-06-14
-- **Deciders:** CyberGuard maintainers
+- **Deciders:** Nidavellir maintainers
 
 ## Context
 
@@ -33,7 +33,7 @@ module** (`infra/terraform-aws/`) driven entirely by two variables:
 - `nodes` → one `aws_instance` per node (`for_each`), AMI resolved by fixed id
   or a `data.aws_ami` name+owner lookup, instance type from the node `size`.
 
-Everything is tagged `cyberguard:arena_id` (+ `:role`, `:node`, `:segment`).
+Everything is tagged `nidavellir:arena_id` (+ `:role`, `:node`, `:segment`).
 **No internet gateway or NAT is created** and the security group is confined to
 the VPC CIDR → egress lockdown by construction. Access is intended via **SSM**,
 not inbound SSH (`associate_public_ip` defaults to `false`).

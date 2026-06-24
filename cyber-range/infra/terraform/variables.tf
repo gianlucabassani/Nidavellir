@@ -57,12 +57,12 @@ variable "external_network_name" {
 
 variable "net_name" {
   type    = string
-  default = "networkcyberguard"
+  default = "networknidavellir"
 }
 
 variable "subnet_name" {
   type    = string
-  default = "networkcyberguard-subnet"
+  default = "networknidavellir-subnet"
 }
 
 variable "private_cidr" {
@@ -112,7 +112,7 @@ variable "image_name" {
 variable "vm_name" {
   description = "Virtual machine name"
   type        = string
-  default     = "cyber_guard-attack"
+  default     = "nidavellir-attack"
 }
 
 variable "root_volume_gb" {
@@ -133,7 +133,7 @@ variable "log_image_name" {
 variable "log_vm_name" {
   description = "Sensor/log VM name"
   type        = string
-  default     = "cyber_guard_log"
+  default     = "nidavellir_log"
 }
 
 variable "log_root_volume_gb" {
@@ -156,7 +156,7 @@ variable "victim_image_name" {
 variable "victim_vm_name" {
   description = "Victim VM name"
   type        = string
-  default     = "cyber_guard_victim"
+  default     = "nidavellir_victim"
 }
 
 variable "victim_root_volume_gb" {
@@ -171,5 +171,5 @@ variable "victim_root_volume_gb" {
 variable "keypair_name" {
   description = "Name of the SSH keypair in OpenStack"
   type        = string
-  default     = "cyberguard_ssh_key"
+  default     = "nidavellir_ssh_key"
 }

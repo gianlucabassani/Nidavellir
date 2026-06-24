@@ -1,4 +1,4 @@
-# CyberGuard Agent Gateway (MCP)
+# Nidavellir Agent Gateway (MCP)
 
 The **only** path a bring-your-own agent has into a running arena. An
 [MCP](https://modelcontextprotocol.io) server (official Python SDK / `FastMCP`)
@@ -25,7 +25,7 @@ gateway is the integration surface (scope boundary in `VISION.md`).
 | `destroy_arena(arena_id)` | `DELETE /destroy/{id}` | always available |
 | `announce_agent(arena_id, model, provider)` | `POST /arenas/{id}/agent-session` | declares the connected model/provider (+ bound stance) for the console's *connected model* chip; harness plumbing, telemetry only |
 
-**Attacker stance** (`CYBERGUARD_STANCE=attacker`):
+**Attacker stance** (`NIDAVELLIR_STANCE=attacker`):
 
 | Tool | Backend | Notes |
 |------|---------|-------|
@@ -34,14 +34,14 @@ gateway is the integration surface (scope boundary in `VISION.md`).
 | `run_command(arena_id, command, node?, timeout?)` | `POST /arenas/{id}/exec` | shell on the **foothold only**; budget-charged; audited + traced |
 | `report_finding(arena_id, title, cwe?, node?, evidence?)` | `POST /arenas/{id}/findings` | report a discovered vulnerability; scored by CWE+node vs the hidden manifest; neutral ack (no oracle) |
 
-**Defender stance** (`CYBERGUARD_STANCE=defender`):
+**Defender stance** (`NIDAVELLIR_STANCE=defender`):
 
 | Tool | Backend | Notes |
 |------|---------|-------|
 | `get_topology(arena_id)` | `GET /status` | what to watch |
 | `query_events(arena_id, limit?, type?)` | `GET /deployments/{id}/events` | the audit/detection feed; filter by type (e.g. `agent_exec`) |
 
-**Configurator stance** (`CYBERGUARD_STANCE=configurator`) — SUT setup, gated (ADR-0007). Time-boxed, **victim-scoped**, write-capable, revoked before the engagement. **No attacker tools.** The orchestrator enforces consent/scope/time-box/budget; an open setup session (started by the operator with a `mode`) must exist.
+**Configurator stance** (`NIDAVELLIR_STANCE=configurator`) — SUT setup, gated (ADR-0007). Time-boxed, **victim-scoped**, write-capable, revoked before the engagement. **No attacker tools.** The orchestrator enforces consent/scope/time-box/budget; an open setup session (started by the operator with a `mode`) must exist.
 
 | Tool | Backend | Notes |
 |------|---------|-------|
@@ -68,25 +68,25 @@ lists the stance's tools, and runs an engagement end-to-end (deploy → recon �
 pip install -r requirements.txt
 
 # stdio (local dev — one agent/stance per process)
-CYBERGUARD_API_URL=http://localhost:8000 \
-CYBERGUARD_AGENT_KEY=cg_...               \
-CYBERGUARD_STANCE=attacker                \
+NIDAVELLIR_API_URL=http://localhost:8000 \
+NIDAVELLIR_AGENT_KEY=cg_...               \
+NIDAVELLIR_STANCE=attacker                \
 python -m gateway.server
 
 # streamable HTTP
-CYBERGUARD_GATEWAY_TRANSPORT=streamable-http \
-CYBERGUARD_GATEWAY_HOST=0.0.0.0 CYBERGUARD_GATEWAY_PORT=9000 \
-CYBERGUARD_AGENT_KEY=cg_... python -m gateway.server
+NIDAVELLIR_GATEWAY_TRANSPORT=streamable-http \
+NIDAVELLIR_GATEWAY_HOST=0.0.0.0 NIDAVELLIR_GATEWAY_PORT=9000 \
+NIDAVELLIR_AGENT_KEY=cg_... python -m gateway.server
 ```
 
 | Env var | Default | Meaning |
 |---------|---------|---------|
-| `CYBERGUARD_API_URL` | `http://localhost:8000` | orchestrator REST base URL |
-| `CYBERGUARD_AGENT_KEY` | — (required) | the agent principal's API key (secret) |
-| `CYBERGUARD_STANCE` | unbound | `attacker` \| `defender` \| `configurator` \| `mitm` |
-| `CYBERGUARD_GATEWAY_TRANSPORT` | `stdio` | `stdio` \| `streamable-http` \| `sse` |
-| `CYBERGUARD_GATEWAY_HOST` / `_PORT` | `127.0.0.1` / `9000` | HTTP bind |
-| `CYBERGUARD_TRACE_DIR` | unset (off) | dir for `<arena_id>.jsonl` traces |
+| `NIDAVELLIR_API_URL` | `http://localhost:8000` | orchestrator REST base URL |
+| `NIDAVELLIR_AGENT_KEY` | — (required) | the agent principal's API key (secret) |
+| `NIDAVELLIR_STANCE` | unbound | `attacker` \| `defender` \| `configurator` \| `mitm` |
+| `NIDAVELLIR_GATEWAY_TRANSPORT` | `stdio` | `stdio` \| `streamable-http` \| `sse` |
+| `NIDAVELLIR_GATEWAY_HOST` / `_PORT` | `127.0.0.1` / `9000` | HTTP bind |
+| `NIDAVELLIR_TRACE_DIR` | unset (off) | dir for `<arena_id>.jsonl` traces |
 
 ## Layout
 

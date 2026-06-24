@@ -32,7 +32,7 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-SCHEMA_VERSION = "cyberguard/v3"
+SCHEMA_VERSION = "nidavellir/v3"
 
 # Slug for node/segment names: lowercase, starts alphanumeric, then
 # alphanumeric/'-'/'_', 1-63 chars. Mirrors SCENARIO_ID_RE in scenarios.py so
@@ -114,7 +114,7 @@ class SourceBuild(BaseModel):
     arenas). Pin `ref` (commit/tag) for reproducibility. The *execution* (clone +
     build) runs on docker-local via the daemon, but is **OFF by default** because
     building untrusted code executes it at build time: enable explicitly with
-    ``CYBERGUARD_ALLOW_SOURCE_BUILD=true`` (see SECURITY.md). When disabled, prefer
+    ``NIDAVELLIR_ALLOW_SOURCE_BUILD=true`` (see SECURITY.md). When disabled, prefer
     a packaged `Service.image`. `service.package` install is a separate follow-up."""
 
     model_config = ConfigDict(extra="forbid")

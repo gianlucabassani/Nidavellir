@@ -121,7 +121,7 @@
         <input class="input mono" id="import-id" placeholder="my-scenario" pattern="[a-z0-9][a-z0-9_-]{0,63}"></div>
       <div class="field"><label class="label">Spec</label>
         <textarea class="input" id="import-spec" rows="12" spellcheck="false"
-          placeholder="schema: cyberguard/v3&#10;name: corp-dmz&#10;network:&#10;  segments: [{name: lab}]&#10;nodes:&#10;  - {name: kali, role: attacker, image: kali, segments: [lab], entrypoint: true}&#10;  - {name: web, role: victim, image: dvwa, segments: [lab], ports: [80]}&#10;agents:&#10;  - {stance: attacker, node: kali}"></textarea></div>
+          placeholder="schema: nidavellir/v3&#10;name: corp-dmz&#10;network:&#10;  segments: [{name: lab}]&#10;nodes:&#10;  - {name: kali, role: attacker, image: kali, segments: [lab], entrypoint: true}&#10;  - {name: web, role: victim, image: dvwa, segments: [lab], ports: [80]}&#10;agents:&#10;  - {stance: attacker, node: kali}"></textarea></div>
       <div class="import-msg" id="import-msg" style="margin-bottom:12px"></div>
       <div style="display:flex; gap:8px">
         <button type="button" class="btn" id="import-preview-btn" style="flex:1"><i class="fa-solid fa-eye"></i> Validate &amp; preview</button>
@@ -161,4 +161,4 @@
 </section>
 {% endblock %}
 
-{% block scripts %}<script>CyberGuard.initLaunch();</script>{% endblock %}
+{% block scripts %}<script>Nidavellir.initLaunch();</script>{% endblock %}

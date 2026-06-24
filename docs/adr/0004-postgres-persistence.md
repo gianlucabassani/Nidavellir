@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-06-11 (accepted same day)
-- **Deciders:** CyberGuard maintainers
+- **Deciders:** Nidavellir maintainers
 
 ## Context
 

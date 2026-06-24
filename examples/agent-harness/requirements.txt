@@ -1,4 +1,4 @@
-# CyberGuard reference agent harness — dependencies. Bring your own model + key.
+# Nidavellir reference agent harness — dependencies. Bring your own model + key.
 # A thin tool-use loop that drives the MCP agent gateway.
 
 # Official MCP Python SDK — the streamable-HTTP client used to reach the gateway.

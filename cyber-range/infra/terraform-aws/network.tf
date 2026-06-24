@@ -4,8 +4,8 @@ resource "aws_vpc" "arena" {
   enable_dns_hostnames = true
 
   tags = {
-    Name                  = "cyberguard-${var.arena_id}"
-    "cyberguard:arena_id" = var.arena_id
+    Name                  = "nidavellir-${var.arena_id}"
+    "nidavellir:arena_id" = var.arena_id
   }
 }
 
@@ -16,9 +16,9 @@ resource "aws_subnet" "segment" {
   cidr_block = each.value.cidr
 
   tags = {
-    Name                  = "cyberguard-${var.arena_id}-${each.key}"
-    "cyberguard:arena_id" = var.arena_id
-    "cyberguard:segment"  = each.key
+    Name                  = "nidavellir-${var.arena_id}-${each.key}"
+    "nidavellir:arena_id" = var.arena_id
+    "nidavellir:segment"  = each.key
   }
 }
 
@@ -26,8 +26,8 @@ resource "aws_subnet" "segment" {
 # so there is no internet egress by construction (the Phase 2 containment
 # guarantee). The security group additionally confines traffic to the VPC.
 resource "aws_security_group" "arena" {
-  name        = "cyberguard-${var.arena_id}"
-  description = "Intra-arena traffic for CyberGuard arena ${var.arena_id}"
+  name        = "nidavellir-${var.arena_id}"
+  description = "Intra-arena traffic for Nidavellir arena ${var.arena_id}"
   vpc_id      = aws_vpc.arena.id
 
   ingress {
@@ -47,7 +47,7 @@ resource "aws_security_group" "arena" {
   }
 
   tags = {
-    Name                  = "cyberguard-${var.arena_id}"
-    "cyberguard:arena_id" = var.arena_id
+    Name                  = "nidavellir-${var.arena_id}"
+    "nidavellir:arena_id" = var.arena_id
   }
 }

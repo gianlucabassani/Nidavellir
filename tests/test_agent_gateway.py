@@ -43,14 +43,14 @@ class _FakeRestClient:
             "status": "active", "scenario": "basic_pentest",
             "outputs": {
                 # foothold (has a shell command) + one web target
-                "node_jump_name": "cg-x-jump",
+                "node_jump_name": "nv-x-jump",
                 "node_jump_private_ip": "10.0.0.3",
-                "node_jump_ssh_command": "docker exec -it cg-x-jump /bin/bash",
-                "node_web_name": "cg-x-web",
+                "node_jump_ssh_command": "docker exec -it nv-x-jump /bin/bash",
+                "node_web_name": "nv-x-web",
                 "node_web_private_ip": "10.0.0.2",
                 "node_web_url": "http://127.0.0.1:32768",
                 "node_web_state": "running",
-                "lab_networks": ["cyberguard-x-lab"],
+                "lab_networks": ["nidavellir-x-lab"],
             },
         }
 
@@ -161,8 +161,8 @@ def test_report_finding_proxies_rest_and_is_gated():
 def test_session_from_config_requires_key():
     with pytest.raises(GatewayAuthError):
         session_from_config(GatewayConfig(env={}))
-    s = session_from_config(GatewayConfig(env={"CYBERGUARD_AGENT_KEY": "cg_x",
-                                               "CYBERGUARD_STANCE": "defender"}))
+    s = session_from_config(GatewayConfig(env={"NIDAVELLIR_AGENT_KEY": "cg_x",
+                                               "NIDAVELLIR_STANCE": "defender"}))
     assert s.stance is Stance.defender
 
 
@@ -286,7 +286,7 @@ def test_unbound_session_registers_exactly_the_lifecycle_tools():
     from gateway.server import build_server
     from gateway.stances import LIFECYCLE_TOOLS
 
-    mcp = build_server(GatewayConfig(env={"CYBERGUARD_GATEWAY_HOST": "127.0.0.1"}))
+    mcp = build_server(GatewayConfig(env={"NIDAVELLIR_GATEWAY_HOST": "127.0.0.1"}))
     names = {t.name for t in asyncio.run(mcp.list_tools())}
     assert names == set(LIFECYCLE_TOOLS)
 
@@ -296,7 +296,7 @@ def test_attacker_session_also_registers_the_attacker_tools():
 
     from gateway.server import build_server
 
-    mcp = build_server(GatewayConfig(env={"CYBERGUARD_STANCE": "attacker"}))
+    mcp = build_server(GatewayConfig(env={"NIDAVELLIR_STANCE": "attacker"}))
     names = {t.name for t in asyncio.run(mcp.list_tools())}
     assert {"run_command", "list_targets", "get_topology", "report_finding"} <= names
 
@@ -355,7 +355,7 @@ def test_get_topology_marks_the_foothold():
     by_node = {n["node"]: n for n in topo["nodes"]}
     assert by_node["jump"]["foothold"] is True
     assert by_node["web"]["foothold"] is False
-    assert topo["networks"] == ["cyberguard-x-lab"]
+    assert topo["networks"] == ["nidavellir-x-lab"]
 
 
 def test_defender_cannot_run_command():
@@ -394,8 +394,8 @@ def test_defender_session_registers_query_events_not_run_command():
     import asyncio
 
     from gateway.server import build_server
-    mcp = build_server(GatewayConfig(env={"CYBERGUARD_STANCE": "defender",
-                                          "CYBERGUARD_GATEWAY_HOST": "127.0.0.1"}))
+    mcp = build_server(GatewayConfig(env={"NIDAVELLIR_STANCE": "defender",
+                                          "NIDAVELLIR_GATEWAY_HOST": "127.0.0.1"}))
     names = {t.name for t in asyncio.run(mcp.list_tools())}
     assert {"query_events", "get_topology"} <= names
     assert "run_command" not in names
@@ -422,8 +422,8 @@ def test_configurator_session_registers_its_tools():
 
     from gateway.server import build_server
 
-    mcp = build_server(GatewayConfig(env={"CYBERGUARD_STANCE": "configurator",
-                                          "CYBERGUARD_GATEWAY_HOST": "127.0.0.1"}))
+    mcp = build_server(GatewayConfig(env={"NIDAVELLIR_STANCE": "configurator",
+                                          "NIDAVELLIR_GATEWAY_HOST": "127.0.0.1"}))
     names = {t.name for t in asyncio.run(mcp.list_tools())}
     assert {"get_setup_brief", "propose_setup_step", "await_setup_step",
             "run_setup_step", "upload_file", "finish_setup"} <= names

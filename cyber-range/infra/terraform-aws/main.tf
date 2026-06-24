@@ -40,9 +40,9 @@ resource "aws_instance" "node" {
   key_name                    = var.key_name
 
   tags = {
-    Name                  = "cyberguard-${var.arena_id}-${each.key}"
-    "cyberguard:arena_id" = var.arena_id
-    "cyberguard:role"     = each.value.role
-    "cyberguard:node"     = each.key
+    Name                  = "nidavellir-${var.arena_id}-${each.key}"
+    "nidavellir:arena_id" = var.arena_id
+    "nidavellir:role"     = each.value.role
+    "nidavellir:node"     = each.key
   }
 }

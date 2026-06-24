@@ -1,4 +1,4 @@
-# CyberGuard developer workflow.
+# Nidavellir developer workflow.
 # Run `make help` for the list of targets.
 
 .DEFAULT_GOAL := help
@@ -54,7 +54,7 @@ DEV_COMPOSE := $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
 
 dev: ## Start the dev stack: mock mode pinned, live code reload, no .env needed
 	$(DEV_COMPOSE) up -d --build
-	@echo "WebUI: http://localhost:5000 (admin/cyberguard) — API: http://localhost:8000 (X-API-Key: dev-insecure-key)"
+	@echo "WebUI: http://localhost:5000 (admin/nidavellir) — API: http://localhost:8000 (X-API-Key: dev-insecure-key)"
 
 dev-down: ## Stop the dev stack
 	$(DEV_COMPOSE) down

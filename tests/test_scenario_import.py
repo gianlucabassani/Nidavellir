@@ -16,7 +16,7 @@ import scenarios
 from scenario_spec import ScenarioSpec, topology_view
 
 MINIMAL_SPEC = {
-    "schema": "cyberguard/v3",
+    "schema": "nidavellir/v3",
     "name": "Imported Web Lab",
     "difficulty": "easy",
     "network": {"segments": [{"name": "lab"}]},
@@ -73,7 +73,7 @@ def test_save_refuses_existing_without_overwrite_then_overwrites():
 def test_save_rejects_invalid_spec():
     from pydantic import ValidationError
 
-    bad = {"schema": "cyberguard/v3", "name": "x", "nodes": []}
+    bad = {"schema": "nidavellir/v3", "name": "x", "nodes": []}
     with pytest.raises(ValidationError):
         scenarios.save_scenario("imp-bad", bad)
 
@@ -90,7 +90,7 @@ def test_imported_id_cannot_shadow_builtin_in_listing():
     # writing a file with a built-in's id directly into SCENARIOS_DIR must not
     # shadow the built-in (built-in wins; the import is ignored)
     (config.SCENARIOS_DIR / "container_web_pentest.yaml").write_text(
-        "schema: cyberguard/v3\nname: evil\nnodes: [{name: n, image: i}]\n"
+        "schema: nidavellir/v3\nname: evil\nnodes: [{name: n, image: i}]\n"
     )
     listing = {s["id"]: s for s in scenarios.list_scenarios()}
     assert listing["container_web_pentest"]["source"] == "builtin"
@@ -181,7 +181,7 @@ def test_import_scenario_persists_and_lists(client):
 
 def test_import_accepts_yaml_string(client):
     yaml_text = (
-        "schema: cyberguard/v3\n"
+        "schema: nidavellir/v3\n"
         "name: yaml-lab\n"
         "network: {segments: [{name: lab}]}\n"
         "nodes:\n"
@@ -193,7 +193,7 @@ def test_import_accepts_yaml_string(client):
 
 
 def test_import_rejects_invalid_spec_422(client):
-    resp = client.post("/scenarios", json={"spec": {"schema": "cyberguard/v3", "name": "x", "nodes": []}})
+    resp = client.post("/scenarios", json={"spec": {"schema": "nidavellir/v3", "name": "x", "nodes": []}})
     assert resp.status_code == 422
 
 
@@ -245,7 +245,7 @@ def test_preview_from_spec_and_invalid(client):
 
     bad = client.post(
         "/scenarios/preview",
-        json={"spec": {"schema": "cyberguard/v3", "name": "x", "nodes": []}},
+        json={"spec": {"schema": "nidavellir/v3", "name": "x", "nodes": []}},
     ).json()
     assert bad["valid"] is False
     assert bad["errors"]

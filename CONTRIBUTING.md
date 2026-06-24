@@ -1,13 +1,13 @@
-# Contributing to CyberGuard
+# Contributing to Nidavellir
 
-Thanks for helping build CyberGuard. This guide gets you from clone to green tests.
+Thanks for helping build Nidavellir. This guide gets you from clone to green tests.
 
 ## Development setup
 
 ```bash
 # 1. Clone & enter
-git clone https://github.com/gianlucabassani/CyberGuard.git
-cd CyberGuard
+git clone https://github.com/gianlucabassani/Nidavellir.git
+cd Nidavellir
 
 # 2. Create a virtualenv
 python3 -m venv .venv && source .venv/bin/activate
@@ -28,7 +28,7 @@ tests run in `MOCK_MODE=true` and stub the task queue.
 
 ```bash
 make dev              # compose + docker-compose.dev.yml override
-# WebUI:  http://localhost:5000   (login: admin / cyberguard)
+# WebUI:  http://localhost:5000   (login: admin / nidavellir)
 # API:    http://localhost:8000   (header: X-API-Key: dev-insecure-key)
 make dev-logs         # tail everything
 make dev-down
