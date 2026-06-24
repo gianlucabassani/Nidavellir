@@ -374,8 +374,11 @@ stance's entry point; the sensor node feeds defender-stance scoring.
 
 ### 2. random_vulnhub
 
-**Nodes:** a catalog-selected vulnerable image + a Kali foothold. Wiring the
-VulnHub importer to make this real is a Phase-1 item (audit #10).
+**Nodes:** a catalog-selected vulnerable image + a Kali foothold. For real
+ready-to-run targets, import a [Vulhub](https://github.com/vulhub/vulhub) CVE
+environment via `POST /scenarios/import/vulhub` (deterministic compose→v3, audit
+#10; see [API.md](API.md) / [SCENARIOS.md](SCENARIOS.md)). A VulnHub-VM converter
+(full disk images) is still planned.
 
 
 

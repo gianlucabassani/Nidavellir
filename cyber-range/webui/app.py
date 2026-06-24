@@ -748,6 +748,30 @@ def scenario_import_proxy():
     return jsonify(data), code
 
 
+@app.route("/api/scenarios/import/vulhub", methods=["POST"])
+def scenario_import_vulhub_proxy():
+    """Convert a Vulhub environment into a v3 pack (proxies
+    POST /scenarios/import/vulhub). ``dry_run`` previews; otherwise it saves.
+    CSRF-protected."""
+    body = request.get_json(silent=True) or {}
+    payload = {
+        "ref": (body.get("ref") or "").strip() or "master",
+        "include_attacker": body.get("include_attacker", True),
+        "dry_run": bool(body.get("dry_run")),
+        "overwrite": bool(body.get("overwrite")),
+    }
+    if body.get("path"):
+        payload["path"] = str(body["path"]).strip()
+    if body.get("compose") is not None:
+        payload["compose"] = body.get("compose")
+    if body.get("id"):
+        payload["id"] = body.get("id")
+    if body.get("name"):
+        payload["name"] = body.get("name")
+    data, code = _api_post("/scenarios/import/vulhub", payload)
+    return jsonify(data), code
+
+
 @app.route("/api/scenarios/<scenario_id>/topology", methods=["GET"])
 def scenario_topology_proxy(scenario_id):
     """Topology graph of a registered scenario for the pre-deploy preview."""

@@ -24,6 +24,7 @@ import model_verify
 import netguard
 import scenarios
 import setup_phase
+import vulhub_import
 from auth import Principal, ensure_bootstrap_key, require_principal
 from database import Database
 from orchestrator import Orchestrator
@@ -336,6 +337,108 @@ async def preview_scenario(
             "nodes": len(spec.nodes),
         },
         "topology": topology_view(spec),
+    }
+
+
+class VulhubImportRequest(BaseModel):
+    """Import a Vulhub environment as a v3 pack (P1-5 / track C). Provide either
+    ``path`` (a Vulhub env dir, e.g. ``weblogic/CVE-2017-10271`` — fetched from
+    GitHub at ``ref``) or ``compose`` (a pasted docker-compose object or YAML
+    string, for offline/air-gapped use). ``dry_run`` previews without saving."""
+
+    path: str | None = None
+    compose: dict | str | None = None
+    ref: str = vulhub_import.DEFAULT_REF
+    id: str | None = Field(default=None, max_length=64)
+    name: str | None = Field(default=None, max_length=120)
+    include_attacker: bool = True
+    overwrite: bool = False
+    dry_run: bool = False
+
+    @model_validator(mode="after")
+    def _one_source(self) -> "VulhubImportRequest":
+        if bool(self.path) == bool(self.compose):
+            raise ValueError("provide exactly one of 'path' or 'compose'")
+        return self
+
+
+@app.post("/scenarios/import/vulhub")
+@limiter.limit(RATE_LIMIT_DEPLOY)
+async def import_vulhub(
+    request: Request,
+    req: VulhubImportRequest,
+    principal: Principal = Depends(require_principal),
+):
+    """Convert a Vulhub Docker Compose environment into a v3 scenario pack
+    (operator-only). Deterministic — no model in the loop. ``dry_run`` returns a
+    preview (valid/warnings/topology); otherwise the pack is validated and
+    persisted to the registry like any imported scenario. Never deploys."""
+    _require_operator(principal)
+    try:
+        if req.path:
+            compose, env_path = vulhub_import.fetch_vulhub_compose(
+                req.path, ref=req.ref
+            )
+        else:
+            compose = _parse_scenario_spec(req.compose)
+            env_path = ""
+        raw, warnings = vulhub_import.convert_compose(
+            compose,
+            name=req.name,
+            env_path=env_path,
+            ref=req.ref,
+            include_attacker=req.include_attacker,
+        )
+    except vulhub_import.VulhubImportError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except netguard.UnsafeHostError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+    try:
+        spec = ScenarioSpec.from_raw(raw)
+    except ValidationError as e:
+        # A faithful conversion that still fails v3 validation — report it.
+        raise HTTPException(status_code=422, detail=_spec_errors(e)) from e
+
+    if req.dry_run:
+        suggested = None
+        try:
+            suggested = _derive_scenario_id(raw)
+        except HTTPException:
+            pass
+        return {
+            "valid": True,
+            "errors": [],
+            "warnings": warnings + spec.warnings(),
+            "suggested_id": req.id or suggested,
+            "summary": {
+                "name": spec.name,
+                "title": spec.title,
+                "difficulty": spec.difficulty,
+                "provider_class": spec.requires.provider_class.value,
+                "nodes": len(spec.nodes),
+            },
+            "topology": topology_view(spec),
+        }
+
+    scenario_id = (req.id or "").strip().lower() or _derive_scenario_id(raw)
+    try:
+        summary = scenarios.save_scenario(scenario_id, raw, overwrite=req.overwrite)
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=_spec_errors(e)) from e
+    except FileExistsError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    logger.info(
+        "Imported Vulhub scenario '%s' (path=%r) by '%s'",
+        scenario_id, req.path, principal.name,
+    )
+    return {
+        "status": "imported",
+        "id": scenario_id,
+        "scenario": summary,
+        "warnings": warnings + spec.warnings(),
     }
 
 

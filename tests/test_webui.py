@@ -405,6 +405,21 @@ def test_scenario_topology_proxy_offline_is_404(client):
     assert resp.get_json()["topology"] is None
 
 
+def test_vulhub_import_proxy_requires_csrf(client):
+    _login(client)
+    assert client.post(
+        "/api/scenarios/import/vulhub", json={"path": "a/b"}
+    ).status_code == 400
+
+
+def test_vulhub_import_proxy_relays_unreachable_backend(client):
+    _login(client)
+    token = _csrf_token(client, "/")
+    resp = client.post("/api/scenarios/import/vulhub", json={"path": "a/b"},
+                       headers={"X-CSRFToken": token})
+    assert resp.status_code == 502 and "error" in resp.get_json()
+
+
 def test_build_custom_posts_multiple_attackers(client, monkeypatch):
     """The custom-build form relays an `attackers` list to the orchestrator."""
     import app as webui_module

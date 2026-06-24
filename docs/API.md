@@ -78,6 +78,26 @@ validates against the [v3 schema](scenario.schema.json) (see
 [SCENARIOS.md](SCENARIOS.md)); a `false` here means the registry fell back to
 raw metadata for a non-conforming template.
 
+**Authoring & import (operator-only).** `POST /scenarios` validates a v3 spec
+(JSON object or YAML/JSON string) and persists it as a reusable pack;
+`DELETE /scenarios/{id}` removes an imported pack (built-ins are read-only);
+`POST /scenarios/preview` dry-runs a candidate (a pasted spec or catalog `picks`)
+returning `{valid, errors, warnings, topology}` without deploying;
+`GET /scenarios/{id}/topology` returns a registered pack's topology graph.
+
+`POST /scenarios/import/vulhub` (operator-only) converts a [Vulhub](https://github.com/vulhub/vulhub)
+Docker Compose environment into a v3 pack — deterministically, no model in the
+loop. Provide `path` (a Vulhub env dir, e.g. `weblogic/CVE-2017-10271`, fetched
+from GitHub at `ref`, default `master`) **or** `compose` (a pasted compose object
+or YAML string, for offline use). Each compose service → one `victim` node; a
+build-only service maps to a gated `service.source` (needs
+`CYBERGUARD_ALLOW_SOURCE_BUILD`); a Kali foothold is added unless
+`include_attacker: false`. Lossy conversions (dropped `volumes`/`depends_on`/…)
+are returned in `warnings`. `dry_run: true` previews (validate + topology) without
+saving; otherwise the pack is persisted and appears in `GET /scenarios`. VulnHub
+(full VM disks) is a separate, planned track. Returns `422` on an unconvertible
+compose, `409` on an id collision (pass `overwrite: true`).
+
 ### Provider Registry
 
 `GET /providers` — the deployment backends available in this install and the

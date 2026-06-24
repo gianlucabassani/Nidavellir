@@ -162,6 +162,10 @@ class Node(BaseModel):
     size: str = "small"
     segments: list[str] = Field(default_factory=list)
     ports: list[int] = Field(default_factory=list)
+    #: environment variables for the workload (str→str). Many imported targets
+    #: (e.g. Vulhub CVE environments) only function with their compose `environment`
+    #: set, so it is modeled explicitly rather than dropped by ``extra="ignore"``.
+    environment: dict[str, str] = Field(default_factory=dict)
     #: marks the foothold an attacker stance attaches to (Phase 2 gateway).
     entrypoint: bool = False
     #: container/VM entrypoint override (e.g. "sleep infinity" for tool boxes).
@@ -469,6 +473,7 @@ def _canonical_node(node: dict) -> dict:
         "size": node.get("size", "small"),
         "segments": list(node.get("segments") or []),
         "ports": list(node.get("ports") or []),
+        "environment": dict(node.get("environment") or {}),
         "entrypoint": bool(node.get("entrypoint", False)),
         "command": node.get("command"),
         "services": list(node.get("services") or []),

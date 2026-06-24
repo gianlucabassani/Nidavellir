@@ -351,11 +351,15 @@ class DockerLocalProvider(RangeProvider):
         if command is not None:
             run_kwargs["command"] = command
 
+        # The node's own environment (e.g. a Vulhub CVE env's compose `environment`).
+        environment = {str(k): str(v) for k, v in (node.get("environment") or {}).items()}
+
         # Point a foothold's apt/pip at the allowlisted mirror. Set in the
         # container config so `docker exec` sessions inherit it too. NO_PROXY
-        # keeps loopback/intra-arena traffic off the proxy.
+        # keeps loopback/intra-arena traffic off the proxy. Merged on TOP of the
+        # node env so the foothold's proxy settings always win.
         if mirror is not None and self._is_foothold(node):
-            run_kwargs["environment"] = {
+            environment.update({
                 "http_proxy": _MIRROR_PROXY_URL,
                 "https_proxy": _MIRROR_PROXY_URL,
                 "HTTP_PROXY": _MIRROR_PROXY_URL,
@@ -364,7 +368,9 @@ class DockerLocalProvider(RangeProvider):
                 # reaches victim services directly; external repos still proxied.
                 "no_proxy": _FOOTHOLD_NO_PROXY,
                 "NO_PROXY": _FOOTHOLD_NO_PROXY,
-            }
+            })
+        if environment:
+            run_kwargs["environment"] = environment
 
         # Mount white-box source read-only into the foothold so the agent can
         # read it while testing the running service from here (SUT arenas).

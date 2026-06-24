@@ -86,6 +86,13 @@
           "title": "Ports",
           "type": "array"
         },
+        "environment": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Environment",
+          "type": "object"
+        },
         "entrypoint": {
           "default": false,
           "title": "Entrypoint",
@@ -176,6 +183,30 @@
         "provider_class": {
           "$ref": "#/$defs/ProviderClass",
           "default": "any"
+        },
+        "egress": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Egress"
+        },
+        "mirror": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mirror"
         }
       },
       "title": "Requires",
@@ -270,7 +301,7 @@
     },
     "SourceBuild": {
       "additionalProperties": false,
-      "description": "Build a node's workload from source \u2014 e.g. a GitHub project (P1-6, SUT\narenas). Pin `ref` (commit/tag) for reproducibility. The *execution* (clone +\nbuild) is a deliberate, separately-reviewed increment: the schema is accepted\nnow; docker-local builds from source in a later P1-6 step (until then, prefer\na packaged `Service.image`).",
+      "description": "Build a node's workload from source \u2014 e.g. a GitHub project (P1-6, SUT\narenas). Pin `ref` (commit/tag) for reproducibility. The *execution* (clone +\nbuild) runs on docker-local via the daemon, but is **OFF by default** because\nbuilding untrusted code executes it at build time: enable explicitly with\n``CYBERGUARD_ALLOW_SOURCE_BUILD=true`` (see SECURITY.md). When disabled, prefer\na packaged `Service.image`. `service.package` install is a separate follow-up.",
       "properties": {
         "repo": {
           "title": "Repo",

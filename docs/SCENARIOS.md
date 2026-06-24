@@ -84,8 +84,9 @@ ttl_hours: 8                     # optional
 
 **Node:** `name` (unique slug, required), a **workload** (`image` *or* a
 `service:` block — see below), `role` (slug, default `node`), `size` (default
-`small`), `segments[]`, `ports[]`, `entrypoint` (bool), `command`, plus
-informational `services[]`/`tools[]`.
+`small`), `segments[]`, `ports[]`, `environment` (a `str→str` map of env vars for
+the workload), `entrypoint` (bool), `command`, plus informational
+`services[]`/`tools[]`.
 
 ### Software-under-test: the `service:` block (P1-6, packaged-first)
 
@@ -126,6 +127,30 @@ running service. The clone runs nothing from the repo (so source *reading* is
 ungated, unlike *building*), the mount is read-only, and the volume is reclaimed on
 destroy. `whitebox: true` **without** a `source` just surfaces the flag (no source
 to mount). The mounted path is surfaced as `node_<victim>_whitebox_source`.
+
+### Importing from Vulhub (P1-5)
+
+[Vulhub](https://github.com/vulhub/vulhub) ships hundreds of pre-built vulnerable
+container environments as Docker Compose files (one dir per CVE/app). CyberGuard
+**deterministically** converts one into a v3 pack and lands it in the import
+registry — no model in the loop (that is the separate prompt→spec generator):
+
+```bash
+curl -sX POST "$API/scenarios/import/vulhub" -H "X-API-Key: $OP" \
+  -H 'Content-Type: application/json' \
+  -d '{"path": "weblogic/CVE-2017-10271", "ref": "master"}'
+```
+
+Each compose **service** becomes one `victim` node: `image:` → `image`; a
+build-only service → a gated `service.source` rooted at the Vulhub repo subdir
+(deploying it needs `CYBERGUARD_ALLOW_SOURCE_BUILD`); `ports:` → the container
+ports; `environment:` (dict or `KEY=VALUE` list) → `environment`; `command:` →
+`command`. A Kali foothold is added by default (so the arena is drivable by a
+human or an agent). Keys we can't faithfully map (`volumes`, `depends_on`,
+`privileged`, …) are **dropped and reported in `warnings`** — never silently. Pass
+`compose` (a pasted compose object/string) instead of `path` for offline use, or
+`dry_run: true` to preview the topology without saving. VulnHub (full VM disks)
+needs a VM provider and is a separate, planned track.
 
 ### Validation: hard errors vs. soft warnings
 

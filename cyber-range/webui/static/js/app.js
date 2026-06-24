@@ -974,6 +974,45 @@
         else if (iMsg) { iMsg.className = "import-msg err"; iMsg.textContent = "Import failed: " + (data.error || ("HTTP " + status)); }
       });
     });
+
+    // Vulhub: env path → deterministic convert → preview/import
+    const vhPath = document.getElementById("vh-path");
+    const vhRef = document.getElementById("vh-ref");
+    const vhId = document.getElementById("vh-id");
+    const vhAtk = document.getElementById("vh-attacker");
+    const vhMsg = document.getElementById("vh-msg");
+    const vhPv = document.getElementById("vh-preview-btn");
+    const vhDo = document.getElementById("vh-do-btn");
+    const vhBody = () => ({
+      path: vhPath ? vhPath.value.trim() : "",
+      ref: vhRef ? vhRef.value.trim() : "",
+      include_attacker: vhAtk ? vhAtk.checked : true,
+    });
+    if (vhPv) vhPv.addEventListener("click", () => {
+      const b = vhBody();
+      if (!b.path) { if (vhMsg) { vhMsg.className = "import-msg err"; vhMsg.textContent = "Enter a Vulhub environment path first."; } return; }
+      if (vhMsg) { vhMsg.className = "import-msg"; vhMsg.textContent = "Fetching from GitHub…"; }
+      postJson("/api/scenarios/import/vulhub", Object.assign(b, { dry_run: true })).then(({ status, data }) => {
+        if (status === 200 && data.valid) {
+          renderSpecTopology("vh-preview", data.topology);
+          const w = (data.warnings || []).length ? "  ⚠ " + data.warnings.join("; ") : "";
+          if (vhMsg) { vhMsg.className = "import-msg ok"; vhMsg.textContent = "Valid ✓ " + (data.summary ? data.summary.nodes + " node(s)" : "") + w; }
+          if (vhId && !vhId.value && data.suggested_id) vhId.value = data.suggested_id;
+        } else {
+          renderSpecTopology("vh-preview", null);
+          if (vhMsg) { vhMsg.className = "import-msg err"; vhMsg.textContent = (data.errors ? data.errors.join("; ") : (data.error || ("HTTP " + status))); }
+        }
+      });
+    });
+    if (vhDo) vhDo.addEventListener("click", () => {
+      const b = vhBody();
+      if (!b.path) return;
+      if (vhId && vhId.value.trim()) b.id = vhId.value.trim();
+      postJson("/api/scenarios/import/vulhub", b).then(({ status, data }) => {
+        if (status === 200) { window.location.href = "/scenarios"; }
+        else if (vhMsg) { vhMsg.className = "import-msg err"; vhMsg.textContent = "Import failed: " + (data.error || (data.detail) || ("HTTP " + status)); }
+      });
+    });
   }
 
   /* ---- scenarios page: click a row to preview its topology ------------ */

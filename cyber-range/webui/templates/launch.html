@@ -141,6 +141,58 @@
   </div>
 </div>
 
+<!-- import a Vulhub environment -->
+<div class="card" style="margin-top:18px">
+  <div class="flexrow" style="margin-bottom:6px">
+    <span class="badge badge--accent"><i class="fa-solid fa-cubes-stacked"></i> Vulhub</span>
+    <h3 style="margin:0">Import from Vulhub</h3>
+  </div>
+  <p class="muted" style="margin-top:0;font-size:13px">
+    Convert a <a href="https://github.com/vulhub/vulhub" target="_blank" rel="noopener">Vulhub</a>
+    container environment into a reusable v3 pack — deterministically, no model in the
+    loop. Give the environment path (e.g. <span class="mono">log4j/CVE-2021-44228</span>)
+    and a Kali foothold is added so it's drivable by a human or an agent. (Track C, P1-5.)
+  </p>
+  <div class="grid cols-2">
+    <div>
+      <div class="field">
+        <label class="label">Vulhub environment path</label>
+        <input class="input mono" type="text" id="vh-path"
+               placeholder="weblogic/CVE-2017-10271">
+      </div>
+      <div class="grid cols-2">
+        <div class="field">
+          <label class="label">Git ref <span class="muted">(branch/tag/commit)</span></label>
+          <input class="input mono" type="text" id="vh-ref" value="master">
+        </div>
+        <div class="field">
+          <label class="label">Scenario id <span class="muted">(optional)</span></label>
+          <input class="input mono" type="text" id="vh-id"
+                 placeholder="derived from the path" pattern="[a-z0-9][a-z0-9_-]{0,63}">
+        </div>
+      </div>
+      <label class="flexrow" style="gap:8px;font-size:13px">
+        <input type="checkbox" id="vh-attacker" checked>
+        Add a Kali attacker foothold (recommended)
+      </label>
+      <div class="flexrow" style="margin-top:10px">
+        <button type="button" class="btn" id="vh-preview-btn"><i class="fa-solid fa-eye"></i> Fetch &amp; preview</button>
+        <button type="button" class="btn btn-primary" id="vh-do-btn"><i class="fa-solid fa-file-import"></i> Import</button>
+      </div>
+      <div class="import-msg" id="vh-msg" style="margin-top:10px"></div>
+    </div>
+    <div>
+      <div class="topo-preview" id="vh-preview"></div>
+      <div class="topo-legend">
+        <span><i class="dotsq dotsq--danger"></i> foothold</span>
+        <span><i class="dotsq dotsq--warn"></i> target</span>
+        <span><i class="dotsq dotsq--muted"></i> host</span>
+        <span><i class="dashbox"></i> segment</span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- software-under-test wizard -->
 <div class="card" style="margin-top:18px">
   <div class="flexrow" style="margin-bottom:6px">
