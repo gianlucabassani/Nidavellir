@@ -61,7 +61,7 @@ security findings; all the load-bearing ones are fixed. Kept for the record.
 | 7 | 🟠 | **No tests, no CI.** | repo-wide | Fixed ✅ |
 | 8 | 🟠 | **Bare `except:`** swallowed errors. | `api.py`, `orchestrator.py` | Fixed ✅ (bandit gate blocking) |
 | 9 | 🟠 | **No arena TTL / reaper** → cost + quota leak. | orchestrator/worker | Fixed ✅ (Phase-3 reaper) |
-| 10| 🟠 | **`random_vulnhub` not wired** to the importer. | `vulnhub-importer/*` | Phase 1 (topology engine) |
+| 10| 🟠 | **`random_vulnhub` not wired** to the importer. | `vulnhub-importer/*` | Vulhub-container importer landed ✅ (2026-06-24, `vulhub_import.py` + `POST /scenarios/import/vulhub`); VulnHub-VM converter still planned |
 | 11| 🟠 | **CSRF** absent on WebUI POSTs. | `webui/app.py` | Fixed ✅ (+ API rate limiting) |
 | 12| 🟡 | **CLI dead code.** | `cli.py` | Fixed ✅ (deleted) |
 | 13| 🟡 | **`update_deployment` truthiness bug**; no migrations. | `database.py` | Fixed ✅ (ADR-0004) |
@@ -190,9 +190,11 @@ across the phases below in four steps that build on each other:
   scenarios page, and (restyled) the live arena. → **P7-9**.
 - **C — Community import → v3 pack (Phase 1).** A deterministic converter from
   public sources that lands a ready-to-run pack in the registry (step A). Targets
-  **both** **Vulhub** (container CVE environments — native to docker-local) and
-  **VulnHub** (full VM disks — VM providers; modernizes the orphaned legacy
-  importer). Complementary to SUT provisioning, not replaced by it. → **P1-5**.
+  **both** **Vulhub** (container CVE environments — native to docker-local; **DONE**
+  2026-06-24 — `vulhub_import.py` + `POST /scenarios/import/vulhub` + WebUI card)
+  and **VulnHub** (full VM disks — VM providers; modernizes the orphaned legacy
+  importer; **planned**). Complementary to SUT provisioning, not replaced by it.
+  → **P1-5**.
 - **D — Zero-to-prompt generation (Phase 3).** The LLM (BYO key) emits a v3 spec →
   validate → **preview (B)** → review-gate → **import (A)** → compile (existing).
   The capstone "generate JSON → parsed into docker/Terraform targets"; it depends
@@ -240,10 +242,17 @@ Key work:
   AMI).
 - **Arena packs + variants** (GOAD model: full / light / mini); a first
   multi-node AD-style or service-mesh arena beyond the legacy 2–3 node ones.
-- **VulnHub importer / catalog expansion** (#10): a **deterministic auto-converter
-  from public sources (e.g. VulnHub)** → import → emit a v3 scenario pack + image
-  registration. A **separate, still-needed track** that grows the library of known,
-  ready-to-run targets — complementary to SUT provisioning, not replaced by it.
+- **Community importer / catalog expansion** (#10): a **deterministic auto-converter
+  from public sources** → import → emit a v3 scenario pack + image registration. A
+  **separate, still-needed track** that grows the library of known, ready-to-run
+  targets — complementary to SUT provisioning, not replaced by it. **Vulhub
+  (containers) DONE** (2026-06-24): `vulhub_import.py` converts a Vulhub Docker
+  Compose env → v3 pack (image→image, build→gated `service.source`,
+  ports/environment/command mapped; honest drops reported), via
+  `POST /scenarios/import/vulhub` (fetch-by-path or pasted compose, `dry_run`
+  preview) + a WebUI card, landing in the P1-7 registry; needed the new
+  `Node.environment` field. **VulnHub (VM disks)** — planned (modernize the orphaned
+  `vulnhub-importer/`; needs a VM provider + qemu).
 - **SUT provisioning (software-under-test arenas), packaged-first:** a `service:`
   block on a node — an `image`/container (preferred), a `package`, or `source` (git
   repo + ref + build). **Black-box prefers an existing, user-approved image and
