@@ -9,6 +9,11 @@
 </p>
 
 <p align="center">
+  <a href="https://gianlucabassani.github.io/Nidavellir"><strong>Explore the Live Website & Interactive Docs »</strong></a>
+</p>
+
+<p align="center">
+  <a href="https://gianlucabassani.github.io/Nidavellir"><img src="https://img.shields.io/badge/website-live-F5A524"></a>
   <img src="https://img.shields.io/badge/status-active_development-F5A524">
   <img src="https://img.shields.io/badge/stack-Python_·_FastAPI_·_Celery_·_MCP-3D9BFF">
   <img src="https://img.shields.io/badge/providers-docker--local_·_OpenStack_·_AWS-34D399">
@@ -111,6 +116,9 @@ Full detail in [`ROADMAP.md`](ROADMAP.md).
 
 ## Documentation
 
+Visit the **[Nidavellir Live Website & Interactive Docs](https://gianlucabassani.github.io/Nidavellir)** to browse the codebase documentation in a clean, interactive single-page app.
+
+Individual markdown documents:
 - [`docs/OPERATIONS.md`](docs/OPERATIONS.md) — detailed setup & operations
 - [`docs/API.md`](docs/API.md) — orchestrator REST API
 - [`docs/SCENARIOS.md`](docs/SCENARIOS.md) — the v3 scenario schema + Vulhub import
