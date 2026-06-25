@@ -36,7 +36,7 @@
       svg: '<svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>' },
     openai: { name: "OpenAI", color: "#10a37f", model: "gpt-4o",
       svg: '<svg viewBox="0 0 24 24"><path d="M12 3l7.79 4.5v9L12 21l-7.79-4.5v-9z" fill="none" stroke="currentColor" stroke-width="2"/></svg>' },
-    gemini: { name: "Google · Gemini", color: "#4285f4", model: "gemini-2.0-flash",
+    gemini: { name: "Google · Gemini", color: "#4285f4", model: "gemini-2.5-flash",
       svg: '<svg viewBox="0 0 24 24"><path d="M12 2c.6 5.3 3.1 7.8 8.4 8.4-5.3.6-7.8 3.1-8.4 8.4-.6-5.3-3.1-7.8-8.4-8.4C8.9 9.8 11.4 7.3 12 2z" fill="currentColor"/></svg>' },
     deepseek: { name: "DeepSeek", color: "#4d6bfe", model: "deepseek-chat",
       svg: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 13c2 2.2 8 2.2 10-1.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>' },
