@@ -19,6 +19,16 @@ def test_validate_config_passes_in_mock_mode(monkeypatch):
     assert config.DATA_DIR.exists()
 
 
+def test_mock_mode_overrides_range_provider_skips_creds(monkeypatch):
+    """MOCK_MODE=true is a hard override: even with RANGE_PROVIDER=openstack,
+    startup resolves to the mock provider and must not require OpenStack creds."""
+    monkeypatch.setenv("MOCK_MODE", "true")
+    monkeypatch.setenv("RANGE_PROVIDER", "openstack")
+    import config
+
+    config.validate_config()  # must not raise
+
+
 def test_validate_config_requires_creds_in_prod(monkeypatch):
     """With MOCK_MODE off and no OpenStack creds, startup must fail loudly."""
     monkeypatch.setenv("MOCK_MODE", "false")

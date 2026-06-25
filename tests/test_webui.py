@@ -420,6 +420,51 @@ def test_vulhub_import_proxy_relays_unreachable_backend(client):
     assert resp.status_code == 502 and "error" in resp.get_json()
 
 
+def test_scenario_generate_proxy_requires_csrf(client):
+    _login(client)
+    assert client.post(
+        "/api/scenarios/generate", json={"prompt": "a dvwa lab"}
+    ).status_code == 400
+
+
+def test_scenario_generate_proxy_relays_unreachable_backend(client):
+    _login(client)
+    token = _csrf_token(client, "/")
+    resp = client.post("/api/scenarios/generate", json={"prompt": "x"},
+                       headers={"X-CSRFToken": token})
+    assert resp.status_code == 502 and "error" in resp.get_json()
+
+
+def test_scenario_generate_proxy_relays_prompt_and_class(client, monkeypatch):
+    """The generate proxy forwards the prompt + provider_class to the orchestrator."""
+    import app as webui_module
+
+    captured = {}
+
+    class _FakeResp:
+        status_code = 200
+
+        def json(self):
+            return {"valid": True, "spec": {}, "topology": {}}
+
+    def fake_post(url, json=None, **kwargs):
+        captured["url"] = url
+        captured["json"] = json
+        return _FakeResp()
+
+    monkeypatch.setattr(webui_module.requests, "post", fake_post)
+    _login(client)
+    token = _csrf_token(client, "/")
+    resp = client.post(
+        "/api/scenarios/generate",
+        json={"prompt": "  a redis box  ", "provider_class": "container"},
+        headers={"X-CSRFToken": token},
+    )
+    assert resp.status_code == 200
+    assert captured["url"].endswith("/scenarios/generate")
+    assert captured["json"] == {"prompt": "a redis box", "provider_class": "container"}
+
+
 def test_build_custom_posts_multiple_attackers(client, monkeypatch):
     """The custom-build form relays an `attackers` list to the orchestrator."""
     import app as webui_module

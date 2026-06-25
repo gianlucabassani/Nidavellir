@@ -98,6 +98,22 @@ saving; otherwise the pack is persisted and appears in `GET /scenarios`. VulnHub
 (full VM disks) is a separate, planned track. Returns `422` on an unconvertible
 compose, `409` on an id collision (pass `overwrite: true`).
 
+**Generate from a prompt (operator-only, BYO model — P3).** `POST /scenarios/generate`
+turns a natural-language `prompt` into a candidate v3 spec using the **operator's
+own connected model** (the model bubble; decrypted in-process, never logged).
+Optional `provider_class` (`container` | `vm` | `any`) pins the backend class.
+The model is called in **JSON mode** (OpenAI-compatible providers incl. Gemini get
+`response_format: json_object`; Anthropic is prefilled with `{`) so the reply is
+valid JSON by construction. It validates the generated spec and returns
+`{valid, errors, warnings, suggested_id, summary, topology, spec}` **without
+deploying or saving** — the review gate (P3-2): the operator reviews the spec +
+topology, then imports it via `POST /scenarios` and launches. `409` when no model
+is connected; a model reply that isn't usable JSON returns `valid: false` with the
+model's `raw` reply (and provider errors are surfaced cleanly), never a `500`.
+Scope boundary: Nidavellir supplies the prompt + validation + review gate, never
+the AI — the model and key are the operator's, and generation is operator-only
+(it is **not** exposed to in-arena agent stances).
+
 ### Provider Registry
 
 `GET /providers` — the deployment backends available in this install and the

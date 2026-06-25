@@ -828,6 +828,20 @@ def scenario_preview_proxy():
     return jsonify(data), code
 
 
+@app.route("/api/scenarios/generate", methods=["POST"])
+def scenario_generate_proxy():
+    """Generate a candidate v3 spec from a prompt using the operator's connected
+    model (proxies POST /scenarios/generate). Returns the spec + topology for
+    review — never deploys/saves. The model call can be slow, so allow a longer
+    timeout. CSRF-protected."""
+    body = request.get_json(silent=True) or {}
+    payload = {"prompt": (body.get("prompt") or "").strip()}
+    if body.get("provider_class"):
+        payload["provider_class"] = str(body["provider_class"]).strip()
+    data, code = _api_post("/scenarios/generate", payload, timeout=120)
+    return jsonify(data), code
+
+
 @app.route("/api/scenarios/import", methods=["POST"])
 def scenario_import_proxy():
     """Persist an operator-pasted scenario as a reusable pack (proxies

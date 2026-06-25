@@ -18,8 +18,9 @@ logger = logging.getLogger(__name__)
 class Orchestrator:
     def __init__(self, provider=None, provider_name=None):
         # Provider instance injectable for tests; a name (e.g. the one
-        # recorded on the deployment) resolves through the registry;
-        # otherwise RANGE_PROVIDER / MOCK_MODE decide (providers.get_provider).
+        # recorded on the deployment) resolves through the registry; otherwise
+        # RANGE_PROVIDER decides. MOCK_MODE=true is a hard override that forces
+        # the mock provider regardless of name/RANGE_PROVIDER (get_provider).
         self.provider = provider or get_provider(provider_name)
 
     def deploy(self, scenario_name: str, instance_id: str, user_vars: dict = None,

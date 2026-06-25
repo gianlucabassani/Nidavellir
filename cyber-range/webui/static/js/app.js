@@ -1013,6 +1013,79 @@
         else if (vhMsg) { vhMsg.className = "import-msg err"; vhMsg.textContent = "Import failed: " + (data.error || (data.detail) || ("HTTP " + status)); }
       });
     });
+
+    // generate: prompt → operator's connected model → candidate spec → review/import
+    const genPrompt = document.getElementById("gen-prompt");
+    const genPc = document.getElementById("gen-provider-class");
+    const genId = document.getElementById("gen-id");
+    const genMsg = document.getElementById("gen-msg");
+    const genDo = document.getElementById("gen-do-btn");
+    const genSpec = document.getElementById("gen-spec");
+    const genSpecWrap = document.getElementById("gen-spec-wrap");
+    const genImportRow = document.getElementById("gen-import-row");
+    const genReval = document.getElementById("gen-revalidate-btn");
+    const genImport = document.getElementById("gen-import-btn");
+    const genShowReview = (show) => {
+      if (genSpecWrap) genSpecWrap.hidden = !show;
+      if (genImportRow) genImportRow.hidden = !show;
+    };
+    if (genDo) genDo.addEventListener("click", () => {
+      const prompt = genPrompt ? genPrompt.value.trim() : "";
+      if (!prompt) { if (genMsg) { genMsg.className = "import-msg err"; genMsg.textContent = "Describe the arena you want first."; } return; }
+      if (genMsg) { genMsg.className = "import-msg"; genMsg.textContent = "Generating with your connected model…"; }
+      genDo.disabled = true;
+      const body = { prompt };
+      if (genPc && genPc.value) body.provider_class = genPc.value;
+      postJson("/api/scenarios/generate", body).then(({ status, data }) => {
+        genDo.disabled = false;
+        if (status === 409) {
+          genShowReview(false); renderSpecTopology("gen-preview", null);
+          if (genMsg) { genMsg.className = "import-msg err"; genMsg.textContent = "No model connected — set one up via the model bubble (top-right) first."; }
+          return;
+        }
+        if (status === 200 && data.valid) {
+          if (genSpec) genSpec.value = JSON.stringify(data.spec, null, 2);
+          genShowReview(true);
+          renderSpecTopology("gen-preview", data.topology);
+          if (genId && !genId.value && data.suggested_id) genId.value = data.suggested_id;
+          const w = (data.warnings || []).length ? "  ⚠ " + data.warnings.join("; ") : "";
+          if (genMsg) { genMsg.className = "import-msg ok"; genMsg.textContent = "Generated ✓ " + (data.summary ? data.summary.nodes + " node(s)" : "") + w + " — review below, then import."; }
+        } else {
+          renderSpecTopology("gen-preview", null);
+          // Show the model's raw reply (when it produced no usable spec) so the operator can adjust the prompt.
+          if (data.raw && genSpec) { genSpec.value = data.raw; genShowReview(true); }
+          else genShowReview(false);
+          if (genMsg) { genMsg.className = "import-msg err"; genMsg.textContent = "Couldn't generate a valid spec: " + (data.errors ? data.errors.join("; ") : (data.error || data.detail || ("HTTP " + status))); }
+        }
+      }).catch(() => {
+        genDo.disabled = false;
+        if (genMsg) { genMsg.className = "import-msg err"; genMsg.textContent = "Generation request failed (network/timeout)."; }
+      });
+    });
+    if (genReval) genReval.addEventListener("click", () => {
+      const spec = genSpec ? genSpec.value.trim() : "";
+      if (!spec) return;
+      postJson("/api/scenarios/preview", { spec }).then(({ data }) => {
+        if (data.valid) {
+          renderSpecTopology("gen-preview", data.topology);
+          if (genId && !genId.value && data.suggested_id) genId.value = data.suggested_id;
+          const w = (data.warnings || []).length ? "  ⚠ " + data.warnings.join("; ") : "";
+          if (genMsg) { genMsg.className = "import-msg ok"; genMsg.textContent = "Valid ✓ " + (data.summary ? data.summary.nodes + " node(s)" : "") + w; }
+        } else {
+          renderSpecTopology("gen-preview", null);
+          if (genMsg) { genMsg.className = "import-msg err"; genMsg.textContent = "Invalid: " + (data.errors || ["spec rejected"]).join("; "); }
+        }
+      });
+    });
+    if (genImport) genImport.addEventListener("click", () => {
+      const spec = genSpec ? genSpec.value.trim() : "";
+      if (!spec) return;
+      const id = genId ? genId.value.trim() : "";
+      postJson("/api/scenarios/import", { spec, id: id || null }).then(({ status, data }) => {
+        if (status === 200) { window.location.href = "/scenarios"; }
+        else if (genMsg) { genMsg.className = "import-msg err"; genMsg.textContent = "Import failed: " + (data.error || data.detail || ("HTTP " + status)); }
+      });
+    });
   }
 
   /* ---- scenarios page: click a row to preview its topology ------------ */

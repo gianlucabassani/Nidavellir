@@ -309,9 +309,18 @@ end-to-end with every action audited; a containment test proves arena nodes
 cannot reach the internet; red and blue agents run concurrently on one arena
 with paired traces. ADR-0005 (gateway protocol & guardrails).
 
-### 🔵 Phase 3 — Zero-to-prompt scenario generation (BYO key) · **M**
+### 🔵 Phase 3 — Zero-to-prompt scenario generation (BYO key) · **M** · _in progress (core + WebUI generator shipped 2026-06-25)_
 
 **Goal:** an LLM turns a brief into a deployable arena, safely.
+
+> **Status (2026-06-25):** the prompt→spec generator core is live — `POST
+> /scenarios/generate` (operator-only) drafts a v3 spec with the operator's BYO
+> model, validates it, and returns spec + topology **without deploying** (the
+> review gate); a Launch "Generate" card drives it. The MCP path is the
+> operator-keyed author→preview→import→deploy route — authoring stays an operator
+> privilege, deliberately absent from the in-arena agent gateway. Remaining:
+> Terraform/vm-target generation, a literal operator-tier `scaffold_scenario`
+> tool + diff view, and the arena wizard (P3-3).
 
 Key work:
 - `range-authoring` surface: prompt → topology spec (Terraform/JSON) → **validate

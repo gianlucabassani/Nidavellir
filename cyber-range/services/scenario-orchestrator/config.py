@@ -128,13 +128,15 @@ def validate_config():
     warnings = []
     
     # OpenStack creds are mandatory only when OpenStack is the *active* default
-    # provider. Mirror the precedence in providers.get_provider(): an explicit
-    # RANGE_PROVIDER wins, otherwise MOCK_MODE=true -> mock, else openstack.
-    # docker-local / aws / mock need no OpenStack creds, so a container-only
-    # stack (RANGE_PROVIDER=docker-local, MOCK_MODE=false) must still boot.
+    # provider. Mirror the precedence in providers.resolve_provider_name():
+    # MOCK_MODE=true is a hard override (-> mock), so the no-infra demo needs no
+    # OpenStack creds even when the compose default RANGE_PROVIDER=docker-local
+    # (or =openstack) is still set. With MOCK_MODE off, RANGE_PROVIDER wins,
+    # else openstack — so a container-only stack (RANGE_PROVIDER=docker-local,
+    # MOCK_MODE=false) must still boot.
     mock_mode = os.getenv("MOCK_MODE", "false").lower() == "true"
     range_provider = os.getenv("RANGE_PROVIDER")
-    default_provider = range_provider or ("mock" if mock_mode else "openstack")
+    default_provider = "mock" if mock_mode else (range_provider or "openstack")
 
     if default_provider == "openstack":
         skip = "set MOCK_MODE=true or RANGE_PROVIDER=docker-local to skip"

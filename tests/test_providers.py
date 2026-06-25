@@ -1,10 +1,10 @@
 """
 Tests for the RangeProvider driver layer (ADR-0003).
 
-Pins: provider selection precedence (arg > RANGE_PROVIDER > MOCK_MODE >
-openstack default), the mock provider's contract, and that the Orchestrator
-is a pure dispatcher (loads the scenario, delegates, never reaches a
-provider with an invalid scenario).
+Pins: provider selection precedence (MOCK_MODE=true is a hard override > arg >
+RANGE_PROVIDER > openstack default), the mock provider's contract, and that the
+Orchestrator is a pure dispatcher (loads the scenario, delegates, never reaches
+a provider with an invalid scenario).
 """
 import pytest
 
@@ -34,14 +34,27 @@ class _RecordingProvider:
 
 
 def test_explicit_name_wins(monkeypatch):
+    # With MOCK_MODE off, an explicit name beats RANGE_PROVIDER.
+    monkeypatch.setenv("MOCK_MODE", "false")
     monkeypatch.setenv("RANGE_PROVIDER", "openstack")
     assert isinstance(providers.get_provider("mock"), MockProvider)
 
 
-def test_env_var_overrides_mock_mode(monkeypatch):
+def test_mock_mode_overrides_range_provider(monkeypatch):
+    # MOCK_MODE=true is a hard override: it wins over RANGE_PROVIDER so the
+    # no-infra path needs no extra env (the compose default is docker-local).
     monkeypatch.setenv("MOCK_MODE", "true")
     monkeypatch.setenv("RANGE_PROVIDER", "openstack")
-    assert isinstance(providers.get_provider(), OpenStackProvider)
+    assert isinstance(providers.get_provider(), MockProvider)
+
+
+def test_mock_mode_overrides_explicit_name(monkeypatch):
+    # The override also beats an explicit provider name — under MOCK_MODE no
+    # request can provision real infra ("no containers or else").
+    monkeypatch.setenv("MOCK_MODE", "true")
+    monkeypatch.setenv("RANGE_PROVIDER", "docker-local")
+    assert isinstance(providers.get_provider("docker-local"), MockProvider)
+    assert isinstance(providers.get_provider("openstack"), MockProvider)
 
 
 def test_mock_mode_falls_back_to_mock(monkeypatch):
@@ -56,7 +69,10 @@ def test_default_is_openstack(monkeypatch):
     assert isinstance(providers.get_provider(), OpenStackProvider)
 
 
-def test_unknown_provider_raises():
+def test_unknown_provider_raises(monkeypatch):
+    # The unknown-name guard is a real-backend concern; MOCK_MODE would
+    # otherwise short-circuit every name to the mock provider.
+    monkeypatch.setenv("MOCK_MODE", "false")
     with pytest.raises(ValueError, match="Unknown provider"):
         providers.get_provider("does-not-exist")
 

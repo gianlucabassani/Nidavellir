@@ -152,6 +152,33 @@ human or an agent). Keys we can't faithfully map (`volumes`, `depends_on`,
 `dry_run: true` to preview the topology without saving. VulnHub (full VM disks)
 needs a VM provider and is a separate, planned track.
 
+### Generating from a prompt (P3, BYO model)
+
+Where the Vulhub importer is deterministic, the **prompt→spec generator** drafts a
+new topology from a natural-language brief using the **operator's own connected
+model** (the model bubble). Nidavellir builds the prompt (embedding this schema +
+a worked example), calls the operator's model **in JSON mode** (OpenAI-compatible
+providers incl. Gemini get `response_format: json_object`; Anthropic is prefilled
+with `{`), and parses a v3 spec out of the reply — it never supplies the AI itself:
+
+```bash
+curl -sX POST "$API/scenarios/generate" -H "X-API-Key: $OP" \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt": "a Kali foothold and a vulnerable Apache CMS box on an isolated segment",
+       "provider_class": "container"}'
+```
+
+The response is the **same review payload** as `/scenarios/preview`
+(`valid`/`errors`/`warnings`/`topology`/`summary`) plus the generated `spec`. It
+**never deploys or saves** — the operator reviews the spec + topology (in the
+Launch → *Generate* card, the generated spec is editable), then imports it via
+`POST /scenarios` and launches like any other pack. No model connected → `409`; an
+unusable model reply → `valid: false` with the model's `raw` text (never a `500`).
+Generation is **operator-only** and is not exposed to in-arena agent stances
+(authoring infrastructure is an operator privilege). An operator driving over MCP
+authors a spec directly and validates it through the same `preview → import`
+gate — there is no scenario-authoring tool on the attacker/defender gateway.
+
 ### Validation: hard errors vs. soft warnings
 
 Structural problems raise a validation error and the scenario **does not

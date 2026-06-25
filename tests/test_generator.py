@@ -1,0 +1,215 @@
+"""
+Tests for the zero-to-prompt scenario generator (P3 / Track D).
+
+Two layers, both offline (the model call is injected — no network, no key):
+- the pure core in ``generator.py`` (prompt build + JSON extraction + the
+  validate-via-ScenarioSpec round trip on a generated spec);
+- the ``POST /scenarios/generate`` endpoint (operator-only, 409 without a model
+  connection, the review gate: returns a validated spec + topology, never
+  deploys/saves), with ``model_chat.complete_chat`` monkeypatched.
+"""
+import json
+
+import pytest
+
+import generator
+from scenario_spec import ScenarioSpec
+
+# A minimal valid v3 spec the fake model "returns".
+_GOOD_SPEC = {
+    "schema": "nidavellir/v3",
+    "name": "Generated SQLi Lab",
+    "difficulty": "easy",
+    "description": "A vulnerable web app and a Kali foothold.",
+    "requires": {"provider_class": "container"},
+    "network": {"segments": [{"name": "lab", "description": "isolated bridge"}]},
+    "nodes": [
+        {"name": "victim", "role": "victim", "image": "dvwa", "segments": ["lab"], "ports": [80]},
+        {"name": "attacker", "role": "attacker", "image": "kali", "segments": ["lab"],
+         "entrypoint": True, "command": "sleep infinity"},
+    ],
+    "agents": [{"stance": "attacker", "node": "attacker"}],
+    "objectives": [{"description": "Exploit the web app"}],
+}
+
+
+# --- core: prompt building ----------------------------------------------------
+
+
+def test_build_messages_includes_brief_and_schema():
+    system, messages = generator.build_messages("a redis box with RCE")
+    assert "nidavellir/v3" in system  # schema guide embedded
+    assert messages[0]["role"] == "user"
+    assert "redis" in messages[0]["content"]
+
+
+def test_build_messages_pins_provider_class():
+    _, messages = generator.build_messages("anything", provider_class="container")
+    assert 'provider_class MUST be "container"' in messages[0]["content"]
+
+
+# --- core: JSON extraction ----------------------------------------------------
+
+
+def test_extract_plain_json():
+    assert generator.extract_spec_json(json.dumps(_GOOD_SPEC))["name"] == "Generated SQLi Lab"
+
+
+def test_extract_strips_markdown_fences_and_prose():
+    text = "Here is your spec:\n```json\n" + json.dumps(_GOOD_SPEC) + "\n```\nEnjoy!"
+    assert generator.extract_spec_json(text)["schema"] == "nidavellir/v3"
+
+
+def test_extract_empty_reply_raises():
+    with pytest.raises(generator.GeneratorError):
+        generator.extract_spec_json("   ")
+
+
+def test_extract_no_json_raises_with_raw():
+    with pytest.raises(generator.GeneratorError) as exc:
+        generator.extract_spec_json("sorry, I can't do that")
+    assert exc.value.raw == "sorry, I can't do that"
+
+
+def test_extract_malformed_json_raises():
+    with pytest.raises(generator.GeneratorError):
+        generator.extract_spec_json('{"name": "x",}')  # trailing comma
+
+
+# --- core: generate + validate round trip ------------------------------------
+
+
+def test_generate_returns_spec_that_validates():
+    raw = generator.generate_scenario_spec(
+        lambda system, messages: json.dumps(_GOOD_SPEC), "brief"
+    )
+    spec = ScenarioSpec.from_raw(raw)  # must not raise
+    assert spec.requires.provider_class.value == "container"
+    assert len(spec.nodes) == 2
+
+
+def test_generate_rejects_unknown_provider_class():
+    with pytest.raises(generator.GeneratorError):
+        generator.generate_scenario_spec(lambda s, m: "{}", "x", provider_class="bogus")
+
+
+def test_generate_surfaces_model_failure():
+    # The model could not reach the provider (stream_chat's error sentinel).
+    with pytest.raises(generator.GeneratorError):
+        generator.generate_scenario_spec(
+            lambda s, m: "[co-pilot] couldn't reach the provider (no egress?).", "x"
+        )
+
+
+# --- endpoint: POST /scenarios/generate ---------------------------------------
+
+pytest.importorskip("fastapi")
+from fastapi.testclient import TestClient  # noqa: E402
+
+import auth  # noqa: E402
+import model_chat  # noqa: E402
+from database import Database  # noqa: E402
+
+
+def _operator_client():
+    key = auth.generate_api_key()
+    Database().create_api_key(auth.hash_api_key(key), name="gen-op", role="operator")
+    import api
+
+    c = TestClient(api.app)
+    c.headers["X-API-Key"] = key
+    return c
+
+
+def _agent_client():
+    key = auth.generate_api_key()
+    Database().create_api_key(auth.hash_api_key(key), name="gen-agent", role="agent")
+    import api
+
+    c = TestClient(api.app)
+    c.headers["X-API-Key"] = key
+    return c
+
+
+def test_generate_requires_model_connection(monkeypatch):
+    c = _operator_client()
+    # No stored model connection for this fresh operator.
+    monkeypatch.setattr(
+        "database.Database.get_decrypted_model_credential", lambda self, owner: None
+    )
+    resp = c.post("/scenarios/generate", json={"prompt": "a dvwa lab"})
+    assert resp.status_code == 409
+    assert "no model connected" in resp.text
+
+
+def test_generate_returns_validated_spec_and_topology(monkeypatch):
+    c = _operator_client()
+    monkeypatch.setattr(
+        "database.Database.get_decrypted_model_credential",
+        lambda self, owner: {"provider": "anthropic", "model": "claude", "api_key": "k"},
+    )
+    monkeypatch.setattr(model_chat, "complete_chat", lambda *a, **k: json.dumps(_GOOD_SPEC))
+    resp = c.post("/scenarios/generate", json={"prompt": "a dvwa sqli lab", "provider_class": "container"})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["valid"] is True
+    assert body["spec"]["schema"] == "nidavellir/v3"        # echoed for review→import
+    assert body["topology"] is not None                      # the preview is rendered
+    assert body["summary"]["nodes"] == 2
+    assert body["suggested_id"]                              # derivable id for import
+
+
+def test_generate_invalid_spec_reports_errors_not_500(monkeypatch):
+    c = _operator_client()
+    monkeypatch.setattr(
+        "database.Database.get_decrypted_model_credential",
+        lambda self, owner: {"provider": "anthropic", "model": "claude", "api_key": "k"},
+    )
+    # Model returns JSON that fails v3 validation (no nodes, bad schema id).
+    monkeypatch.setattr(model_chat, "complete_chat", lambda *a, **k: '{"name": "x"}')
+    resp = c.post("/scenarios/generate", json={"prompt": "x"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["valid"] is False
+    assert body["errors"]
+    assert body["topology"] is None
+
+
+def test_generate_no_json_returns_raw(monkeypatch):
+    c = _operator_client()
+    monkeypatch.setattr(
+        "database.Database.get_decrypted_model_credential",
+        lambda self, owner: {"provider": "anthropic", "model": "claude", "api_key": "k"},
+    )
+    monkeypatch.setattr(model_chat, "complete_chat", lambda *a, **k: "I cannot help with that.")
+    resp = c.post("/scenarios/generate", json={"prompt": "x"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["valid"] is False
+    assert "I cannot help with that." in body["raw"]
+
+
+def test_generate_provider_error_is_clean_no_copilot_branding(monkeypatch):
+    """An upstream provider error (model_chat's inline sentinel) is surfaced as a
+    clean generator error — the 'co-pilot' branding must not leak through."""
+    c = _operator_client()
+    monkeypatch.setattr(
+        "database.Database.get_decrypted_model_credential",
+        lambda self, owner: {"provider": "anthropic", "model": "claude", "api_key": "k"},
+    )
+    monkeypatch.setattr(
+        model_chat, "complete_chat",
+        lambda *a, **k: model_chat.ERROR_SENTINEL + " the provider rate limit was hit (HTTP 429).",
+    )
+    resp = c.post("/scenarios/generate", json={"prompt": "x"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["valid"] is False
+    assert "model provider could not complete" in body["errors"][0]
+    assert "co-pilot" not in body["errors"][0]
+
+
+def test_generate_is_operator_only():
+    c = _agent_client()
+    resp = c.post("/scenarios/generate", json={"prompt": "x"})
+    assert resp.status_code == 403

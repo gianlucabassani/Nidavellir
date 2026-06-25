@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 import bindings
 import catalog
 import config
+import generator
 import model_chat
 import model_verify
 import netguard
@@ -283,6 +284,39 @@ async def delete_scenario(
     return {"status": "deleted", "id": scenario_id}
 
 
+def _spec_review(raw: dict, *, include_spec: bool = False) -> dict:
+    """Validate a candidate v3 spec and build the no-deploy review payload
+    (``valid``/``errors``/``warnings``/``suggested_id``/``summary``/``topology``)
+    shared by the preview and generate endpoints — the review gate (never
+    deploys). With ``include_spec`` the raw spec is echoed back for the
+    review→import flow."""
+    base = {"spec": raw} if include_spec else {}
+    try:
+        spec = ScenarioSpec.from_raw(raw)
+    except ValidationError as e:
+        return {**base, "valid": False, "errors": _spec_errors(e), "warnings": [], "topology": None}
+    suggested = None
+    try:
+        suggested = _derive_scenario_id(raw)
+    except HTTPException:
+        pass
+    return {
+        **base,
+        "valid": True,
+        "errors": [],
+        "warnings": spec.warnings(),
+        "suggested_id": suggested,
+        "summary": {
+            "name": spec.name,
+            "title": spec.title,
+            "difficulty": spec.difficulty,
+            "provider_class": spec.requires.provider_class.value,
+            "nodes": len(spec.nodes),
+        },
+        "topology": topology_view(spec),
+    }
+
+
 class ScenarioPreviewRequest(BaseModel):
     """A no-deploy dry-run: validate a candidate scenario and return its topology.
     Provide exactly one of ``spec`` (a v3 spec, object or YAML/JSON string) or
@@ -314,30 +348,67 @@ async def preview_scenario(
     else:
         raise HTTPException(status_code=422, detail="provide a 'spec' or 'picks'")
 
-    try:
-        spec = ScenarioSpec.from_raw(raw)
-    except ValidationError as e:
-        return {"valid": False, "errors": _spec_errors(e), "warnings": [], "topology": None}
+    return _spec_review(raw)
 
-    suggested = None
+
+class ScenarioGenerateRequest(BaseModel):
+    """Zero-to-prompt generation (P3): a natural-language ``prompt`` the operator's
+    connected model turns into a candidate v3 spec. ``provider_class`` optionally
+    pins the backend class (container | vm | any)."""
+
+    prompt: str = Field(min_length=1, max_length=4000)
+    provider_class: str | None = Field(default=None, max_length=16)
+
+
+@app.post("/scenarios/generate")
+@limiter.limit(RATE_LIMIT_DEPLOY)
+async def generate_scenario(
+    request: Request,
+    req: ScenarioGenerateRequest,
+    principal: Principal = Depends(require_principal),
+):
+    """Generate a candidate v3 scenario from a prompt using the OPERATOR'S OWN
+    connected model (the model bubble), validate it, and return the spec + its
+    topology preview WITHOUT deploying or saving (the review gate — P3-2). The
+    operator reviews, then imports via POST /scenarios and launches. Operator-only;
+    409 when no model is connected. Scope boundary: the model + key are the
+    operator's; Nidavellir never supplies the AI ([[cyberguard-ai-scope-boundary]])."""
+    _require_operator(principal)
+    cred = db.get_decrypted_model_credential(principal.name)
+    if not cred:
+        raise HTTPException(
+            status_code=409,
+            detail="no model connected — configure one via the model bubble first",
+        )
+
+    def complete(system, messages):
+        reply = model_chat.complete_chat(
+            cred["provider"], cred["model"], cred["api_key"], system, messages,
+            max_tokens=4096, json_mode=True,
+        )
+        # An upstream failure arrives as model_chat's inline error sentinel rather
+        # than a spec — re-surface it as a clean generator error (no co-pilot
+        # branding) carrying the provider's own message.
+        if reply.lstrip().startswith(model_chat.ERROR_SENTINEL):
+            clean = reply.replace(model_chat.ERROR_SENTINEL, "").strip()
+            raise generator.GeneratorError(
+                f"the model provider could not complete the request: {clean}", raw=reply
+            )
+        return reply
+
     try:
-        suggested = _derive_scenario_id(raw)
-    except HTTPException:
-        pass
-    return {
-        "valid": True,
-        "errors": [],
-        "warnings": spec.warnings(),
-        "suggested_id": suggested,
-        "summary": {
-            "name": spec.name,
-            "title": spec.title,
-            "difficulty": spec.difficulty,
-            "provider_class": spec.requires.provider_class.value,
-            "nodes": len(spec.nodes),
-        },
-        "topology": topology_view(spec),
-    }
+        raw = generator.generate_scenario_spec(complete, req.prompt, req.provider_class)
+    except generator.GeneratorError as e:
+        logger.info("scenario generation for '%s' produced no usable spec", principal.name)
+        return {
+            "valid": False,
+            "errors": [str(e)],
+            "warnings": [],
+            "topology": None,
+            "raw": (e.raw or "")[:6000],
+        }
+    logger.info("Generated candidate scenario for '%s' (review pending)", principal.name)
+    return _spec_review(raw, include_spec=True)
 
 
 class VulhubImportRequest(BaseModel):

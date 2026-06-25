@@ -29,6 +29,12 @@ providers/
 - **Selection precedence:** explicit argument → `RANGE_PROVIDER` env →
   legacy `MOCK_MODE=true` → `openstack` default. `MOCK_MODE` keeps working
   so nothing in compose/docs/tests breaks.
+  - **Amended 2026-06-25:** `MOCK_MODE=true` was promoted to a **hard global
+    override** at the top of the precedence (`MOCK_MODE=true` → `mock` >
+    explicit argument > `RANGE_PROVIDER` > `openstack`). The no-infra demo is
+    now a single dependable switch — it no longer needs `RANGE_PROVIDER` unset,
+    so it overrides the compose default `RANGE_PROVIDER=docker-local`. See
+    `providers.resolve_provider_name`.
 - **Contract:** providers receive the *parsed scenario config* (loading and
   the path-traversal guard stay above the interface, in `scenarios.py`) and
   return the existing dict shape (`{"success", "outputs"|"error"}`) with

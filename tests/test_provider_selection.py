@@ -97,6 +97,9 @@ def test_vm_scenario_without_provider_rejected_when_default_is_container(
     """No explicit provider resolves to the active default; a vm-scenario must
     still be rejected up front when that default is container-class (was a
     silent bypass → async Celery failure)."""
+    # MOCK_MODE (on by default in the suite) would override RANGE_PROVIDER to
+    # the any-class mock provider; turn it off so docker-local is the default.
+    monkeypatch.setenv("MOCK_MODE", "false")
     monkeypatch.setenv("RANGE_PROVIDER", "docker-local")  # default → container
     resp = client.post(
         "/deploy",
@@ -138,7 +141,10 @@ def test_unknown_provider_rejected(client):
     assert "GET /providers" in resp.text
 
 
-def test_orchestrator_resolves_provider_by_name():
+def test_orchestrator_resolves_provider_by_name(monkeypatch):
+    # Registry name→driver resolution (the real-backend path); MOCK_MODE (on by
+    # default in the suite) would otherwise force every name to the mock driver.
+    monkeypatch.setenv("MOCK_MODE", "false")
     assert Orchestrator(provider_name="docker-local").provider.name == "docker-local"
     assert Orchestrator(provider_name="mock").provider.name == "mock"
 

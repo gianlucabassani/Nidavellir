@@ -2,10 +2,17 @@
 Provider registry (ADR-0003).
 
 Selection precedence:
-1. explicit `name` argument
-2. RANGE_PROVIDER env var
-3. legacy MOCK_MODE=true  -> "mock"
+1. MOCK_MODE=true         -> "mock"  (hard global override)
+2. explicit `name` argument
+3. RANGE_PROVIDER env var
 4. default                -> "openstack"
+
+MOCK_MODE=true is a master switch: it forces the in-memory mock provider for
+EVERY resolution, ignoring both an explicit ``name`` and RANGE_PROVIDER, so a
+no-infra demo run never provisions real containers/VMs — no matter what a
+request (or the compose default ``RANGE_PROVIDER=docker-local``) asks for.
+Leave MOCK_MODE unset/false to run the real backends, where the precedence is
+explicit name > RANGE_PROVIDER > openstack.
 """
 import os
 
@@ -32,26 +39,34 @@ def infra_class_of(name: str) -> str:
     return _REGISTRY[name].infra_class
 
 
+def _mock_mode() -> bool:
+    return os.getenv("MOCK_MODE", "false").lower() == "true"
+
+
+def resolve_provider_name(name: str | None = None) -> str:
+    """Resolve the effective provider name with the precedence documented at the
+    top of this module. ``MOCK_MODE=true`` wins over everything (an explicit
+    ``name`` and ``RANGE_PROVIDER``) so the no-infra path is a single dependable
+    switch; otherwise an explicit ``name`` wins, then ``RANGE_PROVIDER``, then
+    the openstack default."""
+    if _mock_mode():
+        return MockProvider.name
+    if name is not None:
+        return name
+    return os.getenv("RANGE_PROVIDER") or OpenStackProvider.name
+
+
 def default_provider_name() -> str:
-    """The provider name `get_provider(None)` resolves to — mirrors the
-    precedence below without instantiating a driver (RANGE_PROVIDER > MOCK_MODE
-    > openstack). Lets callers (API/UI) reason about the active default."""
-    name = os.getenv("RANGE_PROVIDER")
-    if name is None:
-        mock = os.getenv("MOCK_MODE", "false").lower() == "true"
-        name = "mock" if mock else "openstack"
-    return name
+    """The provider name `get_provider(None)` resolves to, without instantiating
+    a driver. Lets callers (API/UI) reason about the active default."""
+    return resolve_provider_name(None)
 
 
 def get_provider(name: str | None = None) -> RangeProvider:
-    if name is None:
-        name = os.getenv("RANGE_PROVIDER")
-    if name is None:
-        mock = os.getenv("MOCK_MODE", "false").lower() == "true"
-        name = "mock" if mock else "openstack"
+    resolved = resolve_provider_name(name)
     try:
-        return _REGISTRY[name]()
+        return _REGISTRY[resolved]()
     except KeyError:
         raise ValueError(
-            f"Unknown provider {name!r} (available: {available_providers()})"
+            f"Unknown provider {resolved!r} (available: {available_providers()})"
         ) from None

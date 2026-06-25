@@ -61,8 +61,10 @@ services:
     environment:
       # The local stack provisions REAL container arenas by default: the
       # docker-local provider talks to the host Docker daemon (socket mounted
-      # below). Set MOCK_MODE=true (and unset RANGE_PROVIDER) for the no-infra
-      # demo, or RANGE_PROVIDER=openstack/aws + creds for cloud backends.
+      # below). Set MOCK_MODE=true for the no-infra demo — it is a hard override
+      # that forces the mock provider even though RANGE_PROVIDER stays
+      # docker-local below (no need to unset it). For cloud backends leave
+      # MOCK_MODE unset and set RANGE_PROVIDER=openstack/aws + creds.
       MOCK_MODE: ${MOCK_MODE:-false}
       RANGE_PROVIDER: ${RANGE_PROVIDER:-docker-local}
 
@@ -150,7 +152,8 @@ services:
     # FIXED: Use the correct module path (no orchestrator. prefix)
     command: celery -A tasks worker --loglevel=info --concurrency=3
     environment:
-      # Same environment as orchestrator — real container arenas by default.
+      # Same environment as orchestrator — real container arenas by default;
+      # MOCK_MODE=true overrides RANGE_PROVIDER and forces the mock provider.
       MOCK_MODE: ${MOCK_MODE:-false}
       RANGE_PROVIDER: ${RANGE_PROVIDER:-docker-local}
       OS_AUTH_URL: ${OS_AUTH_URL:-}
