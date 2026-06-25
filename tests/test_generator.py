@@ -48,6 +48,16 @@ def test_build_messages_pins_provider_class():
     assert 'provider_class MUST be "container"' in messages[0]["content"]
 
 
+def test_build_messages_vm_adds_vm_guidance_and_example():
+    system, messages = generator.build_messages("an AD lab", provider_class="vm")
+    assert "VIRTUAL MACHINES" in system          # vm note appended
+    assert "ubuntu-22.04" in system               # vm worked-example present
+    assert 'provider_class MUST be "vm"' in messages[0]["content"]
+    # the default (container) prompt does NOT carry the vm note
+    sys_default, _ = generator.build_messages("x")
+    assert "VIRTUAL MACHINES" not in sys_default
+
+
 # --- core: JSON extraction ----------------------------------------------------
 
 
@@ -157,6 +167,46 @@ def test_generate_returns_validated_spec_and_topology(monkeypatch):
     assert body["topology"] is not None                      # the preview is rendered
     assert body["summary"]["nodes"] == 2
     assert body["suggested_id"]                              # derivable id for import
+
+
+_VM_SPEC = {
+    "schema": "nidavellir/v3",
+    "name": "Linux VM Pentest",
+    "difficulty": "medium",
+    "description": "A Kali attacker VM and an Ubuntu victim VM on an isolated LAN.",
+    "requires": {"provider_class": "vm"},
+    "network": {"segments": [{"name": "lan", "description": "isolated"}]},
+    "nodes": [
+        {"name": "attacker", "role": "attacker", "image": "kali", "segments": ["lan"], "entrypoint": True},
+        {"name": "web", "role": "victim", "image": "ubuntu-22.04", "segments": ["lan"], "ports": [22, 80]},
+    ],
+    "agents": [{"stance": "attacker", "node": "attacker"}],
+    "objectives": [{"description": "Exploit and pivot"}],
+}
+
+
+def test_generate_vm_class_spec_validates(monkeypatch):
+    """A vm-class generation validates and reports provider_class 'vm' (the spec
+    is provider-agnostic; live deploy is gated on a vm backend — see the QEMU
+    provider item, out of scope for generation)."""
+    c = _operator_client()
+    monkeypatch.setattr(
+        "database.Database.get_decrypted_model_credential",
+        lambda self, owner: {"provider": "anthropic", "model": "claude", "api_key": "k"},
+    )
+    captured = {}
+
+    def fake_complete(provider, model, api_key, system, messages, **kw):
+        captured["system"] = system
+        return json.dumps(_VM_SPEC)
+
+    monkeypatch.setattr(model_chat, "complete_chat", fake_complete)
+    resp = c.post("/scenarios/generate", json={"prompt": "a linux vm lab", "provider_class": "vm"})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["valid"] is True
+    assert body["summary"]["provider_class"] == "vm"
+    assert "VIRTUAL MACHINES" in captured["system"]   # vm guidance reached the model
 
 
 def test_generate_invalid_spec_reports_errors_not_500(monkeypatch):

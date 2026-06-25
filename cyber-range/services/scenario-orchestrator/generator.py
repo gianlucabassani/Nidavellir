@@ -90,6 +90,35 @@ _SYSTEM = (
     + _EXAMPLE
 )
 
+# VM-class guidance + example, appended when the operator pins provider_class: vm.
+# VMs are full machines (OpenStack/AWS/local-libvirt), not containers — different
+# image names and no container-only fields.
+_VM_NOTE = (
+    "This brief targets requires.provider_class: \"vm\" — nodes are full VIRTUAL "
+    "MACHINES, not containers:\n"
+    "- image: use OS image names — \"ubuntu-22.04\", \"debian-12\", "
+    "\"windows-server-2019\", or \"kali\" for the attacker. Not container app images.\n"
+    "- Do NOT set container-only fields like command: \"sleep infinity\".\n"
+    "- ports are the service's real listening ports (e.g. 22, 80, 445, 3389).\n"
+    "- The attacker entrypoint is a Kali VM; services on victims run as real daemons."
+)
+_VM_EXAMPLE = """\
+{
+  "schema": "nidavellir/v3",
+  "name": "Linux VM Pentest",
+  "title": "Linux VM Pentest",
+  "difficulty": "medium",
+  "description": "A Kali attacker VM and an Ubuntu victim VM on an isolated LAN.",
+  "requires": {"provider_class": "vm"},
+  "network": {"segments": [{"name": "lan", "description": "isolated layer-2 segment"}]},
+  "nodes": [
+    {"name": "attacker", "role": "attacker", "image": "kali", "segments": ["lan"], "entrypoint": true},
+    {"name": "web", "role": "victim", "image": "ubuntu-22.04", "segments": ["lan"], "ports": [22, 80]}
+  ],
+  "agents": [{"stance": "attacker", "node": "attacker"}],
+  "objectives": [{"description": "Exploit the vulnerable web service and pivot on the LAN"}]
+}"""
+
 # Provider classes the operator may pin via the request.
 PROVIDER_CLASSES = ("container", "vm", "any")
 
@@ -105,13 +134,18 @@ class GeneratorError(Exception):
 
 def build_messages(brief: str, provider_class: str | None = None) -> tuple[str, list[dict]]:
     """Return (system_prompt, messages) for a generation request. A
-    ``provider_class`` hint is appended as a hard constraint when supplied."""
+    ``provider_class`` hint is appended as a hard constraint when supplied; for
+    ``vm`` the system prompt also gains VM-specific guidance + a VM worked-example
+    (the default example is container-class)."""
+    system = _SYSTEM
+    if provider_class == "vm":
+        system = system + "\n\n" + _VM_NOTE + "\n\nVM worked example:\n" + _VM_EXAMPLE
     user = brief.strip()
     if provider_class:
         user += (
             f"\n\nConstraint: requires.provider_class MUST be \"{provider_class}\"."
         )
-    return _SYSTEM, [{"role": "user", "content": user}]
+    return system, [{"role": "user", "content": user}]
 
 
 def extract_spec_json(text: str) -> dict:

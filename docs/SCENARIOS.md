@@ -174,10 +174,15 @@ The response is the **same review payload** as `/scenarios/preview`
 Launch → *Generate* card, the generated spec is editable), then imports it via
 `POST /scenarios` and launches like any other pack. No model connected → `409`; an
 unusable model reply → `valid: false` with the model's `raw` text (never a `500`).
+Pass `provider_class: "vm"` to generate a **VM** topology instead (OS images,
+real service ports, no container-only fields) — it validates the same way; a live
+VM **deploy** needs a vm backend (OpenStack/AWS, or the planned local QEMU/libvirt
+provider).
+
 Generation is **operator-only** and is not exposed to in-arena agent stances
-(authoring infrastructure is an operator privilege). An operator driving over MCP
-authors a spec directly and validates it through the same `preview → import`
-gate — there is no scenario-authoring tool on the attacker/defender gateway.
+(authoring infrastructure is an operator privilege). Over MCP the operator's gateway
+runs with an **operator stance** exposing `scaffold_scenario` (the same review-gated
+generate) and `import_scenario` — never on an attacker/defender/configurator session.
 
 ### Validation: hard errors vs. soft warnings
 
