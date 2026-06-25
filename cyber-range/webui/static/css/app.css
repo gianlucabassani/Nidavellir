@@ -408,11 +408,145 @@ select[multiple] option { padding:6px 8px; border-radius:6px; }
 .empty i { font-size:26px; display:block; margin-bottom:10px; opacity:.6; }
 
 /* ---------- login ---------- */
-.auth { min-height:100vh; display:grid; place-items:center; padding:24px; }
-.auth-card { width:min(380px,100%); background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:30px; box-shadow:var(--shadow); }
-.auth-brand { display:flex; align-items:center; gap:11px; justify-content:center; font-size:20px; font-weight:700; margin-bottom:6px; }
-.auth-brand .mark { width:36px; height:36px; border-radius:10px; display:grid; place-items:center; background:linear-gradient(150deg,var(--accent),var(--accent-deep)); color:#1a1206; font-size:18px; }
-.auth-sub { text-align:center; color:var(--muted); font-size:13px; margin-bottom:24px; }
+.auth {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(circle at top right, rgba(20, 28, 48, 1) 0%, rgba(9, 11, 16, 1) 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.auth::before {
+  content: "";
+  position: absolute;
+  top: -20%;
+  left: -10%;
+  width: 50%;
+  height: 50%;
+  background: radial-gradient(circle, rgba(212, 175, 55, 0.15) 0%, transparent 70%);
+  filter: blur(80px);
+  z-index: 0;
+  animation: float 10s infinite alternate ease-in-out;
+}
+
+.auth::after {
+  content: "";
+  position: absolute;
+  bottom: -20%;
+  right: -10%;
+  width: 50%;
+  height: 50%;
+  background: radial-gradient(circle, rgba(46, 92, 153, 0.15) 0%, transparent 70%);
+  filter: blur(80px);
+  z-index: 0;
+  animation: float 12s infinite alternate-reverse ease-in-out;
+}
+
+@keyframes float {
+  0% { transform: translateY(0) scale(1); }
+  100% { transform: translateY(30px) scale(1.1); }
+}
+
+.auth-card {
+  width: min(420px, 100%);
+  background: rgba(18, 22, 29, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 40px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  position: relative;
+  z-index: 1;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.auth-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 35px 60px -15px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(212, 175, 55, 0.2);
+}
+
+.auth-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  justify-content: center;
+  font-family: 'Inter', sans-serif;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+}
+
+.auth-brand .mark {
+  width: 80px;
+  height: 80px;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.1);
+  transition: transform 0.3s ease;
+  cursor: pointer;
+}
+
+.auth-brand .mark:hover {
+  transform: scale(1.05) translateY(-2px);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.7), 0 0 0 1px rgba(212, 175, 55, 0.3);
+}
+
+.auth-sub {
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  margin-bottom: 32px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.auth .field .label {
+  font-weight: 600;
+  color: rgba(255,255,255,0.8);
+  margin-bottom: 8px;
+  letter-spacing: 0.02em;
+}
+
+.auth .input {
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 15px;
+  transition: all 0.2s ease;
+}
+
+.auth .input:focus {
+  background: rgba(0,0,0,0.4);
+  border-color: rgba(212, 175, 55, 0.5);
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.15);
+}
+
+.auth .btn-primary {
+  margin-top: 10px;
+  padding: 14px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.9), rgba(184, 134, 11, 0.9));
+  color: #000;
+  box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
+  transition: all 0.3s ease;
+}
+
+.auth .btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(212, 175, 55, 0.4);
+  filter: brightness(1.1);
+}
 
 /* ---------- responsive ---------- */
 @media (max-width:1000px) {

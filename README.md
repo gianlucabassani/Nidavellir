@@ -41,6 +41,10 @@ machines inside it and a live topology preview:
 
 <p align="center"><img src="docs/assets/inventory.png" alt="Nidavellir inventory — scenario packs with machine line-ups + topology" width="900"></p>
 
+The **Arena View** gives operators full live-control over active topologies:
+
+<p align="center"><img src="docs/assets/arena.png" alt="Inside Arena View — instance control and network segments" width="900"></p>
+
 ## Three pillars
 
 1. **Dynamic N-node topologies** (GOAD-inspired). A scenario is a provider-agnostic, data-defined

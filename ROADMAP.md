@@ -25,8 +25,8 @@ technical model; the gateway and stances are designed on their own terms.
 
 - Decoupled control plane: FastAPI ↔ Redis/Celery ↔ provider drivers.
 - **Provider abstraction** (ADR-0003): `mock`, `docker-local` (container arenas,
-  seconds to deploy, zero cloud cost), `openstack`; per-request provider
-  selection; per-arena workspace isolation.
+  seconds to deploy, zero cloud cost), `libvirt` (KVM local VM orchestration),
+  `openstack`; per-request provider selection; per-arena workspace isolation.
 - API-key auth with roles (ADR-0002); input validation; CSRF + API rate limits.
 - **PostgreSQL + SQLAlchemy + Alembic** (ADR-0004); explicit lab **state
   machine**; append-only **`events` audit table**; **TTL/stuck reaper**.

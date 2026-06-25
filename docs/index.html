@@ -1414,6 +1414,19 @@
                 <p>Configure provider instances (docker-local, AWS, OpenStack), input parameters, wire specific stances, and launch targets.</p>
               </div>
             </div>
+            
+            <!-- Card 4 -->
+            <div class="gallery-card" onclick="openLightbox('assets/arena.png', 'Inside Arena View showing live topology, active segments, and instance controls.')">
+              <div class="gallery-img-wrapper">
+                <img src="assets/arena.png" alt="Inside Arena View" onerror="this.parentNode.innerHTML='<div style=\'position:absolute;width:100%;height:100%;display:grid;place-items:center;color:var(--faint);font-family:var(--mono);font-size:12px;\'>[ arena.png ]</div>'">
+              </div>
+              <div class="gallery-info">
+                <h3>Arena Control <span class="gallery-badge">Live</span></h3>
+                <p>Monitor specific arena details, interact with running instances, and review network segment routing.</p>
+              </div>
+            </div>
+
+
           </div>
         </div>
       </section>
@@ -1572,8 +1585,7 @@
                 <span class="roadmap-status">Active</span>
               </div>
               <div class="roadmap-content">
-                <h3>Dynamic Topologies (Pillar 1)</h3>
-                <p>Introduce the abstract v3 YAML scenario schema modeling arbitrary networks, node structures, and subnets. Build compiler engines that deploy these dynamic scopes locally to Docker, or VM providers (OpenStack/AWS). Setup the Vulhub community environment importer.</p>
+                <p>Introduce the abstract v3 YAML scenario schema modeling arbitrary networks, node structures, and subnets. Build compiler engines that deploy these dynamic scopes locally to Docker, or VM providers (OpenStack/AWS/Libvirt). Implement Docker Hub image existence verification. Setup the Vulhub community environment importer.</p>
               </div>
             </div>
             
@@ -1599,7 +1611,7 @@
               </div>
               <div class="roadmap-content">
                 <h3>Zero-to-Prompt Scenario Gen (Pillar 3)</h3>
-                <p>Deploy natural language LLM prompt compilers that generate validated v3 yaml topology configurations dynamically. Wire an approval wizard inside the operator dashboard before provisioning code to hypervisors.</p>
+                <p>Deploy natural language LLM prompt compilers that generate validated v3 yaml topology configurations dynamically. Wire an approval wizard and setup proposal generation inside the operator dashboard before provisioning code to hypervisors.</p>
               </div>
             </div>
             
