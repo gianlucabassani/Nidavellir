@@ -169,6 +169,21 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
             engagement."""
             return tools.finish_setup(ctx(), arena_id=arena_id)
 
+    elif stance is Stance.operator:
+        @mcp.tool()
+        def scaffold_scenario(prompt: str, provider_class: str | None = None) -> dict:
+            """Generate a candidate v3 scenario from a natural-language prompt using
+            your connected model. Returns {valid, spec, topology, errors,
+            suggested_id} for REVIEW — it does NOT deploy or save. provider_class
+            optionally pins the backend ('container' | 'vm' | 'any')."""
+            return tools.scaffold_scenario(ctx(), prompt=prompt, provider_class=provider_class)
+
+        @mcp.tool()
+        def import_scenario(spec: dict, id: str | None = None, overwrite: bool = False) -> dict:
+            """Persist a reviewed v3 spec as a reusable pack (use after
+            scaffold_scenario). Returns the registered scenario id."""
+            return tools.import_scenario(ctx(), spec=spec, scenario_id=id, overwrite=overwrite)
+
     return mcp
 
 

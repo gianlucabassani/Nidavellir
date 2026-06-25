@@ -232,6 +232,15 @@ select[multiple] option { padding:6px 8px; border-radius:6px; }
 .import-msg { font-size:12.5px; min-height:16px; }
 .import-msg.ok { color:var(--ok); } .import-msg.err { color:var(--danger); }
 
+/* generator review diff: operator edits vs the model's original draft */
+.diffview { margin-top:10px; padding:10px 12px; border:1px solid var(--line); border-radius:var(--radius-sm);
+  background:var(--surface); font-family:var(--mono); font-size:12px; line-height:1.5; color:var(--muted);
+  white-space:pre-wrap; word-break:break-word; max-height:300px; overflow:auto; }
+.diffview.has-changes { color:var(--text); }
+.diffview .diff-add { color:var(--ok); display:block; }
+.diffview .diff-del { color:var(--danger); display:block; }
+.diffview .diff-ctx { color:var(--faint); display:block; }
+
 /* ---------- inventory (machine line-up) ---------- */
 .inv-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
 .inv-card { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; cursor:pointer; transition:.16s; }

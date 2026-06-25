@@ -50,7 +50,13 @@ toolsets are gated by an allow-list (`stances.allowed_tools`):
   against the hidden manifest by CWE + node — the 2026-06-16 manifest model that
   replaced `submit_flag`);
 - **MITM** — in-path `observe_stream` / `modify_message` on a shared segment;
-- **defender** — `query_events`, `get_alerts`, `submit_detection`.
+- **defender** — `query_events`, `get_alerts`, `submit_detection`;
+- **operator** — *not an in-arena agent stance.* The operator driving scenario
+  **authoring** over MCP with their operator/admin key: `scaffold_scenario`
+  (generate a v3 spec from a prompt via their connected model — the review gate,
+  no deploy/save) and `import_scenario` (persist a reviewed spec). Gated to the
+  operator stance AND independently operator-only on the orchestrator, so an
+  attacker/defender agent key can never reach authoring (P3-2, 2026-06-25).
 
 **Guardrails (server-enforced, non-negotiable):**
 1. **Network containment is the primary control**, provider-enforced, not

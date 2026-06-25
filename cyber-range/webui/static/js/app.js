@@ -1025,9 +1025,13 @@
     const genImportRow = document.getElementById("gen-import-row");
     const genReval = document.getElementById("gen-revalidate-btn");
     const genImport = document.getElementById("gen-import-btn");
+    const genDiffBtn = document.getElementById("gen-diff-btn");
+    const genDiff = document.getElementById("gen-diff");
+    let genDraft = "";   // the model's original spec, for the "review edits" diff
     const genShowReview = (show) => {
       if (genSpecWrap) genSpecWrap.hidden = !show;
       if (genImportRow) genImportRow.hidden = !show;
+      if (!show && genDiff) genDiff.hidden = true;
     };
     if (genDo) genDo.addEventListener("click", () => {
       const prompt = genPrompt ? genPrompt.value.trim() : "";
@@ -1044,7 +1048,8 @@
           return;
         }
         if (status === 200 && data.valid) {
-          if (genSpec) genSpec.value = JSON.stringify(data.spec, null, 2);
+          genDraft = JSON.stringify(data.spec, null, 2);
+          if (genSpec) genSpec.value = genDraft;
           genShowReview(true);
           renderSpecTopology("gen-preview", data.topology);
           if (genId && !genId.value && data.suggested_id) genId.value = data.suggested_id;
@@ -1086,6 +1091,46 @@
         else if (genMsg) { genMsg.className = "import-msg err"; genMsg.textContent = "Import failed: " + (data.error || data.detail || ("HTTP " + status)); }
       });
     });
+    // review-gate diff: what the operator changed vs the model's original draft
+    if (genDiffBtn) genDiffBtn.addEventListener("click", () => {
+      if (!genDiff) return;
+      if (!genDiff.hidden) { genDiff.hidden = true; return; }   // toggle off
+      const cur = genSpec ? genSpec.value : "";
+      const rows = lineDiff(genDraft, cur);
+      const changed = rows.some((r) => r.t !== " ");
+      genDiff.hidden = false;
+      if (!changed) {
+        genDiff.textContent = "No edits — importing the model's spec exactly as generated.";
+        genDiff.className = "diffview";
+        return;
+      }
+      genDiff.className = "diffview has-changes";
+      genDiff.innerHTML = rows.map((r) => {
+        const cls = r.t === "+" ? "diff-add" : r.t === "-" ? "diff-del" : "diff-ctx";
+        return '<span class="' + cls + '">' + escapeHtml(r.t + " " + r.line) + "</span>";
+      }).join("\n");
+    });
+  }
+
+  /* ---- minimal LCS line diff (model draft vs operator-edited spec) ----- */
+  function lineDiff(aText, bText) {
+    const a = (aText || "").split("\n"), b = (bText || "").split("\n");
+    const n = a.length, m = b.length;
+    // LCS length table
+    const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+    for (let i = n - 1; i >= 0; i--)
+      for (let j = m - 1; j >= 0; j--)
+        dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    const out = [];
+    let i = 0, j = 0;
+    while (i < n && j < m) {
+      if (a[i] === b[j]) { out.push({ t: " ", line: a[i] }); i++; j++; }
+      else if (dp[i + 1][j] >= dp[i][j + 1]) { out.push({ t: "-", line: a[i] }); i++; }
+      else { out.push({ t: "+", line: b[j] }); j++; }
+    }
+    while (i < n) out.push({ t: "-", line: a[i++] });
+    while (j < m) out.push({ t: "+", line: b[j++] });
+    return out;
   }
 
   /* ---- scenarios page: click a row to preview its topology ------------ */

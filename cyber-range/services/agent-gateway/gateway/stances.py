@@ -17,6 +17,12 @@ class Stance(str, Enum):
     mitm = "mitm"
     defender = "defender"
     configurator = "configurator"
+    # Not an in-arena agent stance: the OPERATOR driving scenario authoring over
+    # MCP with their operator/admin key (generate + import). Registered here so
+    # the gateway can expose an operator toolset, but it never gets attacker
+    # tools — and the orchestrator independently enforces operator-only on the
+    # authoring endpoints, so an agent key can never reach these tools.
+    operator = "operator"
 
 
 # Shared lifecycle tools — available to every authenticated session.
@@ -35,6 +41,9 @@ LIFECYCLE_TOOLS = frozenset(
 #     P2-10). NO attacker tools. HITL: propose/await; autonomous (double-locked):
 #     run. The orchestrator is the enforcement point.
 #   MITM — lands in a later increment (in-path intercept).
+#   operator — authoring (NOT an arena agent): generate a scenario spec from a
+#     prompt (the operator's BYO model) and import it. Review gate stays on the
+#     orchestrator; both endpoints are operator-only there.
 STANCE_TOOLS: dict[Stance, frozenset[str]] = {
     Stance.attacker: frozenset(
         {"get_topology", "list_targets", "run_command", "report_finding"}
@@ -45,6 +54,7 @@ STANCE_TOOLS: dict[Stance, frozenset[str]] = {
          "run_setup_step", "upload_file", "finish_setup"}
     ),
     Stance.mitm: frozenset(),
+    Stance.operator: frozenset({"scaffold_scenario", "import_scenario"}),
 }
 
 

@@ -104,6 +104,16 @@ class _FakeRestClient:
         self.calls.append(("setup_finish", api_key, arena_id))
         return {"finished": True}
 
+    # operator stance (authoring)
+    def generate_scenario(self, api_key, prompt, provider_class=None):
+        self.calls.append(("generate_scenario", api_key, prompt, provider_class))
+        return {"valid": True, "spec": {"schema": "nidavellir/v3", "name": "Gen"},
+                "topology": {"nodes": []}, "suggested_id": "gen", "warnings": []}
+
+    def import_scenario(self, api_key, spec, scenario_id=None, overwrite=False):
+        self.calls.append(("import_scenario", api_key, scenario_id, overwrite))
+        return {"status": "imported", "id": scenario_id or "gen"}
+
 
 def _ctx(stance=Stance.attacker, trace_dir=None, client=None):
     return GatewayContext(
@@ -299,6 +309,47 @@ def test_attacker_session_also_registers_the_attacker_tools():
     mcp = build_server(GatewayConfig(env={"NIDAVELLIR_STANCE": "attacker"}))
     names = {t.name for t in asyncio.run(mcp.list_tools())}
     assert {"run_command", "list_targets", "get_topology", "report_finding"} <= names
+
+
+def test_operator_session_registers_authoring_tools_only():
+    import asyncio
+
+    from gateway.server import build_server
+
+    mcp = build_server(GatewayConfig(env={"NIDAVELLIR_STANCE": "operator"}))
+    names = {t.name for t in asyncio.run(mcp.list_tools())}
+    # authoring tools present...
+    assert {"scaffold_scenario", "import_scenario"} <= names
+    # ...and NONE of the in-arena agent tools leak onto the operator surface
+    assert not ({"run_command", "report_finding", "query_events",
+                 "run_setup_step"} & names)
+
+
+def test_authoring_tools_absent_from_agent_stances():
+    """scaffold/import must never appear on an attacker/defender/configurator
+    session — authoring is an operator privilege."""
+    assert not Session("k", Stance.attacker).can_use("scaffold_scenario")
+    assert not Session("k", Stance.defender).can_use("import_scenario")
+    assert not Session("k", Stance.configurator).can_use("scaffold_scenario")
+    assert Session("k", Stance.operator).can_use("scaffold_scenario")
+    assert Session("k", Stance.operator).can_use("import_scenario")
+
+
+def test_scaffold_scenario_proxies_generate_and_traces():
+    ctx = _ctx(stance=Stance.operator)
+    out = tools.scaffold_scenario(ctx, prompt="a dvwa lab", provider_class="container")
+    assert out["valid"] is True and out["spec"]["schema"] == "nidavellir/v3"
+    call = next(c for c in ctx.client.calls if c[0] == "generate_scenario")
+    assert call[2] == "a dvwa lab" and call[3] == "container"
+
+
+def test_import_scenario_proxies_and_is_operator_only():
+    ctx = _ctx(stance=Stance.operator)
+    out = tools.import_scenario(ctx, spec={"schema": "nidavellir/v3"}, scenario_id="my-id")
+    assert out["status"] == "imported" and out["id"] == "my-id"
+    # an attacker session is blocked at the guard
+    with pytest.raises(tools.ToolNotAllowed):
+        tools.scaffold_scenario(_ctx(stance=Stance.attacker), prompt="x")
 
 
 # --- attacker stance: run_command + recon ------------------------------------

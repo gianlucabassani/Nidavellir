@@ -136,3 +136,19 @@ class RestClient:
 
     def setup_finish(self, api_key: str, arena_id: str) -> dict:
         return self._request("POST", f"/arenas/{arena_id}/setup/finish", api_key)
+
+    # --- operator authoring (P3) ---------------------------------------------
+
+    def generate_scenario(self, api_key: str, prompt: str,
+                          provider_class: str | None = None) -> dict:
+        body = {"prompt": prompt}
+        if provider_class:
+            body["provider_class"] = provider_class
+        return self._request("POST", "/scenarios/generate", api_key, json=body)
+
+    def import_scenario(self, api_key: str, spec, scenario_id: str | None = None,
+                       overwrite: bool = False) -> dict:
+        body = {"spec": spec, "overwrite": overwrite}
+        if scenario_id:
+            body["id"] = scenario_id
+        return self._request("POST", "/scenarios", api_key, json=body)

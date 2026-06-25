@@ -135,6 +135,40 @@ def arena_status(ctx: GatewayContext, arena_id: str) -> dict:
     return res
 
 
+def scaffold_scenario(ctx: GatewayContext, prompt: str,
+                      provider_class: str | None = None) -> dict:
+    """Operator authoring: generate a candidate v3 scenario from a prompt using
+    the operator's own connected model. Proxies the orchestrator's review gate
+    (POST /scenarios/generate) — returns {valid, spec, topology, errors,
+    suggested_id, ...} and does NOT deploy or save. Operator-only (the
+    orchestrator rejects non-operator keys)."""
+    _guard(ctx, "scaffold_scenario")
+    try:
+        res = ctx.client.generate_scenario(ctx.session.api_key, prompt, provider_class)
+    except Exception:
+        _trace(ctx, "scaffold_scenario", {"provider_class": provider_class}, ok=False)
+        raise
+    _trace(ctx, "scaffold_scenario",
+           {"provider_class": provider_class, "valid": bool((res or {}).get("valid"))}, ok=True)
+    return res
+
+
+def import_scenario(ctx: GatewayContext, spec, scenario_id: str | None = None,
+                    overwrite: bool = False) -> dict:
+    """Operator authoring: persist a reviewed v3 spec as a reusable pack (proxies
+    POST /scenarios). Use after scaffold_scenario returns a valid spec you've
+    reviewed. Operator-only."""
+    _guard(ctx, "import_scenario")
+    try:
+        res = ctx.client.import_scenario(ctx.session.api_key, spec, scenario_id, overwrite)
+    except Exception:
+        _trace(ctx, "import_scenario", {"id": scenario_id, "overwrite": overwrite}, ok=False)
+        raise
+    _trace(ctx, "import_scenario",
+           {"id": (res or {}).get("id", scenario_id), "overwrite": overwrite}, ok=True)
+    return res
+
+
 def destroy_arena(ctx: GatewayContext, arena_id: str) -> dict:
     _guard(ctx, "destroy_arena")
     res = ctx.client.destroy(ctx.session.api_key, arena_id)

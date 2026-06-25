@@ -24,6 +24,11 @@ os.environ["TF_PLUGIN_CACHE_DIR"] = str(_TMP / "cache" / "terraform-plugins")
 # Rate limiting would trip on the suite's rapid-fire requests; the dedicated
 # rate-limit test re-enables it explicitly.
 os.environ["RATE_LIMIT_ENABLED"] = "false"
+# Hermetic encryption: the suite assumes "no key" by default (the encryption
+# tests set one explicitly via monkeypatch). config.load_dotenv() would otherwise
+# pull a developer's local .env SECRETS_ENCRYPTION_KEY into the process and flip
+# encryption on — empty + present means load_dotenv(override=False) won't touch it.
+os.environ["SECRETS_ENCRYPTION_KEY"] = ""
 
 # --- 2. Make the orchestrator package importable ---------------------------
 # The service uses flat imports (`from database import Database`), so its
