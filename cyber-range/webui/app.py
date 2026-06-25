@@ -813,6 +813,14 @@ def setup_decision_proxy(instance_id, step_id, decision):
     return jsonify(data), code
 
 
+@app.route("/api/setup/<instance_id>/generate-proposals", methods=["POST"])
+def setup_generate_proposals_proxy(instance_id):
+    """Have the operator's connected model draft HITL setup proposals (Field-C).
+    The model call can be slow, so allow a longer timeout. CSRF-protected."""
+    data, code = _api_post(f"/arenas/{instance_id}/setup/generate-proposals", timeout=120)
+    return jsonify(data), code
+
+
 # --- scenario authoring & import (P1-7) + topology preview (P7-9) -----------
 @app.route("/api/scenarios/preview", methods=["POST"])
 def scenario_preview_proxy():

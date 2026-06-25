@@ -312,6 +312,12 @@ Three **modes** (the consent choice): `operator` (the operator scripts steps —
 - `POST /arenas/{id}/setup/proposals/{step_id}/approve` — **approve** a proposed step →
   it runs on the victim and the result is recorded (the load-bearing HITL gate).
 - `POST /arenas/{id}/setup/proposals/{step_id}/reject` — reject (it never runs).
+- `POST /arenas/{id}/setup/generate-proposals` (operator-only, **HITL**) — draft setup
+  steps using the **operator's own connected model** and record them as pending
+  `setup_proposal`s for approval (the gate is unchanged — the model only drafts,
+  nothing runs without approval). For when you don't have a configurator-stance agent
+  connected. `409` without an open hitl session or a connected model; capped at the
+  remaining step budget; out-of-scope/empty steps are dropped.
 
 **Configurator-agent tools** (the gateway `stance=configurator` backend; reachable by an
 `agent` key but gated by a **`configurator` binding** to the arena (D1) + an open session

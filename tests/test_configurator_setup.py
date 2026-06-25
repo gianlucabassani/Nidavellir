@@ -168,6 +168,55 @@ def test_steps_are_audited(operator):
     assert "setup_session" in types and "setup_step" in types and "setup_finished" in types
 
 
+# --- Field-C: operator-model-driven HITL proposals --------------------------
+
+
+def test_generate_proposals_requires_a_connected_model(operator, monkeypatch):
+    _arena("cfg-gp-nomodel")
+    operator.post("/arenas/cfg-gp-nomodel/setup/start", json={"mode": "hitl"})
+    monkeypatch.setattr("database.Database.get_decrypted_model_credential",
+                        lambda self, owner: None)
+    r = operator.post("/arenas/cfg-gp-nomodel/setup/generate-proposals")
+    assert r.status_code == 409 and "no model" in r.text
+
+
+def test_generate_proposals_requires_hitl_mode(operator, monkeypatch):
+    _arena("cfg-gp-mode")
+    operator.post("/arenas/cfg-gp-mode/setup/start", json={"mode": "operator"})
+    monkeypatch.setattr("database.Database.get_decrypted_model_credential",
+                        lambda self, owner: {"provider": "anthropic", "model": "c", "api_key": "k"})
+    r = operator.post("/arenas/cfg-gp-mode/setup/generate-proposals")
+    assert r.status_code == 409 and "hitl" in r.text
+
+
+def test_generate_proposals_records_pending_for_review(operator, monkeypatch):
+    import json as _json
+
+    import model_chat
+
+    _arena("cfg-gp-ok")
+    operator.post("/arenas/cfg-gp-ok/setup/start", json={"mode": "hitl", "command_budget": 5})
+    monkeypatch.setattr("database.Database.get_decrypted_model_credential",
+                        lambda self, owner: {"provider": "anthropic", "model": "c", "api_key": "k"})
+    reply = _json.dumps({"steps": [
+        {"node": "victim", "command": "apt-get install -y nginx", "rationale": "web server"},
+        {"node": "kali", "command": "nmap victim", "rationale": "out-of-scope foothold"},
+    ]})
+    monkeypatch.setattr(model_chat, "complete_chat", lambda *a, **k: reply)
+
+    r = operator.post("/arenas/cfg-gp-ok/setup/generate-proposals")
+    assert r.status_code == 200, r.text
+    assert r.json()["proposed"] == 1   # the out-of-scope foothold step is dropped
+    # it shows up in the operator's pending queue for approval (the gate is unchanged)
+    pend = operator.get("/arenas/cfg-gp-ok/setup").json()["pending_proposals"]
+    assert any(p["command"].startswith("apt-get install -y nginx") for p in pend)
+
+
+def test_generate_proposals_is_operator_only(agent):
+    _arena("cfg-gp-authz")
+    assert agent.post("/arenas/cfg-gp-authz/setup/generate-proposals").status_code == 403
+
+
 def test_setup_egress_open_close_lifecycle(operator, monkeypatch):
     import providers.mock as mock_module
 

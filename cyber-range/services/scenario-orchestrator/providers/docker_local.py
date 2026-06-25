@@ -218,7 +218,9 @@ class DockerLocalProvider(RangeProvider):
             and any(self._is_foothold(node) for node in nodes)
         )
 
+        phase = "init"
         try:
+            phase = "create networks"
             networks = {}
             for seg in wanted:
                 net_name = self._network_name(instance_id, seg)
@@ -233,6 +235,7 @@ class DockerLocalProvider(RangeProvider):
             # Per-arena ingress bridge (no SNAT): lets the operator's browser
             # reach published web ports on a locked arena without giving the
             # node any working egress.
+            phase = "create ingress network"
             ingress = None
             if needs_ingress:
                 ing_name = self._network_name(instance_id, _INGRESS_SEGMENT)
@@ -243,11 +246,13 @@ class DockerLocalProvider(RangeProvider):
 
             # Bring the package mirror up before the nodes so its `mirror` alias
             # resolves the moment a foothold runs apt/pip.
+            phase = "start package mirror"
             mirror = self._run_mirror(instance_id, networks, wanted, labels) if needs_mirror else None
 
             # White-box source (read-only) must be cloned before the footholds
             # start, since they mount it. Only meaningful with a foothold to read
             # it from.
+            phase = "clone white-box sources"
             whitebox = {}
             if any(self._is_foothold(node) for node in nodes):
                 whitebox = self._prepare_whitebox_sources(instance_id, nodes, labels)
@@ -260,8 +265,10 @@ class DockerLocalProvider(RangeProvider):
             # SUT clone-into-box (P2-10 wizard): clone each declared repo read-WRITE
             # into a per-arena volume, mounted into the victim so the configurator
             # (human or HITL agent) can build/run the project in place.
+            phase = "clone SUT sources"
             sut_sources = self._prepare_sut_sources(instance_id, nodes, labels)
 
+            phase = "start node containers"
             records = []
             for node in nodes:
                 container = self._run_node(
@@ -270,6 +277,7 @@ class DockerLocalProvider(RangeProvider):
                 )
                 records.append((node, container))
 
+            phase = "collect outputs"
             outputs = self._collect_outputs(instance_id, networks, wanted, records)
             outputs["egress"] = "blocked" if locked else "open"
             # Surface where each white-box source is readable on the foothold(s).
@@ -304,10 +312,21 @@ class DockerLocalProvider(RangeProvider):
             return {"success": True, "outputs": outputs}
 
         except Exception as e:
-            logger.error(f"[{instance_id}] docker-local deploy failed: {e}")
             # Roll back whatever was created so nothing leaks.
             self.destroy(instance_id)
-            return {"success": False, "error": str(e)}
+            import docker  # lazy: the SDK is present here (we used self.client above)
+            if isinstance(e, (docker.errors.ImageNotFound, docker.errors.NotFound)):
+                msg = (
+                    f"image could not be pulled — not found on the registry "
+                    f"(phase: {phase}): {e}. Use a known logical image "
+                    f"(GET /catalog) or fix the tag."
+                )
+                logger.error(f"[{instance_id}] docker-local deploy failed: {msg}")
+                return {"success": False, "error": msg, "phase": phase,
+                        "error_kind": "image_not_found"}
+            logger.error(f"[{instance_id}] docker-local deploy failed (phase: {phase}): {e}")
+            return {"success": False, "error": str(e), "phase": phase,
+                    "error_kind": type(e).__name__}
 
     def _run_node(self, instance_id, node, networks, ingress, labels, locked,
                   mirror=None, whitebox=None, sut_sources=None):

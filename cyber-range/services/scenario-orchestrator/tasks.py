@@ -59,11 +59,20 @@ def deploy_lab(self, instance_id, scenario_name, user_id, variables=None, provid
     # 1. Update DB: Set status to deploying
     db.update_deployment(instance_id, status="deploying", actor="worker")
 
-    # 2. Execute Deployment
-    result = orch.deploy(scenario_name, instance_id, variables, scenario_config=scenario_config)
+    # 2. Execute Deployment. Wrapped: a *raised* exception must not leave the arena
+    # stuck in 'deploying' with no audit trail — turn it into an observable failure
+    # exactly like a returned {success: False}.
+    try:
+        result = orch.deploy(
+            scenario_name, instance_id, variables, scenario_config=scenario_config
+        )
+    except Exception as e:  # noqa: BLE001 - a crash becomes a recorded failure
+        logger.exception(f"[{instance_id}] deploy task crashed")
+        result = {"success": False, "error": f"deploy crashed: {e}",
+                  "error_kind": type(e).__name__, "phase": "task"}
 
     # 3. Handle Result
-    if result["success"]:
+    if result.get("success"):
         logger.info(f"[{instance_id}] Deployment successful. Updating DB.")
         db.update_deployment(
             instance_id, status="active", outputs=result["outputs"], actor="worker"
@@ -77,9 +86,18 @@ def deploy_lab(self, instance_id, scenario_name, user_id, variables=None, provid
             except Exception:  # noqa: BLE001 - never fail an active deploy on this
                 logger.exception(f"[{instance_id}] pre-armed setup auto-open failed")
     else:
-        logger.error(f"[{instance_id}] Deployment failed. Error: {result['error']}")
-        db.update_deployment(
-            instance_id, status="failed", error=result["error"], actor="worker"
+        err = result.get("error", "unknown error")
+        logger.error(f"[{instance_id}] Deployment failed ({result.get('phase', '?')}): {err}")
+        db.update_deployment(instance_id, status="failed", error=err, actor="worker")
+        # Audit trail for the failure — previously invisible in the events stream
+        # (only a bare 'failed' status), which is why deploy failures were opaque.
+        db.record_event(
+            instance_id, "deploy_failed",
+            {"provider": provider or "default",
+             "phase": result.get("phase", "unknown"),
+             "error_kind": result.get("error_kind"),
+             "error": str(err)[:2000]},
+            actor="worker",
         )
 
     return result

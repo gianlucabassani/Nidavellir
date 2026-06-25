@@ -280,6 +280,40 @@ def test_failed_deploy_rolls_back(monkeypatch):
     assert all(n.removed for n in client.networks.created)
 
 
+def test_image_not_found_is_classified_with_phase(monkeypatch):
+    """A missing image gets a clear, classified error (not an opaque str) plus the
+    deploy phase — the Field-B observability fix."""
+    import docker
+
+    client = _FakeClient()
+
+    def explode(**kwargs):
+        raise docker.errors.ImageNotFound("no such image: ghost/img:latest")
+
+    monkeypatch.setattr(client.containers, "run", explode)
+    result = DockerLocalProvider(client=client).deploy(CONTAINER_SCENARIO, "abcd1234")
+
+    assert result["success"] is False
+    assert result["error_kind"] == "image_not_found"
+    assert result["phase"] == "start node containers"
+    assert "not found on the registry" in result["error"]
+    assert all(n.removed for n in client.networks.created)  # rolled back
+
+
+def test_generic_deploy_failure_carries_phase_and_kind(monkeypatch):
+    client = _FakeClient()
+
+    def explode(**kwargs):
+        raise RuntimeError("kaboom")
+
+    monkeypatch.setattr(client.containers, "run", explode)
+    result = DockerLocalProvider(client=client).deploy(CONTAINER_SCENARIO, "abcd1234")
+
+    assert result["success"] is False
+    assert result["error_kind"] == "RuntimeError"
+    assert result["phase"] == "start node containers"
+
+
 # --- v3 multi-segment topology (P1-2) ------------------------------------------
 
 

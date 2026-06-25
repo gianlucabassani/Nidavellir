@@ -25,7 +25,8 @@
   {%- set m = {'created':'ok','status':'info','agent_exec':'accent','reaped':'idle',
                'record_deleted':'idle','failed':'danger','agent_session':'accent',
                'setup_session':'info','setup_step':'accent','setup_proposal':'warn',
-               'setup_proposal_decision':'info','setup_finished':'idle','finding':'ok'} -%}
+               'setup_proposal_decision':'info','setup_finished':'idle','finding':'ok',
+               'deploy_failed':'danger'} -%}
   <span class="badge badge--{{ m.get(type, 'idle') }}">{{ (type or '?') | replace('_',' ') }}</span>
 {% endmacro %}
 
@@ -49,6 +50,9 @@
     <b>{{ p.decision }}</b>{% if p.exit_code is not none %} · exit {{ p.exit_code }}{% endif %}
   {%- elif e.type == 'finding' -%}
     <span class="mono">{{ (p.title or '') | truncate(50) }}</span> · {{ p.cwe or '—' }} · {{ p.node or 'any' }}
+  {%- elif e.type == 'deploy_failed' -%}
+    failed at <b>{{ p.phase or '?' }}</b>{% if p.error_kind %} · <span class="mono">{{ p.error_kind }}</span>{% endif %} ·
+    <span class="mono faint">{{ (p.error or '') | truncate(80) }}</span>
   {%- elif p -%}
     <span class="mono faint">{{ p | tojson | truncate(90) }}</span>
   {%- else -%}<span class="faint">—</span>{%- endif -%}

@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import json
 
+import images
+
 # A concise, accurate description of the v3 schema. The embedded real example
 # below is the strongest signal; this guide names the fields the model may use
 # so it does not invent unsupported keys (extras are ignored by the validator,
@@ -34,10 +36,11 @@ A Nidavellir v3 scenario is a provider-agnostic topology. Top-level fields:
     - name: unique slug
     - role: "attacker" (the offensive foothold), "victim" (a target), or
       "host" (a neutral box)
-    - image: a LOGICAL image name resolved per-provider. Prefer the known
-      logical names: "kali" (attacker tooling), "dvwa", "juice-shop", "ubuntu",
-      "nginx". A concrete registry image (e.g. "vulhub/solr:8.11.0") is also
-      allowed for victims.
+    - image: a LOGICAL image name resolved per-provider. STRONGLY prefer the
+      catalog logical names listed below. A concrete registry image is allowed
+      ONLY if it is a REAL, public Docker Hub image you are certain exists
+      (e.g. "nginx:1.25", "vulnerables/web-dvwa:latest") — never invent an image
+      name or a tag; a non-existent image makes the arena fail to launch.
     - segments: list of segment names this node attaches to
     - ports: list of container ports to expose (victims), e.g. [80, 8080]
     - entrypoint: true on the attacker node the operator/agent attaches to
@@ -138,6 +141,14 @@ def build_messages(brief: str, provider_class: str | None = None) -> tuple[str, 
     ``vm`` the system prompt also gains VM-specific guidance + a VM worked-example
     (the default example is container-class)."""
     system = _SYSTEM
+    # Inject the live catalog so the model has the exact known-good logical names
+    # (kept in sync with images.py) — the front-line defense against hallucinated
+    # images that fail at deploy.
+    catalog = ", ".join(images.known_logical_names())
+    system += (
+        f"\n\nCatalog logical images (use these exact names whenever they fit): "
+        f"{catalog}."
+    )
     if provider_class == "vm":
         system = system + "\n\n" + _VM_NOTE + "\n\nVM worked example:\n" + _VM_EXAMPLE
     user = brief.strip()

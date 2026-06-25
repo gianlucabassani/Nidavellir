@@ -20,17 +20,20 @@ import bindings
 import catalog
 import config
 import generator
+import image_check
+import images
 import model_chat
 import model_verify
 import netguard
 import scenarios
 import setup_phase
+import setup_proposer
 import vulhub_import
 from auth import Principal, ensure_bootstrap_key, require_principal
 from database import Database
 from orchestrator import Orchestrator
 from providers import available_providers, default_provider_name, infra_class_of
-from scenario_spec import ScenarioSpec, normalize_cwe, topology_view
+from scenario_spec import ScenarioSpec, normalize_cwe, normalized_nodes, topology_view
 from states import IllegalTransition, LabStatus
 from tasks import deploy_lab, destroy_lab
 from config import validate_config
@@ -284,12 +287,33 @@ async def delete_scenario(
     return {"status": "deleted", "id": scenario_id}
 
 
-def _spec_review(raw: dict, *, include_spec: bool = False) -> dict:
+def _image_warnings(raw: dict) -> list[str]:
+    """Best-effort: warn about container images that Docker Hub confidently
+    reports as non-existent (Field-A — a generated/imported spec that names a
+    hallucinated image would otherwise fail opaquely at deploy). Unknown / other-
+    registry images never warn. Never raises."""
+    try:
+        refs = [
+            images.resolve(n["image"], "docker-local")
+            for n in normalized_nodes(raw) if n.get("image")
+        ]
+        missing = image_check.missing_images([r for r in refs if isinstance(r, str)])
+    except Exception:  # noqa: BLE001 - advisory only
+        return []
+    return [
+        f"image '{m}' was not found on Docker Hub — the arena will fail to launch "
+        f"unless it exists; use a catalog image or fix the tag"
+        for m in missing
+    ]
+
+
+def _spec_review(raw: dict, *, include_spec: bool = False, check_images: bool = False) -> dict:
     """Validate a candidate v3 spec and build the no-deploy review payload
     (``valid``/``errors``/``warnings``/``suggested_id``/``summary``/``topology``)
     shared by the preview and generate endpoints — the review gate (never
     deploys). With ``include_spec`` the raw spec is echoed back for the
-    review→import flow."""
+    review→import flow. With ``check_images`` (container-class only), a best-effort
+    Docker Hub existence check appends warnings for missing images."""
     base = {"spec": raw} if include_spec else {}
     try:
         spec = ScenarioSpec.from_raw(raw)
@@ -300,11 +324,14 @@ def _spec_review(raw: dict, *, include_spec: bool = False) -> dict:
         suggested = _derive_scenario_id(raw)
     except HTTPException:
         pass
+    warnings = list(spec.warnings())
+    if check_images and spec.requires.provider_class.value in ("container", "any"):
+        warnings += _image_warnings(raw)
     return {
         **base,
         "valid": True,
         "errors": [],
-        "warnings": spec.warnings(),
+        "warnings": warnings,
         "suggested_id": suggested,
         "summary": {
             "name": spec.name,
@@ -408,7 +435,7 @@ async def generate_scenario(
             "raw": (e.raw or "")[:6000],
         }
     logger.info("Generated candidate scenario for '%s' (review pending)", principal.name)
-    return _spec_review(raw, include_spec=True)
+    return _spec_review(raw, include_spec=True, check_images=True)
 
 
 class VulhubImportRequest(BaseModel):
@@ -1823,6 +1850,98 @@ def setup_propose(
         actor=principal.name,
     )
     return {"proposed": True, "step_id": step_id, "status": "pending"}
+
+
+@app.post("/arenas/{instance_id}/setup/generate-proposals")
+def setup_generate_proposals(
+    instance_id: str, principal: Principal = Depends(require_principal)
+):
+    """Field-C: draft HITL setup proposals using the OPERATOR'S OWN connected model
+    and record them as pending `setup_proposal`s for the operator to approve/reject
+    (the gate is unchanged). Operator-only; requires an open mode='hitl' session and
+    a connected model (409 otherwise). The model never runs anything — it only
+    drafts; nothing executes without operator approval."""
+    record = _active_arena_or_error(instance_id)
+    _require_operator(principal)
+    sess = _open_session_or_409(instance_id)
+    if sess["mode"] != setup_phase.MODE_HITL:
+        raise HTTPException(
+            status_code=409,
+            detail=f"generate-proposals requires mode='hitl' (session is '{sess['mode']}')",
+        )
+    if setup_phase.is_expired(sess, datetime.now()):
+        raise HTTPException(status_code=409, detail="setup session expired (time-box)")
+    budget = setup_phase.budget_remaining(sess)
+    if budget <= 0:
+        raise HTTPException(status_code=429, detail="setup command budget exhausted")
+    cred = db.get_decrypted_model_credential(principal.name)
+    if not cred:
+        raise HTTPException(
+            status_code=409,
+            detail="no model connected — configure one via the model bubble first",
+        )
+
+    outputs = _arena_node_outputs(record)
+    # The repo being stood up (recorded at SUT-wizard creation) — tells the model
+    # WHAT it's setting up, so it proposes the project's real build/run instead of
+    # guessing blind from the source path alone.
+    prearm = next(
+        (e.get("payload") or {} for e in db.list_events(instance_id, limit=300)
+         if e.get("type") == "setup_prearm"),
+        {},
+    )
+    # The SUT source is cloned read-write into the victim (node_<n>_sut_source);
+    # white-box sources are read-only mounts. Either tells the model WHERE the
+    # project to bring up lives — without it the model has nothing real to set up.
+    brief = {
+        "victim_nodes": sess["nodes"],
+        "repo": prearm.get("repo"),
+        "repo_ref": prearm.get("ref"),
+        "sut_source": {
+            n: outputs.get(f"node_{n}_sut_source")
+            for n in sess["nodes"] if outputs.get(f"node_{n}_sut_source")
+        },
+        "whitebox_source": {
+            n: outputs.get(f"node_{n}_whitebox_source")
+            for n in sess["nodes"] if outputs.get(f"node_{n}_whitebox_source")
+        },
+        "scenario": record.get("scenario"),
+        "step_budget_remaining": budget,
+    }
+
+    def complete(system, messages):
+        reply = model_chat.complete_chat(
+            cred["provider"], cred["model"], cred["api_key"], system, messages,
+            max_tokens=2048, json_mode=True,
+        )
+        if reply.lstrip().startswith(model_chat.ERROR_SENTINEL):
+            clean = reply.replace(model_chat.ERROR_SENTINEL, "").strip()
+            raise setup_proposer.ProposerError(
+                f"the model provider could not complete the request: {clean}", raw=reply
+            )
+        return reply
+
+    try:
+        proposals = setup_proposer.generate_proposals(
+            complete, brief, set(sess["nodes"]), max_steps=min(budget, 10)
+        )
+    except setup_proposer.ProposerError as e:
+        logger.info("[%s] setup proposal generation produced nothing usable", instance_id)
+        return {"proposed": 0, "errors": [str(e)], "raw": (e.raw or "")[:4000], "proposals": []}
+
+    recorded = []
+    for p in proposals:
+        step_id = uuid.uuid4().hex[:12]
+        db.record_event(
+            instance_id, setup_phase.SETUP_PROPOSAL,
+            {"session_id": sess["session_id"], "step_id": step_id, "node": p["node"],
+             "command": p["command"], "rationale": p["rationale"],
+             "source": "model", "actor": f"{principal.name} (model)"},
+            actor=principal.name,
+        )
+        recorded.append({**p, "step_id": step_id})
+    logger.info("[%s] model drafted %d setup proposal(s) for review", instance_id, len(recorded))
+    return {"proposed": len(recorded), "proposals": recorded}
 
 
 @app.get("/arenas/{instance_id}/setup/proposals/{step_id}")

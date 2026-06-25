@@ -583,6 +583,8 @@
         '<button class="btn btn-sm" onclick="Nidavellir.cfgRunStep()">Run</button></div>' +
         '<pre class="cfg-out" id="cfg-out" hidden></pre>';
     } else if (s.mode === "hitl") {
+      html += '<div class="cfg-gen"><button class="btn btn-sm" id="cfg-gen-btn" onclick="Nidavellir.cfgGenerate()"><i class="fa-solid fa-wand-magic-sparkles"></i> Generate steps (your model)</button>' +
+              '<span class="muted" style="font-size:12px;margin-left:8px" id="cfg-gen-msg"></span></div>';
       html += '<div id="cfg-props-wrap">' + renderProposals(s) + '</div>';
     } else if (s.mode === "autonomous") {
       html += '<div class="cfg-note">Autonomous: the connected agent runs setup steps directly through the gateway (double-locked). Watch progress in Activity below.</div>';
@@ -644,6 +646,19 @@
   }
   function cfgDecide(stepId, decision) {
     cfgApi("/proposals/" + stepId + "/" + decision, "POST").then((r) => { if (r.error) cfgErr(r.error); refreshConfigurator(); });
+  }
+  function cfgGenerate() {
+    const btn = document.getElementById("cfg-gen-btn");
+    const msg = document.getElementById("cfg-gen-msg");
+    if (btn) btn.disabled = true;
+    if (msg) msg.textContent = "Asking your connected model…";
+    cfgApi("/generate-proposals", "POST").then((r) => {
+      if (btn) btn.disabled = false;
+      if (r.errors && r.errors.length) { if (msg) msg.textContent = r.errors[0]; return; }
+      if (r.error || r.detail) { if (msg) msg.textContent = r.error || r.detail; return; }
+      if (msg) msg.textContent = "Drafted " + (r.proposed || 0) + " step(s) — review below.";
+      refreshConfigurator();
+    }).catch(() => { if (btn) btn.disabled = false; if (msg) msg.textContent = "request failed"; });
   }
   function cfgFinish() {
     if (!confirm("Finish setup and revoke the configurator capability?")) return;
@@ -1305,7 +1320,7 @@
     initDashboard, initLogs, initLaunch, initInventory, initSettings,
     openModelModal, closeModelModal, openModelConfig, saveModel, removeModel, testModel,
     toggleCopilot, sendCopilot,
-    initConfigurator, cfgStart, cfgRunStep, cfgDecide, cfgFinish,
+    initConfigurator, cfgStart, cfgRunStep, cfgDecide, cfgGenerate, cfgFinish,
     initAgents,
     fit: function () { const cy = specCy["topo"]; if (cy) cy.fit(null, 36); },
   };

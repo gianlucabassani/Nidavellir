@@ -48,6 +48,14 @@ def test_build_messages_pins_provider_class():
     assert 'provider_class MUST be "container"' in messages[0]["content"]
 
 
+def test_build_messages_injects_image_catalog():
+    system, _ = generator.build_messages("a dvwa lab")
+    assert "Catalog logical images" in system
+    assert "dvwa" in system and "kali" in system   # live catalog from images.py
+    assert "never invent an image" in system.lower() or "do not invent" in system.lower() \
+        or "never invent" in system.lower()
+
+
 def test_build_messages_vm_adds_vm_guidance_and_example():
     system, messages = generator.build_messages("an AD lab", provider_class="vm")
     assert "VIRTUAL MACHINES" in system          # vm note appended
@@ -207,6 +215,24 @@ def test_generate_vm_class_spec_validates(monkeypatch):
     assert body["valid"] is True
     assert body["summary"]["provider_class"] == "vm"
     assert "VIRTUAL MACHINES" in captured["system"]   # vm guidance reached the model
+
+
+def test_generate_warns_on_missing_image(monkeypatch):
+    """Field-A: the generate review gate flags images Docker Hub reports missing."""
+    import image_check
+
+    c = _operator_client()
+    monkeypatch.setattr(
+        "database.Database.get_decrypted_model_credential",
+        lambda self, owner: {"provider": "anthropic", "model": "claude", "api_key": "k"},
+    )
+    monkeypatch.setattr(model_chat, "complete_chat", lambda *a, **k: json.dumps(_GOOD_SPEC))
+    monkeypatch.setattr(image_check, "exists_on_hub", lambda ref: False)  # all "missing"
+    resp = c.post("/scenarios/generate", json={"prompt": "x", "provider_class": "container"})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["valid"] is True
+    assert any("not found on Docker Hub" in w for w in body["warnings"])
 
 
 def test_generate_invalid_spec_reports_errors_not_500(monkeypatch):
