@@ -163,13 +163,15 @@
       cursor: pointer;
     }
     .brand .logo-mark {
-      width: 32px;
-      height: 32px;
+      width: 44px;
+      height: 44px;
       border-radius: var(--radius-sm);
-      background: linear-gradient(150deg, var(--accent), var(--accent-deep));
-      box-shadow: 0 4px 14px -4px var(--accent);
+      border: 1px solid var(--line);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.4);
       display: grid;
       place-items: center;
+      overflow: hidden;
+      background: var(--surface-2);
     }
     .brand .wordmark {
       display: flex;
@@ -231,11 +233,67 @@
 
     /* --- PRODUCT SHOWCASE VIEW --- */
     
-    /* Hero */
+    /* Hero Split Layout */
     .hero {
       position: relative;
       padding: 100px 0 80px 0;
-      text-align: center;
+    }
+    .hero-split {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 48px;
+    }
+    .hero-left {
+      flex: 1.2;
+      text-align: left;
+    }
+    .hero-right {
+      flex: 0.8;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .hero-logo-card {
+      width: 320px;
+      height: 320px;
+      border-radius: var(--radius);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.8), 0 0 40px -5px rgba(245, 165, 36, 0.15);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .hero-logo-card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 24px 50px -10px rgba(0, 0, 0, 0.9), 0 0 50px -2px rgba(245, 165, 36, 0.25);
+      transform: translateY(-4px);
+    }
+    .hero-logo-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    @media (max-width: 900px) {
+      .hero-split {
+        flex-direction: column;
+        text-align: center;
+        gap: 32px;
+      }
+      .hero-left {
+        text-align: center;
+      }
+      .hero-logo-card {
+        width: 240px;
+        height: 240px;
+      }
+      .shell-container {
+        margin: 0 auto 40px auto !important;
+      }
     }
     .hero-eyebrow {
       font-family: var(--mono);
@@ -255,9 +313,8 @@
       font-size: 52px;
       font-weight: 800;
       letter-spacing: -0.03em;
-      max-width: 900px;
-      margin: 0 auto 24px auto;
       line-height: 1.15;
+      margin-bottom: 24px;
       background: linear-gradient(135deg, #ffffff 40%, var(--accent) 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
@@ -265,15 +322,14 @@
     .hero-desc {
       font-size: 18px;
       color: var(--muted);
-      max-width: 680px;
-      margin: 0 auto 36px auto;
+      margin-bottom: 36px;
       line-height: 1.6;
     }
 
     /* Shell terminal */
     .shell-container {
       max-width: 580px;
-      margin: 0 auto 40px auto;
+      margin: 0 0 40px 0;
       background: var(--ground-2);
       border: 1px solid var(--line);
       border-radius: var(--radius-sm);
@@ -1157,17 +1213,7 @@
     <div class="container nav-container">
       <div class="brand" onclick="switchView('showcase')">
         <div class="logo-mark">
-          <!-- Dwarven Anvil & Hammer logo in gold background -->
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#100a04" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color: #100a04; display: block;">
-            <!-- Anvil base -->
-            <path d="M 6 18 L 18 18 C 18 15, 16 14, 15 12 L 9 12 C 9 14, 6 15, 6 18 Z" fill="#100a04" />
-            <!-- Anvil horn & body -->
-            <path d="M 3 12 C 5 12, 7 12, 9 12 L 20 12 L 20 9 L 9 9 C 8 9, 6 9, 3 12 Z" fill="#100a04" />
-            <!-- Diagonal crossed hammer handle -->
-            <line x1="5" y1="4" x2="14" y2="13" stroke="#100a04" stroke-width="2.2" />
-            <!-- Hammer head -->
-            <rect x="3" y="2" width="4.5" height="3" rx="0.5" transform="rotate(45 5 3.5)" fill="#100a04" />
-          </svg>
+          <img src="assets/anvil_logo.png" alt="Nidavellir Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;">
         </div>
         <div class="wordmark">
           <span>Nidavellir</span>
@@ -1193,44 +1239,52 @@
       
       <!-- HERO SECTION -->
       <section class="hero">
-        <div class="container">
-          <span class="hero-eyebrow">Enterprise Cyber Arena</span>
-          <h1>Testing Skills in Dynamic Environments & Testing AI Agents</h1>
-          <p class="hero-desc">
-            Provision arbitrary multi-machine vulnerable topologies on demand and expose them, through 
-            <strong>MCP gateways</strong>, to bring-your-own agents acting as attacker, blue-team defender, or MITM.
-          </p>
-          
-          <!-- Copyable Command Widget -->
-          <div class="shell-container">
-            <div class="shell-header">
-              <div class="shell-dots">
-                <div class="shell-dot"></div>
-                <div class="shell-dot"></div>
-                <div class="shell-dot"></div>
+        <div class="container hero-split">
+          <div class="hero-left">
+            <span class="hero-eyebrow">Enterprise Cyber Arena</span>
+            <h1>Testing Skills in Dynamic Environments & Testing AI Agents</h1>
+            <p class="hero-desc">
+              Provision arbitrary multi-machine vulnerable topologies on demand and expose them, through 
+              <strong>MCP gateways</strong>, to bring-your-own agents acting as attacker, blue-team defender, or MITM.
+            </p>
+            
+            <!-- Copyable Command Widget -->
+            <div class="shell-container">
+              <div class="shell-header">
+                <div class="shell-dots">
+                  <div class="shell-dot"></div>
+                  <div class="shell-dot"></div>
+                  <div class="shell-dot"></div>
+                </div>
+                <div class="shell-title">Quick Start</div>
               </div>
-              <div class="shell-title">Quick Start</div>
+              <div class="shell-body">
+                <button class="shell-btn-copy" id="shell-copy" onclick="copyQuickStart()">
+                  <span id="copy-text">Copy</span>
+                </button>
+                <div class="shell-line">
+                  <span class="shell-prompt">$</span>
+                  <span class="shell-cmd">git clone https://github.com/gianlucabassani/Nidavellir.git</span>
+                </div>
+                <div class="shell-line">
+                  <span class="shell-prompt">$</span>
+                  <span class="shell-cmd">cd Nidavellir</span>
+                </div>
+                <div class="shell-line">
+                  <span class="shell-prompt">$</span>
+                  <span class="shell-cmd">docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build</span>
+                </div>
+                <div class="shell-line">
+                  <span class="shell-prompt">#</span>
+                  <span class="shell-comment">Console UI runs on http://localhost:5000</span>
+                </div>
+              </div>
             </div>
-            <div class="shell-body">
-              <button class="shell-btn-copy" id="shell-copy" onclick="copyQuickStart()">
-                <span id="copy-text">Copy</span>
-              </button>
-              <div class="shell-line">
-                <span class="shell-prompt">$</span>
-                <span class="shell-cmd">git clone https://github.com/gianlucabassani/Nidavellir.git</span>
-              </div>
-              <div class="shell-line">
-                <span class="shell-prompt">$</span>
-                <span class="shell-cmd">cd Nidavellir</span>
-              </div>
-              <div class="shell-line">
-                <span class="shell-prompt">$</span>
-                <span class="shell-cmd">docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build</span>
-              </div>
-              <div class="shell-line">
-                <span class="shell-prompt">#</span>
-                <span class="shell-comment">Console UI runs on http://localhost:5000</span>
-              </div>
+          </div>
+          
+          <div class="hero-right">
+            <div class="hero-logo-card">
+              <img src="assets/anvil_logo.png" alt="Nidavellir Logo">
             </div>
           </div>
         </div>
