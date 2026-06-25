@@ -19,6 +19,7 @@ import os
 from providers.aws import AWSProvider
 from providers.base import RangeProvider
 from providers.docker_local import DockerLocalProvider
+from providers.libvirt import LibvirtProvider
 from providers.mock import MockProvider
 from providers.openstack import OpenStackProvider
 
@@ -27,6 +28,7 @@ _REGISTRY: dict[str, type[RangeProvider]] = {
     OpenStackProvider.name: OpenStackProvider,
     DockerLocalProvider.name: DockerLocalProvider,
     AWSProvider.name: AWSProvider,
+    LibvirtProvider.name: LibvirtProvider,
 }
 
 

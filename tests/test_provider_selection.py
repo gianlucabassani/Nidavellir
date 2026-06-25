@@ -48,6 +48,7 @@ def test_providers_endpoint_lists_backends(client):
         "openstack": "vm",
         "docker-local": "container",
         "aws": "vm",
+        "libvirt": "vm",
     }
 
 

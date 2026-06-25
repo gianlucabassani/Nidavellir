@@ -123,6 +123,7 @@ services:
       # Terraform templates (read-only)
       - ./cyber-range/infra/terraform:/app/terraform:ro
       - ./cyber-range/infra/terraform-aws:/app/terraform-aws:ro
+      - ./cyber-range/infra/terraform-libvirt:/app/terraform-libvirt:ro
 
       # Docker socket: the orchestrator runs in-arena `exec` (MCP attacker
       # stance) in-process, so it needs the daemon too. ROOT-EQUIVALENT host
@@ -185,6 +186,7 @@ services:
       - tf-cache:/app/cache
       - ./cyber-range/infra/terraform:/app/terraform:ro
       - ./cyber-range/infra/terraform-aws:/app/terraform-aws:ro
+      - ./cyber-range/infra/terraform-libvirt:/app/terraform-libvirt:ro
       # Docker socket: the worker runs deploy/destroy for RANGE_PROVIDER=
       # docker-local against the host daemon (sibling containers). ROOT-
       # EQUIVALENT host access — trusted/dev hosts only.

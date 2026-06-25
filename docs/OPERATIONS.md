@@ -25,7 +25,19 @@ The provider is chosen per request or by the worker's environment:
 |------|-----|--------|
 | **Mock** | `MOCK_MODE=true` | Fake outputs, instant — demoable with no infrastructure. |
 | **Container** | `MOCK_MODE=false`, `RANGE_PROVIDER=docker-local`, mount the Docker socket | Real per-arena container topologies on the local daemon (seconds, zero cloud cost). |
+| **Local VMs (libvirt)** | `MOCK_MODE=false`, `RANGE_PROVIDER=libvirt` + libvirtd/KVM in the worker | Real per-arena **VMs on the local host** (KVM) via the `nodes[]` libvirt OpenTofu module — vm-class arenas with no cloud account. Prereqs below. |
 | **OpenStack / AWS** | `MOCK_MODE=false` + provider credentials | Real VMs via the generic `nodes[]` Terraform/OpenTofu modules. |
+
+> **Local VMs (libvirt) — status & prereqs.** The `libvirt` provider compiles a
+> vm-class scenario to the `terraform-libvirt` module (one isolated libvirt network
+> per segment → no egress by construction; one domain per node) and is
+> schema-validated against `dmacvicar/libvirt` 0.7.6. Going live needs, in the
+> worker: **qemu-kvm + libvirtd** (running, with `/dev/kvm` passed into the worker
+> and the libvirt group), the **terraform-provider-libvirt** plugin, and a base
+> cloud image (`LIBVIRT_BASE_IMAGE`). Not yet implemented (parity with the
+> OpenStack/AWS VM drivers): `exec_in_node` (agent commands — needs SSH/guest-agent)
+> and setup-egress toggling. So libvirt arenas currently **deploy/destroy** but are
+> not yet agent-drivable. Design + roadmap: `.agent/research/local-vm-provider-qemu.md`.
 
 Egress containment is **default-on** for locked arenas (a node cannot reach the
 internet); opt out per scenario with `requires.egress: open`. See
