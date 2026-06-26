@@ -56,6 +56,20 @@ def test_build_messages_injects_image_catalog():
         or "never invent" in system.lower()
 
 
+def test_build_messages_container_adds_target_settings_note():
+    # Container arenas (default / container / any) get the target-settings rule so
+    # the model picks a real image, real ports, and only sets a command to bring a
+    # service up (the engine keeps containers alive — no bare keepalive needed).
+    for pc in (None, "container", "any"):
+        system, _ = generator.build_messages("a vulnerable box", provider_class=pc)
+        assert "CONTAINER TARGET SETTINGS" in system
+        assert "tail -f /dev/null" in system      # the multi-service command shape
+        assert "6379" in system                   # real-port guidance (redis)
+    # The vm prompt carries the VM note instead — not the container one.
+    vm_system, _ = generator.build_messages("an AD lab", provider_class="vm")
+    assert "CONTAINER TARGET SETTINGS" not in vm_system
+
+
 def test_build_messages_vm_adds_vm_guidance_and_example():
     system, messages = generator.build_messages("an AD lab", provider_class="vm")
     assert "VIRTUAL MACHINES" in system          # vm note appended

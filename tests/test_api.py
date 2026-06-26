@@ -116,3 +116,87 @@ def test_destroy_known_marks_destroying(client):
     assert resp.status_code == 200
     assert resp.json()["status"] == "accepted"
     assert client.get(f"/status/{system_id}").json()["status"] == "destroying"
+
+
+# --- deploy-time hallucinated-image gate (docker-local only) -------------------
+
+
+def _import_container_scenario(client, sid, victim_image):
+    spec = {
+        "schema": "nidavellir/v3",
+        "name": sid,
+        "requires": {"provider_class": "container"},
+        "network": {"segments": [{"name": "lab"}]},
+        "nodes": [
+            {"name": "victim", "role": "victim", "image": victim_image,
+             "segments": ["lab"], "ports": [80]},
+            {"name": "attacker", "role": "attacker", "image": "kali",
+             "segments": ["lab"], "entrypoint": True},
+        ],
+        "agents": [{"stance": "attacker", "node": "attacker"}],
+    }
+    r = client.post("/scenarios", json={"spec": spec, "id": sid, "overwrite": True})
+    assert r.status_code == 200, r.text
+    return sid
+
+
+def test_deploy_blocks_confirmed_missing_image(client, monkeypatch):
+    """A docker-local deploy is rejected up front when Docker Hub confidently
+    reports a victim image as missing (the hallucinated-image case) — nothing is
+    queued, so it can't pull-fail opaquely in the worker."""
+    import api
+    import image_check
+
+    monkeypatch.setattr(api, "resolve_provider_name", lambda *a, **k: "docker-local")
+    monkeypatch.setattr(image_check, "exists_on_hub", lambda ref: False)  # all 404
+    sid = _import_container_scenario(client, "blk-missing", "nope/totallyfake:latest")
+
+    resp = client.post(
+        "/deploy",
+        json={"scenario": sid, "instance_id": "blk-missing", "provider": "docker-local"},
+    )
+    assert resp.status_code == 422
+    assert "not found on Docker Hub" in resp.text
+    assert api.deploy_lab.calls == []  # nothing queued
+
+
+def test_deploy_allows_when_image_exists(client, monkeypatch):
+    """When Docker Hub confirms the images exist, the deploy proceeds normally."""
+    import api
+    import image_check
+
+    monkeypatch.setattr(api, "resolve_provider_name", lambda *a, **k: "docker-local")
+    monkeypatch.setattr(image_check, "exists_on_hub", lambda ref: True)  # all present
+    sid = _import_container_scenario(client, "blk-ok", "vulnerables/web-dvwa:latest")
+
+    resp = client.post(
+        "/deploy",
+        json={"scenario": sid, "instance_id": "blk-ok", "provider": "docker-local"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "accepted"
+    assert api.deploy_lab.calls  # queued
+
+
+def test_deploy_image_check_skipped_for_non_docker_local(client, monkeypatch):
+    """mock/vm resolutions never pull Docker Hub, so the gate must not run (no Hub
+    call) even with an image Docker Hub would 404 — no false block off docker-local."""
+    import api
+    import image_check
+
+    monkeypatch.setattr(api, "resolve_provider_name", lambda *a, **k: "mock")
+    calls = {"n": 0}
+
+    def _counting_exists(ref):
+        calls["n"] += 1
+        return False
+
+    monkeypatch.setattr(image_check, "exists_on_hub", _counting_exists)
+    sid = _import_container_scenario(client, "blk-skip", "nope/totallyfake:latest")
+
+    resp = client.post(
+        "/deploy",
+        json={"scenario": sid, "instance_id": "blk-skip", "provider": "docker-local"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert calls["n"] == 0  # the Docker Hub check was skipped entirely

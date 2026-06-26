@@ -122,10 +122,16 @@ class _FakeNetworks:
 
 
 class _FakeImage:
-    def __init__(self, tag=None, labels=None):
+    def __init__(self, tag=None, labels=None, attrs=None):
         self.tags = [tag] if tag else []
         self.id = tag or "sha256:fake"
         self.labels = labels or {}
+        # Default config mimics a legacy 'VM-in-a-container' image: a startup that
+        # daemonizes then returns (ends in interactive bash). The keepalive wrap
+        # re-runs this and then blocks.
+        self.attrs = attrs or {
+            "Config": {"Entrypoint": None, "Cmd": ["sh", "-c", "/bin/services.sh && bash"]}
+        }
 
 
 class _FakeImages:
@@ -137,7 +143,7 @@ class _FakeImages:
 
     def get(self, name):
         if self.present:
-            return object()
+            return _FakeImage(tag=name)
         raise RuntimeError(f"image {name} not found")
 
     def build(self, **kwargs):
@@ -410,6 +416,95 @@ def test_exited_node_is_surfaced_not_silently_successful():
     assert outputs["node_web_state"] == "exited"
     assert outputs["node_jump_state"] == "running"
     assert outputs["unhealthy_nodes"] == ["web"]
+
+
+def test_no_command_victim_gets_generic_keepalive_wrap():
+    # Liveness guardrail (generic — NO image allowlist): any victim with no
+    # explicit command is wrapped so it can't die on a headless boot. The wrap
+    # re-runs the image's OWN startup and then blocks, with the image CMD cleared
+    # so it isn't re-appended. A real foreground service is unaffected (its server
+    # blocks before the trailing blocker is reached).
+    client = _FakeClient()
+    provider = DockerLocalProvider(client=client)
+    scenario = {
+        "requires": {"provider_class": "container", "egress": "open"},
+        "nodes": [
+            # An arbitrary image the model might pick — not on any known list.
+            {"name": "target", "role": "victim", "image": "some/obscure-cve-box:1.2", "ports": [8080]},
+            # An author/generator-supplied explicit command must always win.
+            {"name": "scripted", "role": "victim", "image": "ubuntu",
+             "command": "sh -c 'service ssh start; sleep infinity'"},
+            {"name": "kali", "role": "attacker", "image": "kali", "entrypoint": True},
+        ],
+    }
+    provider.deploy(scenario, "keepaliv")
+    by_node = {kw["labels"][LABEL_NODE]: kw for kw in client.containers.run_kwargs}
+
+    # No-command victim -> wrapped (re-run startup, then a portable blocker).
+    target = by_node["target"]
+    assert target["entrypoint"][:2] == ["/bin/sh", "-c"]
+    script = target["entrypoint"][2]
+    assert "/bin/services.sh" in script          # the image's own startup is preserved
+    assert "tail -f /dev/null" in script         # portable blocker (not `sleep infinity`)
+    assert target.get("command") == []           # image CMD cleared (folded into script)
+
+    # An explicit command always wins — never overridden by the guardrail.
+    scripted = by_node["scripted"]
+    assert "entrypoint" not in scripted
+    assert scripted["command"] == "sh -c 'service ssh start; sleep infinity'"
+
+    # The foothold keeps its existing keepalive command; no entrypoint override.
+    kali = by_node["kali"]
+    assert "entrypoint" not in kali
+    assert kali.get("command") == "sleep infinity"
+
+
+def test_open_url_targets_web_port_not_first_published():
+    # The WebUI "Open" button must land on the real web server. A multi-port box
+    # (metasploitable: 21/80/3306) must open on 80, not whatever Docker bound first.
+    client = _FakeClient()
+    provider = DockerLocalProvider(client=client)
+    scenario = {
+        "requires": {"provider_class": "container", "egress": "open"},
+        "nodes": [
+            {"name": "box", "role": "victim", "image": "metasploitable2",
+             "ports": [21, 80, 3306]},  # fake binds 21->49000, 80->49001, 3306->49002
+            {"name": "kali", "role": "attacker", "image": "kali", "entrypoint": True},
+        ],
+    }
+    out = provider.deploy(scenario, "weburl12")["outputs"]
+    assert out["node_box_url"] == "http://127.0.0.1:49001"          # 80, not 21
+    assert out["node_box_floating_ip"] == "127.0.0.1:49001"
+    assert out["victim_web_url"] == "http://127.0.0.1:49001"        # legacy key too
+    # The full mapping is surfaced so non-web services stay reachable.
+    assert out["node_box_ports"] == {"21": "49000", "80": "49001", "3306": "49002"}
+
+
+def test_open_url_uses_https_scheme_for_tls_port():
+    client = _FakeClient()
+    provider = DockerLocalProvider(client=client)
+    scenario = {
+        "requires": {"provider_class": "container", "egress": "open"},
+        "nodes": [{"name": "web", "role": "victim", "image": "nginx", "ports": [443]}],
+    }
+    out = provider.deploy(scenario, "httpsweb")["outputs"]
+    assert out["node_web_url"] == "https://127.0.0.1:49000"
+
+
+def test_no_web_port_emits_no_open_url_but_keeps_mapping():
+    # An FTP-only target gets a reachable host:port but NO browser Open URL (so
+    # the button doesn't link the operator to a non-web port).
+    client = _FakeClient()
+    provider = DockerLocalProvider(client=client)
+    scenario = {
+        "requires": {"provider_class": "container", "egress": "open"},
+        "nodes": [{"name": "ftp", "role": "victim", "image": "some/ftp", "ports": [21]}],
+    }
+    out = provider.deploy(scenario, "ftponly1")["outputs"]
+    assert "node_ftp_url" not in out
+    assert "victim_web_url" not in out
+    assert out["node_ftp_floating_ip"] == "127.0.0.1:49000"
+    assert out["node_ftp_ports"] == {"21": "49000"}
 
 
 # --- egress containment (P2-3), default-ON ------------------------------------
@@ -692,6 +787,65 @@ def test_locked_arena_mirror_allows_repos_but_not_egress_real_docker():
         assert "REACHED" not in denied["stdout"], denied
     finally:
         assert provider.destroy(iid)["success"] is True
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not _docker_available(), reason="no Docker daemon available")
+def test_keepalive_keeps_arbitrary_victim_alive_real_docker(tmp_path):
+    """Generic liveness guardrail, real containers, NO image allowlist. A tiny
+    purpose-built image whose CMD daemonizes then returns reproduces the 'victim
+    dies on boot' failure when run raw — but deploying it as a no-command victim
+    keeps it running, because the provider wraps ANY no-command victim's own
+    startup in a keepalive. (Mirrors real metasploitable2 without the multi-GB pull.)"""
+    import time
+
+    import docker
+
+    client = docker.from_env()
+    # Tiny legacy-style image: starts a background 'daemon', prints, and exits.
+    (tmp_path / "Dockerfile").write_text(
+        "FROM alpine:3.20\n"
+        "RUN printf '#!/bin/sh\\n(while true; do sleep 30; done) &\\necho up\\n'"
+        " > /bin/services.sh && chmod +x /bin/services.sh\n"
+        'CMD ["/bin/services.sh"]\n'
+    )
+    tag = "nidavellir-legacy-itest:latest"
+    client.images.build(path=str(tmp_path), tag=tag, rm=True)
+
+    raw = None
+    provider = DockerLocalProvider()
+    iid = "itest-keepalive"
+    try:
+        # Baseline: run the image the way a plain detached deploy would — it exits.
+        raw = client.containers.run(tag, detach=True, name="itest-keepalive-raw")
+        time.sleep(6)  # outlast the daemonize-then-exit window
+        raw.reload()
+        assert raw.attrs["State"]["Status"] == "exited", "control: raw image should die on boot"
+
+        # The guardrail: the SAME image as a no-command victim stays up.
+        scenario = {
+            "requires": {"provider_class": "container", "egress": "open"},
+            "nodes": [{"name": "victim", "role": "victim", "image": tag}],
+        }
+        assert provider.deploy(scenario, iid)["success"] is True
+        time.sleep(6)
+        c = provider._find_node_container(iid, "victim")
+        c.reload()
+        assert c.attrs["State"]["Status"] == "running", "keepalive must keep the victim up"
+        # The wrap re-ran the image's OWN startup, so its 'daemon' is alive inside.
+        rc, _ = c.exec_run(["sh", "-c", "pgrep -f 'sleep 30' >/dev/null"])
+        assert rc == 0, "the image's own startup must still have run under the wrap"
+    finally:
+        provider.destroy(iid)
+        if raw is not None:
+            try:
+                raw.remove(force=True)
+            except Exception:  # noqa: BLE001
+                pass
+        try:
+            client.images.remove(tag, force=True)
+        except Exception:  # noqa: BLE001 - best-effort cleanup
+            pass
 
 
 # --- software-under-test `service:` provisioning (P1-6, packaged-first) -------

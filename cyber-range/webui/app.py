@@ -370,6 +370,9 @@ def _parse_nodes(outputs):
             "url": url,
             "ssh": ssh,
             "foothold": bool(ssh),
+            # All published container→host port mappings, so the operator can reach
+            # non-web services on a multi-port box (not just the web Open button).
+            "ports": outputs.get(f"node_{n}_ports") or {},
         })
     return sorted(nodes, key=lambda x: (not x["foothold"], x["name"]))
 

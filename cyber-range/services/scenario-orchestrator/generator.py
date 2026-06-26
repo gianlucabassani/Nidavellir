@@ -44,7 +44,10 @@ A Nidavellir v3 scenario is a provider-agnostic topology. Top-level fields:
     - segments: list of segment names this node attaches to
     - ports: list of container ports to expose (victims), e.g. [80, 8080]
     - entrypoint: true on the attacker node the operator/agent attaches to
-    - command: optional container command; tool containers use "sleep infinity"
+    - command: optional container command. Tool/foothold containers use
+      "sleep infinity". Leave it unset for a normal victim (Nidavellir keeps
+      containers alive); set it only to bring a specific service up (see the
+      container note below)
     - environment: optional {KEY: value} env vars for the container
 - agents: list of {stance, node} — stance is "attacker" | "defender" | "mitm";
   bind the attacker stance to the entrypoint node
@@ -122,6 +125,27 @@ _VM_EXAMPLE = """\
   "objectives": [{"description": "Exploit the vulnerable web service and pivot on the LAN"}]
 }"""
 
+# Container-class guidance, appended whenever the arena is NOT vm-class. Helps the
+# model choose settings that actually parse + deploy + stay alive for ANY target
+# it picks for the brief (not a fixed list of images).
+_CONTAINER_NOTE = (
+    "CONTAINER TARGET SETTINGS — get these right so the arena matches the brief:\n"
+    "- image: choose a REAL, public image that genuinely contains the vulnerability "
+    "described. When the brief names a specific CVE or version, pin the matching "
+    "TAG (e.g. \"tomcat:9.0.30\", not \":latest\") so the named weakness is actually "
+    "present. Never invent an image or tag — a non-existent image fails the launch.\n"
+    "- ports: list the vulnerable service's REAL listening port(s) so the attacker "
+    "can reach it — e.g. 80/8080 (web), 21 (ftp), 22 (ssh), 445 (smb), 3306 "
+    "(mysql), 6379 (redis). A victim that exposes no port is usually wrong.\n"
+    "- command: a normal service image runs its server in the FOREGROUND — leave "
+    "`command` unset. Nidavellir keeps every container alive on a headless deploy, "
+    "so you NEVER need to add a bare 'sleep'/keepalive yourself. Set `command` ONLY "
+    "to bring a specific service up — e.g. an all-in-one box that must launch "
+    "several daemons: \"sh -c 'service mysql start; service apache2 start; "
+    "tail -f /dev/null'\". Do not rely on an interactive shell (bash) to keep a "
+    "victim alive."
+)
+
 # Provider classes the operator may pin via the request.
 PROVIDER_CLASSES = ("container", "vm", "any")
 
@@ -151,6 +175,9 @@ def build_messages(brief: str, provider_class: str | None = None) -> tuple[str, 
     )
     if provider_class == "vm":
         system = system + "\n\n" + _VM_NOTE + "\n\nVM worked example:\n" + _VM_EXAMPLE
+    else:
+        # container | any | unspecified — all compile to docker-local locally.
+        system = system + "\n\n" + _CONTAINER_NOTE
     user = brief.strip()
     if provider_class:
         user += (

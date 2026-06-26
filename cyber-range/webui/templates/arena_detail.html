@@ -68,6 +68,16 @@
           </div>
         </td></tr>
         {% endif %}
+        {% if n.ports %}
+        <tr><td colspan="4" style="padding-top:0">
+          <label class="label" style="margin-bottom:4px">Published ports</label>
+          <div class="flexrow" style="flex-wrap:wrap;gap:6px">
+            {% for cport, hport in n.ports.items() %}
+            <span class="badge mono" title="container port {{ cport }} mapped to host">{{ cport }} &rarr; 127.0.0.1:{{ hport }}</span>
+            {% endfor %}
+          </div>
+        </td></tr>
+        {% endif %}
         {% endfor %}
       </tbody>
     </table>

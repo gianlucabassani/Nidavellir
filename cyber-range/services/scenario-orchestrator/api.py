@@ -32,7 +32,12 @@ import vulhub_import
 from auth import Principal, ensure_bootstrap_key, require_principal
 from database import Database
 from orchestrator import Orchestrator
-from providers import available_providers, default_provider_name, infra_class_of
+from providers import (
+    available_providers,
+    default_provider_name,
+    infra_class_of,
+    resolve_provider_name,
+)
 from scenario_spec import ScenarioSpec, normalize_cwe, normalized_nodes, topology_view
 from states import IllegalTransition, LabStatus
 from tasks import deploy_lab, destroy_lab
@@ -287,24 +292,58 @@ async def delete_scenario(
     return {"status": "deleted", "id": scenario_id}
 
 
-def _image_warnings(raw: dict) -> list[str]:
-    """Best-effort: warn about container images that Docker Hub confidently
-    reports as non-existent (Field-A — a generated/imported spec that names a
-    hallucinated image would otherwise fail opaquely at deploy). Unknown / other-
-    registry images never warn. Never raises."""
+def _missing_container_images(raw: dict) -> list[str]:
+    """Resolved docker-local image refs that Docker Hub confidently reports as
+    NOT existing (404). Fail-open: an unknown / other-registry / unreachable
+    result is never reported (see ``image_check.missing_images``), and this never
+    raises — so it is safe both as an advisory (review gate) and as a hard gate
+    (deploy block)."""
     try:
         refs = [
             images.resolve(n["image"], "docker-local")
             for n in normalized_nodes(raw) if n.get("image")
         ]
-        missing = image_check.missing_images([r for r in refs if isinstance(r, str)])
+        return image_check.missing_images([r for r in refs if isinstance(r, str)])
     except Exception:  # noqa: BLE001 - advisory only
         return []
+
+
+def _image_warnings(raw: dict) -> list[str]:
+    """Best-effort: warn about container images that Docker Hub confidently
+    reports as non-existent (Field-A — a generated/imported spec that names a
+    hallucinated image would otherwise fail opaquely at deploy). Unknown / other-
+    registry images never warn. Never raises."""
     return [
         f"image '{m}' was not found on Docker Hub — the arena will fail to launch "
         f"unless it exists; use a catalog image or fix the tag"
-        for m in missing
+        for m in _missing_container_images(raw)
     ]
+
+
+def _assert_container_images_exist(scenario_id: str, provider_name: str | None):
+    """Hard gate: block a deploy whose container image(s) Docker Hub confidently
+    reports as missing (404). A hallucinated or mistyped image — common in
+    prompt-generated specs — would otherwise pull-fail opaquely deep in the worker
+    after the deploy is already queued. Runs ONLY for the docker-local provider
+    (the only backend that pulls Docker Hub refs); mock/vm resolutions are skipped.
+    Fail-open: anything other than a confident 404 (private/other registry,
+    network error, rate limit) never blocks — see ``image_check``."""
+    if resolve_provider_name(provider_name) != "docker-local":
+        return
+    raw = scenarios.load_scenario(scenario_id)
+    if not raw:
+        return  # an unknown scenario id is rejected downstream (404)
+    missing = sorted(set(_missing_container_images(raw)))
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Deploy blocked — image(s) not found on Docker Hub: "
+                + ", ".join(missing)
+                + ". Fix the tag or use a catalog image (GET /catalog); a "
+                "non-existent image cannot launch."
+            ),
+        )
 
 
 def _spec_review(raw: dict, *, include_spec: bool = False, check_images: bool = False) -> dict:
@@ -810,6 +849,7 @@ async def deploy(
     """Queue deployment via Celery with Unique UUID"""
 
     _check_provider_compatibility(req.scenario, req.provider)
+    _assert_container_images_exist(req.scenario, req.provider)
 
     # 1. Generate a Unique ID for the System (Primary Key)
     # (prevents collisions for same instanec name)

@@ -20,6 +20,7 @@ Notes:
 import logging
 import os
 import re
+import shlex
 
 import config
 import images
@@ -41,6 +42,24 @@ _DEFAULT_SEGMENT = "_default"
 
 # Keeps tool containers (kali etc.) alive when the scenario doesn't say how.
 DEFAULT_ATTACKER_COMMAND = "sleep infinity"
+
+# Portable "block forever" for the no-command victim keepalive (see
+# _keepalive_run_args). NOT `sleep infinity`: that needs coreutils >= 8.x, and
+# classic targets like Metasploitable ship 6.10 where `sleep infinity` errors out.
+# `tail -f /dev/null` blocks on essentially everything (ancient coreutils + busybox).
+KEEPALIVE_BLOCK = "tail -f /dev/null"
+
+# Container ports that serve a browser UI, in preference order — the WebUI "Open"
+# button must land on the real web server, not whatever port Docker happened to
+# bind first. A multi-service box (metasploitable publishes 21/23/445/3306/…
+# alongside 80) would otherwise open on FTP. 443/8443 are https; the rest are
+# assumed http (best-effort by port number — the scheme isn't probed).
+_WEB_PORT_PREFERENCE: tuple[tuple[int, str], ...] = (
+    (80, "http"), (443, "https"),
+    (8080, "http"), (8000, "http"), (8443, "https"),
+    (3000, "http"), (5000, "http"), (8888, "http"),
+    (8081, "http"), (9000, "http"), (8090, "http"),
+)
 
 # Software-under-test (SUT) arenas, P1-6: a node may build its workload from
 # source (ADR-0007). The built image is tagged + labeled per arena so destroy()
@@ -391,10 +410,25 @@ class DockerLocalProvider(RangeProvider):
         }
 
         command = node.get("command")
-        if command is None and (role == "attacker" or node.get("entrypoint")):
+        if command is None and self._is_foothold(node):
             command = DEFAULT_ATTACKER_COMMAND
         if command is not None:
             run_kwargs["command"] = command
+        elif not node.get("needs_build"):
+            # Liveness guardrail (generic — no image allowlist). A container is
+            # reaped the instant its foreground process exits, and Nidavellir
+            # deploys headlessly (detached, no TTY). Any target whose image starts
+            # daemons then returns — or ends in an interactive shell — therefore
+            # dies on boot (the classic 'VM-in-a-container' failure: metasploitable,
+            # many imported CVE boxes, a bare OS image, …), often a few seconds in,
+            # so an immediate health check can even see a misleading 'running'.
+            # Re-run the image's OWN entrypoint+cmd and THEN block, so the box
+            # stays up regardless of which image the operator/generator chose.
+            # Transparent to a real foreground service (its server blocks, so the
+            # trailing blocker is never reached). Skipped for footholds (handled
+            # above) and from-source builds (the operator's Dockerfile owns CMD).
+            # An explicit `command` from the author/generator always wins.
+            run_kwargs.update(self._keepalive_run_args(instance_id, image))
 
         # The node's own environment (e.g. a Vulhub CVE env's compose `environment`).
         environment = {str(k): str(v) for k, v in (node.get("environment") or {}).items()}
@@ -450,6 +484,50 @@ class DockerLocalProvider(RangeProvider):
         if mirror is not None and self._is_foothold(node):
             self._pin_foothold_repos(container)
         return container
+
+    def _inspect_image(self, image):
+        """The local image object, pulling it first if absent so its config is
+        inspectable before we run it. (containers.run would auto-pull, but the
+        keepalive wrap needs the image's own ENTRYPOINT/CMD up front.)"""
+        try:
+            return self.client.images.get(image)
+        except Exception:  # noqa: BLE001 - not present locally yet
+            logger.info(f"pulling image {image} to inspect its startup")
+            pulled = self.client.images.pull(image)
+            return pulled[0] if isinstance(pulled, list) else pulled
+
+    def _keepalive_run_args(self, instance_id, image) -> dict:
+        """Run kwargs that keep a no-command victim alive headlessly: re-run the
+        image's OWN ENTRYPOINT+CMD (so a real service still comes up the normal
+        way), then block forever. The original startup is read from the image
+        config — never hardcoded or allowlisted — so it works for ANY image the
+        operator/generator picks. For a foreground service the original blocks and
+        the trailing blocker is never reached (transparent); for a daemonize-then-
+        exit image the blocker keeps the box up. On any inspection failure we fall
+        back to a bare blocker: the box stays reachable even if its service didn't
+        start (a dead-service-but-reachable box is diagnosable; a vanished one is
+        the silent failure we're fixing)."""
+        orig = ""
+        try:
+            cfg = (self._inspect_image(image).attrs or {}).get("Config") or {}
+            parts = list(cfg.get("Entrypoint") or []) + list(cfg.get("Cmd") or [])
+            orig = shlex.join(parts) if parts else ""
+        except Exception as e:  # noqa: BLE001 - degrade to a bare keepalive
+            logger.warning(
+                f"[{instance_id}] keepalive: could not inspect {image!r} startup "
+                f"({e}); using a bare blocker"
+            )
+        # Run the original (if any), THEN block — `;` not `&&`, so the box stays up
+        # even if the startup exits non-zero. `exec` hands PID control to the
+        # blocker so `docker stop` signals it directly.
+        script = f"{orig}; exec {KEEPALIVE_BLOCK}" if orig else f"exec {KEEPALIVE_BLOCK}"
+        logger.info(
+            f"[{instance_id}] keepalive wrap on {image!r}: re-run its startup then "
+            f"block, so the victim can't die on a headless boot"
+        )
+        # Override the entrypoint with our wrapper and clear command so the image's
+        # own CMD isn't re-appended (it is already folded into `script`).
+        return {"entrypoint": ["/bin/sh", "-c", script], "command": []}
 
     def _build_service_image(self, instance_id, node, labels):
         """Build a node's workload from source (SUT arenas, P1-6; ADR-0007).
@@ -658,6 +736,32 @@ class DockerLocalProvider(RangeProvider):
                 f"white-box source clone failed for {repo}: {e}"
             ) from e
 
+    @staticmethod
+    def _published_ports(container) -> dict:
+        """{container_port:int -> host_port:str} for every published TCP port."""
+        mapping = {}
+        for key, bindings in (container.attrs["NetworkSettings"].get("Ports") or {}).items():
+            if not bindings:
+                continue
+            cport, _, proto = key.partition("/")
+            if proto and proto != "tcp":
+                continue
+            try:
+                mapping[int(cport)] = bindings[0]["HostPort"]
+            except (ValueError, KeyError, IndexError):
+                continue
+        return mapping
+
+    @staticmethod
+    def _browser_target(published: dict):
+        """(host_port, scheme) the browser 'Open' should hit — the actual web
+        server, by port preference — or None when no recognizable web port is
+        published (so a non-web box like an FTP/SMB target gets no bogus Open URL)."""
+        for cport, scheme in _WEB_PORT_PREFERENCE:
+            if cport in published:
+                return published[cport], scheme
+        return None
+
     def _collect_outputs(self, instance_id, networks, wanted, records) -> dict:
         outputs = {
             "provider": self.name,
@@ -690,15 +794,20 @@ class DockerLocalProvider(RangeProvider):
             ssh = f"docker exec -it {container.name} /bin/bash"
             is_foothold = role == "attacker" or bool(node.get("entrypoint"))
 
-            # First published port (if any) → host-reachable URL.
+            # Map published ports → host ports, then point the browser "Open" URL
+            # at the actual WEB port (80/443/8080/…), not whatever Docker bound
+            # first — a multi-service box (metasploitable) would otherwise open on
+            # FTP. `floating` is the reachable host:port (the web mapping when there
+            # is one, else the first published port so it's still visible).
+            published = self._published_ports(container)
+            target = self._browser_target(published)
             floating = url = None
-            ports = container.attrs["NetworkSettings"].get("Ports") or {}
-            for bindings in ports.values():
-                if bindings:
-                    host_port = bindings[0]["HostPort"]
-                    floating = f"127.0.0.1:{host_port}"
-                    url = f"http://127.0.0.1:{host_port}"
-                    break
+            if target:
+                host_port, scheme = target
+                floating = f"127.0.0.1:{host_port}"
+                url = f"{scheme}://127.0.0.1:{host_port}"
+            elif published:
+                floating = f"127.0.0.1:{next(iter(published.values()))}"
 
             # Per-node outputs — always emitted, so repeated roles and N-node
             # topologies are fully addressable.
@@ -718,7 +827,14 @@ class DockerLocalProvider(RangeProvider):
                 outputs[f"node_{name}_ssh_command"] = ssh
             if floating:
                 outputs[f"node_{name}_floating_ip"] = floating
+            if url:
                 outputs[f"node_{name}_url"] = url
+            if published:
+                # All published mappings (container→host) so the operator can also
+                # reach non-web services on a multi-port box (FTP/SMB/MySQL/…).
+                outputs[f"node_{name}_ports"] = {
+                    str(c): h for c, h in sorted(published.items())
+                }
 
             # Legacy role-prefixed outputs for the FIRST node of each canonical
             # role (the dashboard + mock-parity contract).
@@ -731,8 +847,8 @@ class DockerLocalProvider(RangeProvider):
                     outputs[f"{prefix}_ssh_command"] = ssh
                 if floating:
                     outputs[f"{prefix}_floating_ip"] = floating
-                    if role == "victim":
-                        outputs["victim_web_url"] = url
+                if url and role == "victim":
+                    outputs["victim_web_url"] = url
 
         if unhealthy:
             outputs["unhealthy_nodes"] = unhealthy
