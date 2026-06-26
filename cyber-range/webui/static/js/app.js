@@ -1520,7 +1520,7 @@
     const form = document.getElementById("wiz-form");
     if (!form) return;
     const panels = Array.prototype.slice.call(document.querySelectorAll(".wiz-panel"));
-    const stepBtns = Array.prototype.slice.call(document.querySelectorAll("#wiz-steps button"));
+    const stepBtns = Array.prototype.slice.call(document.querySelectorAll("#wiz-steps .wiz-step"));
     const back = document.getElementById("wiz-back");
     const next = document.getElementById("wiz-next");
     const launch = document.getElementById("wiz-launch");

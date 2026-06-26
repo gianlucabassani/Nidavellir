@@ -12,10 +12,31 @@
   </div>
 </div>
 
-<div class="seg" id="wiz-steps" style="margin-bottom:18px; pointer-events:none">
-  <button class="on" data-step="1"><i class="fa-solid fa-bullseye"></i> 1 · Target</button>
-  <button data-step="2"><i class="fa-solid fa-shield-halved"></i> 2 · Setup consent</button>
-  <button data-step="3"><i class="fa-solid fa-list-check"></i> 3 · Review &amp; launch</button>
+<!-- wizard step indicator -->
+<div class="wiz-stepper" id="wiz-steps">
+  <button class="wiz-step on" data-step="1">
+    <span class="wiz-step__num">1</span>
+    <span class="wiz-step__body">
+      <span class="wiz-step__title">Target</span>
+      <span class="wiz-step__desc">Repository & machines</span>
+    </span>
+  </button>
+  <div class="wiz-step__line"></div>
+  <button class="wiz-step" data-step="2">
+    <span class="wiz-step__num">2</span>
+    <span class="wiz-step__body">
+      <span class="wiz-step__title">Setup consent</span>
+      <span class="wiz-step__desc">Safety & budgets</span>
+    </span>
+  </button>
+  <div class="wiz-step__line"></div>
+  <button class="wiz-step" data-step="3">
+    <span class="wiz-step__num">3</span>
+    <span class="wiz-step__body">
+      <span class="wiz-step__title">Review & launch</span>
+      <span class="wiz-step__desc">Validate topology</span>
+    </span>
+  </button>
 </div>
 
 <form method="POST" action="{{ url_for('build_sut') }}" id="wiz-form">
@@ -23,37 +44,87 @@
 
   <!-- STEP 1: TARGET -->
   <section class="wiz-panel" data-step="1">
-    <div class="card card-pad" style="max-width:680px">
-      <h3 style="font-size:15px; margin-bottom:4px">What are you standing up?</h3>
-      <p class="help" style="margin-bottom:16px">A fresh Ubuntu box with this repo cloned read-write into <code class="mono">/opt/sut</code>; the service is brought up in the setup phase (next step). An optional Kali foothold is added for the engagement.</p>
-      <div class="field"><label class="label">Instance name</label>
-        <input class="input mono" name="instance_id" id="wiz-name" placeholder="my-sut-arena" required
-               pattern="[a-z0-9][a-z0-9-]{0,39}" title="Lowercase letters, digits and hyphens (max 40)"></div>
-      <div class="field"><label class="label">Repository</label>
-        <input class="input mono" name="repo" id="wiz-repo" placeholder="https://github.com/owner/project" required></div>
-      <div class="grid cols-2" style="gap:14px">
-        <div class="field"><label class="label">Ref <span class="faint">(tag / branch / commit)</span></label><input class="input mono" name="ref" id="wiz-ref" placeholder="main"></div>
-        <div class="field"><label class="label">Service ports</label><input class="input mono" name="ports" id="wiz-ports" placeholder="8000"></div>
+    <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; gap:18px">
+      <div class="card card-pad">
+        <h3 style="font-size:15px; margin-bottom:4px">What are you standing up?</h3>
+        <p class="help" style="margin-bottom:16px">A fresh Ubuntu box with this repo cloned read-write into <code class="mono">/opt/sut</code>; the service is brought up in the setup phase (next step). An optional Kali foothold is added for the engagement.</p>
+        <div class="field"><label class="label">Instance name</label>
+          <input class="input mono" name="instance_id" id="wiz-name" placeholder="my-sut-arena" required
+                 pattern="[a-z0-9][a-z0-9-]{0,39}" title="Lowercase letters, digits and hyphens (max 40)"></div>
+        <div class="field"><label class="label">Repository</label>
+          <input class="input mono" name="repo" id="wiz-repo" placeholder="https://github.com/owner/project" required></div>
+        <div class="grid cols-2" style="gap:14px">
+          <div class="field"><label class="label">Ref <span class="faint">(tag / branch / commit)</span></label><input class="input mono" name="ref" id="wiz-ref" placeholder="main"></div>
+          <div class="field"><label class="label">Service ports</label><input class="input mono" name="ports" id="wiz-ports" placeholder="8000"></div>
+        </div>
+        <label class="check" style="margin:2px 0 4px"><input type="checkbox" name="include_attacker" id="wiz-atk" checked> Add a Kali attacker foothold for the engagement</label>
       </div>
-      <label class="check" style="margin:2px 0 4px"><input type="checkbox" name="include_attacker" id="wiz-atk" checked> Add a Kali attacker foothold for the engagement</label>
+      <!-- context panel -->
+      <div class="card pad-0 wiz-ctx">
+        <div class="card-head"><span class="label">How it works</span></div>
+        <div class="card-pad">
+          <div class="wiz-ctx__hero">
+            <i class="fa-solid fa-code-branch"></i>
+          </div>
+          <div class="wiz-ctx__items">
+            <div class="wiz-ctx__item">
+              <i class="fa-solid fa-download" style="color:var(--accent)"></i>
+              <div><strong>Clone</strong><span class="muted"> — your repo is cloned into <code class="mono">/opt/sut</code> on a fresh Ubuntu box.</span></div>
+            </div>
+            <div class="wiz-ctx__item">
+              <i class="fa-solid fa-shield-halved" style="color:var(--defender)"></i>
+              <div><strong>Isolate</strong><span class="muted"> — the box sits on its own segment, network-isolated from the host.</span></div>
+            </div>
+            <div class="wiz-ctx__item">
+              <i class="fa-solid fa-laptop-code" style="color:var(--attacker)"></i>
+              <div><strong>Attack</strong><span class="muted"> — optionally a Kali foothold joins the segment for the engagement.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
   <!-- STEP 2: SETUP CONSENT (load-bearing) -->
   <section class="wiz-panel" data-step="2" hidden>
-    <div class="card card-pad" style="max-width:680px">
-      <h3 style="font-size:15px; margin-bottom:4px">Setup phase — your consent</h3>
-      <p class="help" style="margin-bottom:16px">Bringing the service up needs a configurator session on the victim. This is the load-bearing safety choice: nothing writes/configures the box without it, and it's time-boxed, step-budgeted, and its egress is revoked before the engagement.</p>
-      <div class="field"><label class="label">Who configures it</label>
-        <select class="select" name="setup_mode" id="wiz-mode">
-          <option value="operator">You — operator shell (AI-optional)</option>
-          <option value="hitl">HITL — an agent (or your model) proposes, you approve each step</option>
-        </select></div>
-      <div class="grid cols-2" style="gap:14px">
-        <div class="field"><label class="label">Time-box (seconds)</label><input class="input mono" type="number" name="time_box_seconds" id="wiz-tb" value="1800" min="60"></div>
-        <div class="field"><label class="label">Step budget</label><input class="input mono" type="number" name="command_budget" id="wiz-budget" value="50" min="1"></div>
+    <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; gap:18px">
+      <div class="card card-pad">
+        <h3 style="font-size:15px; margin-bottom:4px">Setup phase — your consent</h3>
+        <p class="help" style="margin-bottom:16px">Bringing the service up needs a configurator session on the victim. This is the load-bearing safety choice: nothing writes/configures the box without it, and it's time-boxed, step-budgeted, and its egress is revoked before the engagement.</p>
+        <div class="field"><label class="label">Who configures it</label>
+          <select class="select" name="setup_mode" id="wiz-mode">
+            <option value="operator">You — operator shell (AI-optional)</option>
+            <option value="hitl">HITL — an agent (or your model) proposes, you approve each step</option>
+          </select></div>
+        <div class="grid cols-2" style="gap:14px">
+          <div class="field"><label class="label">Time-box (seconds)</label><input class="input mono" type="number" name="time_box_seconds" id="wiz-tb" value="1800" min="60"></div>
+          <div class="field"><label class="label">Step budget</label><input class="input mono" type="number" name="command_budget" id="wiz-budget" value="50" min="1"></div>
+        </div>
+        <label class="check" style="margin:2px 0 4px"><input type="checkbox" name="setup_egress" id="wiz-egress" checked> Open setup egress (victim can fetch dependencies during setup; revoked before the engagement)</label>
       </div>
-      <label class="check" style="margin:2px 0 4px"><input type="checkbox" name="setup_egress" id="wiz-egress" checked> Open setup egress (victim can fetch dependencies during setup; revoked before the engagement)</label>
+      <!-- context panel -->
+      <div class="card pad-0 wiz-ctx">
+        <div class="card-head"><span class="label">Safety guarantees</span></div>
+        <div class="card-pad">
+          <div class="wiz-ctx__hero wiz-ctx__hero--shield">
+            <i class="fa-solid fa-shield-halved"></i>
+          </div>
+          <div class="wiz-ctx__items">
+            <div class="wiz-ctx__item">
+              <i class="fa-solid fa-clock" style="color:var(--warn)"></i>
+              <div><strong>Time-boxed</strong><span class="muted"> — the setup session auto-expires after the configured timeout.</span></div>
+            </div>
+            <div class="wiz-ctx__item">
+              <i class="fa-solid fa-list-ol" style="color:var(--accent)"></i>
+              <div><strong>Step-budgeted</strong><span class="muted"> — hard cap on the number of commands that can run.</span></div>
+            </div>
+            <div class="wiz-ctx__item">
+              <i class="fa-solid fa-ban" style="color:var(--danger)"></i>
+              <div><strong>Egress revoked</strong><span class="muted"> — network egress is cut before the engagement begins.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -78,7 +149,7 @@
     </div>
   </section>
 
-  <div class="wiz-nav" style="display:flex; gap:10px; margin-top:18px; max-width:680px">
+  <div class="wiz-nav">
     <button type="button" class="btn" id="wiz-back" hidden><i class="fa-solid fa-arrow-left"></i> Back</button>
     <span class="grow"></span>
     <button type="button" class="btn btn-primary" id="wiz-next">Next <i class="fa-solid fa-arrow-right"></i></button>
