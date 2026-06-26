@@ -694,6 +694,22 @@ class SutArenaRequest(BaseModel):
         return value
 
 
+@app.post("/arenas/sut/preview")
+def preview_sut_arena(req: SutArenaRequest, principal: Principal = Depends(require_principal)):
+    """No-deploy review for the arena wizard: compile the SUT spec and return its
+    topology + warnings (incl. image existence) WITHOUT provisioning, so the
+    operator reviews the planned arena before launching. Operator-only."""
+    _require_operator(principal)
+    try:
+        spec = catalog.build_sut_scenario(
+            req.instance_id, req.repo, req.ref,
+            ports=req.ports, include_attacker=req.include_attacker,
+        )
+    except catalog.CatalogError as e:
+        return {"valid": False, "errors": [str(e)], "warnings": [], "topology": None}
+    return _spec_review(spec, check_images=True)
+
+
 @app.post("/arenas/sut")
 @limiter.limit(RATE_LIMIT_DEPLOY)
 async def deploy_sut_arena(
@@ -1021,6 +1037,52 @@ async def exec_in_arena(
     }
 
 
+class MitmObserveRequest(BaseModel):
+    seconds: int = Field(default=6, ge=1, le=60)
+    max_packets: int = Field(default=200, ge=1, le=2000)
+
+
+@app.post("/arenas/{instance_id}/mitm/observe")
+@limiter.limit(RATE_LIMIT_EXEC)
+async def mitm_observe(
+    request: Request,
+    instance_id: str,
+    req: MitmObserveRequest,
+    principal: Principal = Depends(require_principal),
+):
+    """Observe in-flight traffic on the arena's shared segment — the MCP MITM
+    stance's backend (in-path observation). Synchronous; bounded by seconds/
+    max_packets. D1: an agent must hold an `mitm` binding (CAP_OBSERVE); operators
+    bypass. Every capture is audited (`mitm_observe`)."""
+    record = db.get_deployment(instance_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    if record.get("status") != "active":
+        raise HTTPException(
+            status_code=409, detail=f"Arena is '{record.get('status')}', not active"
+        )
+    _require_binding(principal, instance_id, bindings.CAP_OBSERVE)  # D1
+
+    orch = Orchestrator(provider_name=record.get("provider"))
+    try:
+        result = orch.capture_traffic(
+            instance_id, seconds=req.seconds, max_packets=req.max_packets
+        )
+    except NotImplementedError as e:
+        raise HTTPException(status_code=501, detail=str(e)) from e
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=502, detail=f"capture failed: {result.get('error', 'unknown error')}"
+        )
+    db.record_event(
+        instance_id, "mitm_observe",
+        {"packets": result.get("packets"), "bridge": result.get("bridge"),
+         "seconds": req.seconds, "actor": principal.name},
+        actor=principal.name,
+    )
+    return result
+
+
 # Audit stream (ADR-0004). Read-only views over the append-only `events` table —
 # the operator audit console (WebUI) and the defender stance's detection feed.
 EVENTS_MAX_LIMIT = 500
@@ -1044,10 +1106,14 @@ def _redact_findings_for_agent(principal: Principal, events: list[dict]) -> list
 
 
 @app.get("/events")
-def list_events(limit: int = 100, principal: Principal = Depends(require_principal)):
-    """Recent audit events across all arenas (newest first)."""
+def list_events(limit: int = 100, type: str | None = None,
+                principal: Principal = Depends(require_principal)):
+    """Recent audit events across all arenas (newest first). Optional ``type``
+    restricts to one event type — lets a caller pull e.g. `agent_session` without
+    it being flooded out of a fixed window by high-volume activity events."""
     limit = max(1, min(limit, EVENTS_MAX_LIMIT))
-    return {"events": _redact_findings_for_agent(principal, db.list_events(limit=limit))}
+    types = [type] if type else None
+    return {"events": _redact_findings_for_agent(principal, db.list_events(limit=limit, types=types))}
 
 
 @app.get("/deployments/{instance_id}/events")

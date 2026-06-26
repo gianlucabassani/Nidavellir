@@ -241,6 +241,18 @@ select[multiple] option { padding:6px 8px; border-radius:6px; }
 .diffview .diff-del { color:var(--danger); display:block; }
 .diffview .diff-ctx { color:var(--faint); display:block; }
 
+/* arena wizard — review recap */
+.wiz-recap { margin:0; display:flex; flex-direction:column; gap:8px; }
+.wiz-recap__row { display:flex; justify-content:space-between; gap:12px; font-size:13px; border-bottom:1px solid var(--line-soft); padding-bottom:7px; }
+.wiz-recap__row dt { color:var(--muted); }
+.wiz-recap__row dd { margin:0; color:var(--text); text-align:right; word-break:break-word; }
+.wiz-panel .help { color:var(--muted); font-size:13px; }
+
+/* agent bindings panel (D1) */
+.bindings-list { display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+.binding-row { display:flex; align-items:center; gap:10px; padding-bottom:8px; border-bottom:1px solid var(--line-soft); }
+.binding-grant { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+
 /* ---------- inventory (machine line-up) ---------- */
 .inv-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
 .inv-card { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; cursor:pointer; transition:.16s; }

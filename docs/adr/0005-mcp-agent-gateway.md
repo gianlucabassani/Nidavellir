@@ -12,8 +12,9 @@
   package repos ONLY, with no general egress (live-verified: nmap installs and
   scans in-scope while the internet stays unreachable); and **server-enforced
   per-arena key↔arena binding** — guardrail #6 below, the orchestrator-side
-  authorization that closes audit finding D1. **Deferred:** MITM stance,
-  per-request HTTP auth, token budget, operator kill switch.)
+  authorization that closes audit finding D1. The **MITM stance** (observe) landed
+  2026-06-26. **Deferred:** MITM in-path `modify_message`, per-request HTTP auth,
+  token budget, operator kill switch.)
 - **Date:** 2026-06-14
 - **Deciders:** Nidavellir maintainers
 
@@ -49,7 +50,10 @@ toolsets are gated by an allow-list (`stances.allowed_tools`):
   download_file`, `report_finding` (self-report a discovered known vuln, matched
   against the hidden manifest by CWE + node — the 2026-06-16 manifest model that
   replaced `submit_flag`);
-- **MITM** — in-path `observe_stream` / `modify_message` on a shared segment;
+- **MITM** — `observe_traffic` (in-path packet capture on the arena's shared
+  segment bridge, bounded by seconds/packets → a flow summary; `get_topology`).
+  Landed 2026-06-26 (P2-5), orchestrator-gated to an `mitm`-bound key (CAP_OBSERVE);
+  in-path `modify_message` is a later increment;
 - **defender** — `query_events`, `get_alerts`, `submit_detection`;
 - **operator** — *not an in-arena agent stance.* The operator driving scenario
   **authoring** over MCP with their operator/admin key: `scaffold_scenario`

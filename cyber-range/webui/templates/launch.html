@@ -19,9 +19,9 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="eyebrow">Provision</div>
+    <div class="eyebrow">Adversarial</div>
     <h1>Launch an arena</h1>
-    <div class="sub">Pick what you're standing up — one configurator at a time, with a live topology preview.</div>
+    <div class="sub">Stand up an attack arena — a predefined pack, a custom build, an AI-generated topology, a Vulhub import, or a pasted spec — with a live topology preview. Bringing up your own project to test? Use the <a href="{{ url_for('wizard') }}" style="color:var(--accent)">SUT wizard</a>.</div>
   </div>
 </div>
 
@@ -31,7 +31,6 @@
   <button data-l="generate"><i class="fa-solid fa-wand-magic-sparkles"></i> Generate</button>
   <button data-l="vulhub"><i class="fa-solid fa-down-to-bracket"></i> Vulhub import</button>
   <button data-l="spec"><i class="fa-solid fa-file-code"></i> Paste spec</button>
-  <button data-l="sut"><i class="fa-brands fa-github"></i> Software-under-test</button>
 </div>
 
 <!-- PREDEFINED -->
@@ -169,33 +168,6 @@
   </div>
 </section>
 
-<!-- SUT -->
-<section class="launch-panel" data-l="sut" hidden>
-  <div class="card card-pad" style="max-width:680px">
-    <h3 style="font-size:15px; margin-bottom:4px">Software-under-test</h3>
-    <p class="help" style="margin-bottom:16px">Clone any GitHub project into a fresh Ubuntu box; bring the service up in a gated setup phase (you, or a HITL agent), then pentest it.</p>
-    <form method="POST" action="{{ url_for('build_sut') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="field"><label class="label">Instance name</label>
-        <input class="input mono" name="instance_id" placeholder="juice-shop-sut" required
-               pattern="[a-z0-9][a-z0-9-]{0,39}" title="Lowercase letters, digits and hyphens (max 40)"></div>
-      <div class="field"><label class="label">Repository</label>
-        <input class="input mono" name="repo" placeholder="https://github.com/owner/project" required></div>
-      <div class="grid cols-2" style="gap:14px">
-        <div class="field"><label class="label">Ref <span class="faint">(tag/commit)</span></label><input class="input mono" name="ref" placeholder="main"></div>
-        <div class="field"><label class="label">Service ports</label><input class="input mono" name="ports" placeholder="3000"></div>
-      </div>
-      <div class="field"><label class="label">Who configures it</label>
-        <select class="select" name="setup_mode">
-          <option value="operator">You — operator shell</option>
-          <option value="hitl">HITL agent — proposes, you approve</option>
-        </select></div>
-      <label class="check" style="margin:2px 0 10px"><input type="checkbox" name="include_attacker" checked> Add a Kali attacker foothold for the engagement</label>
-      <label class="check" style="margin-bottom:16px"><input type="checkbox" name="setup_egress"> Open setup egress (victim can fetch dependencies during setup)</label>
-      <button class="btn btn-primary" style="width:100%; justify-content:center"><i class="fa-brands fa-github"></i> Clone &amp; provision</button>
-    </form>
-  </div>
-</section>
 {% endblock %}
 
 {% block scripts %}<script>Nidavellir.initLaunch();</script>{% endblock %}

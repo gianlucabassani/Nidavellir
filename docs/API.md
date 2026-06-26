@@ -180,6 +180,15 @@ providers once wired). **Every exec is written to the `events` audit trail.**
 → { "node": "jump", "exit_code": 0, "stdout": "...", "stderr": "" }
 ```
 
+`POST /arenas/{instance_id}/mitm/observe` `{seconds?, max_packets?}` — the MCP
+**MITM** stance's `observe_traffic` backend: capture in-flight traffic on the
+arena's shared segment bridge for a bounded window and return a flow summary
+(`{flows:[{src,dst,proto,sport,dport}], packets, bridge}`). docker-local taps the
+segment's bridge device via a short-lived host-net tcpdump sidecar (privileged by
+nature). D1: an `agent` key needs an **`mitm`** binding (CAP_OBSERVE); operators
+bypass. `501` on a provider without capture, `409` if the arena isn't active.
+Audited as `mitm_observe`. (In-path `modify` is a later increment.)
+
 **Authorization (D1):** an `agent`-role key may exec only on an arena it is
 **bound** to (see *Agent ↔ arena bindings* below) — `403` otherwise. Foothold
 node-scope is now **enforced server-side** for an `attacker`-stance binding (not
@@ -240,6 +249,9 @@ are never bound and bypass every check.
 
 `403` for an `agent` caller · `404` unknown arena · `422` unknown stance.
 
+The **operator console** surfaces these on the arena detail page (the *Agent
+bindings* panel: list / grant / revoke) — no curl needed.
+
 ### Model connection (operator's bring-your-own key)
 
 The operator configures their **bring-your-own model** (provider + model + API
@@ -277,6 +289,17 @@ over HTTP).
   logged) with the arena's context injected (scenario, topology, setup state,
   recent activity, benchmark progress). **Advise-only** (no tools), operator-only,
   `text/plain` chunked stream. `409` if no model is connected.
+
+### SUT arena wizard
+
+`POST /arenas/sut` (operator-only) provisions a software-under-test arena from a
+GitHub repo (cloned read-write into a fresh Ubuntu victim at `/opt/sut`, optional
+Kali foothold); the setup config (`mode`/`time_box_seconds`/`command_budget`/
+`setup_egress`) is captured as consent and the setup session auto-opens when the
+arena is active. `POST /arenas/sut/preview` (operator-only) compiles the same spec
+and returns `{valid, summary, topology, warnings}` **without deploying** — the
+review gate the WebUI **Wizard** (`/wizard`) uses to show the planned topology
+before launch.
 
 ### Configurator setup phase (SUT arenas)
 

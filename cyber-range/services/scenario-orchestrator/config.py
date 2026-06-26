@@ -43,6 +43,12 @@ LIBVIRT_BASE_IMAGE = os.getenv(
 )
 LIBVIRT_POOL = os.getenv("LIBVIRT_POOL", "default")
 
+# MITM stance (P2-5): the in-path capture sidecar image (host-net tcpdump on the
+# arena bridge — needs tcpdump + coreutils `timeout`) and a hard cap on capture
+# duration so a tap can never run unbounded.
+MITM_CAPTURE_IMAGE = os.getenv("MITM_CAPTURE_IMAGE", "nicolaka/netshoot:latest")
+MITM_CAPTURE_MAX_SECONDS = int(os.getenv("MITM_CAPTURE_MAX_SECONDS", "20"))
+
 # Runtime directories (at project root for easy access)
 RUNS_DIR = Path(os.getenv("RUNS_DIR", str(BASE_DIR / "runs")))
 DATA_DIR = Path(os.getenv("DATA_DIR", str(BASE_DIR / "data")))

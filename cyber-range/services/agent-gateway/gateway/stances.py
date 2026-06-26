@@ -40,7 +40,8 @@ LIFECYCLE_TOOLS = frozenset(
 #     time-boxed + victim-scoped + revoked before the engagement (ADR-0007 /
 #     P2-10). NO attacker tools. HITL: propose/await; autonomous (double-locked):
 #     run. The orchestrator is the enforcement point.
-#   MITM — lands in a later increment (in-path intercept).
+#   mitm — observe in-flight traffic on the shared segment (`observe_traffic`);
+#     in-path *modify* lands in a later increment.
 #   operator — authoring (NOT an arena agent): generate a scenario spec from a
 #     prompt (the operator's BYO model) and import it. Review gate stays on the
 #     orchestrator; both endpoints are operator-only there.
@@ -49,11 +50,11 @@ STANCE_TOOLS: dict[Stance, frozenset[str]] = {
         {"get_topology", "list_targets", "run_command", "report_finding"}
     ),
     Stance.defender: frozenset({"get_topology", "query_events"}),
+    Stance.mitm: frozenset({"get_topology", "observe_traffic"}),
     Stance.configurator: frozenset(
         {"get_setup_brief", "propose_setup_step", "await_setup_step",
          "run_setup_step", "upload_file", "finish_setup"}
     ),
-    Stance.mitm: frozenset(),
     Stance.operator: frozenset({"scaffold_scenario", "import_scenario"}),
 }
 

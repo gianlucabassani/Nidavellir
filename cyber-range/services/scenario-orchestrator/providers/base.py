@@ -72,3 +72,15 @@ class RangeProvider(ABC):
         raise NotImplementedError(
             f"the {self.name!r} provider does not support setup-time egress yet"
         )
+
+    def capture_traffic(self, instance_id: str, *, seconds: int = 6,
+                        max_packets: int = 200) -> dict:
+        """Observe in-flight traffic on the arena's shared segment(s) — the MCP
+        MITM stance's backend (in-path observation). Bounded by ``seconds`` /
+        ``max_packets``. Result contract:
+            {"success": True, "flows": [{src,dst,proto,sport,dport,...}], "packets": int, ...}
+          | {"success": False, "error": "..."}
+        Not every backend can tap a segment; the default refuses cleanly."""
+        raise NotImplementedError(
+            f"the {self.name!r} provider does not support traffic capture yet"
+        )

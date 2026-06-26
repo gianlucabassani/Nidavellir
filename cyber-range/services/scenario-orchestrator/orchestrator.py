@@ -62,6 +62,17 @@ class Orchestrator:
         )
         return self.provider.set_node_egress(instance_id, node, open)
 
+    def capture_traffic(self, instance_id: str, seconds: int = 6, max_packets: int = 200):
+        """Observe in-flight traffic on the arena's shared segment (MCP MITM
+        stance). Delegates to the provider the arena was deployed with."""
+        logger.info(
+            f"[{instance_id}] MITM capture ({seconds}s/{max_packets}p) "
+            f"(provider: {self.provider.name})"
+        )
+        return self.provider.capture_traffic(
+            instance_id, seconds=seconds, max_packets=max_packets
+        )
+
     def _load_scenario(self, scenario_name: str) -> dict:
         """Load scenario YAML configuration (delegates to the registry)."""
         return load_scenario(scenario_name)

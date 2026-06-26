@@ -58,3 +58,23 @@ def test_announce_requires_model_and_provider():
     iid = _arena(c.db, "as-arena-2")
     assert c.post(f"/arenas/{iid}/agent-session", json={"model": "m"}).status_code == 422
     assert c.post(f"/arenas/{iid}/agent-session", json={"provider": "p"}).status_code == 422
+
+
+def test_events_type_filter_isolates_agent_sessions_from_floods():
+    """The Agents-page connection cards derive from `agent_session` events; a burst
+    of other events must NOT flood them out (the type filter the /api uses)."""
+    c = _client("operator")
+    iid = _arena(c.db, "as-flood")
+    c.post(f"/arenas/{iid}/agent-session",
+           json={"model": "gemini-2.5-flash", "provider": "gemini", "stance": "attacker"})
+    # flood with many non-session events
+    for i in range(60):
+        c.db.record_event(iid, "agent_exec", {"node": "victim", "command": f"c{i}", "exit_code": 0}, actor="agent")
+
+    # an unfiltered small window is dominated by the flood...
+    mixed = c.get("/events?limit=20").json()["events"]
+    assert not any(e["type"] == "agent_session" for e in mixed)
+    # ...but the type-filtered query still surfaces the session
+    only = c.get("/events?limit=20&type=agent_session").json()["events"]
+    assert only and all(e["type"] == "agent_session" for e in only)
+    assert only[0]["payload"]["model"] == "gemini-2.5-flash"

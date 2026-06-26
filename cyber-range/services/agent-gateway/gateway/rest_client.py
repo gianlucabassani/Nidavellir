@@ -84,6 +84,13 @@ class RestClient:
             "GET", f"/deployments/{arena_id}/events?limit={int(limit)}", api_key
         )
 
+    def mitm_observe(self, api_key: str, arena_id: str, seconds: int = 6,
+                     max_packets: int = 200) -> dict:
+        return self._request(
+            "POST", f"/arenas/{arena_id}/mitm/observe", api_key,
+            json={"seconds": seconds, "max_packets": max_packets},
+        )
+
     def report_finding(self, api_key: str, arena_id: str, title: str,
                        cwe: str | None = None, node: str | None = None,
                        evidence: str | None = None) -> dict:

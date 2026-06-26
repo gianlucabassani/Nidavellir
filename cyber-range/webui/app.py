@@ -106,9 +106,10 @@ def _catalog():
     return images, attackers, victims
 
 
-def _events(instance_id=None, limit=100):
+def _events(instance_id=None, limit=100, type=None):
     path = f"/deployments/{instance_id}/events" if instance_id else "/events"
-    data, _ = _api_get(f"{path}?limit={int(limit)}")
+    q = f"?limit={int(limit)}" + (f"&type={type}" if type else "")
+    data, _ = _api_get(f"{path}{q}")
     return (data or {}).get("events", [])
 
 
@@ -116,7 +117,7 @@ def _current_agent():
     """The most recently connected BYO agent's model + provider, from the latest
     `agent_session` event (events are newest-first). None when no agent has
     announced itself. Powers the topbar 'connected model' chip."""
-    for e in _events(limit=100):
+    for e in _events(limit=50, type="agent_session"):  # type-filtered: survives activity floods
         if e.get("type") == "agent_session":
             p = e.get("payload") or {}
             if not p.get("model"):
@@ -178,7 +179,10 @@ def _agent_summary(e):
 
 def _agent_overview(limit=200):
     """Connections + activity timeline aggregated from the audit stream."""
-    events = _events(limit=limit)            # newest-first across all arenas
+    events = _events(limit=limit)            # newest-first across all arenas (timeline + counts)
+    # Connections come from `agent_session` events — fetched type-filtered so a
+    # burst of activity events can't flood the connection cards out of the window.
+    sessions = _events(limit=100, type="agent_session")
     deployments, _ = _deployments()
     name_of = {k: (v.get("user_id") or k) for k, v in deployments.items()}
     status_of = {k: v.get("status") for k, v in deployments.items()}
@@ -195,7 +199,7 @@ def _agent_overview(limit=200):
             finds[a] = finds.get(a, 0) + 1
 
     conns = {}
-    for e in events:                          # newest-first → first per key wins
+    for e in sessions:                        # newest-first → first per (arena, stance) wins
         if e.get("type") != "agent_session":
             continue
         p = e.get("payload") or {}
@@ -451,6 +455,28 @@ def launch():
                            attackers=attackers, victims=victims, default_infra=default_infra)
 
 
+@app.route("/wizard")
+def wizard():
+    """Guided arena authoring (P3-3): a step-by-step SUT flow — target → setup
+    consent → review (no-deploy topology) → launch."""
+    return render_template("wizard.html", active="wizard")
+
+
+@app.route("/api/arenas/sut/preview", methods=["POST"])
+def sut_preview_proxy():
+    """No-deploy review for the wizard (proxies POST /arenas/sut/preview)."""
+    body = request.get_json(silent=True) or {}
+    payload = {
+        "instance_id": (body.get("instance_id") or "wizard-preview").strip() or "wizard-preview",
+        "repo": (body.get("repo") or "").strip(),
+        "ref": (body.get("ref") or "").strip() or None,
+        "ports": body.get("ports") or [],
+        "include_attacker": bool(body.get("include_attacker", True)),
+    }
+    data, code = _api_post("/arenas/sut/preview", payload)
+    return jsonify(data), code
+
+
 @app.route("/scenarios")
 def scenarios():
     _, attackers, victims = _catalog()
@@ -577,6 +603,11 @@ def build_sut():
         "setup_mode": f.get("setup_mode", "operator"),
         "setup_egress": f.get("setup_egress") == "on",
     }
+    # The wizard surfaces the time-box + step budget; pass them through when given.
+    if f.get("time_box_seconds"):
+        payload["time_box_seconds"] = int(re.sub(r"\D", "", f["time_box_seconds"]) or 0)
+    if f.get("command_budget"):
+        payload["command_budget"] = int(re.sub(r"\D", "", f["command_budget"]) or 0)
     try:
         resp = requests.post(
             f"{API_URL}/arenas/sut", json=payload, headers=API_HEADERS, timeout=10
@@ -893,6 +924,41 @@ def scenario_topology_proxy(scenario_id):
     """Topology graph of a registered scenario for the pre-deploy preview."""
     data, ok = _api_get(f"/scenarios/{scenario_id}/topology")
     return jsonify(data or {"topology": None}), (200 if ok else 404)
+
+
+@app.route("/api/arenas/<instance_id>/bindings", methods=["GET"])
+def list_bindings_proxy(instance_id):
+    """Active agent↔arena bindings (D1) for the operator console."""
+    data, ok = _api_get(f"/arenas/{instance_id}/bindings")
+    return jsonify(data or {"bindings": []}), (200 if ok else 502)
+
+
+@app.route("/api/arenas/<instance_id>/bindings", methods=["POST"])
+def grant_binding_proxy(instance_id):
+    """Authorize a BYO agent key to drive this arena in a stance (proxies
+    POST /arenas/<id>/bindings). CSRF-protected."""
+    body = request.get_json(silent=True) or {}
+    payload = {
+        "agent_name": (body.get("agent_name") or "").strip(),
+        "stance": (body.get("stance") or "").strip() or None,
+    }
+    data, code = _api_post(f"/arenas/{instance_id}/bindings", payload)
+    return jsonify(data), code
+
+
+@app.route("/api/arenas/<instance_id>/bindings/<agent_name>", methods=["DELETE"])
+def revoke_binding_proxy(instance_id, agent_name):
+    """Revoke an agent's binding (proxies DELETE). CSRF-protected."""
+    try:
+        resp = requests.delete(
+            f"{API_URL}/arenas/{instance_id}/bindings/{agent_name}",
+            headers=API_HEADERS, timeout=10,
+        )
+    except requests.RequestException:
+        return jsonify({"error": "orchestrator unreachable"}), 502
+    if resp.status_code == 200:
+        return jsonify(resp.json())
+    return jsonify({"error": _api_error(resp)}), resp.status_code
 
 
 @app.route("/api/scenarios/<scenario_id>", methods=["DELETE"])

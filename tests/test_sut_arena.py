@@ -190,3 +190,37 @@ def test_prearmed_setup_surfaces_connect_command():
     body = c.get(f"/arenas/{iid}/setup").json()
     assert body["open"] is True
     assert body["connect"]["sut"] == "docker exec -it nv-sut /bin/bash"
+
+
+# --- wizard: no-deploy preview (P3-3) ----------------------------------------
+
+
+def test_sut_preview_returns_topology_without_deploying(client, monkeypatch):
+    import image_check
+
+    monkeypatch.setattr(image_check, "exists_on_hub", lambda ref: None)  # no network
+    resp = client.post("/arenas/sut/preview", json={
+        "instance_id": "sut-prev", "repo": "https://github.com/org/proj",
+        "ports": [8000], "include_attacker": True,
+    })
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["valid"] is True
+    assert body["summary"]["nodes"] == 2
+    assert body["topology"] is not None
+    assert client.dispatched == {}   # review only — nothing deployed
+
+
+def test_sut_preview_is_operator_only():
+    import api
+    import auth
+    from database import Database
+
+    key = auth.generate_api_key()
+    Database().create_api_key(auth.hash_api_key(key), name="sut-prev-agent", role="agent")
+    c = TestClient(api.app)
+    c.headers["X-API-Key"] = key
+    resp = c.post("/arenas/sut/preview", json={
+        "instance_id": "x", "repo": "https://github.com/o/proj",
+    })
+    assert resp.status_code == 403

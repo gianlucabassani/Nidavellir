@@ -343,6 +343,23 @@ def query_events(
     return {"arena_id": arena_id, "count": len(events), "events": events}
 
 
+def observe_traffic(ctx: GatewayContext, arena_id: str, seconds: int = 6,
+                    max_packets: int = 200) -> dict:
+    """MITM stance: observe in-flight traffic on the arena's shared segment for a
+    bounded window — returns a flow summary (src/dst/proto/ports). In-path capture
+    only (modify lands later). Orchestrator-gated to an mitm-bound session."""
+    _guard(ctx, "observe_traffic")
+    try:
+        res = ctx.client.mitm_observe(ctx.session.api_key, arena_id, seconds, max_packets)
+    except Exception:
+        _trace(ctx, "observe_traffic", {"seconds": seconds}, ok=False, arena_id=arena_id)
+        raise
+    _trace(ctx, "observe_traffic",
+           {"seconds": seconds, "packets": (res or {}).get("packets")},
+           ok=True, arena_id=arena_id)
+    return res
+
+
 # --- configurator stance (SUT setup phase, ADR-0007 / P2-10) -----------------
 # Bring an arbitrary OSS service up on the victim during a consented, time-boxed,
 # victim-scoped setup session. The orchestrator enforces scope/budget/time-box;

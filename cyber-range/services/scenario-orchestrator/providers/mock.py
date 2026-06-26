@@ -84,3 +84,15 @@ class MockProvider(RangeProvider):
     def set_node_egress(self, instance_id, node, open):
         logger.info(f"[{instance_id}] 🎭 SIMULATING setup egress {'open' if open else 'close'} on {node}")
         return {"success": True, "egress": "open" if open else "closed"}
+
+    def capture_traffic(self, instance_id, *, seconds=6, max_packets=200):
+        logger.info(f"[{instance_id}] 🎭 SIMULATING MITM traffic capture ({seconds}s)")
+        return {
+            "success": True,
+            "packets": 2,
+            "flows": [
+                {"src": "10.0.0.3", "dst": "10.0.0.2", "proto": "tcp", "sport": 51020, "dport": 80},
+                {"src": "10.0.0.2", "dst": "10.0.0.3", "proto": "tcp", "sport": 80, "dport": 51020},
+            ],
+            "note": "simulated; MOCK_MODE",
+        }

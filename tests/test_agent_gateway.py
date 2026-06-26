@@ -114,6 +114,13 @@ class _FakeRestClient:
         self.calls.append(("import_scenario", api_key, scenario_id, overwrite))
         return {"status": "imported", "id": scenario_id or "gen"}
 
+    # mitm stance
+    def mitm_observe(self, api_key, arena_id, seconds=6, max_packets=200):
+        self.calls.append(("mitm_observe", api_key, arena_id, seconds, max_packets))
+        return {"success": True, "packets": 1,
+                "flows": [{"src": "10.0.0.3", "dst": "10.0.0.2", "proto": "tcp",
+                           "sport": 5000, "dport": 80}]}
+
 
 def _ctx(stance=Stance.attacker, trace_dir=None, client=None):
     return GatewayContext(
@@ -309,6 +316,30 @@ def test_attacker_session_also_registers_the_attacker_tools():
     mcp = build_server(GatewayConfig(env={"NIDAVELLIR_STANCE": "attacker"}))
     names = {t.name for t in asyncio.run(mcp.list_tools())}
     assert {"run_command", "list_targets", "get_topology", "report_finding"} <= names
+
+
+def test_mitm_session_registers_observe_tools_only():
+    import asyncio
+
+    from gateway.server import build_server
+
+    mcp = build_server(GatewayConfig(env={"NIDAVELLIR_STANCE": "mitm"}))
+    names = {t.name for t in asyncio.run(mcp.list_tools())}
+    assert {"get_topology", "observe_traffic"} <= names
+    # no attacker/defender/configurator tools leak onto the mitm surface
+    assert not ({"run_command", "report_finding", "query_events",
+                 "run_setup_step"} & names)
+
+
+def test_observe_traffic_proxies_and_is_mitm_only():
+    ctx = _ctx(stance=Stance.mitm)
+    out = tools.observe_traffic(ctx, arena_id="a1", seconds=4)
+    assert out["packets"] == 1 and out["flows"][0]["dport"] == 80
+    call = next(c for c in ctx.client.calls if c[0] == "mitm_observe")
+    assert call[2] == "a1" and call[3] == 4
+    # an attacker session may NOT observe traffic
+    with pytest.raises(tools.ToolNotAllowed):
+        tools.observe_traffic(_ctx(stance=Stance.attacker), arena_id="a1")
 
 
 def test_operator_session_registers_authoring_tools_only():

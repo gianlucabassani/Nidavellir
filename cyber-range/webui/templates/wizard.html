@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Software-Under-Test Wizard{% endblock %}
+{% block crumb %}SUT{% endblock %}
+{% block head %}<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Research</div>
+    <h1>Software-Under-Test Wizard</h1>
+    <div class="sub">Bring your own GitHub project up as a software-under-test arena — target, then the setup consent, then review the topology before you launch. For adversarial attack scenarios, use <a href="{{ url_for('launch') }}" style="color:var(--accent)">Launch</a>.</div>
+  </div>
+</div>
+
+<div class="seg" id="wiz-steps" style="margin-bottom:18px; pointer-events:none">
+  <button class="on" data-step="1"><i class="fa-solid fa-bullseye"></i> 1 · Target</button>
+  <button data-step="2"><i class="fa-solid fa-shield-halved"></i> 2 · Setup consent</button>
+  <button data-step="3"><i class="fa-solid fa-list-check"></i> 3 · Review &amp; launch</button>
+</div>
+
+<form method="POST" action="{{ url_for('build_sut') }}" id="wiz-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <!-- STEP 1: TARGET -->
+  <section class="wiz-panel" data-step="1">
+    <div class="card card-pad" style="max-width:680px">
+      <h3 style="font-size:15px; margin-bottom:4px">What are you standing up?</h3>
+      <p class="help" style="margin-bottom:16px">A fresh Ubuntu box with this repo cloned read-write into <code class="mono">/opt/sut</code>; the service is brought up in the setup phase (next step). An optional Kali foothold is added for the engagement.</p>
+      <div class="field"><label class="label">Instance name</label>
+        <input class="input mono" name="instance_id" id="wiz-name" placeholder="my-sut-arena" required
+               pattern="[a-z0-9][a-z0-9-]{0,39}" title="Lowercase letters, digits and hyphens (max 40)"></div>
+      <div class="field"><label class="label">Repository</label>
+        <input class="input mono" name="repo" id="wiz-repo" placeholder="https://github.com/owner/project" required></div>
+      <div class="grid cols-2" style="gap:14px">
+        <div class="field"><label class="label">Ref <span class="faint">(tag / branch / commit)</span></label><input class="input mono" name="ref" id="wiz-ref" placeholder="main"></div>
+        <div class="field"><label class="label">Service ports</label><input class="input mono" name="ports" id="wiz-ports" placeholder="8000"></div>
+      </div>
+      <label class="check" style="margin:2px 0 4px"><input type="checkbox" name="include_attacker" id="wiz-atk" checked> Add a Kali attacker foothold for the engagement</label>
+    </div>
+  </section>
+
+  <!-- STEP 2: SETUP CONSENT (load-bearing) -->
+  <section class="wiz-panel" data-step="2" hidden>
+    <div class="card card-pad" style="max-width:680px">
+      <h3 style="font-size:15px; margin-bottom:4px">Setup phase — your consent</h3>
+      <p class="help" style="margin-bottom:16px">Bringing the service up needs a configurator session on the victim. This is the load-bearing safety choice: nothing writes/configures the box without it, and it's time-boxed, step-budgeted, and its egress is revoked before the engagement.</p>
+      <div class="field"><label class="label">Who configures it</label>
+        <select class="select" name="setup_mode" id="wiz-mode">
+          <option value="operator">You — operator shell (AI-optional)</option>
+          <option value="hitl">HITL — an agent (or your model) proposes, you approve each step</option>
+        </select></div>
+      <div class="grid cols-2" style="gap:14px">
+        <div class="field"><label class="label">Time-box (seconds)</label><input class="input mono" type="number" name="time_box_seconds" id="wiz-tb" value="1800" min="60"></div>
+        <div class="field"><label class="label">Step budget</label><input class="input mono" type="number" name="command_budget" id="wiz-budget" value="50" min="1"></div>
+      </div>
+      <label class="check" style="margin:2px 0 4px"><input type="checkbox" name="setup_egress" id="wiz-egress" checked> Open setup egress (victim can fetch dependencies during setup; revoked before the engagement)</label>
+    </div>
+  </section>
+
+  <!-- STEP 3: REVIEW & LAUNCH -->
+  <section class="wiz-panel" data-step="3" hidden>
+    <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; gap:18px">
+      <div class="card card-pad">
+        <h3 style="font-size:15px; margin-bottom:4px">Review</h3>
+        <p class="help" style="margin-bottom:14px">The planned arena, validated without deploying. Launch provisions it and opens the setup session automatically.</p>
+        <div class="import-msg" id="wiz-msg" style="margin-bottom:12px"></div>
+        <dl class="wiz-recap" id="wiz-recap"></dl>
+      </div>
+      <div class="card pad-0">
+        <div class="card-head"><span class="label">Topology preview</span></div>
+        <div class="topo-preview topo-preview--tall" id="wiz-topo"></div>
+        <div class="topo-legend">
+          <span><i class="dotsq dotsq--danger"></i> foothold</span>
+          <span><i class="dotsq dotsq--warn"></i> target</span>
+          <span><i class="dashbox"></i> segment</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="wiz-nav" style="display:flex; gap:10px; margin-top:18px; max-width:680px">
+    <button type="button" class="btn" id="wiz-back" hidden><i class="fa-solid fa-arrow-left"></i> Back</button>
+    <span class="grow"></span>
+    <button type="button" class="btn btn-primary" id="wiz-next">Next <i class="fa-solid fa-arrow-right"></i></button>
+    <button type="submit" class="btn btn-primary" id="wiz-launch" hidden><i class="fa-solid fa-rocket"></i> Launch arena</button>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}<script>Nidavellir.initWizard();</script>{% endblock %}

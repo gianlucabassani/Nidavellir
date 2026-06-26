@@ -127,6 +127,18 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
             `type` (e.g. 'agent_exec' for attacker commands)."""
             return tools.query_events(ctx(), arena_id=arena_id, limit=limit, type=type)
 
+    elif stance is Stance.mitm:
+        @mcp.tool()
+        def get_topology(arena_id: str) -> dict:
+            """The arena's nodes (IPs, networks) — the segment you're in-path on."""
+            return tools.get_topology(ctx(), arena_id=arena_id)
+
+        @mcp.tool()
+        def observe_traffic(arena_id: str, seconds: int = 6, max_packets: int = 200) -> dict:
+            """Observe in-flight traffic on the arena's shared segment for a bounded
+            window; returns a flow summary (src/dst/proto/ports). In-path capture."""
+            return tools.observe_traffic(ctx(), arena_id=arena_id, seconds=seconds, max_packets=max_packets)
+
     elif stance is Stance.configurator:
         @mcp.tool()
         def get_setup_brief(arena_id: str) -> dict:

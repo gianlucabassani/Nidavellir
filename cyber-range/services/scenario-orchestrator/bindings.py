@@ -37,18 +37,19 @@ BINDING_EVENT_WINDOW = 256
 STANCES = ("attacker", "mitm", "defender", "configurator")
 
 # Capability classes a bound agent may exercise, and which stances permit each.
-CAP_EXEC = "exec"     # run_command / report_finding (attacker)
-CAP_SETUP = "setup"   # configurator setup steps (configurator)
+CAP_EXEC = "exec"        # run_command / report_finding (attacker)
+CAP_SETUP = "setup"      # configurator setup steps (configurator)
+CAP_OBSERVE = "observe"  # in-path traffic capture on a shared segment (mitm)
 
 # stance -> permitted capabilities. `None` (own-sandbox) permits everything;
 # a stance-scoped binding permits only its stance's class. Reads (status/events)
 # are intentionally NOT capability-gated — D1 is about *driving* an arena.
 _STANCE_CAPS: dict[str | None, set[str]] = {
-    None: {CAP_EXEC, CAP_SETUP},
+    None: {CAP_EXEC, CAP_SETUP, CAP_OBSERVE},
     "attacker": {CAP_EXEC},
     "configurator": {CAP_SETUP},
     "defender": set(),
-    "mitm": set(),
+    "mitm": {CAP_OBSERVE},
 }
 
 

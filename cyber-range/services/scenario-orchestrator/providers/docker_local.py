@@ -107,6 +107,32 @@ _MIRROR_CONTEXT = os.path.join(
 )
 
 
+# tcpdump (`-nn -tt`) line: "<ts> IP <src>.<sport> > <dst>.<dport>: Flags ..."
+# (ports optional for ICMP/ARP). Parsed into a flow summary for the MITM stance.
+_TCPDUMP_RE = re.compile(
+    r"IP6?\s+(?P<src>[0-9a-fA-F:.]+?)(?:\.(?P<sport>\d+))?\s+>\s+"
+    r"(?P<dst>[0-9a-fA-F:.]+?)(?:\.(?P<dport>\d+))?:\s*(?P<rest>.*)"
+)
+
+
+def _parse_tcpdump(text: str) -> list[dict]:
+    """Summarize tcpdump output into ``[{src,dst,proto,sport,dport}]`` flows."""
+    flows = []
+    for line in (text or "").splitlines():
+        m = _TCPDUMP_RE.search(line)
+        if not m:
+            continue
+        rest = m.group("rest") or ""
+        proto = ("udp" if "UDP" in rest else "icmp" if "ICMP" in rest
+                 else "tcp" if ("Flags" in rest or "ack" in rest or "seq" in rest) else "ip")
+        flows.append({
+            "src": m.group("src"), "dst": m.group("dst"), "proto": proto,
+            "sport": int(m.group("sport")) if m.group("sport") else None,
+            "dport": int(m.group("dport")) if m.group("dport") else None,
+        })
+    return flows
+
+
 class DockerLocalProvider(RangeProvider):
     name = "docker-local"
     infra_class = "container"
@@ -899,6 +925,39 @@ class DockerLocalProvider(RangeProvider):
             return ""
         text = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)
         return text[: cls.EXEC_OUTPUT_CAP]
+
+    def capture_traffic(self, instance_id, *, seconds=6, max_packets=200):
+        """MITM in-path observation: tcpdump on the arena's primary bridge via a
+        short-lived host-network sidecar. A bridge-attached container only sees its
+        own + broadcast traffic, so we capture on the *bridge device* (which sees
+        all intra-arena unicast). Privileged by nature (NET_RAW + host net) —
+        gated upstream to an mitm-bound agent. Bounded by seconds/max_packets."""
+        seconds = max(1, min(int(seconds), config.MITM_CAPTURE_MAX_SECONDS))
+        max_packets = max(1, min(int(max_packets), 2000))
+        nets = self.client.networks.list(filters={"label": f"{LABEL_LAB_ID}={instance_id}"})
+        # Capture on a real SEGMENT bridge (where node↔node traffic flows), NOT the
+        # auxiliary ingress / mirror / setupgw bridges this arena also creates.
+        segs = [n for n in nets if not n.name.endswith(("-ingress", "-mirror", "-setupgw"))]
+        if not segs:
+            return {"success": False, "error": "no arena segment networks to observe"}
+        default_name = self._network_name(instance_id, _DEFAULT_SEGMENT)
+        net = next((n for n in segs if n.name == default_name), segs[0])
+        bridge = "br-" + net.id[:12]
+        cmd = ["sh", "-c",
+               f"timeout {seconds} tcpdump -i {bridge} -nn -tt -l -c {max_packets} 2>/dev/null; true"]
+        try:
+            raw = self.client.containers.run(
+                config.MITM_CAPTURE_IMAGE, command=cmd, network_mode="host",
+                cap_add=["NET_RAW", "NET_ADMIN"], remove=True, stdout=True, stderr=False,
+                labels={LABEL_LAB_ID: instance_id},
+            )
+        except Exception as e:  # noqa: BLE001 - surface capture failures cleanly
+            logger.error(f"[{instance_id}] MITM capture on {bridge} failed: {e}")
+            return {"success": False, "error": f"capture failed: {e}"}
+        flows = _parse_tcpdump(self._decode(raw))[:max_packets]
+        logger.info(f"[{instance_id}] MITM capture on {bridge}: {len(flows)} packet(s) in {seconds}s")
+        return {"success": True, "bridge": bridge, "segment": net.name,
+                "packets": len(flows), "flows": flows}
 
     def destroy(self, instance_id):
         try:

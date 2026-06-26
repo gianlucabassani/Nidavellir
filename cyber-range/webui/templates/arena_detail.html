@@ -140,6 +140,16 @@
 </div>
 {% endif %}
 
+<div class="card pad-0" id="bindings-card" style="margin-top:18px">
+  <div class="card-head">
+    <h3><i class="fa-solid fa-key"></i> Agent bindings
+      <span class="muted" style="font-weight:400;font-size:12px">— which BYO agent key may drive this arena, in what stance (D1)</span></h3>
+    <div class="spacer"></div>
+    <span id="bindings-state" class="badge badge--idle">…</span>
+  </div>
+  <div id="bindings-body" style="padding:16px"><div class="muted" style="font-size:13px">Loading…</div></div>
+</div>
+
 <div class="card pad-0" style="margin-top:18px">
   <div class="card-head"><h3><i class="fa-solid fa-clipboard-list"></i> Activity</h3>
     <div class="spacer"></div>
@@ -174,6 +184,9 @@
   Nidavellir.initArena();
   if (document.getElementById("configurator-card")) {
     Nidavellir.initConfigurator({{ instance_id | tojson }});
+  }
+  if (document.getElementById("bindings-card")) {
+    Nidavellir.initBindings({{ instance_id | tojson }});
   }
 </script>
 {% endblock %}

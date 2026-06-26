@@ -665,6 +665,56 @@
     cfgApi("/finish", "POST").then(() => refreshConfigurator());
   }
 
+  /* ---- agent bindings (D1): authorize which BYO agent drives this arena - */
+  function initBindings(arena) {
+    const body = document.getElementById("bindings-body");
+    const state = document.getElementById("bindings-state");
+    if (!body) return;
+    const STANCES = [["", "unrestricted"], ["attacker", "attacker"], ["mitm", "mitm"],
+                     ["defender", "defender"], ["configurator", "configurator"]];
+    const bmsg = (t, cls) => { const m = document.getElementById("bind-msg"); if (m) { m.className = "import-msg " + (cls || ""); m.textContent = t; } };
+
+    function render(list) {
+      if (state) { state.className = "badge badge--" + (list.length ? "accent" : "idle"); state.textContent = list.length + " bound"; }
+      const rows = list.length
+        ? '<div class="bindings-list">' + list.map((b) =>
+            '<div class="binding-row"><span class="mono grow">' + escapeHtml(b.agent_name) + '</span>' +
+            '<span class="badge badge--' + (b.stance ? "info" : "idle") + '">' + escapeHtml(b.stance || "unrestricted") + '</span>' +
+            '<span class="muted" style="font-size:12px">by ' + escapeHtml(b.granted_by || "—") + (b.auto ? " · auto" : "") + '</span>' +
+            '<button class="btn btn-danger btn-sm" data-revoke="' + encodeURIComponent(b.agent_name) + '">Revoke</button></div>').join("") + '</div>'
+        : '<div class="cfg-note">No agents bound. Grant a key below to authorize a BYO agent (by key name) to drive this arena in a stance.</div>';
+      const opts = STANCES.map((s) => '<option value="' + s[0] + '">' + s[1] + '</option>').join("");
+      body.innerHTML = rows +
+        '<div class="binding-grant"><input class="input mono" id="bind-name" placeholder="agent key name" style="max-width:220px">' +
+        '<select class="select" id="bind-stance" style="max-width:170px">' + opts + '</select>' +
+        '<button class="btn btn-primary btn-sm" id="bind-grant">Grant</button></div>' +
+        '<div class="import-msg" id="bind-msg" style="margin-top:8px"></div>';
+      const g = document.getElementById("bind-grant");
+      if (g) g.addEventListener("click", doGrant);
+      body.querySelectorAll("[data-revoke]").forEach((btn) =>
+        btn.addEventListener("click", () => doRevoke(decodeURIComponent(btn.dataset.revoke))));
+    }
+
+    function refresh() {
+      fetch("/api/arenas/" + arena + "/bindings").then((r) => r.json())
+        .then((d) => render(d.bindings || []))
+        .catch(() => { body.innerHTML = '<div class="cfg-note">Couldn\'t load bindings.</div>'; });
+    }
+    function doGrant() {
+      const name = document.getElementById("bind-name").value.trim();
+      if (!name) { bmsg("Enter an agent key name.", "err"); return; }
+      const stance = document.getElementById("bind-stance").value;
+      postJson("/api/arenas/" + arena + "/bindings", { agent_name: name, stance: stance || null })
+        .then(({ status, data }) => { if (status === 200) refresh(); else bmsg(data.error || data.detail || ("HTTP " + status), "err"); });
+    }
+    function doRevoke(name) {
+      fetch("/api/arenas/" + arena + "/bindings/" + encodeURIComponent(name),
+        { method: "DELETE", headers: { "X-CSRFToken": csrfToken() } })
+        .then((r) => r.json().catch(() => ({}))).then(() => refresh());
+    }
+    refresh();
+  }
+
   /* ---- agents console (live connections + activity trace) ------------- */
   let agentsTimer = null;
 
@@ -1246,6 +1296,75 @@
     initScenarioPreview();
   }
 
+  /* ---- arena wizard (guided SUT authoring: target -> consent -> review) - */
+  function initWizard() {
+    const form = document.getElementById("wiz-form");
+    if (!form) return;
+    const panels = Array.prototype.slice.call(document.querySelectorAll(".wiz-panel"));
+    const stepBtns = Array.prototype.slice.call(document.querySelectorAll("#wiz-steps button"));
+    const back = document.getElementById("wiz-back");
+    const next = document.getElementById("wiz-next");
+    const launch = document.getElementById("wiz-launch");
+    let step = 1;
+    const ports = () => (document.getElementById("wiz-ports").value.match(/\d+/g) || []).map(Number).slice(0, 8);
+
+    const show = (n) => {
+      step = n;
+      panels.forEach((p) => { p.hidden = +p.dataset.step !== n; });
+      stepBtns.forEach((b) => b.classList.toggle("on", +b.dataset.step === n));
+      back.hidden = n === 1;
+      next.hidden = n === 3;
+      launch.hidden = n !== 3;
+      if (n === 3) review();
+    };
+
+    function review() {
+      const msg = document.getElementById("wiz-msg");
+      const recap = document.getElementById("wiz-recap");
+      msg.className = "import-msg"; msg.textContent = "Validating…";
+      const body = {
+        instance_id: document.getElementById("wiz-name").value.trim() || "wizard-preview",
+        repo: document.getElementById("wiz-repo").value.trim(),
+        ref: document.getElementById("wiz-ref").value.trim() || null,
+        ports: ports(),
+        include_attacker: document.getElementById("wiz-atk").checked,
+      };
+      const recapRows = [
+        ["Repository", body.repo + (body.ref ? " @ " + body.ref : "")],
+        ["Ports", body.ports.length ? body.ports.join(", ") : "—"],
+        ["Attacker foothold", body.include_attacker ? "Kali" : "none"],
+        ["Configured by", document.getElementById("wiz-mode").value === "hitl" ? "HITL (propose → approve)" : "operator shell"],
+        ["Setup egress", document.getElementById("wiz-egress").checked ? "open (revoked before engagement)" : "off"],
+        ["Time-box / budget", document.getElementById("wiz-tb").value + "s / " + document.getElementById("wiz-budget").value + " steps"],
+      ];
+      recap.innerHTML = recapRows.map((r) =>
+        '<div class="wiz-recap__row"><dt>' + escapeHtml(r[0]) + '</dt><dd class="mono">' + escapeHtml(String(r[1])) + '</dd></div>').join("");
+      postJson("/api/arenas/sut/preview", body).then(({ status, data }) => {
+        if (status === 200 && data.valid) {
+          renderSpecTopology("wiz-topo", data.topology);
+          const w = (data.warnings || []).length ? "  ⚠ " + data.warnings.join("; ") : "";
+          msg.className = "import-msg ok";
+          msg.textContent = "Valid ✓ " + (data.summary ? data.summary.nodes + " node(s)" : "") + w;
+        } else {
+          renderSpecTopology("wiz-topo", null);
+          msg.className = "import-msg err";
+          msg.textContent = "Invalid: " + (data.errors ? data.errors.join("; ") : (data.detail || ("HTTP " + status)));
+        }
+      }).catch(() => { msg.className = "import-msg err"; msg.textContent = "Preview request failed."; });
+    }
+
+    next.addEventListener("click", () => {
+      // step 1 needs a valid name + repo before advancing (uses native validity)
+      if (step === 1) {
+        const name = document.getElementById("wiz-name"), repo = document.getElementById("wiz-repo");
+        if (!name.reportValidity() || !repo.reportValidity()) return;
+      }
+      show(Math.min(step + 1, 3));
+    });
+    back.addEventListener("click", () => show(Math.max(step - 1, 1)));
+    show(1);
+  }
+
   /* ---- inventory (per-card machine line-up + topology rail) ----------- */
   function initInventory() {
     const cards = Array.prototype.slice.call(document.querySelectorAll(".inv-card[data-scenario-id]"));
@@ -1317,10 +1436,10 @@
   window.Nidavellir = {
     initArena, renderTopology, renderSpecTopology,
     initScenarioPreview, initScenariosBrowser,
-    initDashboard, initLogs, initLaunch, initInventory, initSettings,
+    initDashboard, initLogs, initLaunch, initWizard, initInventory, initSettings,
     openModelModal, closeModelModal, openModelConfig, saveModel, removeModel, testModel,
     toggleCopilot, sendCopilot,
-    initConfigurator, cfgStart, cfgRunStep, cfgDecide, cfgGenerate, cfgFinish,
+    initConfigurator, cfgStart, cfgRunStep, cfgDecide, cfgGenerate, cfgFinish, initBindings,
     initAgents,
     fit: function () { const cy = specCy["topo"]; if (cy) cy.fit(null, 36); },
   };

@@ -252,7 +252,7 @@ def test_current_agent_reports_latest_announced_model(client, monkeypatch):
     """The chip endpoint surfaces the newest agent_session event's model/provider."""
     import app as webui_module
 
-    monkeypatch.setattr(webui_module, "_events", lambda limit=100: [
+    monkeypatch.setattr(webui_module, "_events", lambda limit=100, type=None: [
         {"type": "agent_exec", "lab_id": "arena-9", "payload": {"node": "kali"}},
         {"type": "agent_session", "lab_id": "arena-9", "ts": "2026-06-18 10:00:00",
          "actor": "agent-x",
@@ -418,6 +418,60 @@ def test_vulhub_import_proxy_relays_unreachable_backend(client):
     resp = client.post("/api/scenarios/import/vulhub", json={"path": "a/b"},
                        headers={"X-CSRFToken": token})
     assert resp.status_code == 502 and "error" in resp.get_json()
+
+
+def test_wizard_page_renders(client):
+    _login(client)
+    r = client.get("/wizard")
+    assert r.status_code == 200
+    assert b"Software-Under-Test Wizard" in r.data and b"wiz-form" in r.data
+
+
+def test_sut_preview_proxy_relays_unreachable_backend(client):
+    _login(client)
+    token = _csrf_token(client, "/")
+    r = client.post("/api/arenas/sut/preview",
+                    json={"instance_id": "w", "repo": "https://github.com/o/p"},
+                    headers={"X-CSRFToken": token})
+    assert r.status_code == 502 and "error" in r.get_json()
+
+
+def test_grant_binding_proxy_requires_csrf(client):
+    _login(client)
+    assert client.post("/api/arenas/a1/bindings",
+                       json={"agent_name": "x", "stance": "attacker"}).status_code == 400
+
+
+def test_grant_binding_proxy_relays_name_and_stance(client, monkeypatch):
+    import app as webui_module
+
+    captured = {}
+
+    class _FakeResp:
+        status_code = 200
+
+        def json(self):
+            return {"bound": True}
+
+    def fake_post(url, json=None, **kwargs):
+        captured["url"], captured["json"] = url, json
+        return _FakeResp()
+
+    monkeypatch.setattr(webui_module.requests, "post", fake_post)
+    _login(client)
+    token = _csrf_token(client, "/")
+    r = client.post("/api/arenas/a1/bindings",
+                    json={"agent_name": "  red-team  ", "stance": "attacker"},
+                    headers={"X-CSRFToken": token})
+    assert r.status_code == 200
+    assert captured["url"].endswith("/arenas/a1/bindings")
+    assert captured["json"] == {"agent_name": "red-team", "stance": "attacker"}
+
+
+def test_list_bindings_proxy_offline_returns_empty(client):
+    _login(client)
+    data = client.get("/api/arenas/a1/bindings").get_json()
+    assert data == {"bindings": []}   # backend offline → empty, not a 500
 
 
 def test_scenario_generate_proxy_requires_csrf(client):
