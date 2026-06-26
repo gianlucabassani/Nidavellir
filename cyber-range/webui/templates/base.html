@@ -93,7 +93,7 @@
       </span>
     </header>
 
-    <main class="content">
+    <main class="content {% block content_mod %}{% endblock %}">
       <div class="flashes" id="flashes">
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% for category, message in messages %}

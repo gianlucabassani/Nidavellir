@@ -99,11 +99,16 @@
 {% if score %}
 <div class="card pad-0" style="margin-top:18px">
   <div class="card-head"><h3><i class="fa-solid fa-bug"></i> Challenges</h3>
+    <span class="muted" style="font-weight:400;font-size:12px">— ground truth, hidden by default (spoilers)</span>
     <div class="spacer"></div>
-    <span class="muted" style="font-size:12.5px">
+    <span class="muted" id="ch-summary" hidden style="font-size:12.5px">
       {{ score.found|length }} / {{ score.total_vulnerabilities }} found · {{ score.points_earned }}/{{ score.points_total }} pts
     </span>
+    <label class="check" style="margin:0 0 0 14px"><input type="checkbox" id="reveal-ch"
+      onchange="document.getElementById('ch-body').hidden=!this.checked;document.getElementById('ch-summary').hidden=!this.checked;">
+      <span>Reveal</span></label>
   </div>
+  <div id="ch-body" hidden>
   <div style="padding:12px 16px 4px">
     {% set pct = (score.found|length * 100 // score.total_vulnerabilities) if score.total_vulnerabilities else 0 %}
     <div style="height:8px;background:var(--border);border-radius:999px;overflow:hidden">
@@ -135,29 +140,21 @@
     <i class="fa-solid fa-eye-slash"></i> Operator view (the benchmark baseline) — hidden from the agent.
     {{ score.findings_submitted }} finding{{ 's' if score.findings_submitted != 1 }} submitted.
   </div>
+  </div>
 </div>
 {% endif %}
 
-{% if state == 'active' %}
-<div class="card pad-0" id="configurator-card" style="margin-top:18px">
+<!-- Unified engagement: who drives this arena, in what role — the Setup
+     (configurator) hand-off plus every agent binding (D1), in one roles board. -->
+<div class="card pad-0" id="engagement-card" style="margin-top:18px">
   <div class="card-head">
-    <h3><i class="fa-solid fa-screwdriver-wrench"></i> Configurator
-      <span class="muted" style="font-weight:400;font-size:12px">— bring the service up (SUT setup)</span></h3>
+    <h3><i class="fa-solid fa-users-gear"></i> Engagement
+      <span class="muted" style="font-weight:400;font-size:12px">— who drives this arena, in what role</span></h3>
     <div class="spacer"></div>
-    <span id="cfg-state" class="badge badge--idle">…</span>
+    <span id="eng-state" class="badge badge--idle">…</span>
   </div>
-  <div id="cfg-body" style="padding:16px"><div class="muted" style="font-size:13px">Loading…</div></div>
-</div>
-{% endif %}
-
-<div class="card pad-0" id="bindings-card" style="margin-top:18px">
-  <div class="card-head">
-    <h3><i class="fa-solid fa-key"></i> Agent bindings
-      <span class="muted" style="font-weight:400;font-size:12px">— which BYO agent key may drive this arena, in what stance (D1)</span></h3>
-    <div class="spacer"></div>
-    <span id="bindings-state" class="badge badge--idle">…</span>
-  </div>
-  <div id="bindings-body" style="padding:16px"><div class="muted" style="font-size:13px">Loading…</div></div>
+  <div id="eng-board"><div class="muted" style="padding:16px;font-size:13px">Loading…</div></div>
+  <div id="eng-actions"></div>
 </div>
 
 <div class="card pad-0" style="margin-top:18px">
@@ -192,11 +189,8 @@
   document.body.dataset.instanceId = "{{ instance_id }}";
   window.NIDAVELLIR_ARENA = {{ instance_id | tojson }};
   Nidavellir.initArena();
-  if (document.getElementById("configurator-card")) {
-    Nidavellir.initConfigurator({{ instance_id | tojson }});
-  }
-  if (document.getElementById("bindings-card")) {
-    Nidavellir.initBindings({{ instance_id | tojson }});
+  if (document.getElementById("engagement-card")) {
+    Nidavellir.initEngagement({{ instance_id | tojson }}, {{ (state == 'active') | tojson }});
   }
 </script>
 {% endblock %}

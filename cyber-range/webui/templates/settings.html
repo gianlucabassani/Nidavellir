@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Settings{% endblock %}
 {% block crumb %}Settings{% endblock %}
+{% block content_mod %}content--form{% endblock %}
 
 {% block content %}
 <div class="page-head">
@@ -11,7 +12,7 @@
   </div>
 </div>
 
-<div class="grid" style="grid-template-columns:1fr; gap:16px; max-width:780px">
+<div class="grid" style="grid-template-columns:1fr; gap:16px">
   <!-- model connection -->
   <div class="card pad-0">
     <div class="card-head"><span class="label">Model connection</span>
