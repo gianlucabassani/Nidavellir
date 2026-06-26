@@ -7,6 +7,7 @@
   <title>Nidavellir · {% block title %}Console{% endblock %}</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='anvil_logo.png') }}">
   {% block head %}{% endblock %}
 </head>
 <body data-page="{{ active }}">
