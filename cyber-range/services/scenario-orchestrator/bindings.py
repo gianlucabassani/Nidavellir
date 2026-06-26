@@ -9,9 +9,12 @@ gateway's stance gate is client-side only and a direct REST call bypassed it.
 
 A **binding** authorizes one agent principal to act on one arena. State is
 event-backed (no migration — mirrors `setup_phase` / `agent_session`): an
-``agent_binding`` event grants, ``agent_binding_revoked`` revokes. The current
-set is *derived* newest-first from the arena's event stream, so it survives
-restarts and the orchestrator stays the single enforcement point.
+``agent_binding`` event grants, ``agent_binding_revoked`` revokes, and
+``agent_binding_paused`` / ``agent_binding_resumed`` toggle a reversible halt
+(the P2-11 kill-switch — a paused binding still exists but its gated actions
+return 423 until resumed; a *kill* is a revoke). The current set is *derived*
+newest-first from the arena's event stream, so it survives restarts and the
+orchestrator stays the single enforcement point.
 
 Bindings constrain the **agent** role only — operators/admins author and run
 engagements and manage every arena, so they are never bound (the API bypasses the
@@ -27,7 +30,9 @@ A binding carries a **stance** (or ``None``):
 
 BINDING_GRANT = "agent_binding"
 BINDING_REVOKE = "agent_binding_revoked"
-BINDING_EVENT_TYPES = (BINDING_GRANT, BINDING_REVOKE)
+BINDING_PAUSE = "agent_binding_paused"      # P2-11: reversible halt (kill = revoke)
+BINDING_RESUME = "agent_binding_resumed"
+BINDING_EVENT_TYPES = (BINDING_GRANT, BINDING_REVOKE, BINDING_PAUSE, BINDING_RESUME)
 # Bindings are few per arena (≈ one per agent); a generous window covers any arena
 # without engagement noise mattering (these types are fetched on their own anyway).
 BINDING_EVENT_WINDOW = 256
@@ -58,13 +63,29 @@ def stance_permits(stance: str | None, capability: str) -> bool:
     return capability in _STANCE_CAPS.get(stance, set())
 
 
-def _binding_view(agent_name: str, payload: dict, ts) -> dict:
+def is_paused(events: list[dict], agent_name: str) -> bool:
+    """Whether `agent_name` is currently PAUSED (P2-11) — the newest pause/resume
+    event for that agent decides (a pause with no later resume → paused). A kill is
+    a revoke (see `binding_for`), not a pause."""
+    for e in events:  # newest-first
+        if (e.get("payload") or {}).get("agent_name") != agent_name:
+            continue
+        t = e.get("type")
+        if t == BINDING_PAUSE:
+            return True
+        if t in (BINDING_RESUME, BINDING_GRANT, BINDING_REVOKE):
+            return False  # a resume / fresh grant / revoke clears the paused state
+    return False
+
+
+def _binding_view(agent_name: str, payload: dict, ts, paused: bool = False) -> dict:
     return {
         "agent_name": agent_name,
         "stance": payload.get("stance"),
         "granted_by": payload.get("granted_by"),
         "session_id": payload.get("session_id"),
         "auto": bool(payload.get("auto")),
+        "paused": paused,
         "ts": ts,
     }
 
@@ -81,21 +102,24 @@ def binding_for(events: list[dict], agent_name: str) -> dict | None:
         if t == BINDING_REVOKE:
             return None
         if t == BINDING_GRANT:
-            return _binding_view(agent_name, p, e.get("ts"))
+            return _binding_view(agent_name, p, e.get("ts"), paused=is_paused(events, agent_name))
+        # pause/resume events don't change boundness — keep scanning for the grant
     return None
 
 
 def active_bindings(events: list[dict]) -> list[dict]:
-    """All currently-active bindings (one per agent), newest grant first. An agent
-    whose most-recent binding event is a revoke is omitted."""
-    seen: set[str] = set()
-    out: list[dict] = []
+    """All currently-active bindings (one per agent), each with its `paused` state.
+    Boundness is decided by the newest GRANT/REVOKE for the agent (pause/resume
+    don't un-bind); an agent whose newest grant/revoke is a revoke is omitted."""
+    decided: dict[str, dict | None] = {}
     for e in events:  # newest-first
         p = e.get("payload") or {}
-        name = p.get("agent_name")
-        if not name or name in seen:
+        name, t = p.get("agent_name"), e.get("type")
+        if not name or name in decided:
             continue
-        seen.add(name)
-        if e.get("type") == BINDING_GRANT:
-            out.append(_binding_view(name, p, e.get("ts")))
-    return out
+        if t == BINDING_REVOKE:
+            decided[name] = None
+        elif t == BINDING_GRANT:
+            decided[name] = _binding_view(name, p, e.get("ts"), paused=is_paused(events, name))
+        # pause/resume don't decide boundness — leave `name` undecided, keep scanning
+    return [v for v in decided.values() if v is not None]

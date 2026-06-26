@@ -404,6 +404,17 @@
   let copilotBusy = false;
   const currentArena = () => window.NIDAVELLIR_ARENA || null;
 
+  function toggleSidebar() {
+    // < 960px: off-canvas open/close. Desktop: collapse to an icon-only rail
+    // (items stay clickable), persisted across pages.
+    if (window.innerWidth < 960) {
+      document.getElementById("sidebar").classList.toggle("open");
+      return;
+    }
+    const collapsed = document.body.classList.toggle("nav-collapsed");
+    try { localStorage.setItem("nav-collapsed", collapsed ? "1" : "0"); } catch (e) {}
+  }
+
   function toggleCopilot() {
     const el = document.getElementById("copilot");
     if (!el) return;
@@ -677,11 +688,18 @@
     function render(list) {
       if (state) { state.className = "badge badge--" + (list.length ? "accent" : "idle"); state.textContent = list.length + " bound"; }
       const rows = list.length
-        ? '<div class="bindings-list">' + list.map((b) =>
-            '<div class="binding-row"><span class="mono grow">' + escapeHtml(b.agent_name) + '</span>' +
+        ? '<div class="bindings-list">' + list.map((b) => {
+            const enc = encodeURIComponent(b.agent_name);
+            const pauseBtn = b.paused
+              ? '<button class="btn btn-primary btn-sm" data-resume="' + enc + '">Resume</button>'
+              : '<button class="btn btn-sm" data-pause="' + enc + '">Pause</button>';
+            return '<div class="binding-row' + (b.paused ? " binding-row--paused" : "") + '"><span class="mono grow">' + escapeHtml(b.agent_name) + '</span>' +
+            (b.paused ? '<span class="badge badge--warn" title="kill-switch engaged — actions halted">paused</span>' : "") +
             '<span class="badge badge--' + (b.stance ? "info" : "idle") + '">' + escapeHtml(b.stance || "unrestricted") + '</span>' +
             '<span class="muted" style="font-size:12px">by ' + escapeHtml(b.granted_by || "—") + (b.auto ? " · auto" : "") + '</span>' +
-            '<button class="btn btn-danger btn-sm" data-revoke="' + encodeURIComponent(b.agent_name) + '">Revoke</button></div>').join("") + '</div>'
+            pauseBtn +
+            '<button class="btn btn-danger btn-sm" data-revoke="' + enc + '">Revoke</button></div>';
+          }).join("") + '</div>'
         : '<div class="cfg-note">No agents bound. Grant a key below to authorize a BYO agent (by key name) to drive this arena in a stance.</div>';
       const opts = STANCES.map((s) => '<option value="' + s[0] + '">' + s[1] + '</option>').join("");
       body.innerHTML = rows +
@@ -693,6 +711,10 @@
       if (g) g.addEventListener("click", doGrant);
       body.querySelectorAll("[data-revoke]").forEach((btn) =>
         btn.addEventListener("click", () => doRevoke(decodeURIComponent(btn.dataset.revoke))));
+      body.querySelectorAll("[data-pause]").forEach((btn) =>
+        btn.addEventListener("click", () => doPauseResume(decodeURIComponent(btn.dataset.pause), "pause")));
+      body.querySelectorAll("[data-resume]").forEach((btn) =>
+        btn.addEventListener("click", () => doPauseResume(decodeURIComponent(btn.dataset.resume), "resume")));
     }
 
     function refresh() {
@@ -712,11 +734,20 @@
         { method: "DELETE", headers: { "X-CSRFToken": csrfToken() } })
         .then((r) => r.json().catch(() => ({}))).then(() => refresh());
     }
+    function doPauseResume(name, action) {
+      // action: "pause" (kill-switch) | "resume"
+      postJson("/api/arenas/" + arena + "/bindings/" + encodeURIComponent(name) + "/" + action)
+        .then(({ status, data }) => {
+          if (status === 200) { bmsg(action === "pause" ? "Agent paused — actions halted." : "Agent resumed.", "ok"); refresh(); }
+          else bmsg(data.error || data.detail || ("HTTP " + status), "err");
+        });
+    }
     refresh();
   }
 
   /* ---- agents console (live connections + activity trace) ------------- */
   let agentsTimer = null;
+  let agentConns = [];   // latest connections (the agent config modal + usage graph read this)
 
   function initAgents() {
     let data = {};
@@ -732,6 +763,7 @@
   function renderAgents(d) {
     d = d || {};
     const conns = d.connections || [];
+    agentConns = conns;                       // shared with the config modal + usage graph
     const tl = d.timeline || [];
     const count = document.getElementById("agents-count");
     if (count) count.textContent = conns.length + " connection" + (conns.length === 1 ? "" : "s");
@@ -742,6 +774,8 @@
         ? '<div class="agent-grid">' + conns.map(agentCard).join("") + "</div>"
         : '<div class="muted" style="font-size:13px">No agents connected yet. Connect a bring-your-own agent through the MCP gateway (stance <b>attacker</b> or <b>configurator</b>); it appears here once it announces itself or runs a command.</div>';
     }
+    agentUsage();
+
     const tw = document.getElementById("agents-timeline");
     if (tw) {
       tw.innerHTML = tl.length
@@ -750,11 +784,12 @@
     }
   }
 
-  function agentCard(c) {
+  function agentCard(c, idx) {
     const b = brandOf(c.provider);
     const dot = c.active ? "dot--active" : "dot--standby";
-    const arena = encodeURIComponent(c.arena_id || "");
-    return '<div class="agent-card">' +
+    // Clicking the card opens the agent CONFIG modal (details + actions) — not
+    // a jump to the lab (the modal has an explicit "Open arena" action).
+    return '<div class="agent-card" role="button" tabindex="0" onclick="Nidavellir.openAgentConfig(' + idx + ')">' +
       '<div class="agent-card__top">' +
         '<span class="badge badge--accent">' + escapeHtml(c.stance || "agent") + "</span>" +
         '<span class="dot ' + dot + '" title="' + (c.active ? "recent activity" : "idle") + '"></span>' +
@@ -763,13 +798,171 @@
         '<span class="agent-card__logo" style="background:' + b.color + '">' + b.svg + "</span>" +
         '<span class="mono">' + escapeHtml(c.model || b.name) + "</span></div>" +
       '<div class="muted" style="font-size:12px;margin:2px 0 8px">' + escapeHtml(b.name) + "</div>" +
-      '<a class="agent-card__arena mono" href="/arena/' + arena + '">' +
-        escapeHtml(c.arena_name || "") + ' <span class="faint">' + escapeHtml((c.arena_id || "").slice(0, 8)) + "</span></a>" +
+      '<div class="agent-card__arena mono">' +
+        escapeHtml(c.arena_name || "") + ' <span class="faint">' + escapeHtml((c.arena_id || "").slice(0, 8)) + "</span></div>" +
       '<div class="agent-card__stats">' +
         "<span><b>" + (c.commands || 0) + "</b> cmds</span>" +
         "<span><b>" + (c.findings || 0) + "</b> findings</span>" +
         '<span class="faint" title="last seen">' + escapeHtml(c.last_seen || "—") + "</span>" +
       "</div></div>";
+  }
+
+  /* ---- usage graph: per-model step consumption, filterable by stance ----- */
+  let usageStance = "all";
+  function _statBox(n, label) {
+    return '<div class="usage-stat"><div class="usage-stat__n">' + n + '</div>' +
+      '<div class="usage-stat__l">' + label + "</div></div>";
+  }
+  function agentUsage() {
+    const wrap = document.getElementById("agents-usage");
+    if (!wrap) return;
+    const conns = agentConns || [];
+    const stances = Array.from(new Set(conns.map((c) => c.stance || "agent"))).sort();
+    if (usageStance !== "all" && !stances.includes(usageStance)) usageStance = "all";
+    const shown = usageStance === "all" ? conns : conns.filter((c) => (c.stance || "agent") === usageStance);
+
+    const byModel = {};
+    shown.forEach((c) => {
+      const k = c.model || brandOf(c.provider).name;
+      const m = byModel[k] || (byModel[k] = { model: k, provider: c.provider, steps: 0, findings: 0, conns: 0 });
+      m.steps += c.commands || 0; m.findings += c.findings || 0; m.conns += 1;
+    });
+    const models = Object.values(byModel).sort((a, b) => b.steps - a.steps);
+    const totalSteps = models.reduce((s, m) => s + m.steps, 0);
+    const totalFinds = models.reduce((s, m) => s + m.findings, 0);
+    const maxSteps = Math.max.apply(null, models.map((m) => m.steps).concat([1]));
+
+    const chips = '<div class="usage-filter">' +
+      ['all'].concat(stances).map((s) =>
+        '<button class="usage-chip' + (usageStance === s ? " on" : "") + '" data-stance="' + escapeHtml(s) + '">' +
+        (s === "all" ? "All" : escapeHtml(s)) + "</button>").join("") + "</div>";
+
+    const summary = '<div class="usage-summary">' +
+      _statBox(totalSteps, "steps") + _statBox(totalFinds, "findings") +
+      _statBox(models.length, "models") + _statBox(shown.length, "connections") + "</div>";
+
+    const bars = models.length
+      ? '<div class="usage-bars">' + models.map((m) => {
+          const b = brandOf(m.provider);
+          const pct = Math.round((m.steps / maxSteps) * 100);
+          return '<div class="usage-row">' +
+            '<span class="usage-row__logo" style="background:' + b.color + '">' + b.svg + "</span>" +
+            '<div class="grow">' +
+              '<div class="usage-row__head"><span class="mono">' + escapeHtml(m.model) + "</span>" +
+                '<span class="usage-row__val mono">' + m.steps + " steps" + (m.findings ? " · " + m.findings + " find" : "") + "</span></div>" +
+              '<div class="usage-bar"><div class="usage-bar__fill" style="width:' + pct + "%;background:" + b.color + '"></div></div>' +
+              '<div class="usage-row__meta faint">' + m.conns + " connection" + (m.conns === 1 ? "" : "s") + " · " + escapeHtml(b.name) + "</div>" +
+            "</div></div>";
+        }).join("") + "</div>"
+      : '<div class="muted" style="font-size:13px;margin-top:10px">No usage for this filter yet — steps accrue as agents run commands. ' +
+        "(Token / $ cost needs the agent to report usage; this graphs <b>steps</b>, the platform's unit of agent work.)</div>";
+
+    wrap.innerHTML = chips + summary + bars;
+    wrap.querySelectorAll("[data-stance]").forEach((btn) =>
+      btn.addEventListener("click", () => { usageStance = btn.dataset.stance; agentUsage(); }));
+  }
+
+  /* ---- agent config modal (opened from a connection card) --------------- */
+  function openAgentConfig(idx) {
+    const c = (agentConns || [])[idx];
+    if (!c) return;
+    const b = brandOf(c.provider);
+    const arena = encodeURIComponent(c.arena_id || "");
+    document.getElementById("agent-modal-head").innerHTML =
+      '<span class="model-bubble" style="background:' + b.color + '">' + b.svg + "</span>" +
+      '<div><div class="modal__title mono">' + escapeHtml(c.model || b.name) + "</div>" +
+      '<div class="modal__sub">' + escapeHtml(b.name) + " · " + escapeHtml(c.stance || "agent") +
+        (c.active ? ' · <span style="color:var(--ok)">active</span>' : " · idle") + "</div></div>";
+    const kv = [
+      ["Stance", c.stance || "agent"], ["Model", c.model || "—"], ["Provider", b.name],
+      ["Arena", (c.arena_name || "—") + " · " + (c.arena_id || "").slice(0, 8)],
+      ["Arena status", c.status || "—"], ["Steps", c.commands || 0], ["Findings", c.findings || 0],
+      ["Last seen", c.last_seen || "—"], ["Agent key", c.actor || "—"],
+    ];
+    document.getElementById("agent-modal-kv").innerHTML = kv.map((r) =>
+      "<dt>" + escapeHtml(r[0]) + "</dt><dd class='mono'>" + escapeHtml(String(r[1])) + "</dd>").join("");
+    const msg = document.getElementById("agent-modal-msg");
+    if (msg) { msg.textContent = ""; msg.className = "import-msg"; }
+    // Render base action immediately; the binding-dependent actions (pause /
+    // resume / revoke) resolve once we know whether a live binding exists and
+    // whether it's currently paused (P2-11 kill-switch).
+    renderAgentActions(arena, c.actor, null, true);
+    if (c.actor) {
+      fetch("/api/arenas/" + arena + "/bindings").then((r) => r.json())
+        .then((d) => {
+          const b = (d.bindings || []).find((x) => x.agent_name === c.actor) || null;
+          renderAgentActions(arena, c.actor, b, false);
+        })
+        .catch(() => renderAgentActions(arena, c.actor, null, false));
+    }
+    document.getElementById("agent-modal").hidden = false;
+  }
+  // Build the agent-modal action row. `binding` is the live binding (or null if
+  // the agent has no active binding); `loading` shows a transient hint while we
+  // resolve it.
+  function renderAgentActions(arena, name, binding, loading) {
+    const el = document.getElementById("agent-modal-actions");
+    if (!el) return;
+    const acts = ['<a class="btn btn-primary" href="/arena/' + arena + '"><i class="fa-solid fa-up-right-from-square"></i> Open arena</a>'];
+    const enc = name ? encodeURIComponent(name) : "";
+    if (name && !loading && binding) {
+      if (binding.paused) {
+        acts.push('<button class="btn btn-primary" onclick="Nidavellir.resumeAgent(\'' + arena + "','" + enc +
+          '\')"><i class="fa-solid fa-play"></i> Resume</button>');
+      } else {
+        acts.push('<button class="btn" onclick="Nidavellir.pauseAgent(\'' + arena + "','" + enc +
+          '\')"><i class="fa-solid fa-pause"></i> Pause</button>');
+      }
+      acts.push('<button class="btn btn-danger" onclick="Nidavellir.revokeAgent(\'' + arena + "','" + enc +
+        '\')"><i class="fa-solid fa-ban"></i> Kill binding</button>');
+    } else if (name && loading) {
+      acts.push('<span class="muted" style="font-size:12px;align-self:center">checking binding…</span>');
+    }
+    el.innerHTML = acts.join("");
+  }
+  function closeAgentConfig() {
+    const m = document.getElementById("agent-modal");
+    if (m) m.hidden = true;
+  }
+  // After a pause/resume/kill, re-resolve the binding so the action row reflects
+  // the new state, and refresh the connection cards.
+  function _reloadAgentBinding(arena, name) {
+    fetch("/api/arenas/" + arena + "/bindings").then((r) => r.json())
+      .then((d) => {
+        const b = (d.bindings || []).find((x) => x.agent_name === decodeURIComponent(name)) || null;
+        renderAgentActions(arena, decodeURIComponent(name), b, false);
+      }).catch(() => {});
+    refreshAgents();
+  }
+  function _agentMsg(cls, text) {
+    const msg = document.getElementById("agent-modal-msg");
+    if (msg) { msg.className = "import-msg " + (cls || ""); msg.textContent = text; }
+  }
+  function revokeAgent(arena, name) {
+    fetch("/api/arenas/" + arena + "/bindings/" + name,
+      { method: "DELETE", headers: { "X-CSRFToken": csrfToken() } })
+      .then((r) => r.json().catch(() => ({})))
+      .then((d) => {
+        _agentMsg("ok", d.revoked ? "Binding killed." : (d.detail || "No active binding for this agent."));
+        _reloadAgentBinding(arena, name);
+      })
+      .catch(() => {});
+  }
+  function pauseAgent(arena, name) {
+    postJson("/api/arenas/" + arena + "/bindings/" + name + "/pause")
+      .then(({ status, data }) => {
+        _agentMsg(status === 200 ? "ok" : "err", status === 200 ? "Agent paused — actions are halted until resumed." : (data.error || data.detail || ("HTTP " + status)));
+        _reloadAgentBinding(arena, name);
+      })
+      .catch(() => {});
+  }
+  function resumeAgent(arena, name) {
+    postJson("/api/arenas/" + arena + "/bindings/" + name + "/resume")
+      .then(({ status, data }) => {
+        _agentMsg(status === 200 ? "ok" : "err", status === 200 ? "Agent resumed." : (data.error || data.detail || ("HTTP " + status)));
+        _reloadAgentBinding(arena, name);
+      })
+      .catch(() => {});
   }
 
   function agentTimeline(tl) {
@@ -1438,7 +1631,8 @@
     initScenarioPreview, initScenariosBrowser,
     initDashboard, initLogs, initLaunch, initWizard, initInventory, initSettings,
     openModelModal, closeModelModal, openModelConfig, saveModel, removeModel, testModel,
-    toggleCopilot, sendCopilot,
+    toggleSidebar, toggleCopilot, sendCopilot,
+    openAgentConfig, closeAgentConfig, revokeAgent, pauseAgent, resumeAgent,
     initConfigurator, cfgStart, cfgRunStep, cfgDecide, cfgGenerate, cfgFinish, initBindings,
     initAgents,
     fit: function () { const cy = specCy["topo"]; if (cy) cy.fit(null, 36); },
@@ -1447,6 +1641,12 @@
     if (e.key === "Escape") { closeModelModal(); }
   });
   document.addEventListener("DOMContentLoaded", function () {
+    // Restore the persisted collapsed-sidebar preference (desktop only).
+    try {
+      if (localStorage.getItem("nav-collapsed") === "1" && window.innerWidth >= 960) {
+        document.body.classList.add("nav-collapsed");
+      }
+    } catch (e) {}
     pollHealth();
     buildProviderMenu();
     pollModel();

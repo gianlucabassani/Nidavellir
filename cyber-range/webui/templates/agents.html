@@ -22,6 +22,16 @@
 </div>
 
 <div class="card pad-0" style="margin-top:18px">
+  <div class="card-head"><h3><i class="fa-solid fa-chart-simple"></i> Usage</h3>
+    <div class="spacer"></div>
+    <span class="muted" style="font-size:12px">steps by model · filter by stance</span>
+  </div>
+  <div id="agents-usage" style="padding:16px">
+    <div class="muted" style="font-size:13px">Loading…</div>
+  </div>
+</div>
+
+<div class="card pad-0" style="margin-top:18px">
   <div class="card-head"><h3><i class="fa-solid fa-timeline"></i> Activity trace</h3>
     <div class="spacer"></div>
     <a href="{{ url_for('audit') }}" class="muted" style="font-size:12.5px">Full audit <i class="fa-solid fa-arrow-right"></i></a>
@@ -32,8 +42,22 @@
 <p class="faint" style="margin-top:14px;font-size:12.5px">
   <i class="fa-solid fa-circle-info"></i>
   Derived from the append-only audit stream (an attribution signal, not a live socket).
-  Per-step trace replay, kill-switch, and red-vs-blue views are Phase 7.
+  Click a connection to manage its binding (pause / resume / kill). Per-step trace
+  replay and red-vs-blue views are Phase 7.
 </p>
+
+<!-- agent config modal: details + actions (opened from a connection card) -->
+<div class="modal" id="agent-modal" hidden>
+  <div class="modal__backdrop" onclick="Nidavellir.closeAgentConfig()"></div>
+  <div class="modal__card" role="dialog" aria-modal="true" aria-label="Agent config">
+    <button class="modal__x" type="button" onclick="Nidavellir.closeAgentConfig()" title="Close"><i class="fa-solid fa-xmark"></i></button>
+    <div class="modal__head" id="agent-modal-head"></div>
+    <dl class="kv" id="agent-modal-kv"></dl>
+    <div class="model-form__actions" id="agent-modal-actions"></div>
+    <div class="import-msg" id="agent-modal-msg" style="margin-top:8px"></div>
+    <p class="modal__foot">The model + key are the operator's (BYO); this is an attribution + management view. Revoking a binding stops the agent driving this arena (D1).</p>
+  </div>
+</div>
 
 <script id="agents-data" type="application/json">{{ overview | tojson | safe }}</script>
 {% endblock %}

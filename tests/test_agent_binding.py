@@ -87,6 +87,96 @@ def test_revoke_blocks_the_agent(operator, agent):
     assert agent.post("/arenas/bind-revoke/exec", json={"node": "victim", "command": "id"}).status_code == 403
 
 
+# --- pause / resume kill-switch (P2-11) --------------------------------------
+
+
+def test_pause_blocks_exec_then_resume_restores(operator, agent):
+    _active_arena(operator.db, "bind-pause-1")
+    operator.post("/arenas/bind-pause-1/bindings", json={"agent_name": "binder-agent"})
+    assert agent.post("/arenas/bind-pause-1/exec", json={"node": "victim", "command": "id"}).status_code == 200
+    # pause → the binding still exists but gated actions return 423 Locked
+    p = operator.post("/arenas/bind-pause-1/bindings/binder-agent/pause")
+    assert p.status_code == 200 and p.json()["paused"] is True
+    r = agent.post("/arenas/bind-pause-1/exec", json={"node": "victim", "command": "id"})
+    assert r.status_code == 423 and "paused" in r.text
+    # resume → the agent may drive the arena again
+    res = operator.post("/arenas/bind-pause-1/bindings/binder-agent/resume")
+    assert res.status_code == 200 and res.json()["paused"] is False
+    assert agent.post("/arenas/bind-pause-1/exec", json={"node": "victim", "command": "id"}).status_code == 200
+
+
+def test_pause_surfaced_in_binding_list(operator, agent):
+    _active_arena(operator.db, "bind-pause-list")
+    operator.post("/arenas/bind-pause-list/bindings", json={"agent_name": "binder-agent"})
+    operator.post("/arenas/bind-pause-list/bindings/binder-agent/pause")
+    listing = operator.get("/arenas/bind-pause-list/bindings").json()["bindings"]
+    assert len(listing) == 1 and listing[0]["paused"] is True
+    operator.post("/arenas/bind-pause-list/bindings/binder-agent/resume")
+    listing = operator.get("/arenas/bind-pause-list/bindings").json()["bindings"]
+    assert listing[0]["paused"] is False
+
+
+def test_pause_findings_also_locked(operator, agent):
+    _active_arena(operator.db, "bind-pause-find")
+    operator.post("/arenas/bind-pause-find/bindings", json={"agent_name": "binder-agent"})
+    operator.post("/arenas/bind-pause-find/bindings/binder-agent/pause")
+    r = agent.post("/arenas/bind-pause-find/findings",
+                   json={"title": "x", "cwe": "CWE-89", "node": "victim"})
+    assert r.status_code == 423
+
+
+def test_pause_is_idempotent_and_resume_noop(operator, agent):
+    _active_arena(operator.db, "bind-pause-idem")
+    operator.post("/arenas/bind-pause-idem/bindings", json={"agent_name": "binder-agent"})
+    assert operator.post("/arenas/bind-pause-idem/bindings/binder-agent/pause").json()["paused"] is True
+    # second pause is a no-op (still paused), and reports already-paused
+    p2 = operator.post("/arenas/bind-pause-idem/bindings/binder-agent/pause")
+    assert p2.status_code == 200 and p2.json()["paused"] is True
+    # resume an already-resumed (never-paused) is a no-op
+    operator.post("/arenas/bind-pause-idem/bindings/binder-agent/resume")
+    r2 = operator.post("/arenas/bind-pause-idem/bindings/binder-agent/resume")
+    assert r2.status_code == 200 and r2.json()["paused"] is False
+
+
+def test_pause_unknown_binding_404(operator):
+    _active_arena(operator.db, "bind-pause-404")
+    assert operator.post("/arenas/bind-pause-404/bindings/ghost/pause").status_code == 404
+    assert operator.post("/arenas/bind-pause-404/bindings/ghost/resume").status_code == 404
+
+
+def test_pause_endpoints_are_operator_only(operator, agent):
+    _active_arena(operator.db, "bind-pause-authz")
+    operator.post("/arenas/bind-pause-authz/bindings", json={"agent_name": "binder-agent"})
+    assert agent.post("/arenas/bind-pause-authz/bindings/binder-agent/pause").status_code == 403
+    assert agent.post("/arenas/bind-pause-authz/bindings/binder-agent/resume").status_code == 403
+
+
+def test_revoke_then_pause_is_404(operator, agent):
+    # A killed (revoked) binding can't be paused — it no longer exists.
+    _active_arena(operator.db, "bind-revoke-pause")
+    operator.post("/arenas/bind-revoke-pause/bindings", json={"agent_name": "binder-agent"})
+    operator.delete("/arenas/bind-revoke-pause/bindings/binder-agent")
+    assert operator.post("/arenas/bind-revoke-pause/bindings/binder-agent/pause").status_code == 404
+
+
+def test_is_paused_unit_ordering():
+    # Pure derivation: a fresh grant (or revoke) after a pause clears the paused
+    # state; events are newest-first, mirroring db.list_events.
+    import bindings as B
+
+    def ev(t):
+        return {"type": t, "payload": {"agent_name": "a"}}
+
+    # newest-first: pause is newest → paused
+    assert B.is_paused([ev(B.BINDING_PAUSE), ev(B.BINDING_GRANT)], "a") is True
+    # resume after pause → not paused
+    assert B.is_paused([ev(B.BINDING_RESUME), ev(B.BINDING_PAUSE), ev(B.BINDING_GRANT)], "a") is False
+    # a re-grant newer than the pause clears it (active + unpaused)
+    assert B.is_paused([ev(B.BINDING_GRANT), ev(B.BINDING_PAUSE), ev(B.BINDING_GRANT)], "a") is False
+    # other agents' pause events don't leak
+    assert B.is_paused([{"type": B.BINDING_PAUSE, "payload": {"agent_name": "b"}}], "a") is False
+
+
 # --- stance node-scope (server-side, was gateway-only) -----------------------
 
 

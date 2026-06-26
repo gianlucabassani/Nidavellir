@@ -1208,6 +1208,17 @@ def _require_binding(principal: Principal, instance_id: str, capability: str) ->
                 "deployed the arena itself"
             ),
         )
+    if binding.get("paused"):
+        # P2-11 kill-switch / pause: reversible operator halt. 423 Locked — the
+        # binding still exists (so it's distinct from a 403 revoke) but is frozen
+        # until the operator resumes it.
+        raise HTTPException(
+            status_code=423,
+            detail=(
+                "this agent's binding is paused by the operator — actions are "
+                "halted until it is resumed (POST /arenas/{id}/bindings/{agent}/resume)"
+            ),
+        )
     if not bindings.stance_permits(binding.get("stance"), capability):
         raise HTTPException(
             status_code=403,
@@ -1300,6 +1311,53 @@ def revoke_binding(
     )
     logger.info(f"Revoked agent '{agent_name}' binding on arena {instance_id} by '{principal.name}'")
     return {"revoked": True, "agent_name": agent_name}
+
+
+@app.post("/arenas/{instance_id}/bindings/{agent_name}/pause")
+def pause_binding(
+    instance_id: str, agent_name: str, principal: Principal = Depends(require_principal)
+):
+    """Pause (reversibly halt) an agent's binding — a kill-switch that stops the
+    agent driving this arena without tearing the binding down. Gated actions
+    return 423 while paused; `resume` lifts it. Operator-only, idempotent."""
+    _require_operator(principal)
+    if not db.get_deployment(instance_id):
+        raise HTTPException(status_code=404, detail="Arena not found")
+    events = _arena_binding_events(instance_id)
+    if bindings.binding_for(events, agent_name) is None:
+        raise HTTPException(status_code=404, detail="no active binding for that agent")
+    if bindings.is_paused(events, agent_name):
+        return {"paused": True, "agent_name": agent_name, "detail": "already paused"}
+    db.record_event(
+        instance_id, bindings.BINDING_PAUSE,
+        {"agent_name": agent_name, "granted_by": principal.name},
+        actor=principal.name,
+    )
+    logger.info(f"Paused agent '{agent_name}' binding on arena {instance_id} by '{principal.name}'")
+    return {"paused": True, "agent_name": agent_name}
+
+
+@app.post("/arenas/{instance_id}/bindings/{agent_name}/resume")
+def resume_binding(
+    instance_id: str, agent_name: str, principal: Principal = Depends(require_principal)
+):
+    """Resume a paused binding — the agent may drive the arena again. Operator-only,
+    idempotent (resuming a non-paused binding is a no-op)."""
+    _require_operator(principal)
+    if not db.get_deployment(instance_id):
+        raise HTTPException(status_code=404, detail="Arena not found")
+    events = _arena_binding_events(instance_id)
+    if bindings.binding_for(events, agent_name) is None:
+        raise HTTPException(status_code=404, detail="no active binding for that agent")
+    if not bindings.is_paused(events, agent_name):
+        return {"paused": False, "agent_name": agent_name, "detail": "not paused"}
+    db.record_event(
+        instance_id, bindings.BINDING_RESUME,
+        {"agent_name": agent_name, "granted_by": principal.name},
+        actor=principal.name,
+    )
+    logger.info(f"Resumed agent '{agent_name}' binding on arena {instance_id} by '{principal.name}'")
+    return {"paused": False, "agent_name": agent_name}
 
 
 # --- BYO model connection (operator's session-bound agent credential) -------

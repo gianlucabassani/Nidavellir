@@ -474,6 +474,37 @@ def test_list_bindings_proxy_offline_returns_empty(client):
     assert data == {"bindings": []}   # backend offline → empty, not a 500
 
 
+def test_pause_resume_proxy_requires_csrf(client):
+    _login(client)
+    assert client.post("/api/arenas/a1/bindings/x/pause").status_code == 400
+    assert client.post("/api/arenas/a1/bindings/x/resume").status_code == 400
+
+
+def test_pause_resume_proxy_relays_to_orchestrator(client, monkeypatch):
+    import app as webui_module
+
+    captured = {}
+
+    class _FakeResp:
+        status_code = 200
+
+        def json(self):
+            return {"paused": True, "agent_name": "red-team"}
+
+    def fake_post(url, json=None, **kwargs):
+        captured["url"] = url
+        return _FakeResp()
+
+    monkeypatch.setattr(webui_module.requests, "post", fake_post)
+    _login(client)
+    token = _csrf_token(client, "/")
+    r = client.post("/api/arenas/a1/bindings/red-team/pause", headers={"X-CSRFToken": token})
+    assert r.status_code == 200 and r.get_json()["paused"] is True
+    assert captured["url"].endswith("/arenas/a1/bindings/red-team/pause")
+    client.post("/api/arenas/a1/bindings/red-team/resume", headers={"X-CSRFToken": token})
+    assert captured["url"].endswith("/arenas/a1/bindings/red-team/resume")
+
+
 def test_scenario_generate_proxy_requires_csrf(client):
     _login(client)
     assert client.post(

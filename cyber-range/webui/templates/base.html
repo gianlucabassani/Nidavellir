@@ -31,7 +31,7 @@
       ] %}
       {% for key, ep, icon, label in nav %}
       <a class="nav-item {{ 'active' if active == key }}" href="{{ url_for(ep) }}">
-        <span class="ico"><i class="fa-solid {{ icon }}"></i></span>{{ label }}
+        <span class="ico"><i class="fa-solid {{ icon }}"></i></span><span class="nav-label">{{ label }}</span>
       </a>
       {% endfor %}
 
@@ -42,7 +42,7 @@
       ] %}
       {% for key, ep, icon, label in account %}
       <a class="nav-item {{ 'active' if active == key }}" href="{{ url_for(ep) }}">
-        <span class="ico"><i class="fa-solid {{ icon }}"></i></span>{{ label }}
+        <span class="ico"><i class="fa-solid {{ icon }}"></i></span><span class="nav-label">{{ label }}</span>
       </a>
       {% endfor %}
     </nav>
@@ -65,7 +65,7 @@
   <!-- main -->
   <div class="main">
     <header class="topbar">
-      <button class="btn btn-ghost btn-sm menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')">
+      <button class="btn btn-ghost btn-sm menu-btn" onclick="Nidavellir.toggleSidebar()" title="Collapse / expand sidebar">
         <i class="fa-solid fa-bars"></i>
       </button>
       <div class="crumb"><span class="sep">Nidavellir</span> <span class="sep">/</span> <b>{% block crumb %}{% endblock %}</b></div>

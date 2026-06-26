@@ -242,15 +242,27 @@ are never bound and bypass every check.
 
 - `POST /arenas/{id}/bindings` `{ "agent_name": "redteam", "stance": "attacker" }`
   → `{ "bound": true, … }`. Operator-only. Re-granting updates the stance.
-- `GET /arenas/{id}/bindings` → `{ "bindings": [ … ] }` (active bindings).
-  Operator-only.
+- `GET /arenas/{id}/bindings` → `{ "bindings": [ … ] }` (active bindings; each
+  carries a `paused` flag). Operator-only.
 - `DELETE /arenas/{id}/bindings/{agent_name}` → `{ "revoked": true|false }`.
-  Operator-only; idempotent.
+  Operator-only; idempotent. This is the **kill** — the binding is torn down.
 
-`403` for an `agent` caller · `404` unknown arena · `422` unknown stance.
+**Kill-switch / pause (P2-11).** A reversible halt distinct from a kill — the
+binding stays in place but its driving actions are frozen:
+- `POST /arenas/{id}/bindings/{agent_name}/pause` → `{ "paused": true, … }`.
+  Operator-only, idempotent. While paused, the agent's gated actions
+  (exec / findings / setup / observe) return **`423 Locked`**.
+- `POST /arenas/{id}/bindings/{agent_name}/resume` → `{ "paused": false, … }`.
+  Operator-only, idempotent. The agent may drive the arena again.
+Pause/resume are event-backed (`agent_binding_paused` / `agent_binding_resumed`);
+a fresh grant or a revoke also clears the paused state.
+
+`403` for an `agent` caller · `404` unknown arena or no active binding (for
+pause/resume) · `422` unknown stance · `423` action attempted while paused.
 
 The **operator console** surfaces these on the arena detail page (the *Agent
-bindings* panel: list / grant / revoke) — no curl needed.
+bindings* panel: list / grant / pause / resume / revoke) and in the **Agents**
+page agent-config modal (Pause / Resume / Kill) — no curl needed.
 
 ### Model connection (operator's bring-your-own key)
 

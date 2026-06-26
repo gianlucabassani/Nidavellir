@@ -1331,7 +1331,7 @@
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
                 Multi-Cloud Providers
               </h3>
-              <p>Abstract drivers support local container ranges (docker-local running inside seconds), OpenStack VMs, and AWS instances on demand.</p>
+              <p>Abstract drivers support local container ranges (docker-local running inside seconds), local QEMU/Libvirt VMs, OpenStack, and AWS instances on demand.</p>
             </div>
             
             <!-- Feature 3 -->
@@ -1445,8 +1445,8 @@
               <div class="pillar-icon" style="color:var(--defender);">01 // Topologies</div>
               <h3>Dynamic Topologies</h3>
               <p>
-                Author scenarios inside data-defined YAML templates. Topologies compile on-demand to Docker local engines, 
-                OpenStack VMs, or AWS instances using dynamic provider drivers. Supports arbitrary N-node segment setups.
+                Author scenarios inside data-defined YAML templates. Topologies compile on-demand to Docker local engines,
+                local QEMU/Libvirt VMs, OpenStack, or AWS instances using dynamic provider drivers. Supports arbitrary N-node segment setups.
               </p>
             </div>
             
@@ -1455,8 +1455,8 @@
               <div class="pillar-icon" style="color:var(--attacker);">02 // Gateways</div>
               <h3>MCP Agent Gateways</h3>
               <p>
-                Secure and regulate Model Context Protocol (MCP) clients. Every action runs through gateway sandboxes 
-                enforcing strict network scopes, guardrail controls, budgets, and logging to append-only trace auditories.
+                Secure and regulate Model Context Protocol (MCP) clients. Every action runs through gateway sandboxes
+                enforcing stance capabilities, per-arena key&#8596;arena bindings, an operator kill-switch, and logging to append-only audit traces.
               </p>
             </div>
             
@@ -1573,58 +1573,72 @@
               </div>
               <div class="roadmap-content">
                 <h3>Repositioning & Hygiene</h3>
-                <p>Renamed core user roles (student/instructor to operator/agent). Dropped obsolete EDU-ITS server bindings. Audited vulnerabilities, verified Secrets hygiene log redactions, and established green pytest/ruff gates inside CI pipelines.</p>
+                <p>Renamed core user roles (student/instructor to operator/agent). Dropped obsolete EDU-ITS server bindings. Audited vulnerabilities, verified secrets hygiene log redactions, and established green pytest/ruff gates inside CI pipelines.</p>
               </div>
             </div>
-            
+
             <!-- Phase 1 -->
-            <div class="roadmap-item active">
+            <div class="roadmap-item complete">
               <div class="roadmap-badge"></div>
               <div class="roadmap-meta">
                 <span class="roadmap-phase">Phase 1</span>
-                <span class="roadmap-status">Active</span>
+                <span class="roadmap-status">Completed</span>
               </div>
               <div class="roadmap-content">
-                <p>Introduce the abstract v3 YAML scenario schema modeling arbitrary networks, node structures, and subnets. Build compiler engines that deploy these dynamic scopes locally to Docker, or VM providers (OpenStack/AWS/Libvirt). Implement Docker Hub image existence verification. Setup the Vulhub community environment importer.</p>
+                <h3>Dynamic Range Compiler (Pillar 1)</h3>
+                <p>Shipped the abstract v3 YAML scenario schema for arbitrary N-node networks and subnets, and the compiler that deploys it. The docker-local provider stands up egress-locked container ranges in seconds; a local QEMU/Libvirt VM provider and Docker Hub image-existence verification are in place, alongside the Vulhub community-environment importer.</p>
               </div>
             </div>
-            
+
             <!-- Phase 2 -->
-            <div class="roadmap-item">
+            <div class="roadmap-item complete">
               <div class="roadmap-badge"></div>
               <div class="roadmap-meta">
                 <span class="roadmap-phase">Phase 2</span>
-                <span class="roadmap-status">Scheduled</span>
+                <span class="roadmap-status">Completed</span>
               </div>
               <div class="roadmap-content">
                 <h3>MCP Agent Gateways (Pillar 2)</h3>
-                <p>Deploy secure Model Context Protocol gateway layers. Enforce per-session credentials, stance capabilities (attacker foothold commands, MITM packet sniffers, blue-team defenders), step budgets, and audit tracer records.</p>
+                <p>Live Model Context Protocol gateway with per-session credentials and stance capabilities — attacker (foothold-scoped exec), MITM (in-path traffic observation), blue-team defender, plus operator/configurator stances. Server-enforced per-arena key&#8596;arena bindings, an operator kill-switch / pause, default-on egress containment, and an append-only audit tracer.</p>
               </div>
             </div>
-            
+
             <!-- Phase 3 -->
-            <div class="roadmap-item">
+            <div class="roadmap-item complete">
               <div class="roadmap-badge"></div>
               <div class="roadmap-meta">
                 <span class="roadmap-phase">Phase 3</span>
-                <span class="roadmap-status">Planned</span>
+                <span class="roadmap-status">Completed</span>
               </div>
               <div class="roadmap-content">
                 <h3>Zero-to-Prompt Scenario Gen (Pillar 3)</h3>
-                <p>Deploy natural language LLM prompt compilers that generate validated v3 yaml topology configurations dynamically. Wire an approval wizard and setup proposal generation inside the operator dashboard before provisioning code to hypervisors.</p>
+                <p>Natural-language prompts compile to schema-validated v3 topologies through a bring-your-own model. An operator-tier MCP scaffolding tool with a console diff/review view, a guided software-under-test authoring wizard, and human-in-the-loop setup-proposal generation gate every spec before it provisions.</p>
               </div>
             </div>
-            
+
             <!-- Phase 4 -->
-            <div class="roadmap-item">
+            <div class="roadmap-item active">
               <div class="roadmap-badge"></div>
               <div class="roadmap-meta">
                 <span class="roadmap-phase">Phase 4</span>
+                <span class="roadmap-status">Active</span>
+              </div>
+              <div class="roadmap-content">
+                <h3>SUT Scoring & Live Telemetry</h3>
+                <p>Integrating software-under-test monitor sidecars to catch runtime crashes, sanitizer trips, and exceptions, with a crash-oracle and agent scoring benchmarks that grade model efficiency against open-ended vulnerabilities. Replacing console polling with a server-sent-events live activity stream.</p>
+              </div>
+            </div>
+
+            <!-- Phase 5 -->
+            <div class="roadmap-item">
+              <div class="roadmap-badge"></div>
+              <div class="roadmap-meta">
+                <span class="roadmap-phase">Phase 5</span>
                 <span class="roadmap-status">Planned</span>
               </div>
               <div class="roadmap-content">
-                <h3>SUT Monitoring & Scoring Benchmarks</h3>
-                <p>Integrate software-under-test sidecars on target machines to catch runtime crashes, sanitizers, or exceptions. Establish dynamic agent scoring and benchmark trackers evaluating model efficiencies against open-ended vulnerabilities.</p>
+                <h3>Hardening, Budgets & Multi-Tenancy</h3>
+                <p>Per-operator orchestrator identity and token/step budgets, full-disk VulnHub VM conversion and live Libvirt boot, in-path MITM message rewriting, and the multi-tenant workspace controls — shared/hosted operation with isolated tenancy and durable per-scope guardrails.</p>
               </div>
             </div>
           </div>

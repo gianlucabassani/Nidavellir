@@ -961,6 +961,20 @@ def revoke_binding_proxy(instance_id, agent_name):
     return jsonify({"error": _api_error(resp)}), resp.status_code
 
 
+@app.route("/api/arenas/<instance_id>/bindings/<agent_name>/pause", methods=["POST"])
+def pause_binding_proxy(instance_id, agent_name):
+    """Pause (kill-switch) an agent's binding (proxies POST …/pause). CSRF-protected."""
+    data, code = _api_post(f"/arenas/{instance_id}/bindings/{agent_name}/pause")
+    return jsonify(data), code
+
+
+@app.route("/api/arenas/<instance_id>/bindings/<agent_name>/resume", methods=["POST"])
+def resume_binding_proxy(instance_id, agent_name):
+    """Resume a paused binding (proxies POST …/resume). CSRF-protected."""
+    data, code = _api_post(f"/arenas/{instance_id}/bindings/{agent_name}/resume")
+    return jsonify(data), code
+
+
 @app.route("/api/scenarios/<scenario_id>", methods=["DELETE"])
 def scenario_delete_proxy(scenario_id):
     """Delete an imported scenario pack (proxies DELETE /scenarios/<id>).

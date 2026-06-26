@@ -83,7 +83,22 @@ button { font-family:inherit; }
 .iconbtn { display:inline-flex; align-items:center; gap:7px; height:32px; padding:0 12px; border-radius:20px;
   border:1px solid var(--line); background:var(--surface); color:var(--muted); font-size:12.5px; cursor:pointer; transition:.14s; }
 .iconbtn:hover { color:var(--text); border-color:var(--border-strong); }
-.menu-btn { display:none; }
+.menu-btn { display:inline-flex; }  /* desktop: collapse/expand the sidebar to an icon rail */
+
+/* collapsed sidebar — icon-only rail, still clickable (toggled by the topbar button) */
+body.nav-collapsed { --sidebar-w:64px; }
+body.nav-collapsed .brand .wordmark,
+body.nav-collapsed .nav-label,
+body.nav-collapsed .nav-section,
+body.nav-collapsed .nav-item .tag,
+body.nav-collapsed .nav-item .soon,
+body.nav-collapsed .userbox .grow,
+body.nav-collapsed .userbox form { display:none; }
+body.nav-collapsed .sidebar { padding:18px 8px; }
+body.nav-collapsed .brand { justify-content:center; }
+body.nav-collapsed .brand .mark { margin-right:0 !important; }
+body.nav-collapsed .nav-item { justify-content:center; padding:9px 0; gap:0; }
+body.nav-collapsed .userbox { justify-content:center; padding:9px; }
 
 /* ---------- content ---------- */
 .content { padding:26px; max-width:1280px; width:100%; }
@@ -251,6 +266,8 @@ select[multiple] option { padding:6px 8px; border-radius:6px; }
 /* agent bindings panel (D1) */
 .bindings-list { display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
 .binding-row { display:flex; align-items:center; gap:10px; padding-bottom:8px; border-bottom:1px solid var(--line-soft); }
+.binding-row--paused { opacity:.72; }
+.binding-row--paused .mono.grow { text-decoration:line-through; text-decoration-color:var(--warn,#d9a441); }
 .binding-grant { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
 
 /* ---------- inventory (machine line-up) ---------- */
@@ -295,7 +312,28 @@ select[multiple] option { padding:6px 8px; border-radius:6px; }
 
 /* ---------- agents ---------- */
 .agent-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(248px,1fr)); gap:16px; }
-.agent-card { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px; }
+.agent-card { display:block; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px; color:inherit; cursor:pointer; transition:border-color .14s, transform .14s, box-shadow .14s; }
+.agent-card:hover { border-color:var(--accent-line); transform:translateY(-1px); box-shadow:0 8px 22px -14px rgba(0,0,0,.6); }
+
+/* usage graph: per-model step consumption, filterable by stance */
+.usage-filter { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
+.usage-chip { font-family:var(--mono); font-size:11.5px; padding:4px 11px; border-radius:20px; cursor:pointer;
+  border:1px solid var(--line); background:var(--surface); color:var(--muted); transition:.14s; text-transform:lowercase; }
+.usage-chip:hover { color:var(--text); border-color:var(--border-strong); }
+.usage-chip.on { background:var(--accent-soft); border-color:var(--accent-line); color:var(--accent); }
+.usage-summary { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+.usage-stat { flex:1; min-width:88px; background:var(--surface-2); border:1px solid var(--line-soft); border-radius:var(--radius-sm); padding:10px 12px; }
+.usage-stat__n { font-family:var(--mono); font-size:20px; font-weight:700; color:var(--text); line-height:1.1; }
+.usage-stat__l { font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); margin-top:3px; }
+.usage-bars { display:flex; flex-direction:column; gap:14px; }
+.usage-row { display:flex; gap:12px; align-items:flex-start; }
+.usage-row__logo { width:30px; height:30px; border-radius:8px; flex:none; display:grid; place-items:center; color:#fff; }
+.usage-row__logo svg { width:17px; height:17px; }
+.usage-row__head { display:flex; justify-content:space-between; gap:10px; font-size:13px; margin-bottom:5px; }
+.usage-row__val { color:var(--muted); white-space:nowrap; }
+.usage-bar { height:8px; background:var(--surface-3); border-radius:5px; overflow:hidden; }
+.usage-bar__fill { height:100%; border-radius:5px; min-width:3px; transition:width .3s; }
+.usage-row__meta { font-size:11.5px; margin-top:5px; }
 .agent-card__top { display:flex; align-items:center; gap:9px; margin-bottom:12px; }
 .agent-card__top .dot { margin-left:auto; }
 .agent-card__model { display:flex; align-items:center; gap:10px; }
