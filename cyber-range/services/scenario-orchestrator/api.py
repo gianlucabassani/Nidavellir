@@ -251,7 +251,7 @@ class ScenarioImportRequest(BaseModel):
 
 @app.post("/scenarios")
 @limiter.limit(RATE_LIMIT_DEPLOY)
-async def import_scenario(
+def import_scenario(
     request: Request,
     req: ScenarioImportRequest,
     principal: Principal = Depends(require_principal),
@@ -275,7 +275,7 @@ async def import_scenario(
 
 
 @app.delete("/scenarios/{scenario_id}")
-async def delete_scenario(
+def delete_scenario(
     scenario_id: str,
     principal: Principal = Depends(require_principal),
 ):
@@ -393,7 +393,7 @@ class ScenarioPreviewRequest(BaseModel):
 
 
 @app.post("/scenarios/preview")
-async def preview_scenario(
+def preview_scenario(
     request: Request,
     req: ScenarioPreviewRequest,
     principal: Principal = Depends(require_principal),
@@ -428,7 +428,7 @@ class ScenarioGenerateRequest(BaseModel):
 
 @app.post("/scenarios/generate")
 @limiter.limit(RATE_LIMIT_DEPLOY)
-async def generate_scenario(
+def generate_scenario(
     request: Request,
     req: ScenarioGenerateRequest,
     principal: Principal = Depends(require_principal),
@@ -501,7 +501,7 @@ class VulhubImportRequest(BaseModel):
 
 @app.post("/scenarios/import/vulhub")
 @limiter.limit(RATE_LIMIT_DEPLOY)
-async def import_vulhub(
+def import_vulhub(
     request: Request,
     req: VulhubImportRequest,
     principal: Principal = Depends(require_principal),
@@ -604,7 +604,7 @@ def get_catalog(kind: str | None = None, principal: Principal = Depends(require_
 
 @app.post("/arenas/custom")
 @limiter.limit(RATE_LIMIT_DEPLOY)
-async def deploy_custom_arena(
+def deploy_custom_arena(
     request: Request,
     req: CustomArenaRequest,
     principal: Principal = Depends(require_principal),
@@ -751,7 +751,7 @@ def preview_sut_arena(req: SutArenaRequest, principal: Principal = Depends(requi
 
 @app.post("/arenas/sut")
 @limiter.limit(RATE_LIMIT_DEPLOY)
-async def deploy_sut_arena(
+def deploy_sut_arena(
     request: Request,
     req: SutArenaRequest,
     principal: Principal = Depends(require_principal),
@@ -841,7 +841,7 @@ def list_deployments(principal: Principal = Depends(require_principal)):
 
 @app.post("/deploy")
 @limiter.limit(RATE_LIMIT_DEPLOY)
-async def deploy(
+def deploy(
     request: Request,
     req: DeployRequest,
     principal: Principal = Depends(require_principal),
@@ -891,7 +891,7 @@ async def deploy(
 
 @app.delete("/destroy/{instance_id}")
 @limiter.limit(RATE_LIMIT_DESTROY)
-async def destroy(
+def destroy(
     request: Request,
     instance_id: str,
     principal: Principal = Depends(require_principal),
@@ -924,7 +924,7 @@ DELETABLE_STATES = ("destroyed", "failed", "error_destroying")
 
 @app.delete("/deployments/{instance_id}")
 @limiter.limit(RATE_LIMIT_DESTROY)
-async def delete_deployment_record(
+def delete_deployment_record(
     request: Request,
     instance_id: str,
     principal: Principal = Depends(require_principal),
@@ -952,7 +952,7 @@ async def delete_deployment_record(
 
 @app.delete("/deployments")
 @limiter.limit(RATE_LIMIT_DESTROY)
-async def purge_deployment_records(
+def purge_deployment_records(
     request: Request,
     principal: Principal = Depends(require_principal),
 ):
@@ -991,7 +991,7 @@ class ExecRequest(BaseModel):
 
 @app.post("/arenas/{instance_id}/exec")
 @limiter.limit(RATE_LIMIT_EXEC)
-async def exec_in_arena(
+def exec_in_arena(
     request: Request,
     instance_id: str,
     req: ExecRequest,
@@ -1084,7 +1084,7 @@ class MitmObserveRequest(BaseModel):
 
 @app.post("/arenas/{instance_id}/mitm/observe")
 @limiter.limit(RATE_LIMIT_EXEC)
-async def mitm_observe(
+def mitm_observe(
     request: Request,
     instance_id: str,
     req: MitmObserveRequest,
@@ -1178,7 +1178,7 @@ class AgentSessionRequest(BaseModel):
 
 
 @app.post("/arenas/{instance_id}/agent-session")
-async def announce_agent_session(
+def announce_agent_session(
     instance_id: str,
     req: AgentSessionRequest,
     principal: Principal = Depends(require_principal),
@@ -2351,7 +2351,7 @@ class FindingRequest(BaseModel):
 
 
 @app.post("/arenas/{instance_id}/findings")
-async def report_finding(
+def report_finding(
     instance_id: str,
     req: FindingRequest,
     principal: Principal = Depends(require_principal),
