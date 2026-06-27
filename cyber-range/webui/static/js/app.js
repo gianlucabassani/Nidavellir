@@ -502,23 +502,22 @@
   }
 
   /* ---- engagement: unified roles board (setup + agent bindings) -------- */
-  // One panel answers "who drives this arena, in what role": the Setup
-  // (configurator) hand-off row plus every agent binding (D1), each with its
-  // driver (a human operator or a BYO agent key) and live status. Reuses the
-  // existing /api/setup and /api/arenas/<id>/bindings endpoints — the board is
-  // read-only (safe to repaint on poll); the action area rebuilds only when its
-  // shape changes, so a half-typed setup command survives the 5s refresh.
-  let engArena = null, engActive = false, engTimer = null, engSig = null;
+  /* ---- in-arena console: positioning (all) · configurator (SUT) · live log ----
+     Posture: the platform HOSTS and MONITORS a bring-your-own agent — it never
+     drives the agent itself. "Positioning" grants a binding (authorization, live
+     per tool-call); the operator then points their own agent app (Claude Code, a
+     custom MCP framework, …) at the gateway with that key+stance and tells IT to
+     act. Every tool call streams into the live-activity log below. Boards are
+     read-only (safe to repaint on poll); the assign form + configurator action
+     area build once / on shape change, so half-typed input survives a refresh. */
+  let engArena = null, engActive = false, engSut = false, engGateway = "";
+  let engTimer = null, engCfgSig = null, engRecipeDone = false;
 
-  const ENG_ROLES = {
-    attacker:     { label: "Attacker",     icon: "fa-crosshairs",         color: "var(--attacker)" },
-    defender:     { label: "Defender",     icon: "fa-shield-halved",      color: "var(--defender)" },
-    mitm:         { label: "MITM",         icon: "fa-user-secret",        color: "var(--mitm)" },
-    configurator: { label: "Configurator", icon: "fa-screwdriver-wrench", color: "var(--accent)" },
-    "":           { label: "Unrestricted", icon: "fa-key",                color: "var(--idle)" },
-  };
-  const ENG_STANCES = [["attacker", "attacker"], ["defender", "defender"], ["mitm", "mitm"],
-                       ["configurator", "configurator"], ["", "unrestricted"]];
+  const POS_STANCES = [
+    { id: "attacker", label: "Attacker", icon: "fa-crosshairs",    color: "var(--attacker)", desc: "Pentest the targets from the foothold" },
+    { id: "defender", label: "Defender", icon: "fa-shield-halved", color: "var(--defender)", desc: "Read the detection / event feed" },
+    { id: "mitm",     label: "MITM",     icon: "fa-user-secret",   color: "var(--mitm)",     desc: "Observe in-path segment traffic" },
+  ];
 
   function engApi(path, method, body) {
     const opts = { method: method || "GET", headers: {} };
@@ -527,24 +526,172 @@
     return fetch("/api/setup/" + engArena + path, opts).then((r) => r.json());
   }
 
-  function initEngagement(arena, active) {
-    engArena = arena; engActive = !!active; engSig = null;
+  function initEngagement(arena, active, isSut, gateway) {
+    engArena = arena; engActive = !!active; engSut = !!isSut;
+    engGateway = gateway || ""; engCfgSig = null; engRecipeDone = false;
+    engRenderRecipe();
     engRefresh();
     if (engTimer) clearInterval(engTimer);
-    engTimer = setInterval(engRefresh, 5000);
+    engTimer = setInterval(engRefresh, 4000);
   }
 
   function engRefresh() {
     const pBind = fetch("/api/arenas/" + engArena + "/bindings")
       .then((r) => r.json()).then((d) => d.bindings || []).catch(() => []);
-    const pSetup = engActive ? engApi("").catch(() => null) : Promise.resolve(null);
-    Promise.all([pSetup, pBind]).then(([setup, binds]) => engRender(setup, binds)).catch(() => {});
+    const pEvents = fetch("/api/arenas/" + engArena + "/events")
+      .then((r) => r.json()).then((d) => d.events || []).catch(() => []);
+    const pSetup = (engActive && engSut) ? engApi("").catch(() => null) : Promise.resolve(null);
+    Promise.all([pBind, pEvents, pSetup]).then(([binds, events, setup]) => {
+      engRenderPositioning(binds, events);
+      engRenderConfigurator(setup);
+      engRenderLog(events);
+    }).catch(() => {});
   }
 
   function engErr(msg) {
-    const e = document.getElementById("eng-err");
+    const e = document.getElementById("pos-err");
     if (e) { e.textContent = msg || ""; e.hidden = !msg; }
   }
+  function engCfgErr(msg) {
+    const e = document.getElementById("cfg-err");
+    if (e) { e.textContent = msg || ""; e.hidden = !msg; }
+  }
+
+  /* -- positioning ----------------------------------------------------------- */
+
+  // actor -> { actions, connected, lastCmd } from the recent event window, so a
+  // positioned key shows authorized → connected → active as its agent acts.
+  function engActorActivity(events) {
+    const map = {};
+    (events || []).forEach((e) => {
+      const p = e.payload || {};
+      const actor = p.actor || e.actor;
+      if (!actor) return;
+      const m = map[actor] || (map[actor] = { actions: 0, connected: false });
+      if (["agent_exec", "finding", "mitm_observe", "setup_step"].includes(e.type)) m.actions++;
+      if (e.type === "agent_session") m.connected = true;
+    });
+    return map;
+  }
+
+  function engKeyState(b, act) {
+    if (b.paused) return { cls: "warn", txt: "paused" };
+    const a = act[b.agent_name];
+    if (a && a.actions) return { cls: "ok", txt: "active · " + a.actions + " action" + (a.actions === 1 ? "" : "s") };
+    if (a && a.connected) return { cls: "accent", txt: "connected" };
+    return { cls: "idle", txt: "awaiting agent" };
+  }
+
+  function engKeyChip(b, act) {
+    const st = engKeyState(b, act);
+    const enc = encodeURIComponent(b.agent_name);
+    const pauseBtn = b.paused
+      ? '<button class="btn btn-primary btn-xs" data-eng="resume" data-name="' + enc + '">Resume</button>'
+      : '<button class="btn btn-xs" data-eng="pause" data-name="' + enc + '">Pause</button>';
+    return '<div class="pos-key">' +
+      '<span class="mono pos-key__n">' + escapeHtml(b.agent_name) + "</span>" +
+      '<span class="badge badge--' + st.cls + '">' + st.txt + "</span>" +
+      '<span class="pos-key__by muted">by ' + escapeHtml(b.granted_by || "—") + (b.auto ? " · auto" : "") + "</span>" +
+      '<span class="pos-key__act">' + pauseBtn +
+      '<button class="btn btn-danger btn-xs" data-eng="revoke" data-name="' + enc + '">Revoke</button></span></div>';
+  }
+
+  function engStanceBadge(sb, act) {
+    if (!sb.length) return '<span class="badge badge--idle">no agent</span>';
+    let best = "awaiting";
+    sb.forEach((b) => {
+      const a = act[b.agent_name];
+      if (a && a.actions) best = "active";
+      else if (a && a.connected && best !== "active") best = "connected";
+      else if (b.paused && best === "awaiting") best = "paused";
+    });
+    const map = { active: ["ok", "active"], connected: ["accent", "connected"],
+                  paused: ["warn", "paused"], awaiting: ["accent", "authorized"] };
+    const [cls, txt] = map[best];
+    return '<span class="badge badge--' + cls + '">' + txt + "</span>";
+  }
+
+  function engRenderPositioning(binds, events) {
+    const act = engActorActivity(events);
+    const st = document.getElementById("pos-state");
+    if (st) {
+      st.className = "badge badge--" + (binds.length ? "accent" : "idle");
+      st.textContent = binds.length
+        ? binds.length + " agent" + (binds.length === 1 ? "" : "s") + " positioned"
+        : "no agents positioned";
+    }
+    const board = document.getElementById("pos-board");
+    if (board) {
+      let rows = "";
+      POS_STANCES.forEach((s) => {
+        const sb = binds.filter((b) => (b.stance || "") === s.id);
+        rows += '<div class="pos-row">' +
+          '<div class="pos-role"><span class="pos-ic" style="color:' + s.color + '">' +
+            '<i class="fa-solid ' + s.icon + '"></i></span>' +
+            '<div><div class="pos-role__t">' + s.label + "</div>" +
+            '<div class="pos-role__d muted">' + s.desc + "</div></div></div>" +
+          '<div class="pos-mid"><div class="pos-stat">' + engStanceBadge(sb, act) + "</div>" +
+            (sb.length
+              ? '<div class="pos-keys">' + sb.map((b) => engKeyChip(b, act)).join("") + "</div>"
+              : '<div class="pos-keys pos-keys--empty muted">No agent authorized — Assign a key, then connect your agent app (recipe below).</div>') +
+          "</div>" +
+          '<div class="pos-assign-col"><button class="btn btn-sm" data-pos-assign="' + s.id + '">' +
+            (sb.length ? "+ key" : "Assign") + "</button></div></div>";
+      });
+      const others = binds.filter((b) => !POS_STANCES.some((s) => s.id === (b.stance || "")));
+      if (others.length) {
+        rows += '<div class="pos-row pos-row--other"><div class="pos-role muted">' +
+          '<span class="pos-ic"><i class="fa-solid fa-key"></i></span>' +
+          '<div><div class="pos-role__t">Other</div><div class="pos-role__d muted">configurator / unrestricted</div></div></div>' +
+          '<div class="pos-mid"><div class="pos-stat"></div><div class="pos-keys">' +
+          others.map((b) => engKeyChip(b, act)).join("") + "</div></div><div class=\"pos-assign-col\"></div></div>";
+      }
+      board.innerHTML = rows;
+      engWireBoard();
+    }
+    engRenderAssign();
+  }
+
+  function engRenderAssign() {
+    const host = document.getElementById("pos-actions");
+    if (!host || host.dataset.ready) return;  // build once, preserve typing
+    host.dataset.ready = "1";
+    const opts = POS_STANCES.map((s) => '<option value="' + s.id + '">' + s.label + "</option>").join("");
+    host.innerHTML =
+      '<div class="pos-assign"><span class="pos-assign__h">Authorize an agent key:</span>' +
+      '<select class="select" id="pos-stance" style="max-width:140px">' + opts + "</select>" +
+      '<input class="input mono" id="pos-key" placeholder="agent key name (e.g. red-team-1)" style="max-width:240px">' +
+      '<button class="btn btn-primary btn-sm" data-eng="grant">Authorize</button></div>' +
+      '<div class="import-msg" id="pos-err" hidden style="margin:0 18px 14px"></div>';
+    host.querySelector('[data-eng="grant"]').addEventListener("click", engGrant);
+  }
+
+  function engRenderRecipe() {
+    const host = document.getElementById("pos-recipe");
+    if (!host || engRecipeDone) return;
+    engRecipeDone = true;
+    const gw = escapeHtml(engGateway || "http://localhost:9000/mcp");
+    host.innerHTML =
+      '<details class="pos-recipe"><summary><i class="fa-solid fa-plug"></i> ' +
+      "How to connect your agent app (then tell IT to attack)</summary>" +
+      '<ol class="pos-recipe__steps">' +
+      '<li>Create an agent key (admin):<div class="copyfield"><input class="input mono" readonly ' +
+        'value="docker exec nidavellir-orchestrator python auth.py create-key red-team-1 agent" id="rc-key">' +
+        '<button class="btn btn-sm" onclick="copyField(\'rc-key\')"><i class="fa-regular fa-copy"></i></button></div></li>' +
+      "<li>Authorize it above: stance <b>attacker</b>, key name <span class=\"mono\">red-team-1</span> → Authorize.</li>" +
+      '<li>Point your agent app (e.g. Claude Code) at the gateway:' +
+        '<div class="copyfield"><input class="input mono" readonly ' +
+        'value="claude mcp add --transport http nidavellir ' + gw + '" id="rc-mcp">' +
+        '<button class="btn btn-sm" onclick="copyField(\'rc-mcp\')"><i class="fa-regular fa-copy"></i></button></div>' +
+        '<div class="muted" style="font-size:12px;margin-top:4px">The gateway carries that agent key &amp; stance ' +
+        '(<span class="mono">NIDAVELLIR_AGENT_KEY</span>, <span class="mono">NIDAVELLIR_STANCE=attacker</span>) — ' +
+        "one key &amp; stance per gateway process.</div></li>" +
+      '<li>In your agent app, instruct it to start — e.g. <i>“attack this arena from the foothold and report findings”</i>. ' +
+        "Authorization is live per tool-call; every action streams into <b>Live activity</b> below, where you can Pause or Revoke.</li>" +
+      "</ol></details>";
+  }
+
+  /* -- configurator (SUT only) ----------------------------------------------- */
 
   function engSetupDriver(mode) {
     if (mode === "operator") return "Operator (human)";
@@ -553,124 +700,73 @@
     return "—";
   }
 
-  function engRoleChip(stance) {
-    const r = ENG_ROLES[stance] || ENG_ROLES[""];
-    return '<span class="eng-role"><span class="eng-role__ic" style="color:' + r.color +
-      '"><i class="fa-solid ' + r.icon + '"></i></span>' + r.label + "</span>";
-  }
-
-  function engRender(setup, binds) {
-    binds = binds || [];
-    const drivers = binds.length + (setup && setup.open ? 1 : 0);
-    const st = document.getElementById("eng-state");
-    if (st) {
-      st.className = "badge badge--" + (drivers ? "accent" : "idle");
-      st.textContent = drivers ? drivers + " active role" + (drivers === 1 ? "" : "s") : "no agents";
+  function engRenderConfigurator(setup) {
+    const board = document.getElementById("cfg-board");
+    if (!board) return;  // not a SUT arena — the card isn't rendered
+    const stEl = document.getElementById("cfg-state");
+    if (!engActive) {
+      board.innerHTML = '<div class="cfg-note" style="padding:16px 18px">Arena is not active.</div>';
+      if (stEl) { stEl.className = "badge badge--idle"; stEl.textContent = "inactive"; }
+      return;
     }
-    const board = document.getElementById("eng-board");
-    if (board) { board.innerHTML = engBoard(setup, binds); engWireBoard(); }
-
-    const sig = engActive ? (setup && setup.open ? "open|" + setup.mode : "start") : "inactive";
-    const acts = document.getElementById("eng-actions");
-    if (acts && sig !== engSig) { engSig = sig; acts.innerHTML = engActions(setup); engWireActions(); }
-    else if (setup && setup.open) engPatch(setup);
+    const open = setup && setup.open, exp = setup && setup.expired;
+    if (stEl) {
+      stEl.className = "badge badge--" + (open ? (exp ? "danger" : "ok") : "idle");
+      stEl.textContent = open ? (exp ? "expired" : "setup open") : "not started";
+    }
+    if (open) {
+      board.innerHTML = '<div class="cfg-meta" style="padding:14px 18px">' +
+        "<b>Driver:</b> " + escapeHtml(engSetupDriver(setup.mode)) +
+        ' · <b>Scope:</b> <span class="mono">' + escapeHtml((setup.nodes || []).join(", ") || "victim") + "</span>" +
+        " · <b>Steps:</b> " + setup.steps_run + "/" + setup.command_budget +
+        " · <b>Egress:</b> " + (setup.egress_enforced ? "open" : "off") + "</div>";
+    } else {
+      board.innerHTML = '<div class="cfg-note" style="padding:14px 18px">The software-under-test is not set up yet. ' +
+        "Start the setup phase below to bring the service up on the victim before positioning an attacker.</div>";
+    }
+    const sig = open ? "open|" + setup.mode : "start";
+    const acts = document.getElementById("cfg-actions");
+    if (acts && sig !== engCfgSig) { engCfgSig = sig; acts.innerHTML = engCfgActions(setup); engWireCfg(); }
+    else if (open) engPatch(setup);
   }
 
-  function engBoard(setup, binds) {
-    let rows = '<div class="eng-head"><span>Role</span><span>Driver</span><span>Status</span>' +
-      '<span class="eng-acts">Actions</span></div>';
-    let any = false;
-    if (engActive) {
-      any = true;
-      if (setup && setup.open) {
-        const exp = setup.expired;
-        rows += '<div class="eng-row">' +
-          "<div>" + engRoleChip("configurator") +
-            '<div class="eng-scope">setup · ' + escapeHtml((setup.nodes || []).join(", ") || "victim") + "</div></div>" +
-          '<div class="eng-driver">' + escapeHtml(engSetupDriver(setup.mode)) + "</div>" +
-          '<div><span class="badge badge--' + (exp ? "danger" : "ok") + '">' + (exp ? "expired" : "open") + "</span> " +
-            '<span class="muted" style="font-size:11.5px">' + setup.steps_run + "/" + setup.command_budget + " steps</span></div>" +
-          '<div class="eng-acts"><button class="btn btn-danger btn-sm" data-eng="finish">Finish</button></div></div>';
-      } else {
-        rows += '<div class="eng-row eng-row--idle">' +
-          "<div>" + engRoleChip("configurator") + '<div class="eng-scope">setup not started</div></div>' +
-          '<div class="eng-driver muted">—</div>' +
-          '<div><span class="badge badge--idle">idle</span></div>' +
-          '<div class="eng-acts"><span class="muted" style="font-size:12px">start below ↓</span></div></div>';
+  function engCfgActions(setup) {
+    let html = "";
+    if (!setup || !setup.open) {
+      html = '<div class="cfg-start" style="padding:0 18px 16px">' +
+        '<label class="cfg-fld"><span>Mode</span><select class="select" id="eng-mode">' +
+        '<option value="operator">operator-scripted (you run steps)</option>' +
+        '<option value="hitl">HITL (agent proposes, you approve)</option>' +
+        '<option value="autonomous">autonomous (agent runs directly — needs platform flag)</option>' +
+        "</select></label>" +
+        '<label class="cfg-fld"><span>Time-box (s)</span><input class="input" id="eng-tb" type="number" value="1800" min="60"></label>' +
+        '<label class="cfg-fld"><span>Step budget</span><input class="input" id="eng-budget" type="number" value="50" min="1"></label>' +
+        '<label class="cfg-check"><input type="checkbox" id="eng-egress"> open setup egress (victim can fetch dependencies)</label>' +
+        '<button class="btn btn-primary btn-sm" data-eng="start">Start setup</button></div>';
+    } else {
+      html = '<div style="padding:0 18px 16px">';
+      const conn = setup.connect || {}, ck = Object.keys(conn);
+      if (ck.length) {
+        html += '<div class="cfg-note" style="margin-bottom:8px"><b>Connect:</b> ' +
+          ck.map((n) => escapeHtml(n) + ' → <span class="mono">' + escapeHtml(conn[n]) + "</span>").join(" · ") + "</div>";
       }
-    }
-    binds.forEach((b) => {
-      any = true;
-      const enc = encodeURIComponent(b.agent_name);
-      const pauseBtn = b.paused
-        ? '<button class="btn btn-primary btn-sm" data-eng="resume" data-name="' + enc + '">Resume</button>'
-        : '<button class="btn btn-sm" data-eng="pause" data-name="' + enc + '">Pause</button>';
-      rows += '<div class="eng-row' + (b.paused ? " eng-row--paused" : "") + '">' +
-        "<div>" + engRoleChip(b.stance || "") + "</div>" +
-        '<div class="eng-driver"><span class="mono">' + escapeHtml(b.agent_name) + "</span>" +
-          '<div class="eng-scope">by ' + escapeHtml(b.granted_by || "—") + (b.auto ? " · auto" : "") + "</div></div>" +
-        "<div>" + (b.paused
-          ? '<span class="badge badge--warn">paused</span>'
-          : '<span class="eng-live"><span class="dot dot--active"></span> active</span>') + "</div>" +
-        '<div class="eng-acts">' + pauseBtn +
-          '<button class="btn btn-danger btn-sm" data-eng="revoke" data-name="' + enc + '">Revoke</button></div></div>';
-    });
-    if (!any) {
-      rows += '<div class="cfg-note" style="padding:16px 18px">No roles yet. Assign a driver below to authorize ' +
-        "a human or a BYO agent to act in this arena.</div>";
-    }
-    return rows;
-  }
-
-  function engActions(setup) {
-    const opts = ENG_STANCES.map((s) => '<option value="' + s[0] + '">' + s[1] + "</option>").join("");
-    let html = '<div class="eng-section"><div class="eng-section__h">Assign a driver to a role</div>' +
-      '<div class="binding-grant">' +
-      '<select class="select" id="eng-stance" style="max-width:160px">' + opts + "</select>" +
-      '<input class="input mono" id="eng-key" placeholder="agent key name" style="max-width:220px">' +
-      '<button class="btn btn-primary btn-sm" data-eng="grant">Grant</button>' +
-      '<span class="muted" style="font-size:12px">A bound key is a BYO agent; leave it unbound to drive the role yourself (human).</span>' +
-      "</div></div>";
-
-    if (engActive) {
-      html += '<div class="eng-section"><div class="eng-section__h">Setup phase</div>';
-      if (!setup || !setup.open) {
-        html += '<div class="cfg-note">Bring the service up on the victim before the engagement — ' +
-          "consented, time-boxed, victim-scoped.</div>" +
-          '<div class="cfg-start">' +
-          '<label class="cfg-fld"><span>Mode</span><select class="select" id="eng-mode">' +
-          '<option value="operator">operator-scripted (you run steps)</option>' +
-          '<option value="hitl">HITL (agent proposes, you approve)</option>' +
-          '<option value="autonomous">autonomous (agent runs directly — needs platform flag)</option>' +
-          "</select></label>" +
-          '<label class="cfg-fld"><span>Time-box (s)</span><input class="input" id="eng-tb" type="number" value="1800" min="60"></label>' +
-          '<label class="cfg-fld"><span>Step budget</span><input class="input" id="eng-budget" type="number" value="50" min="1"></label>' +
-          '<label class="cfg-check"><input type="checkbox" id="eng-egress"> open setup egress (victim can fetch dependencies)</label>' +
-          '<button class="btn btn-primary btn-sm" data-eng="start">Start setup</button></div>';
+      if (setup.mode === "operator") {
+        const no = (setup.nodes || []).map((n) => '<option value="' + escapeHtml(n) + '">' + escapeHtml(n) + "</option>").join("");
+        html += '<div class="cfg-step"><select class="select" id="eng-node" style="max-width:150px">' + no + "</select>" +
+          '<input class="input mono" id="eng-cmd" placeholder="setup command, e.g. apt-get install -y nginx">' +
+          '<button class="btn btn-sm" data-eng="step">Run</button></div><pre class="cfg-out" id="eng-out" hidden></pre>';
+      } else if (setup.mode === "hitl") {
+        html += '<div class="cfg-gen"><button class="btn btn-sm" id="eng-gen-btn" data-eng="generate">' +
+          '<i class="fa-solid fa-wand-magic-sparkles"></i> Generate steps (your model)</button>' +
+          '<span class="muted" style="font-size:12px;margin-left:8px" id="eng-gen-msg"></span></div>' +
+          '<div id="eng-props">' + engProposals(setup) + "</div>";
       } else {
-        const conn = setup.connect || {}, ck = Object.keys(conn);
-        if (ck.length) {
-          html += '<div class="cfg-note" style="margin-bottom:8px"><b>Connect:</b> ' +
-            ck.map((n) => escapeHtml(n) + ' → <span class="mono">' + escapeHtml(conn[n]) + "</span>").join(" · ") + "</div>";
-        }
-        if (setup.mode === "operator") {
-          const no = (setup.nodes || []).map((n) => '<option value="' + escapeHtml(n) + '">' + escapeHtml(n) + "</option>").join("");
-          html += '<div class="cfg-step"><select class="select" id="eng-node" style="max-width:150px">' + no + "</select>" +
-            '<input class="input mono" id="eng-cmd" placeholder="setup command, e.g. apt-get install -y nginx">' +
-            '<button class="btn btn-sm" data-eng="step">Run</button></div><pre class="cfg-out" id="eng-out" hidden></pre>';
-        } else if (setup.mode === "hitl") {
-          html += '<div class="cfg-gen"><button class="btn btn-sm" id="eng-gen-btn" data-eng="generate">' +
-            '<i class="fa-solid fa-wand-magic-sparkles"></i> Generate steps (your model)</button>' +
-            '<span class="muted" style="font-size:12px;margin-left:8px" id="eng-gen-msg"></span></div>' +
-            '<div id="eng-props">' + engProposals(setup) + "</div>";
-        } else {
-          html += '<div class="cfg-note">Autonomous: the connected agent runs setup steps directly through ' +
-            "the gateway (double-locked). Watch Activity below.</div>";
-        }
+        html += '<div class="cfg-note">Autonomous: the connected agent runs setup steps directly through ' +
+          "the gateway (double-locked). Watch Live activity below.</div>";
       }
-      html += "</div>";
+      html += '<div style="margin-top:12px"><button class="btn btn-danger btn-sm" data-eng="finish">Finish setup</button></div></div>';
     }
-    html += '<div class="import-msg" id="eng-err" hidden style="margin:0 18px 14px"></div>';
+    html += '<div class="import-msg" id="cfg-err" hidden style="margin:0 18px 14px"></div>';
     return html;
   }
 
@@ -695,43 +791,101 @@
     }
   }
 
+  /* -- live activity log ----------------------------------------------------- */
+
+  function engLogLine(e) {
+    const p = e.payload || {};
+    const actor = escapeHtml(p.actor || e.actor || "—");
+    const t = e.type || "";
+    let icon = "fa-circle", color = "var(--muted)", txt = escapeHtml(t);
+    if (t === "agent_exec") {
+      icon = "fa-terminal"; color = "var(--attacker)";
+      txt = "ran <code>" + escapeHtml((p.command || "").slice(0, 140)) + "</code> on <b>" +
+        escapeHtml(p.node || "?") + "</b> → exit " + (p.exit_code != null ? p.exit_code : "?");
+    } else if (t === "finding") {
+      icon = "fa-bug"; color = "var(--warn)";
+      txt = "reported <b>" + escapeHtml(p.title || "finding") + "</b>" + (p.cwe ? " (" + escapeHtml(p.cwe) + ")" : "");
+    } else if (t === "agent_session") {
+      icon = "fa-plug"; color = "var(--accent)";
+      txt = "connected — " + escapeHtml(p.model || "agent") + (p.stance ? " as " + escapeHtml(p.stance) : "");
+    } else if (t === "mitm_observe") {
+      icon = "fa-user-secret"; color = "var(--mitm)";
+      txt = "captured " + (p.packets != null ? p.packets : "?") + " packet(s)";
+    } else if (t === "setup_step") {
+      icon = "fa-screwdriver-wrench"; color = "var(--accent)";
+      txt = "setup <code>" + escapeHtml((p.command || "").slice(0, 140)) + "</code> on <b>" + escapeHtml(p.node || "?") + "</b>";
+    } else if (t.indexOf("setup") === 0) {
+      icon = "fa-screwdriver-wrench"; color = "var(--accent)"; txt = escapeHtml(t.replace(/_/g, " "));
+    } else if (t.indexOf("binding") >= 0) {
+      icon = "fa-chess"; color = "var(--accent)";
+      txt = escapeHtml(t.replace(/_/g, " ")) + (p.stance ? " (" + escapeHtml(p.stance) + ")" : "");
+    }
+    const full = e.ts || "";
+    const tm = (full.match(/\d{2}:\d{2}:\d{2}/) || [full])[0];  // compact time; full on hover
+    return '<div class="log-row"><span class="log-ic" style="color:' + color + '">' +
+      '<i class="fa-solid ' + icon + '"></i></span>' +
+      '<span class="log-ts mono faint" title="' + escapeHtml(full) + '">' + escapeHtml(tm) + "</span>" +
+      '<span class="log-actor mono" title="' + actor + '">' + actor + "</span>" +
+      '<span class="log-txt">' + txt + "</span></div>";
+  }
+
+  function engRenderLog(events) {
+    const host = document.getElementById("log-stream");
+    if (!host) return;
+    const cnt = document.getElementById("log-count");
+    if (cnt) cnt.textContent = events.length ? events.length + " event" + (events.length === 1 ? "" : "s") : "";
+    host.innerHTML = events.length
+      ? events.map(engLogLine).join("")
+      : '<div class="empty" style="padding:24px">No activity yet — once your agent connects and runs a tool, it appears here live.</div>';
+  }
+
+  /* -- wiring & actions ------------------------------------------------------ */
+
   function engWireBoard() {
-    document.querySelectorAll("#eng-board [data-eng]").forEach((btn) => {
+    document.querySelectorAll("#pos-board [data-eng]").forEach((btn) => {
       const act = btn.dataset.eng, name = btn.dataset.name ? decodeURIComponent(btn.dataset.name) : null;
       btn.addEventListener("click", () => {
-        if (act === "finish") {
-          if (confirm("Finish setup and revoke the configurator capability?")) engApi("/finish", "POST").then(engRefresh);
-        } else if (act === "pause" || act === "resume") {
+        if (act === "pause" || act === "resume") {
           postJson("/api/arenas/" + engArena + "/bindings/" + encodeURIComponent(name) + "/" + act)
             .then(({ status, data }) => { if (status === 200) engRefresh(); else engErr(data.error || data.detail || "HTTP " + status); });
         } else if (act === "revoke") {
+          if (!confirm("Revoke " + name + "'s access to this arena?")) return;
           fetch("/api/arenas/" + engArena + "/bindings/" + encodeURIComponent(name),
             { method: "DELETE", headers: { "X-CSRFToken": csrfToken() } })
             .then((r) => r.json().catch(() => ({}))).then(engRefresh);
         }
       });
     });
+    document.querySelectorAll("#pos-board [data-pos-assign]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const sel = document.getElementById("pos-stance"), key = document.getElementById("pos-key");
+        if (sel) sel.value = btn.dataset.posAssign;
+        if (key) key.focus();
+      });
+    });
   }
 
-  function engWireActions() {
-    document.querySelectorAll("#eng-actions [data-eng]").forEach((btn) => {
+  function engWireCfg() {
+    document.querySelectorAll("#cfg-actions [data-eng]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const act = btn.dataset.eng;
-        if (act === "grant") engGrant();
-        else if (act === "start") engStart();
+        if (act === "start") engStart();
         else if (act === "step") engStep();
         else if (act === "generate") engGenerate();
+        else if (act === "finish") {
+          if (confirm("Finish setup and revoke the configurator capability?")) engApi("/finish", "POST").then(engRefresh);
+        }
       });
     });
   }
 
   function engGrant() {
-    const stance = document.getElementById("eng-stance").value;
-    const name = document.getElementById("eng-key").value.trim();
-    if (!name) { engErr("Enter an agent key name (or drive the role yourself — no grant needed for a human)."); return; }
+    const stance = document.getElementById("pos-stance").value;
+    const name = document.getElementById("pos-key").value.trim();
+    if (!name) { engErr("Enter the agent key name to authorize (create one with auth.py create-key … agent)."); return; }
     postJson("/api/arenas/" + engArena + "/bindings", { agent_name: name, stance: stance || null })
       .then(({ status, data }) => {
-        if (status === 200) { engErr(""); document.getElementById("eng-key").value = ""; engRefresh(); }
+        if (status === 200) { engErr(""); document.getElementById("pos-key").value = ""; engRefresh(); }
         else engErr(data.error || data.detail || "HTTP " + status);
       });
   }
@@ -741,14 +895,14 @@
       time_box_seconds: +document.getElementById("eng-tb").value || 1800,
       command_budget: +document.getElementById("eng-budget").value || 50,
       setup_egress: document.getElementById("eng-egress").checked,
-    }).then((r) => { if (r.error) engErr(r.error); else { engErr(""); engRefresh(); } });
+    }).then((r) => { if (r.error) engCfgErr(r.error); else { engCfgErr(""); engRefresh(); } });
   }
   function engStep() {
     const command = document.getElementById("eng-cmd").value.trim();
     if (!command) return;
     engApi("/step", "POST", { node: document.getElementById("eng-node").value, command }).then((r) => {
-      if (r.error) { engErr(r.error); return; }
-      engErr("");
+      if (r.error) { engCfgErr(r.error); return; }
+      engCfgErr("");
       const out = document.getElementById("eng-out");
       if (out) { out.hidden = false; out.textContent = "$ " + command + "\n" + (r.stdout || "") + (r.stderr || ""); }
       document.getElementById("eng-cmd").value = "";
@@ -756,7 +910,7 @@
     });
   }
   function engDecide(stepId, decision) {
-    engApi("/proposals/" + stepId + "/" + decision, "POST").then((r) => { if (r.error) engErr(r.error); engRefresh(); });
+    engApi("/proposals/" + stepId + "/" + decision, "POST").then((r) => { if (r.error) engCfgErr(r.error); engRefresh(); });
   }
   function engGenerate() {
     const btn = document.getElementById("eng-gen-btn"), msg = document.getElementById("eng-gen-msg");
@@ -1139,9 +1293,13 @@
       pos["node_" + n.name] = { x: mx + (i - (bridges.length - 1) / 2) * HOST_GAP, y: BRIDGE_Y };
     });
 
-    const sub = (n) =>
-      n.kind === "foothold" ? (n.stance || "attacker")
-      : (n.kind === "target" && n.ports.length ? ":" + n.ports.join(",") : "");
+    const sub = (n) => {
+      const s = n.kind === "foothold" ? (n.stance || "attacker")
+        : (n.kind === "target" && n.ports.length ? ":" + n.ports.join(",") : "");
+      // don't repeat the node name on the second line (e.g. a node literally
+      // named "attacker" whose stance is also "attacker" → shown once).
+      return s && s.toLowerCase() === String(n.name).toLowerCase() ? "" : s;
+    };
 
     const els = [];
     segments.forEach((s) => els.push({

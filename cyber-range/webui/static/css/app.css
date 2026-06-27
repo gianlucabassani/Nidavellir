@@ -315,29 +315,60 @@ select[multiple] option { padding:6px 8px; border-radius:6px; }
 .binding-row--paused .mono.grow { text-decoration:line-through; text-decoration-color:var(--warn,#d9a441); }
 .binding-grant { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
 
-/* unified engagement roles board (arena detail) */
-.eng-head, .eng-row { display:grid; grid-template-columns:minmax(160px,1.1fr) minmax(150px,1.3fr) 150px auto;
-  gap:12px; align-items:center; padding:11px 18px; }
-.eng-head { font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
-  color:var(--faint); border-bottom:1px solid var(--line); }
-.eng-row { border-bottom:1px solid var(--line-soft); }
-.eng-row:last-child { border-bottom:0; }
-.eng-row--paused { opacity:.7; }
-.eng-role { display:inline-flex; align-items:center; gap:10px; font-weight:600; font-size:13.5px; }
-.eng-role__ic { width:28px; height:28px; flex:none; display:grid; place-items:center; border-radius:8px;
-  background:var(--surface-2); border:1px solid var(--line); font-size:13px; }
-.eng-driver { font-size:13px; min-width:0; }
-.eng-driver .mono { word-break:break-all; }
-.eng-scope { font-size:11.5px; color:var(--faint); margin-top:2px; }
-.eng-live { display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--ok); }
-.eng-acts { display:flex; gap:8px; justify-content:flex-end; align-items:center; flex-wrap:wrap; }
-.eng-section { padding:15px 18px; border-top:1px solid var(--line); }
-.eng-section__h { font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
-  color:var(--faint); margin-bottom:12px; }
+/* ---------- in-arena console: positioning + configurator + live log -------- */
+.btn-xs { padding:2px 8px; font-size:11px; line-height:1.7; }
+
+/* agent positioning board */
+.pos-row { display:grid; grid-template-columns:minmax(180px,1fr) minmax(220px,2fr) auto;
+  gap:14px; align-items:start; padding:13px 18px; border-bottom:1px solid var(--line-soft); }
+.pos-row:last-child { border-bottom:0; }
+.pos-row--other { background:var(--surface-2); }
+.pos-role { display:flex; align-items:flex-start; gap:11px; }
+.pos-ic { width:30px; height:30px; flex:none; display:grid; place-items:center; border-radius:9px;
+  background:var(--surface-2); border:1px solid var(--line); font-size:14px; }
+.pos-role__t { font-weight:600; font-size:14px; }
+.pos-role__d { font-size:11.5px; margin-top:1px; }
+.pos-mid { min-width:0; display:flex; flex-direction:column; gap:8px; }
+.pos-stat { display:flex; gap:8px; align-items:center; }
+.pos-keys { display:flex; flex-direction:column; gap:6px; }
+.pos-keys--empty { font-size:12px; line-height:1.5; }
+.pos-key { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:6px 9px;
+  background:var(--surface-2); border:1px solid var(--line); border-radius:8px; }
+.pos-key__n { font-size:12.5px; font-weight:600; }
+.pos-key__by { font-size:11px; }
+.pos-key__act { display:flex; gap:6px; margin-left:auto; }
+.pos-assign-col { display:flex; justify-content:flex-end; }
+.pos-assign { display:flex; gap:8px; flex-wrap:wrap; align-items:center;
+  padding:14px 18px; border-top:1px solid var(--line); }
+.pos-assign__h { font-size:12.5px; color:var(--muted); font-weight:600; }
+
+/* connect recipe (how to point a BYO agent app at the gateway) */
+.pos-recipe { border-top:1px solid var(--line); }
+.pos-recipe > summary { cursor:pointer; padding:12px 18px; font-size:12.5px; font-weight:600;
+  color:var(--accent); user-select:none; }
+.pos-recipe > summary:hover { background:var(--surface-2); }
+.pos-recipe__steps { margin:0; padding:4px 18px 18px 38px; display:flex; flex-direction:column;
+  gap:12px; font-size:12.5px; line-height:1.6; }
+.pos-recipe__steps .copyfield { margin-top:6px; }
+.cfg-meta { font-size:12.5px; line-height:1.7; }
+
+/* live activity log */
+#log-stream { max-height:440px; overflow:auto; }
+.log-row { display:grid; grid-template-columns:22px 78px 130px minmax(0,1fr); gap:10px;
+  align-items:baseline; padding:8px 18px; border-bottom:1px solid var(--line-soft); font-size:12.5px; }
+.log-row:last-child { border-bottom:0; }
+.log-ic { text-align:center; }
+.log-ts, .log-actor { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.log-ts { font-size:11px; }
+.log-actor { font-size:11.5px; color:var(--muted); }
+.log-txt { min-width:0; }
+.log-txt code { background:var(--surface-2); border:1px solid var(--line); border-radius:5px;
+  padding:1px 5px; font-size:11.5px; word-break:break-all; }
 @media (max-width:760px) {
-  .eng-head { display:none; }
-  .eng-row { grid-template-columns:1fr 1fr; row-gap:8px; }
-  .eng-acts { grid-column:1 / -1; justify-content:flex-start; }
+  .pos-row { grid-template-columns:1fr; }
+  .pos-assign-col { justify-content:flex-start; }
+  .log-row { grid-template-columns:20px 1fr; }
+  .log-ts, .log-actor { grid-column:2; white-space:normal; }
 }
 
 /* ---------- inventory (machine line-up) ---------- */

@@ -28,6 +28,10 @@ API_URL = os.getenv("ORCHESTRATOR_URL", "http://localhost:8000")
 API_KEY = os.getenv("ORCHESTRATOR_API_KEY", "dev-insecure-key")
 API_HEADERS = {"X-API-Key": API_KEY}
 
+# Public URL a BYO agent app (Claude Code, etc.) points its MCP client at to reach
+# the agent gateway. Shown in the in-arena "connect recipe" — override per host.
+GATEWAY_PUBLIC_URL = os.getenv("GATEWAY_PUBLIC_URL", "http://localhost:9000/mcp")
+
 # Operator login for the dashboard itself.
 WEBUI_USERNAME = os.getenv("WEBUI_USERNAME", "admin")
 WEBUI_PASSWORD = os.getenv("WEBUI_PASSWORD", "nidavellir")
@@ -494,6 +498,19 @@ def arena_detail(instance_id):
         flash(f"Arena {instance_id} not found.", "warning")
         return redirect(url_for("arenas"))
     outputs = data.get("outputs", {}) or {}
+    events = _events(instance_id, limit=30)
+    scenario = data.get("scenario", "") or ""
+    # A "configurable" (software-under-test) arena is one whose victim must be
+    # brought up before the engagement — the wizard (`sut:<repo>`), a clone/source
+    # node (`*_setup_shell` / `*_sut_source`), or one with a recorded setup phase.
+    # Predefined vulnerable labs are already armed, so the configurator is hidden
+    # for them; only agent positioning applies.
+    ev_types = {e.get("type") for e in events}
+    is_sut = (
+        scenario.startswith("sut:")
+        or any(k.endswith(("_setup_shell", "_sut_source")) for k in outputs)
+        or bool(ev_types & {"setup_prearm", "setup_session", "setup_step"})
+    )
     return render_template(
         "arena_detail.html", active="arenas",
         instance_id=instance_id,
@@ -503,8 +520,11 @@ def arena_detail(instance_id):
         nodes=_parse_nodes(outputs),
         unhealthy=outputs.get("unhealthy_nodes"),
         provider=outputs.get("provider") or data.get("provider"),
-        events=_events(instance_id, limit=30),
+        events=events,
         score=_score(instance_id),
+        scenario=scenario,
+        is_sut=is_sut,
+        gateway_url=GATEWAY_PUBLIC_URL,
     )
 
 
@@ -927,6 +947,14 @@ def scenario_topology_proxy(scenario_id):
     """Topology graph of a registered scenario for the pre-deploy preview."""
     data, ok = _api_get(f"/scenarios/{scenario_id}/topology")
     return jsonify(data or {"topology": None}), (200 if ok else 404)
+
+
+@app.route("/api/arenas/<instance_id>/events", methods=["GET"])
+def arena_events_proxy(instance_id):
+    """Recent audit events for this arena — feeds the in-arena live activity log
+    (every agent tool call, finding, connection, setup step). Read-only."""
+    limit = request.args.get("limit", 40)
+    return jsonify({"events": _events(instance_id, limit=limit)}), 200
 
 
 @app.route("/api/arenas/<instance_id>/bindings", methods=["GET"])

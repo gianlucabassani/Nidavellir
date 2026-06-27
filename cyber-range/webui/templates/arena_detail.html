@@ -144,41 +144,49 @@
 </div>
 {% endif %}
 
-<!-- Unified engagement: who drives this arena, in what role — the Setup
-     (configurator) hand-off plus every agent binding (D1), in one roles board. -->
-<div class="card pad-0" id="engagement-card" style="margin-top:18px">
+{% if is_sut %}
+<!-- Configurator (SUT only): bring the software-under-test up on the victim
+     before the engagement. Predefined vulnerable labs are already armed, so this
+     card is shown only for software-under-test arenas. -->
+<div class="card pad-0" id="configurator-card" style="margin-top:18px">
   <div class="card-head">
-    <h3><i class="fa-solid fa-users-gear"></i> Engagement
-      <span class="muted" style="font-weight:400;font-size:12px">— who drives this arena, in what role</span></h3>
+    <h3><i class="fa-solid fa-screwdriver-wrench"></i> Configurator
+      <span class="muted" style="font-weight:400;font-size:12px">— set up the software-under-test on the victim before the engagement</span></h3>
     <div class="spacer"></div>
-    <span id="eng-state" class="badge badge--idle">…</span>
+    <span id="cfg-state" class="badge badge--idle">…</span>
   </div>
-  <div id="eng-board"><div class="muted" style="padding:16px;font-size:13px">Loading…</div></div>
-  <div id="eng-actions"></div>
+  <div id="cfg-board"><div class="muted" style="padding:16px;font-size:13px">Loading…</div></div>
+  <div id="cfg-actions"></div>
+</div>
+{% endif %}
+
+<!-- Agent positioning (all arenas): authorize a bring-your-own agent to drive this
+     arena in a stance. This is authorization only — the operator then points their
+     own agent app (e.g. Claude Code) at the MCP gateway and tells IT to act. -->
+<div class="card pad-0" id="positioning-card" style="margin-top:18px"
+     data-gateway="{{ gateway_url }}" data-arena="{{ instance_id }}">
+  <div class="card-head">
+    <h3><i class="fa-solid fa-chess"></i> Agent positioning
+      <span class="muted" style="font-weight:400;font-size:12px">— authorize a BYO agent to drive this arena (attacker · defender · MITM)</span></h3>
+    <div class="spacer"></div>
+    <span id="pos-state" class="badge badge--idle">…</span>
+  </div>
+  <div id="pos-board"><div class="muted" style="padding:16px;font-size:13px">Loading…</div></div>
+  <div id="pos-actions"></div>
+  <div id="pos-recipe"></div>
 </div>
 
-<div class="card pad-0" style="margin-top:18px">
-  <div class="card-head"><h3><i class="fa-solid fa-clipboard-list"></i> Activity</h3>
+<!-- Live activity: every agent tool call, finding and connection, streamed from
+     the audit trail so the operator can monitor each action as it happens. -->
+<div class="card pad-0" id="actionlog-card" style="margin-top:18px">
+  <div class="card-head">
+    <h3><i class="fa-solid fa-wave-square"></i> Live activity
+      <span class="muted" style="font-weight:400;font-size:12px">— every tool call &amp; finding, as it happens</span></h3>
     <div class="spacer"></div>
-    <a href="{{ url_for('audit') }}" class="muted" style="font-size:12.5px">Full audit <i class="fa-solid fa-arrow-right"></i></a>
+    <span id="log-count" class="muted mono" style="font-size:12px"></span>
+    <a href="{{ url_for('audit') }}" class="muted" style="font-size:12.5px;margin-left:12px">Full audit <i class="fa-solid fa-arrow-right"></i></a>
   </div>
-  {% if events %}
-  <table class="table">
-    <thead><tr><th>Time</th><th>Type</th><th>Actor</th><th>Details</th></tr></thead>
-    <tbody>
-      {% for e in events %}
-      <tr>
-        <td class="mono faint" style="white-space:nowrap">{{ e.ts }}</td>
-        <td>{{ ui.event_badge(e.type) }}</td>
-        <td>{{ e.actor }}</td>
-        <td>{{ ui.event_detail(e) }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <div class="empty" style="padding:32px">No recorded activity for this arena yet.</div>
-  {% endif %}
+  <div id="log-stream"><div class="empty" style="padding:24px"><i class="fa-solid fa-circle-notch fa-spin"></i> Waiting for activity…</div></div>
 </div>
 
 <script id="lab-data" type="application/json">{{ outputs | tojson | safe }}</script>
@@ -189,8 +197,13 @@
   document.body.dataset.instanceId = "{{ instance_id }}";
   window.NIDAVELLIR_ARENA = {{ instance_id | tojson }};
   Nidavellir.initArena();
-  if (document.getElementById("engagement-card")) {
-    Nidavellir.initEngagement({{ instance_id | tojson }}, {{ (state == 'active') | tojson }});
+  if (document.getElementById("positioning-card")) {
+    Nidavellir.initEngagement(
+      {{ instance_id | tojson }},
+      {{ (state == 'active') | tojson }},
+      {{ is_sut | tojson }},
+      {{ gateway_url | tojson }}
+    );
   }
 </script>
 {% endblock %}
