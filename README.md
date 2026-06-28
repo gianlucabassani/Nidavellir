@@ -87,9 +87,9 @@ curl -sX POST localhost:8000/scenarios/import/vulhub -H "X-API-Key: dev-insecure
 ## Architecture
 
 ```
-┌────────────┐   HTTP    ┌──────────────┐   tasks   ┌─────────────┐   provider   ┌──────────────┐
-│  Console   │ ───────▶  │  Orchestrator │ ───────▶  │   Worker    │ ──────────▶  │ docker-local │
-│  (Flask)   │ ◀───────  │  (FastAPI)    │ ◀── Redis │  (Celery)   │   drivers    │ OpenStack/AWS│
+┌────────────┐   HTTP    ┌──────────────┐   tasks    ┌─────────────┐   provider   ┌──────────────┐
+│  Console   │ ───────▶ │ Orchestrator │ ───────▶  │   Worker    │ ──────────▶ │ docker-local │
+│  (Flask)   │ ◀─────── │ (FastAPI)    │ ◀── Redis │  (Celery)   │   drivers    │ OpenStack/AWS│
 └────────────┘           └──────┬───────┘            └─────────────┘              └──────────────┘
        ▲                        │ append-only events · API-key auth · Fernet-at-rest
        │ MCP gateway            ▼
