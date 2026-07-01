@@ -3,27 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nidavellir — Enterprise Cyber Arena</title>
+  <title>Nidavellir — Agentic Arena Forge</title>
   
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="assets/anvil_logo.png">
   
   <!-- SEO Meta Tags -->
-  <meta name="description" content="An enterprise cyber arena for testing AI agents in dynamic, multi-machine environments. Connect via MCP gateways with guardrails, budgets, and append-only audits.">
+  <meta name="description" content="An agentic arena forge for testing AI agents in dynamic, multi-machine environments. Connect via MCP gateways with guardrails, budgets, and append-only audits.">
   <meta name="keywords" content="cybersecurity, cyber range, AI agents, MCP gateway, pentesting, red team, blue team, FastAPI, Celery, Docker, OpenStack, AWS">
 
   <!-- Open Graph / Facebook Link Previews -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://gianlucabassani.github.io/Nidavellir/">
-  <meta property="og:title" content="Nidavellir — Enterprise Cyber Arena">
-  <meta property="og:description" content="An enterprise cyber arena for testing AI agents in dynamic, multi-machine environments. Connect via MCP gateways with guardrails, budgets, and append-only audits.">
+  <meta property="og:title" content="Nidavellir — Agentic Arena Forge">
+  <meta property="og:description" content="An agentic arena forge for testing AI agents in dynamic, multi-machine environments. Connect via MCP gateways with guardrails, budgets, and append-only audits.">
   <meta property="og:image" content="https://gianlucabassani.github.io/Nidavellir/assets/anvil_logo.png">
 
   <!-- Twitter Link Previews -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:url" content="https://gianlucabassani.github.io/Nidavellir/">
-  <meta name="twitter:title" content="Nidavellir — Enterprise Cyber Arena">
-  <meta name="twitter:description" content="An enterprise cyber arena for testing AI agents in dynamic, multi-machine environments. Connect via MCP gateways with guardrails, budgets, and append-only audits.">
+  <meta name="twitter:title" content="Nidavellir — Agentic Arena Forge">
+  <meta name="twitter:description" content="An agentic arena forge for testing AI agents in dynamic, multi-machine environments. Connect via MCP gateways with guardrails, budgets, and append-only audits.">
   <meta name="twitter:image" content="https://gianlucabassani.github.io/Nidavellir/assets/anvil_logo.png">
   
   <!-- Web Fonts -->
@@ -1234,7 +1234,7 @@
         </div>
         <div class="wordmark">
           <span>Nidavellir</span>
-          <small>Enterprise Cyber Arena</small>
+          <small>Agentic Arena Forge</small>
         </div>
       </div>
       <nav class="nav-links">
@@ -1258,7 +1258,7 @@
       <section class="hero">
         <div class="container hero-split">
           <div class="hero-left">
-            <span class="hero-eyebrow">Enterprise Cyber Arena</span>
+            <span class="hero-eyebrow">Agentic Arena Forge</span>
             <h1>Testing Skills in Dynamic Environments & Testing AI Agents</h1>
             <p class="hero-desc">
               Provision arbitrary multi-machine vulnerable topologies on demand and expose them, through 
@@ -1564,81 +1564,120 @@
           </div>
           
           <div class="roadmap-timeline">
-            <!-- Phase 0 -->
+            <!-- Foundation -->
             <div class="roadmap-item complete">
               <div class="roadmap-badge"></div>
               <div class="roadmap-meta">
-                <span class="roadmap-phase">Phase 0</span>
-                <span class="roadmap-status">Completed</span>
+                <span class="roadmap-phase">Foundation</span>
+                <span class="roadmap-status">Shipped</span>
               </div>
               <div class="roadmap-content">
-                <h3>Repositioning & Hygiene</h3>
-                <p>Renamed core user roles (student/instructor to operator/agent). Dropped obsolete EDU-ITS server bindings. Audited vulnerabilities, verified secrets hygiene log redactions, and established green pytest/ruff gates inside CI pipelines.</p>
+                <h3>The Substrate & Three Pillars</h3>
+                <p>The production control plane plus all three pillars: the v3 dynamic topology engine and docker-local compiler (egress-locked container ranges in seconds); the MCP agent gateway with attacker / MITM / defender / configurator stances, server-enforced per-arena key&#8596;arena bindings, an operator kill-switch, and an append-only audit trace; and zero-to-prompt scenario generation with the software-under-test wizard and the operator co-pilot.</p>
               </div>
             </div>
 
-            <!-- Phase 1 -->
-            <div class="roadmap-item complete">
-              <div class="roadmap-badge"></div>
-              <div class="roadmap-meta">
-                <span class="roadmap-phase">Phase 1</span>
-                <span class="roadmap-status">Completed</span>
-              </div>
-              <div class="roadmap-content">
-                <h3>Dynamic Range Compiler (Pillar 1)</h3>
-                <p>Shipped the abstract v3 YAML scenario schema for arbitrary N-node networks and subnets, and the compiler that deploys it. The docker-local provider stands up egress-locked container ranges in seconds; a local QEMU/Libvirt VM provider and Docker Hub image-existence verification are in place, alongside the Vulhub community-environment importer.</p>
-              </div>
-            </div>
-
-            <!-- Phase 2 -->
-            <div class="roadmap-item complete">
-              <div class="roadmap-badge"></div>
-              <div class="roadmap-meta">
-                <span class="roadmap-phase">Phase 2</span>
-                <span class="roadmap-status">Completed</span>
-              </div>
-              <div class="roadmap-content">
-                <h3>MCP Agent Gateways (Pillar 2)</h3>
-                <p>Live Model Context Protocol gateway with per-session credentials and stance capabilities — attacker (foothold-scoped exec), MITM (in-path traffic observation), blue-team defender, plus operator/configurator stances. Server-enforced per-arena key&#8596;arena bindings, an operator kill-switch / pause, default-on egress containment, and an append-only audit tracer.</p>
-              </div>
-            </div>
-
-            <!-- Phase 3 -->
-            <div class="roadmap-item complete">
-              <div class="roadmap-badge"></div>
-              <div class="roadmap-meta">
-                <span class="roadmap-phase">Phase 3</span>
-                <span class="roadmap-status">Completed</span>
-              </div>
-              <div class="roadmap-content">
-                <h3>Zero-to-Prompt Scenario Gen (Pillar 3)</h3>
-                <p>Natural-language prompts compile to schema-validated v3 topologies through a bring-your-own model. An operator-tier MCP scaffolding tool with a console diff/review view, a guided software-under-test authoring wizard, and human-in-the-loop setup-proposal generation gate every spec before it provisions.</p>
-              </div>
-            </div>
-
-            <!-- Phase 4 -->
+            <!-- M1 -->
             <div class="roadmap-item active">
               <div class="roadmap-badge"></div>
               <div class="roadmap-meta">
-                <span class="roadmap-phase">Phase 4</span>
+                <span class="roadmap-phase">M1</span>
                 <span class="roadmap-status">Active</span>
               </div>
               <div class="roadmap-content">
-                <h3>SUT Scoring & Live Telemetry</h3>
-                <p>Integrating software-under-test monitor sidecars to catch runtime crashes, sanitizer trips, and exceptions, with a crash-oracle and agent scoring benchmarks that grade model efficiency against open-ended vulnerabilities. Replacing console polling with a server-sent-events live activity stream.</p>
+                <h3>Reliable Repo-to-Service Provisioning</h3>
+                <p>Point Nidavellir at any GitHub repo and get a healthy, version-pinned service. A repo-introspection step grounds the generator and setup proposals so they stop guessing; the build pipeline honors an existing Dockerfile / Compose / devcontainer, falls back to Cloud Native Buildpacks, then to verified LLM Dockerfile synthesis with a build-and-rollback loop.</p>
               </div>
             </div>
 
-            <!-- Phase 5 -->
+            <!-- M2 -->
+            <div class="roadmap-item active">
+              <div class="roadmap-badge"></div>
+              <div class="roadmap-meta">
+                <span class="roadmap-phase">M2</span>
+                <span class="roadmap-status">Active</span>
+              </div>
+              <div class="roadmap-content">
+                <h3>Deep Monitoring, Crash Oracle & Scoring</h3>
+                <p>A monitor sidecar turns crashes, sanitizer aborts, and unhandled 5xx into scored evidence — so a target with no known-CVE list is still scorable. Deterministic validators confirm findings before they count, and structured, machine-parseable verdicts with subtask partial credit replace win/lose scoring.</p>
+              </div>
+            </div>
+
+            <!-- M3 -->
             <div class="roadmap-item">
               <div class="roadmap-badge"></div>
               <div class="roadmap-meta">
-                <span class="roadmap-phase">Phase 5</span>
+                <span class="roadmap-phase">M3</span>
                 <span class="roadmap-status">Planned</span>
               </div>
               <div class="roadmap-content">
-                <h3>Hardening, Budgets & Multi-Tenancy</h3>
-                <p>Per-operator orchestrator identity and token/step budgets, full-disk VulnHub VM conversion and live Libvirt boot, in-path MITM message rewriting, and the multi-tenant workspace controls — shared/hosted operation with isolated tenancy and durable per-scope guardrails.</p>
+                <h3>Benchmark & Eval Layer</h3>
+                <p>Every run becomes a comparable, replayable benchmark: model, scaffold, cost, and pass@k reported together, with difficulty tiers and guided / unguided modes. Traces export as eval datasets in OpenTelemetry-GenAI shape, tagged to MITRE ATT&CK, MITRE ATLAS, and the OWASP LLM Top 10.</p>
+              </div>
+            </div>
+
+            <!-- M4 -->
+            <div class="roadmap-item">
+              <div class="roadmap-badge"></div>
+              <div class="roadmap-meta">
+                <span class="roadmap-phase">M4</span>
+                <span class="roadmap-status">Planned</span>
+              </div>
+              <div class="roadmap-content">
+                <h3>Gateway Hardening & Multi-Agent</h3>
+                <p>MCP OAuth 2.1 with audience-bound tokens, tool-poisoning and confused-deputy defenses, durable fail-closed budgets, and per-request auth that unlocks concurrent red-vs-blue on one arena. Higher-level attacker tooling arrives: an HTTP intercept proxy, a headless browser, and a proof-of-concept sandbox.</p>
+              </div>
+            </div>
+
+            <!-- M5 -->
+            <div class="roadmap-item">
+              <div class="roadmap-badge"></div>
+              <div class="roadmap-meta">
+                <span class="roadmap-phase">M5</span>
+                <span class="roadmap-status">Planned</span>
+              </div>
+              <div class="roadmap-content">
+                <h3>Console & the No-AI Human Path</h3>
+                <p>A server-sent-events live feed replaces polling; in-browser terminal and desktop access (ttyd / noVNC / Guacamole) make every arena fully drivable by a human with no model in the loop. Plus a reusable pack library with full / light / mini variants and a read-only tool layer for the operator co-pilot.</p>
+              </div>
+            </div>
+
+            <!-- M6 -->
+            <div class="roadmap-item">
+              <div class="roadmap-badge"></div>
+              <div class="roadmap-meta">
+                <span class="roadmap-phase">M6</span>
+                <span class="roadmap-status">Planned</span>
+              </div>
+              <div class="roadmap-content">
+                <h3>LLM-Application Targets</h3>
+                <p>A new arena archetype where the victim is an LLM application, with packs mapped to the OWASP Top 10 for LLM and Agentic Applications: prompt injection, system-prompt leakage, excessive agency, and RAG attacks — each scored from the app's own logs.</p>
+              </div>
+            </div>
+
+            <!-- M7 -->
+            <div class="roadmap-item">
+              <div class="roadmap-badge"></div>
+              <div class="roadmap-meta">
+                <span class="roadmap-phase">M7</span>
+                <span class="roadmap-status">Planned</span>
+              </div>
+              <div class="roadmap-content">
+                <h3>Purple-Team Paired Telemetry</h3>
+                <p>Attacker and defender on one arena produce joined, ATT&CK-tagged red / blue datasets. Detection scores within a window of each red action, weighted so that remediation counts for more than detection alone.</p>
+              </div>
+            </div>
+
+            <!-- M8 -->
+            <div class="roadmap-item">
+              <div class="roadmap-badge"></div>
+              <div class="roadmap-meta">
+                <span class="roadmap-phase">M8</span>
+                <span class="roadmap-status">Planned</span>
+              </div>
+              <div class="roadmap-content">
+                <h3>Hardening & Multi-Provider Hosting</h3>
+                <p>Per-operator identity, multi-tenant workspaces, Google SSO, and envelope key custody; the container daemon off the control plane; real VM and AWS deployment with ranges-as-code; and full observability. Deferred until the M1–M3 spine lands.</p>
               </div>
             </div>
           </div>

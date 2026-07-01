@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="170" viewBox="0 0 760 170" role="img" aria-label="Nidavellir — Enterprise Cyber Arena">
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="170" viewBox="0 0 760 170" role="img" aria-label="Nidavellir — Agentic Arena Forge">
   <defs>
     <linearGradient id="amber" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#F8B53C"/>
@@ -28,7 +28,7 @@
   <!-- wordmark -->
   <g transform="translate(156,0)" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif">
     <text x="0" y="78" font-size="46" font-weight="800" letter-spacing="-1.5" fill="#E7EBF3">Nidavellir</text>
-    <text x="2" y="108" font-size="15" font-weight="600" letter-spacing="7" fill="#F5A524" font-family="ui-monospace,SF Mono,Menlo,monospace">ENTERPRISE CYBER ARENA</text>
+    <text x="2" y="108" font-size="15" font-weight="600" letter-spacing="7" fill="#F5A524" font-family="ui-monospace,SF Mono,Menlo,monospace">AGENTIC ARENA FORGE</text>
     <rect x="2" y="122" width="52" height="3" rx="1.5" fill="#F5A524"/>
     <text x="64" y="127" font-size="13" fill="#8A93A8" font-family="ui-monospace,SF Mono,Menlo,monospace">arena forge · BYO-AI under test via MCP</text>
   </g>

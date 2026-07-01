@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="docs/assets/logo.svg" alt="Nidavellir — Enterprise Cyber Arena" width="620">
+  <img src="docs/assets/logo.svg" alt="Nidavellir — Agentic Arena Forge" width="620">
 </p>
 
 <p align="center">
-  <b>An enterprise cyber arena for testing skills in dynamic environments — and, above all, for testing AI agents.</b><br>
+  <b>An agentic arena forge for testing skills in dynamic environments — and, above all, for testing AI agents.</b><br>
   Provision arbitrary multi-machine vulnerable topologies on demand and expose them, through
   <b>MCP gateways</b>, to bring-your-own agents placed as <b>attacker</b>, <b>MITM</b>, or <b>defender</b>.
 </p>
@@ -104,19 +104,22 @@ curl -sX POST localhost:8000/scenarios/import/vulhub -H "X-API-Key: dev-insecure
 
 ## Roadmap
 
-The plan is sequenced around the three pillars on top of the shipped production substrate.
-Full detail in [`ROADMAP.md`](ROADMAP.md).
+Re-sequenced (2026-07-01) around the **software-under-test vertical** — *point Nidavellir at
+any repo → stand it up reliably → monitor it deeply → score a bring-your-own agent that
+pentests it*. The scenario generator, SUT arenas, configurator and co-pilot already shipped;
+M1–M3 **deepen** them into the spine. Full detail (with the state-of-the-art we align to) in
+[`ROADMAP.md`](ROADMAP.md).
 
-| Phase | Focus | Status |
+| Milestone | Focus | Status |
 |------|-------|--------|
-| **0** | Repositioning & hygiene | ✅ complete |
-| **1** | Dynamic topology engine (GOAD-style) | 🟡 in progress — schema v3 ✅, docker-local compiler ✅, image map ✅, **Vulhub importer ✅**, arena packs/variants ◻ |
-| **2** | **MCP agent gateway & stances** *(differentiator)* | 🟡 in progress — gateway ✅, attacker ✅, defender (partial), configurator/SUT setup ✅, **key↔arena binding ✅**, MITM ◻ |
-| **3** | Zero-to-prompt scenario generation (BYO key) | ◻ planned |
-| **4** | Scoring, eval & trace datasets | 🟡 manifest + findings ✅, crash/monitor oracle ◻ |
-| **5** | Hardening & multi-provider hosting (AWS) | 🟡 AWS `nodes[]` module ✅ (no real apply yet), RBAC/workspaces/SSO ◻ |
-| **6** | Observability & scale | ◻ planned |
-| **7** | Operator/auditor console | ✅ redesigned (mission-control dark) — SSE live feed ◻ |
+| **M1** | Reliable *repo → running-service* provisioning (buildpacks-first + verified LLM Dockerfile synthesis) | 🟡 SUT clone + white-box mount + gated source-build ✅; repo-introspection + buildpacks + verified loop ◻ |
+| **M2** | Deep monitoring + crash oracle + structured scoring | 🟡 vuln-manifest + findings ✅; monitor sidecar + deterministic validators + partial credit ◻ |
+| **M3** | Benchmark & eval layer (traces → datasets, replay) | ◻ planned — model+scaffold+cost rows, OTel/OpenInference traces, ATT&CK/ATLAS/OWASP tagging |
+| **M4** | MCP gateway hardening & multi-agent | 🟡 gateway + stances + key↔arena binding + per-arena pause ✅; OAuth 2.1, concurrency, tool defenses, higher-level tools ◻ |
+| **M5** | Console, browser access & the no-AI human path | 🟡 mission-control console + co-pilot + topology preview ✅; SSE, in-browser terminal/VNC, pack library ◻ |
+| **M6** | LLM-application-as-target arenas (OWASP LLM / Agentic Top 10) | ◻ planned |
+| **M7** | Purple-team paired telemetry & detection scoring | ◻ planned |
+| **M8** | Hardening & multi-provider hosting (RBAC / SSO / AWS) | ◻ planned — deferred until the M1–M3 spine lands |
 
 ## Documentation
 
