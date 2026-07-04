@@ -313,6 +313,22 @@ and returns `{valid, summary, topology, warnings}` **without deploying** — the
 review gate the WebUI **Wizard** (`/wizard`) uses to show the planned topology
 before launch.
 
+Both introspect the repo (M1-1) — detected language / build system / declared
+ports / base runtime — and plan the deterministic build tier (M1-2, ADR-0008), so
+the response carries `introspection` + `build_plan`. When the repo ships a
+`Dockerfile` and source builds are enabled (`NIDAVELLIR_ALLOW_SOURCE_BUILD=true`),
+the victim **auto-builds to a version-pinned image** (`build_plan.auto_build`);
+otherwise the bare-Ubuntu + configurator flow is used. `compose` / `devcontainer` /
+`buildpack` are detected but their execution is deferred (see ADR-0008).
+
+`POST /repos/synthesize-dockerfile` (operator-only) is the **tier-3 fallback** for a
+repo that ships no Dockerfile/compose/devcontainer (M1-3, Repo2Run): the operator's
+own connected model drafts a Dockerfile grounded in the introspection, the platform
+**actually builds it**, feeds any build error back to the model to fix, and returns
+only one that **built green** (`{ok, dockerfile, attempts, introspection, build_plan}`)
+— never an unverified Dockerfile, never an auto-deploy. Requires a connected model
+and source builds enabled (409 otherwise). Body: `{repo, ref?, max_attempts?}`.
+
 ### Configurator setup phase (SUT arenas)
 
 Bring an arbitrary OSS service up on the victim node before an engagement

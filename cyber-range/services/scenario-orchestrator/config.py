@@ -103,10 +103,15 @@ SECRETS_ENCRYPTION_KEY = os.getenv("SECRETS_ENCRYPTION_KEY")
 
 # SOFTWARE-UNDER-TEST (SUT) ARENAS — build-from-source execution (P1-6, ADR-0007).
 # Building an arbitrary OSS repo executes third-party code at BUILD time (the
-# Dockerfile RUN steps), which is strictly more dangerous than pulling a published
-# image — so it is OFF by default and must be enabled explicitly. Build-time
-# network is open (apt/pip/npm/go mod); the arena RUNTIME stays egress-locked
-# regardless. SOURCE_BUILD_TIMEOUT bounds the build request. See SECURITY.md.
+# Dockerfile RUN steps). M1 added the guardrails that make enabling this a
+# supported operation: the M1-3 verified-build loop (a synthesized Dockerfile is
+# only used after it builds green), build-time-egress-only (the arena RUNTIME
+# stays egress-locked regardless), version-pinning + arena-labeled image reclaim
+# on destroy(), and SSRF-guarded remote/clone contexts. It stays an explicit
+# opt-in (not default-on) because build-time RUN still executes as the daemon,
+# which is root-equivalent until M8 gets docker.sock off the orchestrator /
+# rootless; flip the default only once that sandboxing lands. Covers source AND
+# `service.package` builds. SOURCE_BUILD_TIMEOUT bounds the build. See SECURITY.md.
 ALLOW_SOURCE_BUILD = os.getenv("NIDAVELLIR_ALLOW_SOURCE_BUILD", "false").lower() in (
     "true", "1", "yes", "on"
 )

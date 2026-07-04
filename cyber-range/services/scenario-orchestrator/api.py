@@ -20,6 +20,7 @@ import bindings
 import build_planner
 import catalog
 import config
+import dockerfile_synth
 import generator
 import image_check
 import images
@@ -37,6 +38,7 @@ from orchestrator import Orchestrator
 from providers import (
     available_providers,
     default_provider_name,
+    get_provider,
     infra_class_of,
     resolve_provider_name,
 )
@@ -840,6 +842,112 @@ def deploy_sut_arena(
         variables={}, provider=req.provider, scenario_config=spec, setup_prearm=prearm,
     )
     return {"status": "accepted", "instance_id": system_id}
+
+
+class SynthesizeDockerfileRequest(BaseModel):
+    repo: str = Field(min_length=8, max_length=400)
+    ref: str | None = Field(default=None, max_length=120)
+    max_attempts: int = Field(default=dockerfile_synth.DEFAULT_MAX_ATTEMPTS, ge=1, le=5)
+
+    @field_validator("repo")
+    @classmethod
+    def _repo_is_https_git(cls, value: str) -> str:
+        value = value.strip()
+        if not _GIT_URL_RE.match(value):
+            raise ValueError("repo must be an https:// git URL")
+        try:
+            netguard.assert_public_host(value, resolve=False)
+        except netguard.UnsafeHostError as e:
+            raise ValueError(str(e)) from e
+        return value
+
+    @field_validator("ref")
+    @classmethod
+    def _ref_is_safe(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if value and not _GIT_REF_RE.match(value):
+            raise ValueError("ref may contain only letters, digits, '.', '_', '/', '-'")
+        return value or None
+
+
+@app.post("/repos/synthesize-dockerfile")
+@limiter.limit(RATE_LIMIT_DEPLOY)
+def synthesize_dockerfile(
+    request: Request,
+    req: SynthesizeDockerfileRequest,
+    principal: Principal = Depends(require_principal),
+):
+    """Synthesize a Dockerfile for a repo that ships none, with a **verified-build
+    loop** (M1-3, ADR-0008 tier-3 / Repo2Run): the OPERATOR'S OWN model drafts a
+    Dockerfile grounded in the repo introspection; the platform actually **builds
+    it**, feeds any build error back to the model to fix, and only returns one that
+    **built green**. Never auto-deploys (review gate) — the operator reviews the
+    verified Dockerfile, then launches a SUT arena. Operator-only; 409 without a
+    connected model; requires source builds enabled (verification runs a real
+    build). Scope boundary holds: the model + key are the operator's; Nidavellir
+    supplies the verified-build harness, never the AI ([[cyberguard-ai-scope-boundary]])."""
+    _require_operator(principal)
+    if not config.ALLOW_SOURCE_BUILD:
+        raise HTTPException(
+            status_code=409,
+            detail="Dockerfile synthesis verifies by building — enable source builds "
+                   "(NIDAVELLIR_ALLOW_SOURCE_BUILD=true) first",
+        )
+    cred = db.get_decrypted_model_credential(principal.name)
+    if not cred:
+        raise HTTPException(
+            status_code=409,
+            detail="no model connected — configure one via the model bubble first",
+        )
+
+    introspection = repo_introspect.summarize_for_prompt(
+        repo_introspect.introspect(req.repo, req.ref)
+    )
+    plan = build_planner.plan_build(introspection)
+    if plan.executable:
+        # The repo already ships a Dockerfile — synthesis is unnecessary.
+        return {
+            "ok": True, "synthesized": False, "dockerfile": None,
+            "introspection": introspection, "build_plan": plan.to_dict(),
+            "note": f"repo already provides a deterministic build ({plan.strategy}); "
+                    "no synthesis needed",
+        }
+
+    provider = get_provider("docker-local")
+
+    def complete(system, messages):
+        reply = model_chat.complete_chat(
+            cred["provider"], cred["model"], cred["api_key"], system, messages,
+            max_tokens=2048, json_mode=False,
+        )
+        if reply.lstrip().startswith(model_chat.ERROR_SENTINEL):
+            clean = reply.replace(model_chat.ERROR_SENTINEL, "").strip()
+            raise dockerfile_synth.SynthError(
+                f"the model provider could not complete the request: {clean}", raw=reply
+            )
+        return reply
+
+    def build(dockerfile_text):
+        return provider.verify_build_dockerfile(req.repo, req.ref, dockerfile_text)
+
+    result = dockerfile_synth.synthesize_verified_dockerfile(
+        complete, build, introspection, max_attempts=req.max_attempts
+    )
+    logger.info(
+        "Dockerfile synthesis for %s by '%s': ok=%s attempts=%d",
+        req.repo, principal.name, result["ok"], len(result["attempts"]),
+    )
+    return {
+        "ok": result["ok"],
+        "synthesized": True,
+        "dockerfile": result["dockerfile"],
+        "attempts": result["attempts"],
+        "error": result["error"],
+        "introspection": introspection,
+        "build_plan": plan.to_dict(),
+    }
 
 
 @app.get("/providers")

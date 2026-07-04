@@ -496,6 +496,30 @@ def test_open_url_targets_web_port_not_first_published():
     assert out["node_box_ports"] == {"21": "49000", "80": "49001", "3306": "49002"}
 
 
+def test_browser_target_prefers_a_listening_port_over_a_dead_higher_pref_one():
+    # A target may EXPOSE a web port it doesn't serve (crccheck/docker-hello-world
+    # exposes 80 and 8000 but listens only on 8000). Given the container's actual
+    # LISTEN set, the Open URL must land on the served port, not the preferred-but-
+    # dead 80.
+    published = {80: "32768", 8000: "32769"}
+    assert DockerLocalProvider._browser_target(published, listening={8000}) == ("32769", "http")
+    # Unknown listening set → preference order (unchanged for single-port targets).
+    assert DockerLocalProvider._browser_target(published) == ("32768", "http")
+    # Listening set known but no web port served → fall back to preference order.
+    assert DockerLocalProvider._browser_target(published, listening={22}) == ("32768", "http")
+
+
+def test_parse_listening_ports_from_proc_net_tcp():
+    # /proc/net/tcp{,6}: col 1 = local addr:HEXPORT, col 3 = st (0A = LISTEN).
+    blob = (
+        "  sl  local_address rem_address   st tx_queue rx_queue\n"
+        "   0: 0100007F:1F40 00000000:0000 0A 00000000:00000000\n"   # 127.0.0.1:8000 LISTEN
+        "   1: 0100007F:0050 00000000:0000 06 00000000:00000000\n"   # :80 TIME_WAIT (not LISTEN)
+        "   2: 00000000000000000000000000000000:1F90 ...:0000 0A\n"  # :: (ipv6) 8080 LISTEN
+    )
+    assert DockerLocalProvider._parse_listening_ports(blob) == {8000, 8080}
+
+
 def test_open_url_uses_https_scheme_for_tls_port():
     client = _FakeClient()
     provider = DockerLocalProvider(client=client)
@@ -960,6 +984,64 @@ def test_sut_source_build_image_is_reclaimed_on_destroy(monkeypatch):
 
     assert provider.destroy("sutbuild2-uuid")["success"] is True
     assert built_tag in client.images.removed
+
+
+# --- service.package install (M1-4) ------------------------------------------
+
+def test_service_package_builds_apt_image_when_enabled(monkeypatch):
+    monkeypatch.setattr(config, "ALLOW_SOURCE_BUILD", True)
+    client = _FakeClient()
+    provider = DockerLocalProvider(client=client)
+    scenario = {
+        "requires": {"provider_class": "container", "egress": "open"},
+        "nodes": [
+            {"name": "victim", "role": "victim", "ports": [80],
+             "service": {"package": "nginx=1.24.0"}},
+            {"name": "attacker", "role": "attacker",
+             "image": "kalilinux/kali-rolling:latest", "entrypoint": True},
+        ],
+    }
+    result = provider.deploy(scenario, "pkgbuild1-uuid")
+    assert result["success"] is True, result.get("error")
+    build = next(b for b in client.images.built
+                 if str(b.get("tag", "")).startswith("nidavellir/sut:"))
+    # context-free fileobj build with the apt recipe baked in, arena-labeled
+    df = build["fileobj"].getvalue().decode()
+    assert df.startswith("FROM ") and "apt-get install -y" in df and "nginx=1.24.0" in df
+    assert build["labels"][LABEL_LAB_ID] == "pkgbuild1-uuid"
+    # the victim runs the built package image; destroy reclaims it
+    victim_kw = next(kw for kw in client.containers.run_kwargs
+                     if kw["labels"][LABEL_NODE] == "victim")
+    assert victim_kw["image"] == build["tag"]
+    assert provider.destroy("pkgbuild1-uuid")["success"] is True
+    assert build["tag"] in client.images.removed
+
+
+def test_service_package_rejects_shell_injection(monkeypatch):
+    monkeypatch.setattr(config, "ALLOW_SOURCE_BUILD", True)
+    client = _FakeClient()
+    provider = DockerLocalProvider(client=client)
+    scenario = {
+        "requires": {"provider_class": "container", "egress": "open"},
+        "nodes": [{"name": "victim", "role": "victim",
+                   "service": {"package": "nginx; rm -rf /"}}],
+    }
+    result = provider.deploy(scenario, "pkgbad-uuid")
+    assert result["success"] is False
+    assert "invalid package spec" in result["error"]
+    assert not client.images.built  # nothing built from an injected spec
+
+
+def test_service_package_gated_off_by_default():
+    client = _FakeClient()
+    provider = DockerLocalProvider(client=client)
+    scenario = {
+        "requires": {"provider_class": "container", "egress": "open"},
+        "nodes": [{"name": "victim", "role": "victim", "service": {"package": "nginx"}}],
+    }
+    result = provider.deploy(scenario, "pkggate-uuid")
+    assert result["success"] is False
+    assert "NIDAVELLIR_ALLOW_SOURCE_BUILD" in result["error"]
 
 
 # --- white-box source access (P2-10 safe half: read-only source mount) --------

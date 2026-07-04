@@ -17,10 +17,14 @@ Notes:
 - Needs access to a Docker daemon. In-container workers must mount
   /var/run/docker.sock (root-equivalent on the host — see SECURITY.md).
 """
+import io
 import logging
 import os
 import re
 import shlex
+import shutil
+import subprocess  # nosec B404 — fixed argv (no shell), timeout, SSRF-guarded host
+import tempfile
 
 import config
 import images
@@ -65,6 +69,12 @@ _WEB_PORT_PREFERENCE: tuple[tuple[int, str], ...] = (
 # source (ADR-0007). The built image is tagged + labeled per arena so destroy()
 # can reclaim it — otherwise a from-source build leaks one image per arena.
 _SUT_IMAGE_PREFIX = "nidavellir/sut"
+
+# `service.package` install (M1-4): base image + apt install recipe. Each package
+# token is validated against this before it is baked into a Dockerfile RUN, so a
+# malicious spec can't inject shell (only `name` or `name=version` is accepted).
+_PKG_BASE_IMAGE = os.getenv("NIDAVELLIR_PACKAGE_BASE_IMAGE", "debian:stable-slim")
+_PKG_TOKEN_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9.+_-]*(=[a-zA-Z0-9.+:~_-]+)?$")
 
 # White-box source access (SUT arenas, P2-10 safe half; ADR-0007). When a victim
 # node's service is `whitebox: true` AND has a `source`, the repo is cloned
@@ -568,11 +578,12 @@ class DockerLocalProvider(RangeProvider):
         service = node.get("service") or {}
         source = service.get("source")
         if not source:
-            # `service.package` install needs a base image + an install recipe;
-            # only source (git) builds are wired in this increment.
+            package = service.get("package")
+            if package:
+                return self._build_package_image(instance_id, node, package, labels)
             raise ValueError(
-                f"node {node['name']!r}: `service.package` install is not "
-                "supported yet — supply a `service.source` or a packaged `image`"
+                f"node {node['name']!r}: service needs a `source`, `package`, or a "
+                "packaged `image`"
             )
         repo = source.get("repo")
         if not repo:
@@ -618,6 +629,118 @@ class DockerLocalProvider(RangeProvider):
             timeout=config.SOURCE_BUILD_TIMEOUT,
         )
         return image_obj.tags[0] if getattr(image_obj, "tags", None) else tag
+
+    def _build_package_image(self, instance_id, node, package, labels):
+        """Install `service.package` on a base image (SUT arenas, P1-6 / M1-4).
+
+        A lighter build than from-source: no repo, just apt-install the named
+        package(s) on ``_PKG_BASE_IMAGE`` and bake a pinned, arena-labeled image
+        (reclaimed by destroy()). Each whitespace-separated token must be a bare
+        package name or ``name=version`` — validated so nothing can inject into
+        the Dockerfile RUN. Built via a context-free ``fileobj`` build. Still gated
+        by ALLOW_SOURCE_BUILD (apt runs as root at build time) and, like all builds,
+        build-time egress is open while the arena runtime stays locked."""
+        tokens = str(package).split()
+        for tok in tokens:
+            if not _PKG_TOKEN_RE.match(tok):
+                raise ValueError(
+                    f"node {node['name']!r}: invalid package spec {tok!r} — only "
+                    "'name' or 'name=version' tokens are allowed"
+                )
+        if not tokens:
+            raise ValueError(f"node {node['name']!r}: service.package is empty")
+        if not any("=" in t for t in tokens):
+            logger.warning(
+                f"[{instance_id}] node {node['name']!r} installs {tokens} with no "
+                "pinned version — not reproducible (use 'name=version')"
+            )
+        pkgs = " ".join(tokens)
+        dockerfile = (
+            f"FROM {_PKG_BASE_IMAGE}\n"
+            "RUN apt-get update && apt-get install -y --no-install-recommends "
+            f"{pkgs} && rm -rf /var/lib/apt/lists/*\n"
+        )
+        tag = f"{_SUT_IMAGE_PREFIX}:{self._short(instance_id)}-{node['name']}"
+        logger.info(
+            f"[{instance_id}] Building package image {tag} for node {node['name']!r} "
+            f"({pkgs} on {_PKG_BASE_IMAGE}); build-time egress is OPEN"
+        )
+        image_obj, _logs = self.client.images.build(
+            fileobj=io.BytesIO(dockerfile.encode()),
+            tag=tag, rm=True, forcerm=True, pull=True,
+            labels=dict(labels), timeout=config.SOURCE_BUILD_TIMEOUT,
+        )
+        return image_obj.tags[0] if getattr(image_obj, "tags", None) else tag
+
+    def verify_build_dockerfile(self, repo, ref, dockerfile_text, *, timeout=None) -> tuple[bool, str]:
+        """VERIFICATION build for LLM Dockerfile synthesis (M1-3, ADR-0008 tier-3;
+        Repo2Run). Shallow-clone ``repo`` into a temp context, drop the candidate
+        ``dockerfile_text`` in it, and try to build it. Returns ``(ok, logs)`` — the
+        log tail feeds the model's next fix attempt. The image is **removed after**
+        (this only proves buildability; the deploy build is separate), the temp
+        context is always cleaned up, and build-time egress is open (as for
+        `_build_service_image`; the arena runtime stays locked). Never raises —
+        a build failure is a normal ``(False, logs)`` result for the loop.
+
+        Gated by ALLOW_SOURCE_BUILD (building untrusted code executes it), same as
+        the from-source path. SSRF-guarded before the clone."""
+        if not config.ALLOW_SOURCE_BUILD:
+            return False, ("source builds are disabled — set NIDAVELLIR_ALLOW_SOURCE_"
+                           "BUILD=true to synthesize + verify a Dockerfile")
+        try:
+            netguard.assert_public_host(repo)
+        except netguard.UnsafeHostError as e:
+            return False, f"unsafe repo host: {e}"
+        tmp = tempfile.mkdtemp(prefix="nv-synthbuild-")
+        env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+        clone_timeout = min(timeout or config.SOURCE_BUILD_TIMEOUT, 300)
+        try:
+            argv = ["git", "clone", "--quiet", "--depth", "1", "--no-tags"]
+            if ref:
+                argv += ["--branch", ref]
+            argv += ["--", _as_git_remote(repo), tmp]
+            proc = subprocess.run(  # nosec B603 — fixed argv, no shell, timeout, guarded host
+                argv, capture_output=True, timeout=clone_timeout, env=env, text=True,
+            )
+            if proc.returncode != 0:
+                return False, f"git clone failed: {proc.stderr.strip()[-1500:]}"
+            # Write the candidate under a name that won't clobber repo files.
+            df_name = "Dockerfile.nidavellir-synth"
+            with open(os.path.join(tmp, df_name), "w", encoding="utf-8") as fh:
+                fh.write(dockerfile_text)
+            tag = f"{_SUT_IMAGE_PREFIX}:synthverify-{os.path.basename(tmp)[-8:]}"
+            image_obj = None
+            try:
+                import docker  # lazy: the SDK is present (used elsewhere in this class)
+
+                image_obj, log_stream = self.client.images.build(
+                    path=tmp, dockerfile=df_name, tag=tag, rm=True, forcerm=True,
+                    pull=True, timeout=(timeout or config.SOURCE_BUILD_TIMEOUT),
+                )
+                # Drain the log stream to a string (also confirms completion).
+                logs = "".join(
+                    chunk.get("stream", "") for chunk in log_stream
+                    if isinstance(chunk, dict)
+                )
+                return True, logs[-4000:]
+            except docker.errors.BuildError as e:
+                logs = "".join(
+                    (c.get("stream") or c.get("error") or "")
+                    for c in (e.build_log or []) if isinstance(c, dict)
+                )
+                return False, (logs or str(e))[-4000:]
+            except docker.errors.APIError as e:
+                return False, f"docker build error: {e}"
+            finally:
+                if image_obj is not None:
+                    try:
+                        self.client.images.remove(image_obj.id, force=True)
+                    except Exception:  # noqa: BLE001 — best-effort cleanup
+                        logger.warning("could not remove synth-verify image %s", tag)
+        except (subprocess.SubprocessError, OSError) as e:
+            return False, f"synthesis build setup failed: {e}"
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
     # Kali's default `http.kali.org` is a MirrorBrain redirector that 302s to
     # rotating community mirrors the allowlist can't cover; `kali.download` (the
@@ -772,14 +895,62 @@ class DockerLocalProvider(RangeProvider):
         return mapping
 
     @staticmethod
-    def _browser_target(published: dict):
+    def _parse_listening_ports(proc_net_tcp: str) -> set:
+        """LISTEN local ports parsed from concatenated /proc/net/tcp{,6} content.
+        Each row's 2nd column is `HEXADDR:HEXPORT` and the 4th (st) is `0A` for
+        LISTEN. Robust to the header row and to IPv4+IPv6 in one blob."""
+        ports: set[int] = set()
+        for line in proc_net_tcp.splitlines():
+            cols = line.split()
+            if len(cols) < 4 or cols[3] != "0A":  # 0A = TCP_LISTEN
+                continue
+            hexport = cols[1].rsplit(":", 1)[-1]
+            try:
+                ports.add(int(hexport, 16))
+            except ValueError:
+                continue
+        return ports
+
+    def _listening_ports(self, container) -> set | None:
+        """The set of TCP ports the container is actually LISTENING on, read from
+        `/proc/net/tcp{,6}` via exec. Returns None when it can't be determined (no
+        shell/cat, exec error) so the caller falls back to preference order — the
+        worker runs in its own netns and can't reach the arena's published ports,
+        so a socket probe would be useless; reading the container's own /proc is
+        the reliable signal."""
+        try:
+            res = container.exec_run(["cat", "/proc/net/tcp", "/proc/net/tcp6"])
+            code = getattr(res, "exit_code", res[0] if isinstance(res, tuple) else None)
+            output = getattr(res, "output", res[1] if isinstance(res, tuple) else b"")
+            if code not in (0, None):
+                return None
+            text = output.decode("utf-8", "replace") if isinstance(output, bytes) else str(output)
+            return self._parse_listening_ports(text)
+        except Exception:  # noqa: BLE001 — best-effort; any failure → fall back
+            return None
+
+    @staticmethod
+    def _browser_target(published: dict, listening: set | None = None):
         """(host_port, scheme) the browser 'Open' should hit — the actual web
-        server, by port preference — or None when no recognizable web port is
-        published (so a non-web box like an FTP/SMB target gets no bogus Open URL)."""
-        for cport, scheme in _WEB_PORT_PREFERENCE:
-            if cport in published:
-                return published[cport], scheme
-        return None
+        server — or None when no recognizable web port is published (so a non-web
+        box like an FTP/SMB target gets no bogus Open URL).
+
+        A target can EXPOSE web ports it does not actually serve (e.g. a repo whose
+        Dockerfile/README declares both 80 and 8000 but listens only on 8000, or
+        introspection guessing a port from README prose). When ``listening`` (the
+        container's actual LISTEN ports) is known, prefer a web port that is really
+        being served, by preference order; fall back to plain preference order when
+        that's unknown or none match — unchanged for single-port targets."""
+        candidates = [(cport, scheme) for cport, scheme in _WEB_PORT_PREFERENCE
+                      if cport in published]
+        if not candidates:
+            return None
+        if listening:
+            for cport, scheme in candidates:
+                if cport in listening:
+                    return published[cport], scheme
+        cport, scheme = candidates[0]
+        return published[cport], scheme
 
     def _collect_outputs(self, instance_id, networks, wanted, records) -> dict:
         outputs = {
@@ -819,7 +990,11 @@ class DockerLocalProvider(RangeProvider):
             # FTP. `floating` is the reachable host:port (the web mapping when there
             # is one, else the first published port so it's still visible).
             published = self._published_ports(container)
-            target = self._browser_target(published)
+            # Prefer a web port the container actually listens on (a target may
+            # EXPOSE ports it doesn't serve, or introspection may have guessed one
+            # from the README) — read its own /proc, since the worker can't reach
+            # the arena's published ports from its netns.
+            target = self._browser_target(published, listening=self._listening_ports(container))
             floating = url = None
             if target:
                 host_port, scheme = target
