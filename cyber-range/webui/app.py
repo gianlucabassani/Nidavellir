@@ -54,8 +54,14 @@ def _api_error(resp):
         detail = resp.json().get("detail")
     except ValueError:
         detail = None
-    if isinstance(detail, list):  # pydantic validation errors
-        detail = "; ".join(e.get("msg", "invalid") for e in detail)
+    if isinstance(detail, list):  # pydantic validation errors — name the field
+        parts = []
+        for e in detail:
+            loc = [str(x) for x in (e.get("loc") or []) if x != "body"]
+            field = loc[-1] if loc else None
+            msg = e.get("msg", "invalid")
+            parts.append(f"{field}: {msg}" if field else msg)
+        detail = "; ".join(parts)
     return detail or f"HTTP {resp.status_code}"
 
 

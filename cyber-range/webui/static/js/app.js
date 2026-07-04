@@ -1733,7 +1733,7 @@
         } else {
           renderSpecTopology("wiz-topo", null);
           msg.className = "import-msg err";
-          msg.textContent = "Invalid: " + (data.errors ? data.errors.join("; ") : (data.detail || ("HTTP " + status)));
+          msg.textContent = "Invalid: " + (data.errors ? data.errors.join("; ") : (data.error || data.detail || ("HTTP " + status)));
         }
       }).catch(() => { msg.className = "import-msg err"; msg.textContent = "Preview request failed."; });
     }
