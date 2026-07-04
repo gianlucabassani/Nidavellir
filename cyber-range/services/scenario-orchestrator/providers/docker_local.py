@@ -77,6 +77,21 @@ _SUT_IMAGE_PREFIX = "nidavellir/sut"
 _GIT_HELPER_IMAGE = os.getenv("NIDAVELLIR_GIT_HELPER_IMAGE", "alpine/git:latest")
 _WHITEBOX_MOUNT_BASE = "/whitebox"
 
+
+def _as_git_remote(repo: str) -> str:
+    """Normalize an https git URL to the `.git` form the docker daemon recognizes
+    as a GIT build context. The daemon treats an https remote as a git repo only
+    when its path ends in `.git` (or `<repo.git>#<ref>`); otherwise it downloads
+    the URL as a tarball context — a plain `https://github.com/org/repo` then
+    returns the repo's HTML page and the build fails. Scheme-less `github.com/…`
+    and `git@…`/`git://…` are already git-detected, so they pass through."""
+    r = repo.strip().rstrip("/")
+    if r.startswith(("git@", "git://")) or r.endswith(".git"):
+        return r
+    if r.startswith(("http://", "https://")):
+        return r + ".git"
+    return r  # scheme-less host paths (e.g. github.com/org/repo) are git-detected
+
 # Canonical roles get stable, dashboard-facing output key prefixes (the mock
 # provider and WebUI expect these). Other roles are addressed per-node only.
 _ROLE_PREFIX = {"attacker": "attack_vm", "victim": "victim_vm", "monitor": "log_vm"}
@@ -567,17 +582,21 @@ class DockerLocalProvider(RangeProvider):
         subdir = source.get("context")
         dockerfile = source.get("dockerfile") or "Dockerfile"
 
-        # Daemon-side remote git context: "<repo>#<ref>:<subdir>". The repo is
-        # operator-authored (authoring the scenario is the approval); pin `ref`
-        # to a commit/tag for a reproducible, trustworthy build.
+        # Daemon-side remote git context: "<repo.git>#<ref>:<subdir>". The daemon
+        # only treats an https remote as a GIT repo when the path ends in `.git`
+        # (else it fetches the URL as a tarball context — a plain GitHub URL then
+        # returns the repo's HTML page and the build fails). Normalize to the
+        # `.git` form so any https git URL builds. The repo is operator-authored
+        # (authoring the scenario is the approval); pin `ref` for reproducibility.
+        git_repo = _as_git_remote(repo)
         if ref and subdir:
-            remote = f"{repo}#{ref}:{subdir}"
+            remote = f"{git_repo}#{ref}:{subdir}"
         elif ref:
-            remote = f"{repo}#{ref}"
+            remote = f"{git_repo}#{ref}"
         elif subdir:
-            remote = f"{repo}#:{subdir}"
+            remote = f"{git_repo}#:{subdir}"
         else:
-            remote = repo
+            remote = git_repo
             logger.warning(
                 f"[{instance_id}] node {node['name']!r} builds from {repo} with "
                 "no pinned source.ref — not reproducible (pin a commit/tag)"

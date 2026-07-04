@@ -13,7 +13,23 @@ from providers.docker_local import (
     LABEL_NODE,
     LABEL_ROLE,
     DockerLocalProvider,
+    _as_git_remote,
 )
+
+
+# --- git remote normalization (M1-2 regression: a plain https GitHub URL was
+# fetched by the daemon as a tarball context → HTML → build 500) ---------------
+
+def test_as_git_remote_appends_dot_git_to_plain_https():
+    assert _as_git_remote("https://github.com/org/repo") == "https://github.com/org/repo.git"
+    assert _as_git_remote("https://github.com/org/repo/") == "https://github.com/org/repo.git"
+
+
+def test_as_git_remote_leaves_git_forms_untouched():
+    assert _as_git_remote("https://github.com/org/repo.git") == "https://github.com/org/repo.git"
+    assert _as_git_remote("git@github.com:org/repo.git") == "git@github.com:org/repo.git"
+    assert _as_git_remote("git://host/repo") == "git://host/repo"
+    assert _as_git_remote("github.com/org/repo") == "github.com/org/repo"
 
 # --- fake docker client -------------------------------------------------------
 
@@ -911,10 +927,11 @@ def test_sut_source_build_runs_built_image_when_enabled(monkeypatch):
     assert result["success"] is True, result.get("error")
 
     # The daemon was asked to build from a pinned, sub-dir'd remote git context,
-    # tagged + arena-labeled, pulling fresh bases.
+    # tagged + arena-labeled, pulling fresh bases. The repo is normalized to the
+    # `.git` form so the daemon treats it as a git context, not a tarball URL (M1-2).
     build = next(b for b in client.images.built
                  if str(b.get("tag", "")).startswith("nidavellir/sut:"))
-    assert build["path"] == "https://github.com/o/p#v1:web"
+    assert build["path"] == "https://github.com/o/p.git#v1:web"
     assert build["dockerfile"] == "Dockerfile"
     assert build["pull"] is True
     assert build["labels"][LABEL_LAB_ID] == "sutbuild1-rest-of-uuid"

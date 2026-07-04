@@ -17,6 +17,7 @@ import yaml
 from datetime import datetime, timedelta
 
 import bindings
+import build_planner
 import catalog
 import config
 import generator
@@ -25,6 +26,7 @@ import images
 import model_chat
 import model_verify
 import netguard
+import repo_introspect
 import scenarios
 import setup_phase
 import setup_proposer
@@ -746,7 +748,20 @@ def preview_sut_arena(req: SutArenaRequest, principal: Principal = Depends(requi
         )
     except catalog.CatalogError as e:
         return {"valid": False, "errors": [str(e)], "warnings": [], "topology": None}
-    return _spec_review(spec, check_images=True)
+    review = _spec_review(spec, check_images=True)
+    # Introspect the repo so the operator sees the detected language / build system /
+    # declared ports BEFORE launch (M1-1) — the review-gate payoff: a `guessed`
+    # port or a missing build system is visible now, not discovered at setup time.
+    introspection = repo_introspect.summarize_for_prompt(
+        repo_introspect.introspect(req.repo, req.ref)
+    )
+    review["introspection"] = introspection
+    # M1-2 (ADR-0008): show the planned build tier so the operator knows whether
+    # this repo will auto-build to a pinned image or use the configurator fallback.
+    plan = build_planner.plan_build(introspection)
+    review["build_plan"] = plan.to_dict()
+    review["build_plan"]["auto_build"] = plan.executable and config.ALLOW_SOURCE_BUILD
+    return review
 
 
 @app.post("/arenas/sut")
@@ -764,10 +779,21 @@ def deploy_sut_arena(
     opens the setup session automatically once the arena is active. Operator-only.
     """
     _require_operator(principal)
+    # Introspect the repo ONCE (M1-1) and plan the deterministic build tier (M1-2,
+    # ADR-0008). Best-effort — introspect never raises. When the repo ships a
+    # Dockerfile AND source builds are enabled, the victim auto-builds to a pinned
+    # image (no manual configurator step); otherwise the bare-box + configurator
+    # flow stays. (Sync handler → Starlette runs the short clone on the threadpool.)
+    introspection = repo_introspect.summarize_for_prompt(
+        repo_introspect.introspect(req.repo, req.ref)
+    )
+    plan = build_planner.plan_build(introspection)
+    auto_build = plan.executable and config.ALLOW_SOURCE_BUILD
     try:
         spec = catalog.build_sut_scenario(
             req.instance_id, req.repo, req.ref,
             ports=req.ports, include_attacker=req.include_attacker,
+            build_plan=plan if auto_build else None,
         )
     except catalog.CatalogError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
@@ -795,14 +821,19 @@ def deploy_sut_arena(
         "actor": principal.name,
     }
     # Capture the setup config at CREATION (review 1.1 fix): an audit breadcrumb
-    # now; the worker applies it (opens the session) when the arena is active.
+    # now; the worker applies it (opens the session) when the arena is active. The
+    # introspection (M1-1) is stored so proposal drafting reuses it without re-
+    # cloning; the build plan (M1-2) records the chosen tier + whether it auto-built.
     db.record_event(
-        system_id, "setup_prearm", {**prearm, "repo": req.repo, "ref": req.ref},
+        system_id, "setup_prearm",
+        {**prearm, "repo": req.repo, "ref": req.ref, "introspection": introspection,
+         "build_plan": plan.to_dict(), "auto_build": auto_build},
         actor=principal.name,
     )
     logger.info(
         f"Queuing SUT arena '{req.instance_id}' ({system_id}): repo={req.repo} "
-        f"ref={req.ref or 'default'} mode={req.setup_mode} by '{principal.name}'"
+        f"ref={req.ref or 'default'} mode={req.setup_mode} build={plan.strategy}"
+        f"{' (auto)' if auto_build else ''} by '{principal.name}'"
     )
     deploy_lab.delay(
         instance_id=system_id, scenario_name=label, user_id=req.instance_id,
@@ -2054,6 +2085,14 @@ def setup_generate_proposals(
          if e.get("type") == "setup_prearm"),
         {},
     )
+    # Repo introspection (M1-1): ground truth read from the repo so the model
+    # stops guessing the runtime/build/port. Reuse the copy captured at deploy;
+    # only re-introspect (best-effort) for older arenas whose prearm predates it.
+    introspection = prearm.get("introspection")
+    if not introspection and prearm.get("repo"):
+        introspection = repo_introspect.summarize_for_prompt(
+            repo_introspect.introspect(prearm["repo"], prearm.get("ref"))
+        )
     # The SUT source is cloned read-write into the victim (node_<n>_sut_source);
     # white-box sources are read-only mounts. Either tells the model WHERE the
     # project to bring up lives — without it the model has nothing real to set up.
@@ -2061,6 +2100,7 @@ def setup_generate_proposals(
         "victim_nodes": sess["nodes"],
         "repo": prearm.get("repo"),
         "repo_ref": prearm.get("ref"),
+        "repo_introspection": introspection,
         "sut_source": {
             n: outputs.get(f"node_{n}_sut_source")
             for n in sess["nodes"] if outputs.get(f"node_{n}_sut_source")

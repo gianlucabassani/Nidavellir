@@ -70,6 +70,17 @@ def test_build_messages_container_adds_target_settings_note():
     assert "CONTAINER TARGET SETTINGS" not in vm_system
 
 
+def test_build_messages_appends_introspection_grounding():
+    intro = {"language": "python", "declared_ports": [5000], "build_system": "dockerfile"}
+    _, messages = generator.build_messages("run this repo", introspection=intro)
+    content = messages[0]["content"]
+    assert "ground truth" in content
+    assert '"declared_ports"' in content and "5000" in content
+    # omitted when no introspection is supplied
+    _, plain = generator.build_messages("run this repo")
+    assert "ground truth" not in plain[0]["content"]
+
+
 def test_build_messages_vm_adds_vm_guidance_and_example():
     system, messages = generator.build_messages("an AD lab", provider_class="vm")
     assert "VIRTUAL MACHINES" in system          # vm note appended

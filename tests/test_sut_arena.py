@@ -43,6 +43,37 @@ def test_build_sut_without_attacker_is_single_victim():
     assert raw["agents"] == []
 
 
+# --- M1-2: build-plan-driven auto-build vs bare-box fallback -----------------
+
+
+def test_build_sut_auto_builds_from_executable_dockerfile_plan():
+    import build_planner
+
+    plan = build_planner.plan_build(
+        {"build_system": "dockerfile", "detected_files": ["Dockerfile"], "declared_ports": [8080]})
+    raw = catalog.build_sut_scenario("demo", "https://github.com/org/proj", ref="abc123",
+                                     build_plan=plan)
+    victim = next(n for n in normalized_nodes(raw) if n["name"] == "sut")
+    # auto-build victim: a service.source block (→ needs_build), no bare-box clone
+    assert victim["needs_build"] is True
+    assert victim.get("sut_clone") is None
+    assert victim["service"]["source"]["repo"] == "https://github.com/org/proj"
+    assert victim["service"]["source"]["dockerfile"] == "Dockerfile"
+    assert victim["service"]["source"]["ref"] == "abc123"
+    assert victim["ports"] == [8080]           # detected port carried through
+    ScenarioSpec.from_raw(raw)                 # still a valid v3 topology
+
+
+def test_build_sut_non_executable_plan_keeps_bare_box():
+    import build_planner
+
+    # a compose plan is deterministic but NOT executable this increment → fallback
+    plan = build_planner.plan_build({"build_system": "compose", "detected_files": ["compose.yml"]})
+    raw = catalog.build_sut_scenario("demo", "https://github.com/org/proj", build_plan=plan)
+    victim = next(n for n in raw["nodes"] if n["name"] == "sut")
+    assert victim["image"] == "ubuntu:22.04" and "sut_clone" in victim
+
+
 # --- endpoint ----------------------------------------------------------------
 
 
@@ -60,6 +91,14 @@ def client(monkeypatch):
             return None
 
     monkeypatch.setattr(api, "deploy_lab", _FakeTask())
+    # Stub repo introspection so the endpoints never touch the network in tests
+    # (the module itself is unit-tested in test_repo_introspect.py).
+    monkeypatch.setattr(
+        api.repo_introspect, "introspect",
+        lambda repo, ref=None: {"repo": repo, "ref": ref, "language": "node",
+                                "build_system": "dockerfile", "declared_ports": [3000],
+                                "indicators": ["Dockerfile"]},
+    )
     key = auth.generate_api_key()
     Database().create_api_key(auth.hash_api_key(key), name="sut-tests", role="operator")
     c = TestClient(api.app)
@@ -91,6 +130,9 @@ def test_sut_endpoint_accepts_and_dispatches_with_prearm(client):
     prearm_evt = next(e for e in events if e["type"] == "setup_prearm")
     assert prearm_evt["payload"]["repo"] == "https://github.com/org/proj"
     assert prearm_evt["payload"]["mode"] == "hitl"
+    # M1-1: the repo introspection is captured once at deploy for the proposer.
+    assert prearm_evt["payload"]["introspection"]["language"] == "node"
+    assert prearm_evt["payload"]["introspection"]["declared_ports"] == [3000]
 
 
 def test_sut_endpoint_rejects_non_https_repo(client):
@@ -209,6 +251,34 @@ def test_sut_preview_returns_topology_without_deploying(client, monkeypatch):
     assert body["summary"]["nodes"] == 2
     assert body["topology"] is not None
     assert client.dispatched == {}   # review only — nothing deployed
+    # M1-1: the review surfaces the repo introspection so the operator sees the
+    # detected build system / declared ports before launch.
+    assert body["introspection"]["build_system"] == "dockerfile"
+    assert body["introspection"]["declared_ports"] == [3000]
+    # M1-2: and the planned build tier (dockerfile → executable; auto_build reflects
+    # the source-build gate, off by default).
+    assert body["build_plan"]["strategy"] == "dockerfile"
+    assert body["build_plan"]["executable"] is True
+    assert body["build_plan"]["auto_build"] is False   # ALLOW_SOURCE_BUILD off by default
+
+
+def test_sut_deploy_auto_builds_when_source_builds_enabled(client, monkeypatch):
+    import config
+
+    # With the source-build gate ON and a Dockerfile repo, the dispatched spec's
+    # victim auto-builds (service.source) instead of the bare-box + clone flow.
+    monkeypatch.setattr(config, "ALLOW_SOURCE_BUILD", True)
+    resp = client.post("/arenas/sut", json={
+        "instance_id": "sut-autobuild", "repo": "https://github.com/org/proj", "ref": "main",
+    })
+    assert resp.status_code == 200, resp.text
+    spec = client.dispatched["scenario_config"]
+    victim = next(n for n in spec["nodes"] if n["name"] == "sut")
+    assert victim["service"]["source"]["repo"] == "https://github.com/org/proj"
+    assert victim["service"]["source"]["dockerfile"] == "Dockerfile"
+    assert "sut_clone" not in victim
+    prearm = client.dispatched["setup_prearm"]  # prearm still carries the config
+    assert prearm["mode"]  # sanity
 
 
 def test_sut_preview_is_operator_only():

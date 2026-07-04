@@ -209,26 +209,50 @@ def build_sut_scenario(
     ports: list[int] | None = None,
     include_attacker: bool = True,
     segment: str = DEFAULT_SEGMENT,
+    build_plan=None,
 ) -> dict:
-    """Compile a software-under-test arena: a fresh Ubuntu victim with ``repo``
-    cloned **read-write** into it (`/opt/sut`) for the configurator to build/run,
-    plus an optional Kali attacker foothold for the engagement that follows.
+    """Compile a software-under-test arena: a victim standing up ``repo``, plus an
+    optional Kali attacker foothold for the engagement that follows.
 
-    The victim runs ``sleep infinity`` so the bare Ubuntu box stays up with no
-    service yet — the service is brought up during the setup phase. Validated
-    before return (the ``sut_clone`` field is provider metadata, ignored by the
-    schema)."""
-    victim = {
-        "name": SUT_VICTIM_NODE,
-        "role": "victim",
-        "image": SUT_VICTIM_IMAGE,
-        "segments": [segment],
-        "command": "sleep infinity",
-        "sut_clone": {"repo": repo, "ref": ref, "path": SUT_CLONE_PATH},
-        "services": ["software-under-test (brought up during the setup phase)"],
-    }
-    if ports:
-        victim["ports"] = list(ports)
+    Two victim shapes (M1-2, ADR-0008):
+    - **Auto-build** — when ``build_plan`` is an *executable* deterministic plan
+      (the repo ships a Dockerfile and the caller has decided source builds are
+      allowed), the victim gets a ``service.source`` block so the provider builds
+      the repo to a **version-pinned image** and runs it — no manual setup step.
+    - **Fallback** (no plan) — a fresh Ubuntu victim runs ``sleep infinity`` with
+      ``repo`` cloned read-write into ``/opt/sut`` for the configurator (human or
+      HITL agent) to build/run during the setup phase.
+
+    Detected ports from the plan fill in when the operator gave none, so the
+    service is reachable either way. Validated before return (``sut_clone`` is
+    provider metadata, ignored by the schema)."""
+    eff_ports = list(ports) if ports else (list(build_plan.ports) if build_plan else [])
+    if build_plan is not None and build_plan.executable:
+        # Auto-build: the built image IS the service — no bare box, no manual clone.
+        source = {"repo": repo, "ref": ref}
+        if build_plan.dockerfile:
+            source["dockerfile"] = build_plan.dockerfile
+        if build_plan.context:
+            source["context"] = build_plan.context
+        victim = {
+            "name": SUT_VICTIM_NODE,
+            "role": "victim",
+            "service": {"source": source},
+            "segments": [segment],
+            "services": [f"software-under-test (auto-built: {build_plan.strategy})"],
+        }
+    else:
+        victim = {
+            "name": SUT_VICTIM_NODE,
+            "role": "victim",
+            "image": SUT_VICTIM_IMAGE,
+            "segments": [segment],
+            "command": "sleep infinity",
+            "sut_clone": {"repo": repo, "ref": ref, "path": SUT_CLONE_PATH},
+            "services": ["software-under-test (brought up during the setup phase)"],
+        }
+    if eff_ports:
+        victim["ports"] = eff_ports
 
     nodes = [victim]
     agents: list[dict] = []

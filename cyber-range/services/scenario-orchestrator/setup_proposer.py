@@ -25,6 +25,14 @@ _SYSTEM = (
     "PROJECT following its own documented build/run steps (its README / Dockerfile "
     "/ package manifest at the sut_source path). Internet is available during "
     "setup, so installing the project's real dependencies is expected.\n\n"
+    "When the brief carries a `repo_introspection` block, it is GROUND TRUTH read "
+    "from the actual repository — trust it over any assumption. Use its detected "
+    "`language`/`base_runtime` to pick the right toolchain (do NOT guess "
+    "npm/python3/go), its `build_system` to decide how to build (an existing "
+    "Dockerfile/compose/devcontainer is the project's own build — prefer it), its "
+    "`declared_ports` for the service port (a port tagged `guessed-language-default` "
+    "is a fallback, so confirm it against the README before relying on it), and its "
+    "`run_hints`/`readme_excerpt` for the real start command.\n\n"
     "Output ONLY a JSON object of this exact shape — no prose, no fences:\n"
     '{"steps": [{"node": "<victim node name>", "command": "<shell command>", '
     '"rationale": "<one short line why>"}]}\n\n'

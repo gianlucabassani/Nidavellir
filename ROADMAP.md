@@ -470,7 +470,7 @@ self-reported; treat as directional.)
 - **0006** AWS deployment topology & cost controls — to write (M8)
 - **0007** software-under-test arenas (provisioner, gated configurator, monitoring/
   crash-oracle, discovery-vs-CVE scoring) — Proposed (M1/M2)
-- **0008** repo→image build pipeline (buildpacks-first + verified LLM synthesis) — to write (M1)
+- **0008** repo→image build pipeline (deterministic-first + verified LLM synthesis) — Proposed (M1; tier-1 Dockerfile landed)
 - **0009** scoring, deterministic validators & trace→eval dataset format — to write (M2/M3)
 - **0010** MCP OAuth 2.1 & tool supply-chain defenses — to write (M4)
 

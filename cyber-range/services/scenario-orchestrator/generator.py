@@ -159,11 +159,30 @@ class GeneratorError(Exception):
         self.raw = raw
 
 
-def build_messages(brief: str, provider_class: str | None = None) -> tuple[str, list[dict]]:
+def _introspection_note(intro: dict) -> str:
+    """A grounding block appended to the user turn when the brief targets a known
+    repo (M1-1). The detected language / build system / declared ports / base
+    runtime are ground truth read from the repo, so the model picks a real image
+    and real ports instead of guessing."""
+    return (
+        "\n\nThe brief targets a specific repository; the following was read from "
+        "it (ground truth — prefer it over assumptions):\n"
+        + json.dumps(intro, indent=2)
+        + "\nUse the detected base_runtime to choose a matching image and the "
+        "declared_ports for the victim's `ports` (a port tagged "
+        "`guessed-language-default` is a fallback — treat it as a hint, not fact)."
+    )
+
+
+def build_messages(
+    brief: str, provider_class: str | None = None, introspection: dict | None = None
+) -> tuple[str, list[dict]]:
     """Return (system_prompt, messages) for a generation request. A
     ``provider_class`` hint is appended as a hard constraint when supplied; for
     ``vm`` the system prompt also gains VM-specific guidance + a VM worked-example
-    (the default example is container-class)."""
+    (the default example is container-class). When ``introspection`` is supplied
+    (a repo introspection summary, M1-1) it is appended to the user turn as a
+    grounding block so the spec reflects the real repo."""
     system = _SYSTEM
     # Inject the live catalog so the model has the exact known-good logical names
     # (kept in sync with images.py) — the front-line defense against hallucinated
@@ -183,6 +202,8 @@ def build_messages(brief: str, provider_class: str | None = None) -> tuple[str, 
         user += (
             f"\n\nConstraint: requires.provider_class MUST be \"{provider_class}\"."
         )
+    if introspection:
+        user += _introspection_note(introspection)
     return system, [{"role": "user", "content": user}]
 
 
@@ -207,7 +228,10 @@ def extract_spec_json(text: str) -> dict:
     return parsed
 
 
-def generate_scenario_spec(complete_fn, brief: str, provider_class: str | None = None) -> dict:
+def generate_scenario_spec(
+    complete_fn, brief: str, provider_class: str | None = None,
+    introspection: dict | None = None,
+) -> dict:
     """Generate a raw (unvalidated) v3 spec dict from a brief.
 
     ``complete_fn(system, messages) -> str`` performs the single model
@@ -218,6 +242,6 @@ def generate_scenario_spec(complete_fn, brief: str, provider_class: str | None =
     the model produced no usable JSON."""
     if provider_class and provider_class not in PROVIDER_CLASSES:
         raise GeneratorError(f"unknown provider_class {provider_class!r}")
-    system, messages = build_messages(brief, provider_class)
+    system, messages = build_messages(brief, provider_class, introspection)
     reply = complete_fn(system, messages)
     return extract_spec_json(reply)
