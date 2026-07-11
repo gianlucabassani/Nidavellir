@@ -104,22 +104,22 @@ curl -sX POST localhost:8000/scenarios/import/vulhub -H "X-API-Key: dev-insecure
 
 ## Roadmap
 
-Re-sequenced (2026-07-01) around the **software-under-test vertical** — *point Nidavellir at
-any repo → stand it up reliably → monitor it deeply → score a bring-your-own agent that
-pentests it*. The scenario generator, SUT arenas, configurator and co-pilot already shipped;
-M1–M3 **deepen** them into the spine. Full detail (with the state-of-the-art we align to) in
-[`ROADMAP.md`](ROADMAP.md).
+Re-sequenced (2026-07-11) around **two horizons**: a personal open-source **flagship** that
+proves the thesis — *point at any repo → stand it up reliably → let a bring-your-own agent
+attack it in a contained arena → get a scored, replayable, audited result* — which then
+graduates into an **internal harness for testing the agents we build**. Product/multi-tenant
+concerns (OAuth, hosting, purple-team, VNC console) are deliberately deferred. Full detail
+(with the state-of-the-art we align to) in [`ROADMAP.md`](ROADMAP.md).
 
-| Milestone | Focus | Status |
-|------|-------|--------|
-| **M1** | Reliable *repo → running-service* provisioning (buildpacks-first + verified LLM Dockerfile synthesis) | 🟡 SUT clone + white-box mount + gated source-build ✅; repo-introspection + buildpacks + verified loop ◻ |
-| **M2** | Deep monitoring + crash oracle + structured scoring | 🟡 vuln-manifest + findings ✅; monitor sidecar + deterministic validators + partial credit ◻ |
-| **M3** | Benchmark & eval layer (traces → datasets, replay) | ◻ planned — model+scaffold+cost rows, OTel/OpenInference traces, ATT&CK/ATLAS/OWASP tagging |
-| **M4** | MCP gateway hardening & multi-agent | 🟡 gateway + stances + key↔arena binding + per-arena pause ✅; OAuth 2.1, concurrency, tool defenses, higher-level tools ◻ |
-| **M5** | Console, browser access & the no-AI human path | 🟡 mission-control console + co-pilot + topology preview ✅; SSE, in-browser terminal/VNC, pack library ◻ |
-| **M6** | LLM-application-as-target arenas (OWASP LLM / Agentic Top 10) | ◻ planned |
-| **M7** | Purple-team paired telemetry & detection scoring | ◻ planned |
-| **M8** | Hardening & multi-provider hosting (RBAC / SSO / AWS) | ◻ planned — deferred until the M1–M3 spine lands |
+| Milestone | Horizon | Focus | Status |
+|------|------|-------|--------|
+| **M1** | Flagship (spine) | Reliable *repo → running-service* provisioning (deterministic build + verified LLM Dockerfile synthesis) | ✅ **done** — introspection + Dockerfile tier + verified loop + package install |
+| **M2** | Flagship (spine) | Deep monitoring + crash oracle + structured scoring | 🔴 **next** — monitor sidecar + deterministic validators + partial credit (the moat) |
+| **M3** | Flagship (spine) | Benchmark & eval layer **+ the flagship demo/benchmark** | ◻ model+scaffold+cost rows, reference harness, OTel/OpenInference traces, replay |
+| **M4** | Internal harness | Agent-grade arena tooling (browser, code-exec sandbox, proxy, file transfer, tunnel) + fail-closed guardrails | ◻ *answers "is the tooling enough for a real agent?"* |
+| **M5** | Internal harness | Regression & eval pipeline (agent vN vs vN+1, export to Langfuse/Phoenix) | ◻ planned |
+| **M6** | Internal harness | *(opportunistic)* LLM-application-as-target arenas (OWASP LLM / Agentic Top 10) | ◻ planned |
+| — | *Deferred* | OAuth 2.1, multi-tenant RBAC/SSO, cloud/VM hosting, in-browser VNC, purple-team | ◻ out of scope until it becomes a product / multi-team |
 
 ## Documentation
 

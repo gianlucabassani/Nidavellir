@@ -3,27 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nidavellir — Agentic Arena Forge</title>
+  <title>Nidavellir · Agentic Arena Forge</title>
   
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="assets/anvil_logo.png">
   
   <!-- SEO Meta Tags -->
-  <meta name="description" content="An agentic arena forge for testing AI agents in dynamic, multi-machine environments. Connect via MCP gateways with guardrails, budgets, and append-only audits.">
+  <meta name="description" content="The neutral, open-source proving ground for agentic security. Point it at any repo, let a bring-your-own AI agent attack it in a contained arena, and get a scored, replayable, audited result.">
   <meta name="keywords" content="cybersecurity, cyber range, AI agents, MCP gateway, pentesting, red team, blue team, FastAPI, Celery, Docker, OpenStack, AWS">
 
   <!-- Open Graph / Facebook Link Previews -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://gianlucabassani.github.io/Nidavellir/">
-  <meta property="og:title" content="Nidavellir — Agentic Arena Forge">
-  <meta property="og:description" content="An agentic arena forge for testing AI agents in dynamic, multi-machine environments. Connect via MCP gateways with guardrails, budgets, and append-only audits.">
+  <meta property="og:title" content="Nidavellir · Agentic Arena Forge">
+  <meta property="og:description" content="The neutral, open-source proving ground for agentic security. Point it at any repo, let a bring-your-own AI agent attack it in a contained arena, and get a scored, replayable, audited result.">
   <meta property="og:image" content="https://gianlucabassani.github.io/Nidavellir/assets/anvil_logo.png">
 
   <!-- Twitter Link Previews -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:url" content="https://gianlucabassani.github.io/Nidavellir/">
-  <meta name="twitter:title" content="Nidavellir — Agentic Arena Forge">
-  <meta name="twitter:description" content="An agentic arena forge for testing AI agents in dynamic, multi-machine environments. Connect via MCP gateways with guardrails, budgets, and append-only audits.">
+  <meta name="twitter:title" content="Nidavellir · Agentic Arena Forge">
+  <meta name="twitter:description" content="The neutral, open-source proving ground for agentic security. Point it at any repo, let a bring-your-own AI agent attack it in a contained arena, and get a scored, replayable, audited result.">
   <meta name="twitter:image" content="https://gianlucabassani.github.io/Nidavellir/assets/anvil_logo.png">
   
   <!-- Web Fonts -->
@@ -900,6 +900,166 @@
       transform: translateY(0);
     }
 
+    /* ===== Showcase components ===== */
+    .hero-cta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 36px;
+    }
+    @media (max-width: 900px) { .hero-cta { justify-content: center; } }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      height: 46px;
+      padding: 0 22px;
+      border-radius: var(--radius-sm);
+      font-family: var(--font);
+      font-size: 14.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border: 1px solid transparent;
+      text-decoration: none;
+    }
+    .btn--primary {
+      background: linear-gradient(150deg, var(--accent), var(--accent-deep));
+      color: #1a1206;
+      box-shadow: 0 4px 14px -2px var(--accent);
+    }
+    .btn--primary:hover { filter: brightness(1.08); transform: translateY(-1px); color: #1a1206; box-shadow: 0 6px 20px -2px var(--accent); }
+    .btn--outline {
+      background: var(--surface-2);
+      border-color: var(--line);
+      color: var(--text);
+    }
+    .btn--outline:hover { border-color: var(--accent); color: var(--text); background: var(--surface-3); }
+    .btn--ghost { background: transparent; color: var(--muted); }
+    .btn--ghost:hover { color: var(--text); background: var(--surface); }
+
+    /* Flow steps */
+    .flow-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+    }
+    @media (max-width: 900px) { .flow-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 600px) { .flow-grid { grid-template-columns: 1fr; } }
+    .flow-step {
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      padding: 24px;
+      position: relative;
+      transition: all 0.2s ease;
+    }
+    .flow-step:hover { border-color: var(--accent-line); transform: translateY(-2px); }
+    .flow-num {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent);
+      display: block;
+      margin-bottom: 12px;
+    }
+    .flow-step h3 { font-size: 17px; margin-bottom: 8px; }
+    .flow-step p { font-size: 13.5px; color: var(--muted); line-height: 1.55; }
+    .flow-tag {
+      display: inline-block;
+      margin-top: 12px;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--defender);
+      border: 1px solid rgba(61,155,255,0.25);
+      background: rgba(61,155,255,0.06);
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    /* Card tag label (compare / audience) */
+    .card-tag {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--faint);
+      display: block;
+      margin-bottom: 10px;
+    }
+
+    /* Callout band */
+    .callout {
+      max-width: 900px;
+      margin: 36px auto 0 auto;
+      text-align: center;
+      background: var(--accent-soft);
+      border: 1px solid var(--accent-line);
+      border-radius: var(--radius);
+      padding: 24px 28px;
+      font-size: 16px;
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .callout strong { color: var(--accent); }
+
+    /* Chips (state of the art) */
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      max-width: 880px;
+      margin: 0 auto;
+    }
+    .chip {
+      font-family: var(--mono);
+      font-size: 12.5px;
+      color: var(--muted);
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 7px 14px;
+      transition: all 0.15s ease;
+    }
+    .chip:hover { border-color: var(--accent-line); color: var(--text); }
+    .chip b { color: var(--accent); font-weight: 600; }
+
+    /* Roadmap horizon divider */
+    .roadmap-horizon {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: var(--accent);
+      margin: 0 0 24px -36px;
+      padding-top: 8px;
+    }
+    .roadmap-horizon.second { margin-top: 8px; }
+    .roadmap-item.deferred .roadmap-badge { background: var(--ground); border-color: var(--line-soft); }
+    .roadmap-item.deferred .roadmap-content { opacity: 0.72; }
+
+    /* CTA action row */
+    .support-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 8px;
+    }
+    .support-note {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--faint);
+      text-align: center;
+      margin-top: 22px;
+    }
+
     /* Footer */
     footer {
       border-top: 1px solid var(--line);
@@ -1258,13 +1418,20 @@
       <section class="hero">
         <div class="container hero-split">
           <div class="hero-left">
-            <span class="hero-eyebrow">Agentic Arena Forge</span>
-            <h1>Testing Skills in Dynamic Environments & Testing AI Agents</h1>
+            <span class="hero-eyebrow">Open-source · MCP-native · Bring-your-own-agent</span>
+            <h1>An arena for testing AI security agents</h1>
             <p class="hero-desc">
-              Provision arbitrary multi-machine vulnerable topologies on demand and expose them, through 
-              <strong>MCP gateways</strong>, to bring-your-own agents acting as attacker, blue-team defender, or MITM.
+              Point Nidavellir at a repository. It stands the service up in a
+              <strong>contained arena</strong>, connects a bring-your-own AI agent over an
+              <strong>MCP gateway</strong>, and records every action to an append-only audit trace.
+              It runs fully local on Docker, with no cloud account required.
             </p>
-            
+
+            <div class="hero-cta">
+              <button class="btn btn--primary" onclick="switchView('docs')">Read the docs</button>
+              <a class="btn btn--outline" href="https://github.com/gianlucabassani/Nidavellir" target="_blank">View on GitHub</a>
+            </div>
+
             <!-- Copyable Command Widget -->
             <div class="shell-container">
               <div class="shell-header">
@@ -1273,12 +1440,16 @@
                   <div class="shell-dot"></div>
                   <div class="shell-dot"></div>
                 </div>
-                <div class="shell-title">Quick Start</div>
+                <div class="shell-title">Quick Start · local, no cloud</div>
               </div>
               <div class="shell-body">
                 <button class="shell-btn-copy" id="shell-copy" onclick="copyQuickStart()">
                   <span id="copy-text">Copy</span>
                 </button>
+                <div class="shell-line">
+                  <span class="shell-prompt">#</span>
+                  <span class="shell-comment">1. Clone the repository</span>
+                </div>
                 <div class="shell-line">
                   <span class="shell-prompt">$</span>
                   <span class="shell-cmd">git clone https://github.com/gianlucabassani/Nidavellir.git</span>
@@ -1287,13 +1458,25 @@
                   <span class="shell-prompt">$</span>
                   <span class="shell-cmd">cd Nidavellir</span>
                 </div>
+                <div class="shell-line" style="margin-top:12px;">
+                  <span class="shell-prompt">#</span>
+                  <span class="shell-comment">2. Start the full stack in Docker</span>
+                </div>
                 <div class="shell-line">
                   <span class="shell-prompt">$</span>
                   <span class="shell-cmd">docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build</span>
                 </div>
+                <div class="shell-line" style="margin-top:12px;">
+                  <span class="shell-prompt">#</span>
+                  <span class="shell-comment">3. Open the console</span>
+                </div>
                 <div class="shell-line">
                   <span class="shell-prompt">#</span>
-                  <span class="shell-comment">Console UI runs on http://localhost:5000</span>
+                  <span class="shell-comment">Console: http://localhost:5000 (login: admin / nidavellir)</span>
+                </div>
+                <div class="shell-line">
+                  <span class="shell-prompt">#</span>
+                  <span class="shell-comment">API: http://localhost:8000 (header: X-API-Key: dev-insecure-key)</span>
                 </div>
               </div>
             </div>
@@ -1307,67 +1490,38 @@
         </div>
       </section>
 
-      <!-- SYSTEM SHIPPED FEATURES -->
-      <section class="showcase-section" id="functionality">
+      <!-- HOW IT WORKS -->
+      <section class="showcase-section" id="how">
         <div class="container">
           <div class="section-head">
-            <h2>Current Functionality</h2>
-            <p>Nidavellir ships with a production-grade substrate decoupled across three core system layers.</p>
+            <h2>How it works</h2>
+            <p>One end-to-end loop, running fully local: point at a repo, contain it, connect an agent, score the result.</p>
           </div>
-          
-          <div class="features-grid">
-            <!-- Feature 1 -->
-            <div class="feature-card">
-              <h3>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
-                Decoupled Substrate
-              </h3>
-              <p>Independent control plane using FastAPI orchestrators, Redis database buffers, and Celery background task runners for clean concurrent actions.</p>
+
+          <div class="flow-grid">
+            <div class="flow-step">
+              <span class="flow-num">01 / POINT</span>
+              <h3>at any repo</h3>
+              <p>Give it a public repository (or paste a spec, or import a Vulhub CVE env). Repo-introspection plus a deterministic-first build pipeline stand up a healthy, version-pinned service.</p>
+              <span class="flow-tag" style="color:var(--ok);border-color:rgba(52,211,153,.25);background:rgba(52,211,153,.06);">Shipped · M1</span>
             </div>
-            
-            <!-- Feature 2 -->
-            <div class="feature-card">
-              <h3>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
-                Multi-Cloud Providers
-              </h3>
-              <p>Abstract drivers support local container ranges (docker-local running inside seconds), local QEMU/Libvirt VMs, OpenStack, and AWS instances on demand.</p>
+            <div class="flow-step">
+              <span class="flow-num">02 / CONTAIN</span>
+              <h3>in a sealed arena</h3>
+              <p>Nodes run on egress-locked network segments; a CI test proves they can't reach the internet or cloud metadata. Generated infrastructure is never auto-deployed unreviewed.</p>
+              <span class="flow-tag" style="color:var(--ok);border-color:rgba(52,211,153,.25);background:rgba(52,211,153,.06);">Shipped</span>
             </div>
-            
-            <!-- Feature 3 -->
-            <div class="feature-card">
-              <h3>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                Secrets & Safety
-              </h3>
-              <p>Fernet encryption at rest for target data. Strict network egress isolation, active rate limiting, and log redactions keep host servers safe.</p>
+            <div class="flow-step">
+              <span class="flow-num">03 / ATTACK</span>
+              <h3>with your agent</h3>
+              <p>Your agent connects over an MCP gateway as attacker, MITM, or defender. Every action is scope-enforced, budget-metered, key↔arena-bound, with an operator kill-switch and a full JSONL trace.</p>
+              <span class="flow-tag" style="color:var(--ok);border-color:rgba(52,211,153,.25);background:rgba(52,211,153,.06);">Shipped</span>
             </div>
-            
-            <!-- Feature 4 -->
-            <div class="feature-card">
-              <h3>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
-                Telemetry & Audits
-              </h3>
-              <p>State machine logs compile everything to an append-only SQL database audit table. Operator consoles review historical action traces.</p>
-            </div>
-            
-            <!-- Feature 5 -->
-            <div class="feature-card">
-              <h3>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                TTL Stuck Reaper
-              </h3>
-              <p>Automated cleanup engine tracking execution time. Identifies and terminates running ranges once the Time To Live expires to prevent cost leaks.</p>
-            </div>
-            
-            <!-- Feature 6 -->
-            <div class="feature-card">
-              <h3>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-                Community Importers
-              </h3>
-              <p>Automated registry path converts public Vulhub compose environments into validated v3 scenario yaml packages on the fly.</p>
+            <div class="flow-step">
+              <span class="flow-num">04 / SCORE</span>
+              <h3>on real evidence</h3>
+              <p>A monitor and crash oracle turn crashes, sanitizer aborts, and programmatically-confirmed findings into a structured, replayable verdict, scorable even with no known-CVE list.</p>
+              <span class="flow-tag">Building now · M2</span>
             </div>
           </div>
         </div>
@@ -1555,15 +1709,74 @@
         </div>
       </section>
 
+      <!-- WHO IT'S FOR -->
+      <section class="showcase-section" id="audience">
+        <div class="container">
+          <div class="section-head">
+            <h2>Who it's for</h2>
+            <p>A bring-your-own-agent, contained, reproducible harness fits several kinds of work.</p>
+          </div>
+
+          <div class="features-grid">
+            <div class="feature-card">
+              <span class="card-tag">Teams building agents</span>
+              <h3>A harness for your own agent</h3>
+              <p>Test, eval, and regression-check the security agent you're building, so you can see how a build performs across versions on targets you choose.</p>
+            </div>
+            <div class="feature-card">
+              <span class="card-tag">Enterprises</span>
+              <h3>Evaluate agents on your code</h3>
+              <p>Run an AI security agent against your own codebases in a contained arena, with a full audit trail. The platform ships no agent of its own, so the results stay yours.</p>
+            </div>
+            <div class="feature-card">
+              <span class="card-tag">Safety &amp; eval researchers</span>
+              <h3>Reproducible cyber evals</h3>
+              <p>Cyber-offense evals with exportable traces in OpenTelemetry-GenAI and OpenInference shape, ready to flow into Langfuse, Phoenix, or Braintrust.</p>
+            </div>
+            <div class="feature-card">
+              <span class="card-tag">AppSec &amp; red teams</span>
+              <h3>Contained, scored pentests</h3>
+              <p>Point an agent at internal or open-source software and let it work, safely boxed and scored. A human can drive any arena too, with no model in the loop.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- BUILT ON THE STATE OF THE ART -->
+      <section class="showcase-section" id="sota">
+        <div class="container">
+          <div class="section-head">
+            <h2>Built on the state of the art</h2>
+            <p>Nidavellir adopts the field's best practice instead of reinventing it. Every design choice traces to published work.</p>
+          </div>
+          <div class="chips">
+            <span class="chip"><b>Repo2Run</b> · verified Dockerfile synthesis</span>
+            <span class="chip"><b>XBOW</b> / <b>Project Naptime</b> · deterministic validators</span>
+            <span class="chip"><b>Cybench</b> · subtasks &amp; first-solve-time</span>
+            <span class="chip"><b>CVE-Bench</b> · attack-outcome graders</span>
+            <span class="chip"><b>Inspect</b> (UK AISI) · structured Score</span>
+            <span class="chip"><b>METR</b> Task Standard</span>
+            <span class="chip"><b>OSS-Fuzz</b> · crash-as-evidence</span>
+            <span class="chip"><b>OpenTelemetry GenAI</b> + <b>OpenInference</b></span>
+            <span class="chip"><b>OWASP</b> LLM &amp; Agentic Top 10</span>
+            <span class="chip"><b>MITRE ATT&amp;CK</b> + <b>ATLAS</b></span>
+            <span class="chip"><b>Cloud Native Buildpacks</b> · Paketo</span>
+            <span class="chip"><b>MCP</b> spec · stdio + Streamable HTTP</span>
+          </div>
+        </div>
+      </section>
+
       <!-- SYSTEM ROADMAP -->
       <section class="showcase-section" id="roadmap">
         <div class="container">
           <div class="section-head">
             <h2>Development Roadmap</h2>
-            <p>Follow our sequenced plan detailing completed milestones and planned targets.</p>
+            <p>Two horizons: a personal open-source flagship that proves the thesis, graduating into an enterprise's internal harness for testing the agents they build.</p>
           </div>
           
           <div class="roadmap-timeline">
+            <div class="roadmap-horizon">Horizon 1 · Flagship (prove the thesis)</div>
+
             <!-- Foundation -->
             <div class="roadmap-item complete">
               <div class="roadmap-badge"></div>
@@ -1578,15 +1791,15 @@
             </div>
 
             <!-- M1 -->
-            <div class="roadmap-item active">
+            <div class="roadmap-item complete">
               <div class="roadmap-badge"></div>
               <div class="roadmap-meta">
                 <span class="roadmap-phase">M1</span>
-                <span class="roadmap-status">Active</span>
+                <span class="roadmap-status">Shipped</span>
               </div>
               <div class="roadmap-content">
                 <h3>Reliable Repo-to-Service Provisioning</h3>
-                <p>Point Nidavellir at any GitHub repo and get a healthy, version-pinned service. A repo-introspection step grounds the generator and setup proposals so they stop guessing; the build pipeline honors an existing Dockerfile / Compose / devcontainer, falls back to Cloud Native Buildpacks, then to verified LLM Dockerfile synthesis with a build-and-rollback loop.</p>
+                <p>Point Nidavellir at any repo and get a healthy, version-pinned service. A repo-introspection step grounds the build so it stops guessing; the pipeline honors an existing Dockerfile, falls back to verified LLM Dockerfile synthesis with a build-and-rollback loop, and can install a named package. Every image is pinned, arena-labeled, and reclaimed.</p>
               </div>
             </div>
 
@@ -1595,11 +1808,11 @@
               <div class="roadmap-badge"></div>
               <div class="roadmap-meta">
                 <span class="roadmap-phase">M2</span>
-                <span class="roadmap-status">Active</span>
+                <span class="roadmap-status">Building now</span>
               </div>
               <div class="roadmap-content">
                 <h3>Deep Monitoring, Crash Oracle & Scoring</h3>
-                <p>A monitor sidecar turns crashes, sanitizer aborts, and unhandled 5xx into scored evidence — so a target with no known-CVE list is still scorable. Deterministic validators confirm findings before they count, and structured, machine-parseable verdicts with subtask partial credit replace win/lose scoring.</p>
+                <p>A monitor sidecar turns crashes, sanitizer aborts, and unhandled 5xx into scored evidence, so a target with no known-CVE list is still scorable. Deterministic validators confirm each finding before it counts, and structured, machine-parseable verdicts with subtask partial credit replace win/lose scoring.</p>
               </div>
             </div>
 
@@ -1611,10 +1824,12 @@
                 <span class="roadmap-status">Planned</span>
               </div>
               <div class="roadmap-content">
-                <h3>Benchmark & Eval Layer</h3>
-                <p>Every run becomes a comparable, replayable benchmark: model, scaffold, cost, and pass@k reported together, with difficulty tiers and guided / unguided modes. Traces export as eval datasets in OpenTelemetry-GenAI shape, tagged to MITRE ATT&CK, MITRE ATLAS, and the OWASP LLM Top 10.</p>
+                <h3>Benchmark, Eval Layer & the Flagship Proof</h3>
+                <p>Every run becomes a comparable, replayable benchmark, with model, scaffold, cost, and pass@k reported together. A reference harness and a public demo show the loop end to end: point at a real repo, prove a real bug, get a scored report. Traces export as eval datasets in OpenTelemetry-GenAI shape, tagged to MITRE ATT&CK, ATLAS, and the OWASP LLM Top 10.</p>
               </div>
             </div>
+
+            <div class="roadmap-horizon second">Horizon 2 · Internal harness (test the agents you build)</div>
 
             <!-- M4 -->
             <div class="roadmap-item">
@@ -1624,8 +1839,8 @@
                 <span class="roadmap-status">Planned</span>
               </div>
               <div class="roadmap-content">
-                <h3>Gateway Hardening & Multi-Agent</h3>
-                <p>MCP OAuth 2.1 with audience-bound tokens, tool-poisoning and confused-deputy defenses, durable fail-closed budgets, and per-request auth that unlocks concurrent red-vs-blue on one arena. Higher-level attacker tooling arrives: an HTTP intercept proxy, a headless browser, and a proof-of-concept sandbox.</p>
+                <h3>Agent-Grade Arena Tooling & Fail-Closed Guardrails</h3>
+                <p>The tools a serious offensive agent needs, as first-class MCP schemas: a headless browser (doubling as the XSS validator), a code-exec sandbox for PoCs, an HTTP intercept proxy, file transfer, and SSH tunnelling, plus durable, fail-closed budgets and a two-scope kill-switch. This addresses whether the tooling is enough for a real agent to do real work.</p>
               </div>
             </div>
 
@@ -1637,8 +1852,8 @@
                 <span class="roadmap-status">Planned</span>
               </div>
               <div class="roadmap-content">
-                <h3>Console & the No-AI Human Path</h3>
-                <p>A server-sent-events live feed replaces polling; in-browser terminal and desktop access (ttyd / noVNC / Guacamole) make every arena fully drivable by a human with no model in the loop. Plus a reusable pack library with full / light / mini variants and a read-only tool layer for the operator co-pilot.</p>
+                <h3>Regression & Eval Pipeline</h3>
+                <p>Run agent version N against N+1 on the same pinned arena suite and get a diffable report of score deltas, new regressions, and cost per arena. One-click export of any run into Langfuse, Phoenix, or Braintrust, with deterministic replay at scale. Designed to run every time the agent changes.</p>
               </div>
             </div>
 
@@ -1647,52 +1862,27 @@
               <div class="roadmap-badge"></div>
               <div class="roadmap-meta">
                 <span class="roadmap-phase">M6</span>
-                <span class="roadmap-status">Planned</span>
+                <span class="roadmap-status">Opportunistic</span>
               </div>
               <div class="roadmap-content">
                 <h3>LLM-Application Targets</h3>
-                <p>A new arena archetype where the victim is an LLM application, with packs mapped to the OWASP Top 10 for LLM and Agentic Applications: prompt injection, system-prompt leakage, excessive agency, and RAG attacks — each scored from the app's own logs.</p>
+                <p>A new arena archetype where the victim is an LLM application, with packs mapped to the OWASP Top 10 for LLM and Agentic Applications: prompt injection, system-prompt leakage, excessive agency, and RAG attacks, each scored from the app's own logs. Directly relevant to testing the agentic products an enterprise builds.</p>
               </div>
             </div>
 
-            <!-- M7 -->
-            <div class="roadmap-item">
+            <!-- Deferred -->
+            <div class="roadmap-item deferred">
               <div class="roadmap-badge"></div>
               <div class="roadmap-meta">
-                <span class="roadmap-phase">M7</span>
-                <span class="roadmap-status">Planned</span>
+                <span class="roadmap-phase">Deferred</span>
+                <span class="roadmap-status">Out of scope for now</span>
               </div>
               <div class="roadmap-content">
-                <h3>Purple-Team Paired Telemetry</h3>
-                <p>Attacker and defender on one arena produce joined, ATT&CK-tagged red / blue datasets. Detection scores within a window of each red action, weighted so that remediation counts for more than detection alone.</p>
-              </div>
-            </div>
-
-            <!-- M8 -->
-            <div class="roadmap-item">
-              <div class="roadmap-badge"></div>
-              <div class="roadmap-meta">
-                <span class="roadmap-phase">M8</span>
-                <span class="roadmap-status">Planned</span>
-              </div>
-              <div class="roadmap-content">
-                <h3>Hardening & Multi-Provider Hosting</h3>
-                <p>Per-operator identity, multi-tenant workspaces, Google SSO, and envelope key custody; the container daemon off the control plane; real VM and AWS deployment with ranges-as-code; and full observability. Deferred until the M1–M3 spine lands.</p>
+                <h3>Product & Multi-Tenant Concerns</h3>
+                <p>MCP OAuth 2.1, multi-tenant RBAC / SSO / workspaces, real cloud and VM hosting, in-browser VNC access, and purple-team detection scoring are deliberately cut, since none are needed for a personal flagship or a single-team harness. They return only if Nidavellir becomes a product or serves multiple teams.</p>
               </div>
             </div>
           </div>
-        </div>
-      </section>
-
-      <!-- CALL TO ACTION -->
-      <section class="cta-section">
-        <div class="container">
-          <h2>Ready to Launch?</h2>
-          <p>Nidavellir runs fully local on your developer machine. Read our documentation guides to get started.</p>
-          <button class="cta-btn" onclick="switchView('docs')">
-            Read Documentation
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-          </button>
         </div>
       </section>
 
