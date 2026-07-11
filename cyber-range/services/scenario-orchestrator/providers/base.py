@@ -84,3 +84,20 @@ class RangeProvider(ABC):
         raise NotImplementedError(
             f"the {self.name!r} provider does not support traffic capture yet"
         )
+
+    def collect_monitor_signals(self, instance_id: str) -> dict:
+        """Gather raw runtime observations for the service-under-test nodes of an
+        arena — the backend for the M2 monitor (the crash / sanitizer-abort /
+        unhandled-5xx / resource-exhaustion oracle, ADR-0009). Read-only and
+        best-effort: it never raises for a single bad node. The pure
+        ``monitor.detect_signals`` turns these observations into scored evidence.
+        Result contract:
+            {"success": True, "observations": [
+                {name, role, state, exit_code, oom_killed, restart_count, log_tail}
+            ]}
+          | {"success": False, "error": "..."}
+        Backends that can't introspect a running workload (VM/cloud until M8)
+        refuse cleanly rather than pretending."""
+        raise NotImplementedError(
+            f"the {self.name!r} provider does not support monitor signals yet"
+        )

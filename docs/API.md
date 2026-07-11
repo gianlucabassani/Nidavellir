@@ -406,6 +406,29 @@ the manifest is operator-only and never shown to an agent.
   `points_earned`/`points_total`, `findings_submitted`, and the `manifest`.
   **operator/admin only** (`403` for an `agent` key).
 
+### Service-under-test monitor (M2, ADR-0009)
+
+A Celery-beat task (`monitor_arenas`, every `NIDAVELLIR_MONITOR_INTERVAL_SECONDS`,
+default 30s) polls each **ACTIVE** arena, reads its service-under-test nodes'
+container state + a bounded log tail from the provider, and runs a crash oracle
+(`monitor.detect_signals`). Any **new** signal is appended to the audit stream as
+a `monitor_signal` event (`actor: "monitor"`) — so a target with **no known-CVE
+manifest is still scorable**, and the signals surface to the defender stance's
+`query_events` feed and the operator console with no extra endpoint. There is no
+request API; the monitor runs on the schedule. Signal kinds: `crash`,
+`sanitizer_abort`, `unhandled_5xx`, `resource_exhaustion`. Payload:
+
+```json
+{ "kind": "crash", "node": "victim", "severity": "high",
+  "summary": "victim exited with a non-zero status (139)",
+  "evidence": "...last log lines...", "key": "crash:victim:178cde5de027" }
+```
+
+`key` deduplicates a persistent fault so it is recorded once, not on every tick.
+Only `docker-local`/`mock` collect today (VM/cloud providers refuse cleanly until
+M8). The deterministic validators that *confirm* a finding before it is credited,
+and the structured scored verdict, are the rest of M2 (items 6–7, ADR-0009).
+
 ### Response Format
 
 All responses are JSON with the following structure:

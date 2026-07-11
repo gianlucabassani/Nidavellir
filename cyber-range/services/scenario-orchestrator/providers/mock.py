@@ -85,6 +85,12 @@ class MockProvider(RangeProvider):
         logger.info(f"[{instance_id}] 🎭 SIMULATING setup egress {'open' if open else 'close'} on {node}")
         return {"success": True, "egress": "open" if open else "closed"}
 
+    def collect_monitor_signals(self, instance_id):
+        # A simulated arena has no real workload to crash — report a healthy,
+        # empty observation set so the monitor sweep stays quiet in MOCK_MODE.
+        logger.info(f"[{instance_id}] 🎭 SIMULATING monitor collection (no signals)")
+        return {"success": True, "observations": []}
+
     def capture_traffic(self, instance_id, *, seconds=6, max_packets=200):
         logger.info(f"[{instance_id}] 🎭 SIMULATING MITM traffic capture ({seconds}s)")
         return {

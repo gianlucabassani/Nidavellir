@@ -145,6 +145,14 @@ REAPER_INTERVAL_SECONDS = int(os.getenv("REAPER_INTERVAL_SECONDS", "300"))
 # considered orphaned (no live worker) and reconciled by the reaper.
 LAB_STUCK_MINUTES = int(os.getenv("LAB_STUCK_MINUTES", "30"))
 
+# M2 service-under-test monitor (ADR-0009). A Celery-beat task polls each ACTIVE
+# arena, collects its SUT nodes' runtime state + log tail, runs the crash oracle
+# (`monitor.detect_signals`), and appends NEW signals to the `events` stream.
+# The window bounds the dedup fetch (how far back we look to avoid re-recording a
+# persistent fault).
+MONITOR_INTERVAL_SECONDS = int(os.getenv("NIDAVELLIR_MONITOR_INTERVAL_SECONDS", "30"))
+MONITOR_EVENT_WINDOW = int(os.getenv("NIDAVELLIR_MONITOR_EVENT_WINDOW", "500"))
+
 # VALIDATION
 def validate_config():
     """Validate required configuration on startup"""

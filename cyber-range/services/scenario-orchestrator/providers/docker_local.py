@@ -1236,6 +1236,63 @@ class DockerLocalProvider(RangeProvider):
         text = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)
         return text[: cls.EXEC_OUTPUT_CAP]
 
+    # How much of each container's log tail the monitor reads per tick. Bounded
+    # so a chatty target can't blow up the collection payload; the scan keeps only
+    # the matching lines. ~200 lines is enough to catch a crash/abort footer.
+    _MONITOR_LOG_TAIL_LINES = 200
+    _MONITOR_LOG_CHARS = 8000
+    # Container roles/nodes that are NOT the service-under-test: the attacker's own
+    # foothold tooling and arena infrastructure (package mirror). The monitor
+    # watches the target, not the harness.
+    _MONITOR_SKIP_ROLES = frozenset({"attacker", "mirror"})
+
+    def collect_monitor_signals(self, instance_id):
+        """M2 monitor backend: read each service-under-test node's container State
+        plus a bounded tail of its logs, so `monitor.detect_signals` can flag
+        crashes / sanitizer aborts / unhandled 5xx / resource exhaustion.
+        Read-only and best-effort — a single unreadable container is skipped, not
+        fatal."""
+        try:
+            containers = self.client.containers.list(
+                all=True, filters={"label": f"{LABEL_LAB_ID}={instance_id}"}
+            )
+        except Exception as e:  # noqa: BLE001 - surface collection failure cleanly
+            logger.error(f"[{instance_id}] monitor collection failed: {e}")
+            return {"success": False, "error": str(e)}
+
+        observations = []
+        for c in containers:
+            labels = getattr(c, "labels", {}) or {}
+            role = labels.get(LABEL_ROLE, "node")
+            node = labels.get(LABEL_NODE) or getattr(c, "name", "?")
+            if role in self._MONITOR_SKIP_ROLES or node == _MIRROR_NODE:
+                continue
+            try:
+                c.reload()  # State/RestartCount are only fresh after a reload
+            except Exception:  # noqa: BLE001 - stale attrs are still usable
+                pass
+            state = (c.attrs.get("State") or {})
+            observations.append({
+                "name": node,
+                "role": role,
+                "state": state.get("Status", "unknown"),
+                "exit_code": state.get("ExitCode"),
+                "oom_killed": bool(state.get("OOMKilled")),
+                "restart_count": int(c.attrs.get("RestartCount") or 0),
+                "log_tail": self._monitor_logs(c),
+            })
+        return {"success": True, "observations": observations}
+
+    def _monitor_logs(self, container) -> str:
+        """A larger log tail than `_tail_logs` (which caps at 20 lines) so the
+        monitor's line scan can see a crash/abort footer. Best-effort."""
+        try:
+            raw = container.logs(tail=self._MONITOR_LOG_TAIL_LINES)
+            text = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)
+            return text[-self._MONITOR_LOG_CHARS:]
+        except Exception:  # noqa: BLE001
+            return ""
+
     def capture_traffic(self, instance_id, *, seconds=6, max_packets=200):
         """MITM in-path observation: tcpdump on the arena's primary bridge via a
         short-lived host-network sidecar. A bridge-attached container only sees its

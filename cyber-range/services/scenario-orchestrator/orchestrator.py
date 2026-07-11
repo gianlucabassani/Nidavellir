@@ -73,6 +73,11 @@ class Orchestrator:
             instance_id, seconds=seconds, max_packets=max_packets
         )
 
+    def collect_monitor_signals(self, instance_id: str):
+        """Gather the service-under-test nodes' runtime state + log tails for the
+        M2 monitor. Delegates to the provider the arena was deployed with."""
+        return self.provider.collect_monitor_signals(instance_id)
+
     def _load_scenario(self, scenario_name: str) -> dict:
         """Load scenario YAML configuration (delegates to the registry)."""
         return load_scenario(scenario_name)

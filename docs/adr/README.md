@@ -28,6 +28,7 @@ contributors understand the reasoning instead of re-litigating it.
 | [0006](0006-aws-topology.md) | AWS topology — generic nodes[] module & egress lockdown | Proposed (driver + module landed; real apply needs creds) |
 | [0007](0007-software-under-test-arenas.md) | Software-under-test arenas — provision/configure/monitor/score any OSS project | Proposed (roadmap archetype; ROADMAP P1-6/P2-10/P3-3/P4-6/P4-7/P7-6) |
 | [0008](0008-repo-image-build-pipeline.md) | Repo → image build pipeline (deterministic-first, LLM-fallback) | Proposed (ROADMAP M1; tier-1 Dockerfile auto-build landed + live-verified) |
+| [0009](0009-scoring-validators-monitor.md) | Monitoring, deterministic validators & structured scoring | Proposed (ROADMAP M2; monitor sidecar / crash oracle landed — validators + scored verdict follow) |
 
 > **2026-06-13 pivot:** Nidavellir repositioned as an enterprise agent-testing
 > arena (dynamic N-node topologies + bring-your-own agents via MCP as

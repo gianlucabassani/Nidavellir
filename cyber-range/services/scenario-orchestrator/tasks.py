@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from celery import Celery
 
 import config
+import monitor
 import setup_phase
 from database import Database
 from orchestrator import Orchestrator
@@ -34,7 +35,17 @@ app.conf.beat_schedule = {
         "task": "reap_labs",
         "schedule": float(config.REAPER_INTERVAL_SECONDS),
     },
+    # M2 service-under-test monitor (ADR-0009): crash / sanitizer / 5xx /
+    # resource-exhaustion oracle over every ACTIVE arena.
+    "monitor-arenas": {
+        "task": "monitor_arenas",
+        "schedule": float(config.MONITOR_INTERVAL_SECONDS),
+    },
 }
+
+# Event type for a recorded monitor signal (audit stream + defender feed + the
+# M2 scorer's input).
+MONITOR_EVENT = "monitor_signal"
 
 logger = logging.getLogger(__name__)
 
@@ -261,3 +272,65 @@ def _revoke_expired_setup_egress(db, now):
         except Exception:  # noqa: BLE001 - one bad arena must not abort the sweep
             logger.exception(f"[{dep.get('id')}] setup-egress reap failed")
     return revoked
+
+
+@app.task(name="monitor_arenas")
+def monitor_arenas():
+    """Service-under-test monitor (ROADMAP M2, ADR-0009), ticked by Celery beat.
+
+    For every ACTIVE arena, gather each SUT node's runtime state + log tail from
+    its provider, run the crash oracle (`monitor.detect_signals`), and append any
+    NEW signal — crash / sanitizer abort / unhandled 5xx / resource exhaustion —
+    to the append-only `events` stream as `monitor_signal`. Signals feed the
+    defender stance and the M2 scorer: a crash on a target with no known-CVE
+    manifest is still scored evidence. Dedup is by the signal `key` against the
+    signals already recorded for the arena, so a persistent fault is recorded
+    once, not on every tick. Best-effort: one bad arena never aborts the sweep;
+    providers that can't introspect a workload (VM/cloud until M8) are skipped.
+    """
+    db = Database()
+    scanned = recorded = 0
+    for dep in db.list_deployments():
+        if dep.get("status") != LabStatus.ACTIVE:
+            continue
+        instance_id = dep["id"]
+        try:
+            orch = Orchestrator(provider_name=dep.get("provider"))
+            result = orch.collect_monitor_signals(instance_id)
+        except NotImplementedError:
+            continue  # provider can't introspect a running workload yet
+        except Exception:  # noqa: BLE001 - one bad arena must not abort the sweep
+            logger.exception(f"[{instance_id}] monitor collection failed")
+            continue
+
+        if not result.get("success"):
+            logger.warning(
+                f"[{instance_id}] monitor collection: {result.get('error', 'unknown error')}"
+            )
+            continue
+        scanned += 1
+
+        signals = monitor.detect_signals(result.get("observations"))
+        if not signals:
+            continue
+
+        # Only record signals not already on the stream (dedup by `key`).
+        seen = {
+            (e.get("payload") or {}).get("key")
+            for e in db.list_events(
+                lab_id=instance_id, limit=config.MONITOR_EVENT_WINDOW, types=[MONITOR_EVENT]
+            )
+        }
+        for sig in signals:
+            if sig["key"] in seen:
+                continue
+            db.record_event(instance_id, MONITOR_EVENT, sig, actor="monitor")
+            recorded += 1
+            logger.info(
+                f"[{instance_id}] monitor signal: {sig['kind']} on "
+                f"{sig['node']} ({sig['severity']})"
+            )
+
+    if scanned or recorded:
+        logger.info(f"Monitor run: {scanned} arena(s) scanned, {recorded} new signal(s)")
+    return {"scanned": scanned, "recorded": recorded}
