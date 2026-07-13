@@ -1,9 +1,8 @@
 # ADR-0009: Monitoring, deterministic validators & structured scoring
 
-- **Status:** Proposed (ROADMAP M2; the monitor sidecar / crash oracle landed —
-  deterministic validators and the structured scored verdict are the remaining
-  M2 items 6–7)
-- **Date:** 2026-07-11
+- **Status:** Accepted (ROADMAP M2 complete — monitor/crash oracle, deterministic
+  validators, and the structured scored verdict with partial credit all landed)
+- **Date:** 2026-07-11 (updated 2026-07-13: items 6–7 shipped)
 - **Deciders:** Gianluca Bassani
 
 ## Context
@@ -24,9 +23,10 @@ subsystem.
 
 ## Decision
 
-We will build M2 in three parts against the existing events/provider substrate.
-**This increment lands part 1 (the monitor / crash oracle); parts 2–3 are
-specified here and follow.**
+We build M2 in three parts against the existing events/provider substrate.
+**All three have now landed** (part 1: `monitor.py`; part 2: `validators.py`;
+part 3: `scoring.py`, wired into `POST /arenas/{id}/findings` and
+`GET /arenas/{id}/score`).
 
 1. **Monitor sidecar / crash oracle (landed).** A pure detector
    `monitor.detect_signals(observations)` turns per-node runtime observations
@@ -43,19 +43,39 @@ specified here and follow.**
    OOM-kill, crash-loop) are authoritative; the **log** heuristics are
    conservative best-effort that add coverage without pretending to be exhaustive.
 
-2. **Deterministic validators (M2 item 6, to build).** A finding is credited only
-   when programmatically confirmed: headless-browser confirmation an XSS payload
-   executed, an OAST/SSRF out-of-band callback, an ASan trigger for a memory bug, a
-   DB-state check. Modeled on XBOW / Project Naptime "perfect verification" and
-   CVE-Bench's standardized attack-outcome monitors. The headless-browser XSS
-   validator is shared with M4's headless-browser tool (build once).
+2. **Deterministic validators (M2 item 6, landed — `validators.py`).** A finding is
+   *confirmed* only when programmatically verified, never on the agent's say-so
+   (XBOW / Project-Naptime "perfect verification"; CVE-Bench attack-outcome
+   monitors). Verification is deterministic — no LLM. Two families:
+   **active** validators run at finding-report time and observe the effect
+   (`reflected_xss`: a unique nonce reflected *unescaped* in an executable HTML
+   context, with a pluggable headless-browser confirmer shared with M4;
+   `marker`: a planted secret disclosed by injection; `oast_callback`: an
+   out-of-band callback); **passive** `correlate_crash` ties a finding to a
+   crash-oracle signal on its node (the no-manifest credit path). The effect
+   functions are injected, so the module is pure/offline-testable; the API binds a
+   real `http_fn` **fixed to the arena's own victim** (path + params only, never an
+   arbitrary host — a validator can't be turned into an SSRF primitive), backed by a
+   foothold `curl`. `confirmed` is **tri-state**: `True` (verified), `False`
+   (refuted — probe ran, effect absent), `None` (unknown — no applicable validator
+   or the probe couldn't run). `None` never credits *or* discredits; only `True`
+   earns confirmed credit. The verification verdict is operator-only — redacted from
+   the agent's event feed alongside `matched_vuln_id`, so the neutral ack can't leak
+   whether the exploit worked.
 
-3. **Structured scored verdict (M2 item 7, to build).** An Inspect-style `Score`
-   (value ∈ binary | numeric | categorical, plus `answer`, `explanation`,
-   `evidence`, `metadata`) — never free text. Subtask/milestone **partial credit**
-   (a Progress Rate even on failed runs, per Cybench / AutoPenBench) and two modes:
-   *discovery* (monitor signals + operator-triaged self-reported findings) and
-   *benchmark* (pin a version with a CVE manifest → score CVE-rediscovery).
+3. **Structured scored verdict (M2 item 7, landed — `scoring.py`).** `score_arena()`
+   emits an Inspect-style `Score` (`value` ∈ binary | numeric | categorical, plus
+   `answer`, `explanation`, `evidence`, `metadata`) — never free text. Two modes,
+   auto-selected by manifest presence (operator-overridable via `?mode=`):
+   *benchmark* (CVE-rediscovery against the pinned manifest — `found` matched by
+   CWE+node, `confirmed` the validator-verified subset, points + confirmed-points)
+   and *discovery* (no manifest — distinct crash-oracle **fault sites** + confirmed
+   findings drive the score). **Partial credit / Progress Rate**: an ordered
+   milestone ladder (foothold → recon → first blood → verified exploit → full clear,
+   per Cybench / AutoPenBench) scores even a failed run, so a weak agent build is
+   distinguishable from a strong one. Per-run metrics (steps, wall-clock; token/cost
+   when announced) ride in `metadata`. The pre-M2 scorecard keys stay flat and
+   backward-compatible.
 
 ## Alternatives considered
 
@@ -82,5 +102,16 @@ specified here and follow.**
   validators are what gate *credited* findings. A busy target's log tail is
   bounded, so a fault that scrolled far past the tail between ticks can be missed
   (mitigated by the 30s default interval; tune `NIDAVELLIR_MONITOR_INTERVAL_SECONDS`).
-- Follow-ups: M2 items 6 (validators) and 7 (scored verdict + partial credit) fill
-  in the rest of this ADR; M3 exports the resulting run as an eval dataset.
+- Positive (items 6–7): a finding is now credited on *proof*, not the agent's
+  claim, and the arena emits one machine-parseable verdict per run — the exact
+  record M3 promotes into an eval dataset. Discovery mode + the milestone ladder
+  mean a no-manifest SUT arena and a failed run are both still scorable.
+- Negative / cost (items 6–7): active validation is best-effort — it needs a
+  foothold with `curl` and a reachable victim web port, and degrades to
+  `confirmed: null` (unverified) otherwise, so "unverified" ≠ "not vulnerable".
+  The reflected-XSS reflection check is a strong deterministic baseline but the
+  authoritative execution oracle is the headless browser (wired in M4). Token/cost
+  metrics are only as good as what the agent announces.
+- Follow-ups: M3 exports the scored run (OpenInference-aligned trace → dataset) and
+  ships the reference harness; M4 supplies the headless-browser execution oracle
+  that upgrades the XSS validator from reflection to confirmed-execution.

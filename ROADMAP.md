@@ -58,6 +58,12 @@ cross-referenced so `.agent/backlog/BACKLOG.md` and the ADRs stay traceable.
   arena-labeled + reclaimed. *(Remaining tier work: compose / devcontainer /
   buildpack **execution** paths are classified but not yet executed — need a
   compose runtime, the `devcontainer` CLI, or the `pack` binary.)*
+- **M2 (monitoring + validators + scoring) — COMPLETE (2026-07-13):** crash oracle
+  (`monitor.py`), deterministic "perfect-verification" validators (`validators.py`),
+  and the structured scored verdict with benchmark/discovery modes + milestone
+  partial credit (`scoring.py`), all event-backed and provider-agnostic. ADR-0009
+  Accepted. *(Remaining: the headless-browser execution oracle that upgrades the XSS
+  validator from reflection to confirmed-execution rides with M4.)*
 - **Ops:** `MOCK_MODE` makes the whole flow demoable/testable with no cloud;
   `make check` (ruff + bandit + pytest) green; CI on SQLite + Postgres.
 
@@ -90,9 +96,11 @@ auto-provision-any-OSS **+** crash-oracle scoring. XBOW/Strix are agents (no are
 Cybench/CVE-Bench are fixed target sets (no arbitrary-repo provisioning); GOAD/Ludus
 are ranges (no agent seam or scoring). Nidavellir's data-defined engine + gateway +
 events spine is the substrate that makes the combination cheap. **The moat is the
-scoring/crash-oracle layer (M2) — and it is precisely the part not yet built.** Most
-effort so far went into the commodity layer (topology, providers, console); the vault
-is still ahead. That's where the next work goes.
+scoring/crash-oracle layer (M2) — now built** (crash oracle + deterministic
+validators + structured scoring, ADR-0009). Most effort before it went into the
+commodity layer (topology, providers, console); with the vault in place, the next
+work is M3 — turning each scored run into a comparable, replayable eval and shipping
+the flagship proof.
 
 **The spine serves both horizons.** M1 → M2 → M3 (reliable provisioning → deep
 monitoring/scoring → benchmark/eval + the flagship proof) *is* Horizon 1, and it is
@@ -126,8 +134,8 @@ enterprise runs.
 | # | Milestone | Horizon | Legacy | Effort | Why it's here |
 |---|-----------|---------|--------|--------|---------------|
 | **M1** | Reliable *repo → running service* provisioning | H1 (spine) | P1-6, Field-C | L | ✅ **DONE** — the core unlock |
-| **M2** | Deep monitoring + crash oracle + structured scoring | H1 (spine) | P4-1/6/7 | L | 🔴 **THE next thing** — the moat; makes any target scorable |
-| **M3** | Benchmark, eval layer & the **flagship proof** | H1 (spine) | P4-2/3/4, P5-4 | M | Turns runs into comparable, replayable datasets **+ ships the demo/benchmark that makes it a flagship** |
+| **M2** | Deep monitoring + crash oracle + structured scoring | H1 (spine) | P4-1/6/7 | L | ✅ **DONE** — the moat; makes any target scorable |
+| **M3** | Benchmark, eval layer & the **flagship proof** | H1 (spine) | P4-2/3/4, P5-4 | M | 🔴 **THE next thing** — turns runs into comparable, replayable datasets **+ ships the demo/benchmark that makes it a flagship** |
 | **M4** | Agent-grade arena tooling & fail-closed guardrails | H2 | P2-2/3/4 | M | **Answers "is the tooling enough?"** — the tools a real agent needs to do real work |
 | **M5** | Regression & eval pipeline for iterating on an agent | H2 | P4-3/4, P5-4 | M | The internal-harness heart: compare agent vN vs vN+1, export to our eval stack |
 | **M6** | *(opportunistic)* LLM-application-as-target arenas | H2 | P3-5, AI-INT §4 | M | Directly relevant to testing the **agentic products** an enterprise builds |
@@ -137,13 +145,22 @@ VNC console), M7 (purple-team), and M8 (multi-tenant hosting) is **deferred — 
 
 ---
 
-### 🔴 M2 — Deep monitoring + crash oracle + structured scoring · **H1 · L**
+### ✅ M2 — Deep monitoring + crash oracle + structured scoring · **H1 · L · DONE (2026-07-13)**
 
 **Goal.** A target with **no pre-known vulnerability manifest is still scorable** —
 "the agent made it fall over" is first-class evidence. This is the capability that
 separates a demo from something that covers real-world issues, it's the platform's
-moat, and it is the payoff of the flagship demo. **It is the single most important
-thing to build next.**
+moat, and it is the payoff of the flagship demo.
+
+**Shipped.** All three parts of ADR-0009 landed: the monitor / crash oracle
+(`monitor.py` + the `monitor_arenas` beat task), the deterministic validators
+(`validators.py` — active reflected-XSS/marker/OAST probes + passive crash
+correlation, SSRF-safe arena-bound `http_fn`, tri-state `confirmed`), and the
+structured scored verdict (`scoring.py` — Inspect-style `Score`, benchmark +
+discovery modes, milestone Progress Rate that scores even a failed run), wired into
+`POST /arenas/{id}/findings` and `GET /arenas/{id}/score`. Verification verdicts are
+operator-only (redacted from the agent feed). `make check` green (636 tests). See
+ADR-0009 for the full design. *The spec below is retained as the design record.*
 
 **Monitor sidecar** around the service-under-test → `events` + the defender feed:
 logs, crashes/panics, **sanitizer aborts** (ASan/UBSan when built with them),
