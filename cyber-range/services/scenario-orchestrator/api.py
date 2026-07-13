@@ -2729,11 +2729,11 @@ def arena_score(
     signals = [e["payload"] for e in events
                if e.get("type") == "monitor_signal" and isinstance(e.get("payload"), dict)]
 
-    # Passive correlation (ADR-0009 item 6): a matched finding on a node the
-    # crash oracle flagged is confirmed by that fault, even with no active probe.
+    # Passive correlation (ADR-0009 item 6): a finding on a node the crash oracle
+    # flagged is confirmed by that fault, even with no active probe. Applies in
+    # both modes and is NOT gated on a manifest match — in discovery, "the agent
+    # made it fall over" is the whole point.
     for f in findings:
-        if not f.get("matched_vuln_id"):
-            continue
         if (f.get("validation") or {}).get("confirmed") is True:
             continue
         corr = validators.correlate_crash(f.get("node"), signals)

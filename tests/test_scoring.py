@@ -74,6 +74,18 @@ def test_discovery_scores_from_crash_signals():
     assert r["score"]["value"] == r["progress_rate"]
 
 
+def test_discovery_counts_confirmed_findings_without_a_manifest():
+    # A finding confirmed by crash correlation counts even with no manifest match.
+    findings = [_finding(vid=None, node="victim", confirmed=True)]
+    r = scoring.score_arena(arena_id="a", scenario=None, manifest=[], findings=findings,
+                            signals=[{"kind": "crash", "node": "victim", "key": "k"}],
+                            run_metrics={"steps": 2})
+    assert r["mode"] == "discovery"
+    assert r["confirmed_findings"] == 1
+    assert "1 confirmed finding(s)" in r["score"]["answer"]
+    assert any(m["id"] == "verified_exploit" and m["reached"] for m in r["milestones"])
+
+
 def test_empty_run_still_reports_zero_progress():
     r = scoring.score_arena(arena_id="a", scenario=None, manifest=[], findings=[],
                             run_metrics={"steps": 0})

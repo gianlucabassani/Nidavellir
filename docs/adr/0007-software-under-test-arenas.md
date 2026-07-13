@@ -1,6 +1,7 @@
 # ADR-0007: Software-under-test (SUT) arenas — provision, configure, monitor, score any OSS project
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-07-13 — the full spine landed: provision (M1,
+  ADR-0008), configure (setup phase), monitor + score (M2, ADR-0009))
 - **Date:** 2026-06-18
 - **Deciders:** Gianluca Bassani
 

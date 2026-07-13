@@ -462,9 +462,9 @@ Designs preserved in git history of the prior roadmap.
 - **0003** provider driver interface & scenario compilation — Accepted
 - **0004** datastore: PostgreSQL + Alembic — Accepted
 - **0005** MCP agent gateway protocol, stances & guardrails — to extend (M4: complete toolset + fail-closed guardrails)
-- **0007** software-under-test arenas — Proposed (M1 done; M2 monitoring/scoring pending)
+- **0007** software-under-test arenas — Accepted (provision→configure→monitor→score spine complete)
 - **0008** repo→image build pipeline — Accepted (M1 complete; buildpack/compose/devcontainer execution tiers pending)
-- **0009** scoring, deterministic validators, trace→eval dataset & regression format — to write (M2/M3/M5)
+- **0009** scoring, deterministic validators, monitor — Accepted (M2 complete; M3/M5 extend the trace→eval + regression format)
 
 *Deferred ADRs (revisit only if the horizon changes, §4): 0006 AWS topology & cost
 controls; 0010 MCP OAuth 2.1 & tool supply-chain defenses.*

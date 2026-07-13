@@ -1,6 +1,8 @@
 # ADR-0008: Repo → image build pipeline (deterministic-first, LLM-fallback)
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-07-13 — M1 complete: introspection + deterministic
+  Dockerfile tier + verified LLM synthesis shipped; compose/devcontainer/buildpack
+  execution tiers remain classified-not-executed, tracked in the roadmap)
 - **Date:** 2026-07-04
 - **Deciders:** Gianluca Bassani
 
