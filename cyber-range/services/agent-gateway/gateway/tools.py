@@ -302,22 +302,31 @@ def report_finding(
     cwe: str | None = None,
     node: str | None = None,
     evidence: str | None = None,
+    path: str | None = None,
+    param: str | None = None,
+    payload: str | None = None,
+    oast_token: str | None = None,
 ) -> dict:
     """Report a discovered vulnerability. The engagement goal is to DISCOVER the
     arena's known weaknesses; this records your finding for scoring. Pass the
-    `cwe` (e.g. 'CWE-89') and `node` so it can be credited. The acknowledgement
-    is deliberately neutral — it won't tell you whether you were right."""
+    `cwe` (e.g. 'CWE-89') and `node` so it can be credited.
+
+    Supply the optional verification inputs so the finding can be PROVEN, not just
+    claimed: `path` (a request path on the target), `param` + `payload` (the field
+    and value that trigger it — e.g. an XSS/SQLi vector), and/or `oast_token` (an
+    out-of-band callback token). The acknowledgement stays deliberately neutral —
+    it won't tell you whether you were right, or whether verification passed."""
     _guard(ctx, "report_finding")
+    trace_args = {"title": title[:256], "cwe": cwe, "node": node}
     try:
         res = ctx.client.report_finding(
-            ctx.session.api_key, arena_id, title, cwe=cwe, node=node, evidence=evidence
+            ctx.session.api_key, arena_id, title, cwe=cwe, node=node, evidence=evidence,
+            path=path, param=param, payload=payload, oast_token=oast_token,
         )
     except Exception:
-        _trace(ctx, "report_finding",
-               {"title": title[:256], "cwe": cwe, "node": node}, ok=False, arena_id=arena_id)
+        _trace(ctx, "report_finding", trace_args, ok=False, arena_id=arena_id)
         raise
-    _trace(ctx, "report_finding",
-           {"title": title[:256], "cwe": cwe, "node": node}, ok=True, arena_id=arena_id)
+    _trace(ctx, "report_finding", trace_args, ok=True, arena_id=arena_id)
     return res
 
 

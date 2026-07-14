@@ -141,6 +141,35 @@ def test_agent_role_cannot_manage_credentials(agent):
     assert agent.delete("/agent/model").status_code == 403
 
 
+# --- P3-4: per-connection base_url + new OpenAI-compatible providers ----------
+
+def test_base_url_stored_masked_and_recoverable(operator):
+    from database import Database
+    r = operator.put("/agent/model", json={
+        "provider": "openrouter", "model": "anthropic/claude-3.5", "api_key": "sk-or-1234",
+        "base_url": "https://openrouter.ai/api/v1"})
+    assert r.status_code == 200
+    assert r.json()["base_url"] == "https://openrouter.ai/api/v1"
+    # masked GET surfaces it (non-secret); in-process credential carries it too.
+    assert operator.get("/agent/model").json()["base_url"] == "https://openrouter.ai/api/v1"
+    cred = Database().get_decrypted_model_credential("op-mc")
+    assert cred["base_url"] == "https://openrouter.ai/api/v1"
+
+
+def test_new_providers_accepted(operator):
+    for prov, model in (("openrouter", "x/y"), ("huggingface", "meta/z")):
+        assert operator.put("/agent/model", json={
+            "provider": prov, "model": model, "api_key": "k"}).status_code == 200
+
+
+def test_custom_provider_is_keyless_with_base_url(operator):
+    # A self-hosted OpenAI-compatible endpoint may run without a key.
+    r = operator.put("/agent/model", json={
+        "provider": "custom", "model": "my-model", "api_key": "",
+        "base_url": "http://vllm.internal:8000/v1"})
+    assert r.status_code == 200 and r.json()["base_url"] == "http://vllm.internal:8000/v1"
+
+
 # --- verification ping ------------------------------------------------------
 
 def test_verify_supplied_key(operator, monkeypatch):
@@ -148,7 +177,7 @@ def test_verify_supplied_key(operator, monkeypatch):
 
     seen = {}
 
-    def fake(provider, model, api_key):
+    def fake(provider, model, api_key, base_url=None):
         seen.update(provider=provider, model=model, api_key=api_key)
         return {"verified": True, "detail": "ok", "checked": True}
 
@@ -167,7 +196,7 @@ def test_verify_uses_stored_decrypted_key_when_body_empty(operator, monkeypatch)
     operator.put("/agent/model", json={"provider": "openai", "model": "gpt-4o", "api_key": "sk-stored-9"})
     captured = {}
 
-    def fake(provider, model, api_key):
+    def fake(provider, model, api_key, base_url=None):
         captured.update(provider=provider, api_key=api_key)
         return {"verified": True, "detail": "ok", "checked": True}
 
@@ -229,7 +258,7 @@ def test_chat_streams_using_the_connected_model(operator, monkeypatch):
     operator.put("/agent/model", json={"provider": "openai", "model": "gpt-4o", "api_key": "sk-chat-1"})
     seen = {}
 
-    def fake_stream(provider, model, api_key, system, messages, max_tokens=1024):
+    def fake_stream(provider, model, api_key, system, messages, max_tokens=1024, base_url=None):
         seen.update(provider=provider, api_key=api_key, system=system, messages=messages)
         yield "Hello "
         yield "operator."
@@ -260,7 +289,7 @@ def test_chat_context_includes_arena_details(operator, monkeypatch):
     holder = {}
     monkeypatch.setattr(
         model_chat, "stream_chat",
-        lambda p, m, k, system, msgs, max_tokens=1024: (holder.update(s=system), iter(["ok"]))[1],
+        lambda p, m, k, system, msgs, max_tokens=1024, base_url=None: (holder.update(s=system), iter(["ok"]))[1],
     )
     operator.post("/agent/chat", json={"arena_id": iid, "messages": [{"role": "user", "content": "?"}]}).text
     assert iid in holder["s"] and "container_web_pentest" in holder["s"]

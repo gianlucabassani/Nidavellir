@@ -65,6 +65,9 @@ class ModelConnection(Base):
     model: Mapped[str] = mapped_column(Text, nullable=False)
     encrypted_key: Mapped[str] = mapped_column(Text, nullable=False)  # Fernet ciphertext
     key_last4: Mapped[str | None] = mapped_column(Text)  # display hint only
+    # Per-connection OpenAI-compatible base URL (OpenRouter/HF/vLLM/self-hosted) —
+    # overrides the provider preset + NIDAVELLIR_MODEL_BASE_URL. Non-secret (P3-4).
+    base_url: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(
         Text, nullable=False, default="standby", server_default="standby"
     )

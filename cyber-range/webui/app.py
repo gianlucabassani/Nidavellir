@@ -247,13 +247,39 @@ def _agent_overview(limit=200):
 
 
 def _score(instance_id):
-    """The arena's benchmark scorecard (known-vuln manifest + found/missed).
-    Operator-only on the API; the WebUI key is operator/admin. Returns None when
-    the scenario has no manifest (so the panel hides itself)."""
+    """The arena's structured scorecard (ADR-0009): benchmark manifest view AND
+    the discovery-mode view (crash-oracle fault sites + confirmed findings +
+    progress). Operator-only on the API; the WebUI key is operator/admin. Returns
+    None only when the API has no score at all — NOT merely when there's no
+    manifest, so discovery arenas render their result too."""
     data, ok = _api_get(f"/arenas/{instance_id}/score")
-    if not ok or not data or not data.get("manifest"):
+    if not ok or not data:
         return None
     return data
+
+
+def _findings(instance_id):
+    """The arena's reported findings (operator view — includes the match + the
+    verification verdict). Type-filtered so a burst of activity can't push them
+    out of the window. Newest first."""
+    out = []
+    for e in _events(instance_id, limit=100, type="finding"):
+        p = e.get("payload") or {}
+        p = {**p, "ts": e.get("ts")}
+        out.append(p)
+    return out
+
+
+def _setup_steps(instance_id):
+    """Executed configurator steps (command + real stdout/stderr) for the setup
+    console — the live feedback an operator was missing on agent-proposed steps.
+    Returned oldest→newest so the console reads top-to-bottom like a terminal."""
+    steps = []
+    for e in _events(instance_id, limit=100, type="setup_step"):
+        p = e.get("payload") or {}
+        steps.append({**p, "ts": e.get("ts")})
+    steps.reverse()  # events are newest-first
+    return steps
 
 
 # Which actor a log line belongs to — the Logs page and the Dashboard feed group
@@ -528,6 +554,8 @@ def arena_detail(instance_id):
         provider=outputs.get("provider") or data.get("provider"),
         events=events,
         score=_score(instance_id),
+        findings=_findings(instance_id),
+        setup_steps=_setup_steps(instance_id),
         scenario=scenario,
         is_sut=is_sut,
         gateway_url=GATEWAY_PUBLIC_URL,
@@ -754,6 +782,7 @@ def model_connection_set():
         "provider": (body.get("provider") or "").strip().lower(),
         "model": (body.get("model") or "").strip(),
         "api_key": body.get("api_key") or "",
+        "base_url": (body.get("base_url") or "").strip() or None,  # P3-4
     }
     try:
         resp = requests.put(
@@ -791,6 +820,7 @@ def model_connection_verify():
         "provider": (body.get("provider") or "").strip().lower() or None,
         "model": (body.get("model") or "").strip() or None,
         "api_key": body.get("api_key") or None,
+        "base_url": (body.get("base_url") or "").strip() or None,  # P3-4
     }
     try:
         resp = requests.post(

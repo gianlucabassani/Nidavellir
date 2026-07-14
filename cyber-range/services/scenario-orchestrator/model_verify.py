@@ -15,6 +15,7 @@ Base URLs mirror the reference harness presets (examples/agent-harness/backends.
 so the console and the harness agree on where each provider lives.
 """
 import logging
+import os
 
 import requests
 
@@ -22,17 +23,35 @@ logger = logging.getLogger("API")
 
 _VERIFY_TIMEOUT = 6  # seconds — fail fast; this is a liveness ping, not a job
 
-# provider -> base_url for OpenAI-compatible providers. None => host not known to
-# the orchestrator (generic local/self-hosted). Shared with model_chat so verify
-# and chat agree on where each provider lives. Mirrors the harness presets.
+# provider -> base_url for OpenAI-compatible providers. None => host not fixed by
+# the orchestrator; resolved from NIDAVELLIR_MODEL_BASE_URL (generic override for
+# self-hosted / any OpenAI-compatible gateway). Shared with model_chat so verify
+# and chat agree on where each provider lives.
+#
+# Scope note: this map is for the OPERATOR COMPANION only (co-pilot / generator /
+# Dockerfile synthesis — features where Nidavellir itself calls a model). A BYO
+# *agent* brings its own provider over MCP, so its choice never touches this.
 OPENAI_COMPAT_BASE = {
     "openai": "https://api.openai.com/v1",
+    "openrouter": "https://openrouter.ai/api/v1",
+    "huggingface": "https://router.huggingface.co/v1",
     "deepseek": "https://api.deepseek.com",
     "gemini": "https://generativelanguage.googleapis.com/v1beta/openai",
     "ollama": "http://localhost:11434/v1",
-    "local": None,
+    "local": None,   # self-hosted; base from NIDAVELLIR_MODEL_BASE_URL
+    "custom": None,  # any OpenAI-compatible endpoint via NIDAVELLIR_MODEL_BASE_URL
 }
 ANTHROPIC_BASE = "https://api.anthropic.com/v1"
+
+
+def openai_base(provider: str) -> str | None:
+    """Resolve an OpenAI-compatible provider's base URL: its preset, else the
+    generic NIDAVELLIR_MODEL_BASE_URL override (so `local`/`custom` and any
+    unlisted OpenAI-compatible gateway work). None when neither is set."""
+    preset = OPENAI_COMPAT_BASE.get(provider)
+    if preset:
+        return preset
+    return os.getenv("NIDAVELLIR_MODEL_BASE_URL") or None
 
 
 def _result(verified, detail, *, checked=True):
@@ -47,11 +66,12 @@ def _classify_status(code: int):
     return _result(False, f"unexpected provider response (HTTP {code})", checked=False)
 
 
-def verify_credential(provider: str, model: str, api_key: str) -> dict:
+def verify_credential(provider: str, model: str, api_key: str, base_url: str | None = None) -> dict:
     """Confirm a credential by listing the provider's models. Returns
     {verified: bool, detail: str, checked: bool}. ``checked=False`` means we
     could not reach a verdict (network blocked / host unknown) — treat as
-    "unverified", not "invalid"."""
+    "unverified", not "invalid". ``base_url`` (per-connection) overrides the
+    provider preset / env for OpenAI-compatible hosts."""
     provider = (provider or "").lower()
     try:
         if provider == "anthropic":
@@ -66,10 +86,11 @@ def verify_credential(provider: str, model: str, api_key: str) -> dict:
                 ).status_code
             )
         if provider in OPENAI_COMPAT_BASE:
-            base = OPENAI_COMPAT_BASE[provider]
-            if not base:  # generic local: base url isn't known server-side
+            base = base_url or openai_base(provider)
+            if not base:  # self-hosted with no base_url / NIDAVELLIR_MODEL_BASE_URL set
                 return _result(
-                    False, "local/self-hosted endpoint — not checked here", checked=False
+                    False, "self-hosted endpoint — set NIDAVELLIR_MODEL_BASE_URL to check",
+                    checked=False,
                 )
             return _classify_status(
                 requests.get(

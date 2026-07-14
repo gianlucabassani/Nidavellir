@@ -340,11 +340,13 @@ class Database:
             "provider": row.provider,
             "model": row.model,
             "key_last4": row.key_last4,
+            "base_url": row.base_url,  # non-secret (P3-4)
             "status": row.status,
             "updated_at": _stringify(row.updated_at),
         }
 
-    def upsert_model_connection(self, owner, provider, model, api_key, keep_key=False):
+    def upsert_model_connection(self, owner, provider, model, api_key, base_url=None,
+                                keep_key=False):
         """Create/replace the operator's model connection. Encrypts the API key
         at rest, keeps only a last-4 hint in clear, resets status to standby.
         Returns the masked view (never the key).
@@ -360,6 +362,7 @@ class Database:
                 session.add(row)
             row.provider = provider
             row.model = model
+            row.base_url = (base_url or "").strip() or None
             if not keep_key:
                 row.encrypted_key = encrypt_secret(api_key or "")
                 row.key_last4 = api_key[-4:] if api_key else None
@@ -401,6 +404,7 @@ class Database:
                 "provider": row.provider,
                 "model": row.model,
                 "api_key": decrypt_secret(row.encrypted_key),
+                "base_url": row.base_url,
             }
 
     def delete_model_connection(self, owner) -> bool:

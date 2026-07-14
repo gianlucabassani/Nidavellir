@@ -31,6 +31,7 @@
 </div>
 {% endif %}
 
+{# ═══ THE ARENA — what exists ═══ #}
 <div class="grid" style="grid-template-columns: 1.1fr 1.4fr">
   <!-- nodes -->
   <div class="card pad-0">
@@ -45,8 +46,8 @@
         <tr>
           <td>
             <div class="flexrow">
-              {% if n.foothold %}<i class="fa-solid fa-user-ninja" style="color:var(--danger)" title="foothold"></i>
-              {% elif n.url %}<i class="fa-solid fa-bullseye" style="color:var(--warn)" title="web target"></i>
+              {% if n.foothold %}<i class="fa-solid fa-user-ninja" style="color:var(--attacker)" title="foothold"></i>
+              {% elif n.url %}<i class="fa-solid fa-bullseye" style="color:var(--accent)" title="web target"></i>
               {% else %}<i class="fa-solid fa-microchip muted"></i>{% endif %}
               <b>{{ n.name }}</b>
             </div>
@@ -71,9 +72,9 @@
         {% if n.ports %}
         <tr><td colspan="4" style="padding-top:0">
           <label class="label" style="margin-bottom:4px">Published ports</label>
-          <div class="flexrow" style="flex-wrap:wrap;gap:6px">
+          <div class="chips">
             {% for cport, hport in n.ports.items() %}
-            <span class="badge mono" title="container port {{ cport }} mapped to host">{{ cport }} &rarr; 127.0.0.1:{{ hport }}</span>
+            <span class="chip-tag" title="container port {{ cport }} mapped to host">{{ cport }} &rarr; 127.0.0.1:{{ hport }}</span>
             {% endfor %}
           </div>
         </td></tr>
@@ -82,7 +83,7 @@
       </tbody>
     </table>
     {% else %}
-    <div class="empty"><div class="ico"><i class="fa-solid fa-circle-notch fa-spin"></i></div>Provisioning nodes…</div>
+    <div class="empty"><i class="fa-solid fa-circle-notch fa-spin"></i>Provisioning nodes…</div>
     {% endif %}
   </div>
 
@@ -96,12 +97,167 @@
   </div>
 </div>
 
-{% if score %}
-<div class="card pad-0" style="margin-top:18px">
-  <div class="card-head"><h3><i class="fa-solid fa-bug"></i> Challenges</h3>
-    <span class="muted" style="font-weight:400;font-size:12px">— ground truth, hidden by default (spoilers)</span>
+{# ═══ SET UP & POSITION — what the operator does ═══ #}
+{% if is_sut %}
+<!-- Configurator overview (SUT): a compact trigger showing what's selected. The method
+     chooser (operator · agent-proposal · autonomous) + the live console open in a modal. -->
+<div class="card" id="configurator-card" style="margin-top:16px">
+  <div class="cfg-overview">
+    <span class="pos-ic"><i class="fa-solid fa-screwdriver-wrench"></i></span>
+    <div class="grow">
+      <div class="flexrow" style="gap:10px">
+        <b style="font-size:14px">Configurator</b>
+        <span id="cfg-state" class="badge badge--idle">…</span>
+        {% if setup_steps %}<span class="chip-tag">{{ setup_steps|length }} step{{ 's' if setup_steps|length != 1 }} run</span>{% endif %}
+      </div>
+      <div class="muted" id="cfg-overview-summary" style="font-size:12.5px;margin-top:3px">Bring the software-under-test up on the victim before the engagement.</div>
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="Nidavellir.openConfigurator()"><i class="fa-solid fa-sliders"></i> Open configurator</button>
+  </div>
+</div>
+
+<!-- Configurator modal: choose how to configure (operator / agent-proposal / autonomous) + drive setup with a live console. -->
+<div class="modal" id="configurator-modal" hidden>
+  <div class="modal__backdrop" onclick="Nidavellir.closeConfigurator()"></div>
+  <div class="modal__card modal__card--wide">
+    <button class="modal__x" onclick="Nidavellir.closeConfigurator()"><i class="fa-solid fa-xmark"></i></button>
+    <div class="modal__head">
+      <span class="model-bubble" style="background:linear-gradient(150deg,var(--accent),var(--accent-deep));color:#1a1206"><i class="fa-solid fa-screwdriver-wrench"></i></span>
+      <div><div class="modal__title">Configurator</div><div class="modal__sub">choose how to set the SUT up, then bring it live on the victim</div></div>
+    </div>
+    <div id="cfg-board"><div class="empty" style="padding:22px"><i class="fa-solid fa-circle-notch fa-spin"></i>Loading…</div></div>
+    <div id="cfg-actions"></div>
+    {% if setup_steps %}
+    <div style="border-top:1px solid var(--line-soft)">
+      <div class="label" style="padding:14px 18px 2px"><i class="fa-solid fa-terminal"></i> Setup console · {{ setup_steps|length }} step{{ 's' if setup_steps|length != 1 }}, real output</div>
+      <div style="padding:12px 18px 18px;display:flex;flex-direction:column;gap:14px">
+        {% for s in setup_steps %}
+        <div>
+          <div class="mono" style="font-size:12.5px;margin-bottom:6px">
+            <i class="fa-solid {{ 'fa-circle-check' if s.ok else 'fa-circle-xmark' }}" style="color:{{ 'var(--ok)' if s.ok else 'var(--danger)' }}"></i>
+            <span class="muted">{{ s.node }}&nbsp;$</span> {{ s.command }}
+            <span class="faint">· exit {{ s.exit_code }}{% if s.via %} · {{ s.via }}{% endif %}</span>
+          </div>
+          {% if s.stdout %}<pre class="cfg-out">{{ s.stdout }}</pre>{% endif %}
+          {% if s.stderr %}<pre class="cfg-out" style="color:var(--danger)">{{ s.stderr }}</pre>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Agent positioning (all arenas): authorize a bring-your-own agent to drive this arena
+     in a stance. Authorization only — the operator then points their own agent app at the gateway. -->
+<div class="card pad-0" id="positioning-card" style="margin-top:16px"
+     data-gateway="{{ gateway_url }}" data-arena="{{ instance_id }}">
+  <div class="card-head">
+    <h3><i class="fa-solid fa-chess"></i> Agent positioning</h3>
+    <span class="muted" style="font-weight:400;font-size:12.5px">— authorize a BYO agent to drive this arena (attacker · defender · MITM)</span>
     <div class="spacer"></div>
-    <span class="muted" id="ch-summary" hidden style="font-size:12.5px">
+    <span id="pos-state" class="badge badge--idle">…</span>
+  </div>
+  <div id="pos-board"><div class="empty" style="padding:22px"><i class="fa-solid fa-circle-notch fa-spin"></i>Loading…</div></div>
+  <div id="pos-actions"></div>
+  <div id="pos-recipe"></div>
+</div>
+
+{# ═══ RESULTS — what the engagement produced ═══ #}
+{% if score %}
+{% set prog = (score.progress_rate * 100) | round | int %}
+{% set is_bench = score.mode == 'benchmark' %}
+{% set has_activity = score.findings_submitted > 0 or score.signals.distinct_fault_sites > 0 %}
+<div class="card pad-0" style="margin-top:16px">
+  <div class="card-head">
+    <h3><i class="fa-solid fa-flag-checkered"></i> Assessment</h3>
+    <span class="badge {{ 'badge--accent' if is_bench else 'badge--info' }}"
+          title="{{ 'Prepared lab: a hidden known-vuln list; agent submissions are matched + verified against it.' if is_bench else 'Software-under-test: no known-vuln list; the agent generates findings over MCP, verified by the crash oracle / validators.' }}">
+      {{ 'known-vuln lab' if is_bench else 'discovery · SUT' }}</span>
+    <div class="spacer"></div>
+    {% if has_activity %}
+    <span class="mono" style="font-size:20px;font-weight:700">{{ (score.score.value * 100) | round | int }}%</span>
+    <span class="badge {{ 'badge--ok' if score.tier in ('complete', 'substantial') else 'badge--idle' }}">{{ score.tier }}</span>
+    {% endif %}
+  </div>
+  <div class="card-pad">
+    <p class="cfg-note" style="margin:0">
+      {% if is_bench %}Findings are matched against a hidden known-vuln list (the agent never sees it) and then verified.
+      {% else %}No known-vuln list — the connected agent generates findings over MCP; the crash oracle and validators verify them.{% endif %}
+    </p>
+    {% if has_activity %}
+    <div class="usage-summary" style="margin-top:15px">
+      {% if is_bench %}
+      <div class="usage-stat"><div class="usage-stat__n">{{ score.found|length }}/{{ score.total_vulnerabilities }}</div><div class="usage-stat__l">found</div></div>
+      <div class="usage-stat"><div class="usage-stat__n">{{ score.points_earned }}/{{ score.points_total }}</div><div class="usage-stat__l">points</div></div>
+      {% else %}
+      <div class="usage-stat"><div class="usage-stat__n">{{ score.signals.distinct_fault_sites }}</div><div class="usage-stat__l">fault sites</div></div>
+      {% endif %}
+      <div class="usage-stat"><div class="usage-stat__n" style="color:var(--ok)">{{ score.confirmed_findings }}</div><div class="usage-stat__l">confirmed</div></div>
+      <div class="usage-stat"><div class="usage-stat__n">{{ score.findings_submitted }}</div><div class="usage-stat__l">submitted</div></div>
+    </div>
+    <div style="margin-top:16px">
+      <div class="flexrow" style="justify-content:space-between;margin-bottom:8px">
+        <span class="label" style="margin:0"><i class="fa-solid fa-bars-progress"></i> Progress</span>
+        <span class="mono" style="font-size:12.5px;font-weight:600">{{ prog }}%</span>
+      </div>
+      <div class="bar ok"><span style="width:{{ prog }}%"></span></div>
+      <div class="chips" style="margin-top:12px">
+        {% for m in score.milestones %}<span class="badge {{ 'badge--ok' if m.reached else 'badge--idle' }}" title="{{ m.detail }}">{% if m.reached %}<i class="fa-solid fa-check"></i> {% endif %}{{ m.id | replace('_', ' ') }}</span>{% endfor %}
+      </div>
+    </div>
+    {% if score.signals.counts %}
+    <div class="cfg-note" style="margin-top:15px"><i class="fa-solid fa-heart-pulse" style="color:var(--danger)"></i> Crash oracle — {% for k, n in score.signals.counts.items() %}<span class="mono">{{ k }} ×{{ n }}</span>{% if not loop.last %} · {% endif %}{% endfor %}</div>
+    {% endif %}
+    {% else %}
+    <div class="cfg-note" style="margin-top:14px;display:flex;align-items:center;gap:9px">
+      <i class="fa-solid fa-hourglass-half" style="color:var(--warn)"></i>
+      {% if is_bench %}No findings submitted yet — the connected agent's reports will be matched and scored here.
+      {% else %}No findings yet — the connected agent's reports and any crash-oracle signals will be scored here as it works.{% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% if findings %}
+<div class="card pad-0" style="margin-top:16px">
+  <div class="card-head"><h3><i class="fa-solid fa-bug"></i> Findings</h3>
+    <span class="muted" style="font-weight:400;font-size:12.5px">— reported by the connected agent, then verified (operator view)</span>
+    <div class="spacer"></div><span class="muted" style="font-size:12px">{{ findings|length }}</span>
+  </div>
+  <table class="table">
+    <thead><tr><th>Title</th><th>CWE</th><th>Node</th><th>Verified</th><th>Matched</th></tr></thead>
+    <tbody>
+      {% for f in findings %}
+      <tr>
+        <td><b>{{ f.title }}</b></td>
+        <td class="mono">{{ f.cwe or '—' }}</td>
+        <td class="mono">{{ f.node or '—' }}</td>
+        <td>
+          {% set c = (f.validation or {}).confirmed %}
+          {% if c == true %}<span class="badge badge--ok"><i class="fa-solid fa-check"></i> confirmed</span>
+          {% elif c == false %}<span class="badge badge--warn">refuted</span>
+          {% else %}<span class="badge badge--idle">unverified</span>{% endif %}
+        </td>
+        <td>{% if f.matched_vuln_id %}<span class="badge badge--accent">{{ f.matched_vuln_id }}</span>{% else %}<span class="faint">—</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="cfg-note" style="padding:11px 18px;border-top:1px solid var(--line-soft)">
+    <i class="fa-solid fa-eye-slash"></i> Match + verification verdict are operator-only — the agent gets a neutral ack.
+  </div>
+</div>
+{% endif %}
+
+{% if score and score.manifest %}
+<div class="card pad-0" style="margin-top:16px">
+  <div class="card-head"><h3><i class="fa-solid fa-bullseye"></i> Challenges</h3>
+    <span class="muted" style="font-weight:400;font-size:12.5px">— ground truth, hidden by default (spoilers)</span>
+    <div class="spacer"></div>
+    <span class="muted mono" id="ch-summary" hidden style="font-size:12px">
       {{ score.found|length }} / {{ score.total_vulnerabilities }} found · {{ score.points_earned }}/{{ score.points_total }} pts
     </span>
     <label class="check" style="margin:0 0 0 14px"><input type="checkbox" id="reveal-ch"
@@ -109,11 +265,9 @@
       <span>Reveal</span></label>
   </div>
   <div id="ch-body" hidden>
-  <div style="padding:12px 16px 4px">
+  <div class="card-pad" style="padding-bottom:4px">
     {% set pct = (score.found|length * 100 // score.total_vulnerabilities) if score.total_vulnerabilities else 0 %}
-    <div style="height:8px;background:var(--border);border-radius:999px;overflow:hidden">
-      <div style="height:100%;width:{{ pct }}%;background:var(--ok);border-radius:999px"></div>
-    </div>
+    <div class="bar ok"><span style="width:{{ pct }}%"></span></div>
   </div>
   <table class="table">
     <thead><tr><th>Status</th><th>Vulnerability</th><th>CWE</th><th>Node</th><th>Severity</th></tr></thead>
@@ -136,7 +290,7 @@
       {% endfor %}
     </tbody>
   </table>
-  <div class="muted" style="padding:10px 16px;font-size:12px;border-top:1px solid var(--border)">
+  <div class="cfg-note" style="padding:11px 18px;border-top:1px solid var(--line-soft)">
     <i class="fa-solid fa-eye-slash"></i> Operator view (the benchmark baseline) — hidden from the agent.
     {{ score.findings_submitted }} finding{{ 's' if score.findings_submitted != 1 }} submitted.
   </div>
@@ -144,49 +298,16 @@
 </div>
 {% endif %}
 
-{% if is_sut %}
-<!-- Configurator (SUT only): bring the software-under-test up on the victim
-     before the engagement. Predefined vulnerable labs are already armed, so this
-     card is shown only for software-under-test arenas. -->
-<div class="card pad-0" id="configurator-card" style="margin-top:18px">
+<!-- Live activity: every agent tool call, finding and connection, streamed from the audit trail. -->
+<div class="card pad-0" id="actionlog-card" style="margin-top:16px">
   <div class="card-head">
-    <h3><i class="fa-solid fa-screwdriver-wrench"></i> Configurator
-      <span class="muted" style="font-weight:400;font-size:12px">— set up the software-under-test on the victim before the engagement</span></h3>
-    <div class="spacer"></div>
-    <span id="cfg-state" class="badge badge--idle">…</span>
-  </div>
-  <div id="cfg-board"><div class="muted" style="padding:16px;font-size:13px">Loading…</div></div>
-  <div id="cfg-actions"></div>
-</div>
-{% endif %}
-
-<!-- Agent positioning (all arenas): authorize a bring-your-own agent to drive this
-     arena in a stance. This is authorization only — the operator then points their
-     own agent app (e.g. Claude Code) at the MCP gateway and tells IT to act. -->
-<div class="card pad-0" id="positioning-card" style="margin-top:18px"
-     data-gateway="{{ gateway_url }}" data-arena="{{ instance_id }}">
-  <div class="card-head">
-    <h3><i class="fa-solid fa-chess"></i> Agent positioning
-      <span class="muted" style="font-weight:400;font-size:12px">— authorize a BYO agent to drive this arena (attacker · defender · MITM)</span></h3>
-    <div class="spacer"></div>
-    <span id="pos-state" class="badge badge--idle">…</span>
-  </div>
-  <div id="pos-board"><div class="muted" style="padding:16px;font-size:13px">Loading…</div></div>
-  <div id="pos-actions"></div>
-  <div id="pos-recipe"></div>
-</div>
-
-<!-- Live activity: every agent tool call, finding and connection, streamed from
-     the audit trail so the operator can monitor each action as it happens. -->
-<div class="card pad-0" id="actionlog-card" style="margin-top:18px">
-  <div class="card-head">
-    <h3><i class="fa-solid fa-wave-square"></i> Live activity
-      <span class="muted" style="font-weight:400;font-size:12px">— every tool call &amp; finding, as it happens</span></h3>
+    <h3><i class="fa-solid fa-wave-square"></i> Live activity</h3>
+    <span class="muted" style="font-weight:400;font-size:12.5px">— every tool call &amp; finding, as it happens</span>
     <div class="spacer"></div>
     <span id="log-count" class="muted mono" style="font-size:12px"></span>
     <a href="{{ url_for('audit') }}" class="muted" style="font-size:12.5px;margin-left:12px">Full audit <i class="fa-solid fa-arrow-right"></i></a>
   </div>
-  <div id="log-stream"><div class="empty" style="padding:24px"><i class="fa-solid fa-circle-notch fa-spin"></i> Waiting for activity…</div></div>
+  <div id="log-stream"><div class="empty" style="padding:24px"><i class="fa-solid fa-circle-notch fa-spin"></i>Waiting for activity…</div></div>
 </div>
 
 <script id="lab-data" type="application/json">{{ outputs | tojson | safe }}</script>

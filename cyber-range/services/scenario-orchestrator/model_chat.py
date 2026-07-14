@@ -17,7 +17,7 @@ import time
 
 import requests
 
-from model_verify import ANTHROPIC_BASE, OPENAI_COMPAT_BASE
+from model_verify import ANTHROPIC_BASE, OPENAI_COMPAT_BASE, openai_base
 
 logger = logging.getLogger("API")
 
@@ -41,7 +41,7 @@ _MAX_BACKOFF = 8.0          # cap a single wait so we stay under the webui read 
 
 
 def stream_chat(provider, model, api_key, system, messages, max_tokens=_MAX_TOKENS,
-                json_mode=False):
+                json_mode=False, base_url=None):
     """Yield text chunks of the model's reply. Errors are yielded as a final
     ``[co-pilot] …`` line rather than raised, so a partial chat still renders.
 
@@ -58,9 +58,11 @@ def stream_chat(provider, model, api_key, system, messages, max_tokens=_MAX_TOKE
         if provider == "anthropic":
             yield from _stream_anthropic(model, api_key, system, messages, max_tokens, json_mode)
         elif provider in OPENAI_COMPAT_BASE:
-            base = OPENAI_COMPAT_BASE[provider]
+            # Per-connection base_url wins over the provider preset / env override.
+            base = base_url or openai_base(provider)
             if not base:
-                yield "[co-pilot] this provider has no server-side endpoint configured."
+                yield ("[co-pilot] no endpoint for this provider — set "
+                       "NIDAVELLIR_MODEL_BASE_URL for a self-hosted/custom OpenAI-compatible host.")
                 return
             yield from _stream_openai(base, model, api_key, system, messages, max_tokens, json_mode)
         else:
@@ -71,7 +73,7 @@ def stream_chat(provider, model, api_key, system, messages, max_tokens=_MAX_TOKE
 
 
 def complete_chat(provider, model, api_key, system, messages, max_tokens=_MAX_TOKENS,
-                  json_mode=False):
+                  json_mode=False, base_url=None):
     """Collect a full (non-streamed) reply as one string — for callers that need
     the whole completion rather than incremental deltas (e.g. the scenario
     generator, which parses a JSON document out of the reply). Reuses the same
@@ -81,7 +83,7 @@ def complete_chat(provider, model, api_key, system, messages, max_tokens=_MAX_TO
     JSON output (see ``stream_chat``)."""
     return "".join(
         stream_chat(provider, model, api_key, system, messages,
-                    max_tokens=max_tokens, json_mode=json_mode)
+                    max_tokens=max_tokens, json_mode=json_mode, base_url=base_url)
     )
 
 

@@ -139,6 +139,11 @@
         <input class="input mono" type="password" id="model-form-key" placeholder="paste your key" autocomplete="new-password">
         <div class="help" id="model-form-keyhint">Encrypted at rest — never shown again.</div>
       </div>
+      <div class="field" id="model-form-base-row" style="margin-bottom:10px" hidden>
+        <label class="label" for="model-form-base-url">Base URL <span class="faint">· optional</span></label>
+        <input class="input mono" type="text" id="model-form-base-url" placeholder="https://host/v1" spellcheck="false">
+        <div class="help">OpenAI-compatible endpoint — overrides the preset. Required for a custom / self-hosted host.</div>
+      </div>
       <div class="model-form__err" id="model-form-err" hidden></div>
       <div class="model-form__verify" id="model-form-verify" hidden></div>
       <div class="model-form__actions">

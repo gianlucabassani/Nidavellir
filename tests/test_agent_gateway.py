@@ -62,8 +62,12 @@ class _FakeRestClient:
         self.calls.append(("exec", api_key, arena_id, node, command, timeout))
         return {"node": node, "exit_code": 0, "stdout": f"ran: {command}\n", "stderr": ""}
 
-    def report_finding(self, api_key, arena_id, title, cwe=None, node=None, evidence=None):
+    def report_finding(self, api_key, arena_id, title, cwe=None, node=None, evidence=None,
+                       path=None, param=None, payload=None, oast_token=None):
         self.calls.append(("report_finding", api_key, arena_id, title, cwe, node))
+        self.last_finding = {"title": title, "cwe": cwe, "node": node, "evidence": evidence,
+                             "path": path, "param": param, "payload": payload,
+                             "oast_token": oast_token}
         return {"recorded": True, "finding_id": "abc123"}
 
     def announce_agent(self, api_key, arena_id, model, provider, stance=None):
@@ -170,6 +174,30 @@ def test_report_finding_proxies_rest_and_is_gated():
     # a defender session may not report findings
     with pytest.raises(ToolNotAllowed):
         tools.report_finding(_ctx(stance=Stance.defender), arena_id="a1", title="x")
+
+
+def test_report_finding_forwards_verification_inputs():
+    # A3: path/param/payload/oast_token reach the orchestrator so the finding can
+    # be ACTIVELY validated, not just passively correlated.
+    ctx = _ctx(stance=Stance.attacker)
+    tools.report_finding(ctx, arena_id="a1", title="reflected XSS", cwe="CWE-79",
+                         node="web", path="/search", param="q",
+                         payload="<svg/onload=alert(1)>", oast_token="tok9")
+    f = ctx.client.last_finding
+    assert f["path"] == "/search" and f["param"] == "q"
+    assert f["payload"] == "<svg/onload=alert(1)>" and f["oast_token"] == "tok9"
+
+
+def test_get_topology_returns_named_nodes():
+    # A4 lock: nodes are keyed "node" (not "name") with real names populated —
+    # the earlier "null names" was a diagnostic script reading the wrong key.
+    ctx = _ctx(stance=Stance.attacker)
+    topo = tools.get_topology(ctx, arena_id="a1")
+    names = {n["node"] for n in topo["nodes"]}
+    assert names == {"jump", "web"}
+    assert all(n["node"] for n in topo["nodes"])  # no null names
+    web = next(n for n in topo["nodes"] if n["node"] == "web")
+    assert web["foothold"] is False and web["url"] == "http://127.0.0.1:32768"
 
 
 # --- session auth ------------------------------------------------------------

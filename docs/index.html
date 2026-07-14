@@ -1521,7 +1521,7 @@
               <span class="flow-num">04 / SCORE</span>
               <h3>on real evidence</h3>
               <p>A monitor and crash oracle turn crashes, sanitizer aborts, and programmatically-confirmed findings into a structured, replayable verdict, scorable even with no known-CVE list.</p>
-              <span class="flow-tag">Building now · M2</span>
+              <span class="flow-tag" style="color:var(--ok);border-color:rgba(52,211,153,.25);background:rgba(52,211,153,.06);">Shipped · M2</span>
             </div>
           </div>
         </div>
@@ -1804,28 +1804,28 @@
             </div>
 
             <!-- M2 -->
-            <div class="roadmap-item active">
+            <div class="roadmap-item complete">
               <div class="roadmap-badge"></div>
               <div class="roadmap-meta">
                 <span class="roadmap-phase">M2</span>
-                <span class="roadmap-status">Building now</span>
+                <span class="roadmap-status">Shipped</span>
               </div>
               <div class="roadmap-content">
                 <h3>Deep Monitoring, Crash Oracle & Scoring</h3>
-                <p>A monitor sidecar turns crashes, sanitizer aborts, and unhandled 5xx into scored evidence, so a target with no known-CVE list is still scorable. Deterministic validators confirm each finding before it counts, and structured, machine-parseable verdicts with subtask partial credit replace win/lose scoring.</p>
+                <p>A monitor and crash oracle turn crashes, sanitizer aborts, and unhandled 5xx into scored evidence, so a target with no known-CVE list is still scorable. Deterministic validators confirm each finding before it counts, and a structured, machine-parseable <code>Score</code> — benchmark or discovery mode, with a milestone Progress Rate that scores even a failed run — replaces win/lose scoring. The moat.</p>
               </div>
             </div>
 
             <!-- M3 -->
-            <div class="roadmap-item">
+            <div class="roadmap-item active">
               <div class="roadmap-badge"></div>
               <div class="roadmap-meta">
                 <span class="roadmap-phase">M3</span>
-                <span class="roadmap-status">Planned</span>
+                <span class="roadmap-status">Building now</span>
               </div>
               <div class="roadmap-content">
                 <h3>Benchmark, Eval Layer & the Flagship Proof</h3>
-                <p>Every run becomes a comparable, replayable benchmark, with model, scaffold, cost, and pass@k reported together. A reference harness and a public demo show the loop end to end: point at a real repo, prove a real bug, get a scored report. Traces export as eval datasets in OpenTelemetry-GenAI shape, tagged to MITRE ATT&CK, ATLAS, and the OWASP LLM Top 10.</p>
+                <p>Every run becomes a comparable, replayable benchmark with model, scaffold, cost, and pass@k reported together. The engine has landed: an eval-export that projects each run to a Langfuse/Phoenix-ready dataset row, OpenInference-aligned traces, and a bring-your-own reference harness that plays an arena autonomously, scales across a suite, and replays deterministically. Remaining: the recorded flagship demo — point at a real repo, prove a real bug, get a scored report.</p>
               </div>
             </div>
 

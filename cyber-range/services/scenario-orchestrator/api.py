@@ -85,6 +85,9 @@ RATE_LIMIT_DESTROY = os.getenv("RATE_LIMIT_DESTROY", "30/minute")
 RATE_LIMIT_EXEC = os.getenv("RATE_LIMIT_EXEC", "120/minute")
 # Cap exec output returned over the API (the provider caps harder at source).
 EXEC_OUTPUT_CAP = 16384
+# Setup-step output persisted in the `setup_step` event (the configurator console).
+# Smaller than EXEC — these accumulate one per step across a setup session.
+SETUP_OUTPUT_CAP = 4000
 
 
 @app.get("/health")
@@ -459,7 +462,7 @@ def generate_scenario(
     def complete(system, messages):
         reply = model_chat.complete_chat(
             cred["provider"], cred["model"], cred["api_key"], system, messages,
-            max_tokens=4096, json_mode=True,
+            max_tokens=4096, json_mode=True, base_url=cred.get("base_url"),
         )
         # An upstream failure arrives as model_chat's inline error sentinel rather
         # than a spec — re-surface it as a clean generator error (no co-pilot
@@ -925,7 +928,7 @@ def synthesize_dockerfile(
     def complete(system, messages):
         reply = model_chat.complete_chat(
             cred["provider"], cred["model"], cred["api_key"], system, messages,
-            max_tokens=2048, json_mode=False,
+            max_tokens=2048, json_mode=False, base_url=cred.get("base_url"),
         )
         if reply.lstrip().startswith(model_chat.ERROR_SENTINEL):
             clean = reply.replace(model_chat.ERROR_SENTINEL, "").strip()
@@ -1559,14 +1562,20 @@ def resume_binding(
 # connection plumbing; the model is the operator's (scope boundary holds — the
 # platform never launches the agent on its own, and arenas stay AI-optional).
 # Operator/admin only; an agent-role key must never manage credentials.
-MODEL_PROVIDERS = ("anthropic", "openai", "gemini", "deepseek", "ollama", "local")
-_KEYLESS_PROVIDERS = ("local", "ollama")  # local runtimes may run without a key
+MODEL_PROVIDERS = ("anthropic", "openai", "openrouter", "huggingface", "gemini",
+                   "deepseek", "ollama", "local", "custom")
+# Keyless: local runtimes / a self-hosted custom endpoint may run without a key.
+_KEYLESS_PROVIDERS = ("local", "ollama", "custom")
 
 
 class ModelConnectionRequest(BaseModel):
     provider: str = Field(min_length=1, max_length=32)
     model: str = Field(min_length=1, max_length=128)
     api_key: str = Field(default="", max_length=512)
+    # Per-connection OpenAI-compatible base URL (P3-4) — overrides the provider
+    # preset + NIDAVELLIR_MODEL_BASE_URL. Required for `custom`/`local`; optional
+    # for named OpenAI-compatible providers.
+    base_url: str | None = Field(default=None, max_length=512)
 
     @field_validator("provider")
     @classmethod
@@ -1599,7 +1608,8 @@ def set_model_connection(
                 detail=f"provider '{req.provider}' requires an API key",
             )
     masked = db.upsert_model_connection(
-        principal.name, req.provider, req.model, req.api_key, keep_key=keep_key
+        principal.name, req.provider, req.model, req.api_key,
+        base_url=req.base_url, keep_key=keep_key,
     )
     # Only the non-secret provider/model are logged — never the key.
     logger.info(
@@ -1630,6 +1640,7 @@ class ModelVerifyRequest(BaseModel):
     provider: str | None = Field(default=None, max_length=32)
     model: str | None = Field(default=None, max_length=128)
     api_key: str | None = Field(default=None, max_length=512)
+    base_url: str | None = Field(default=None, max_length=512)
 
 
 @app.post("/agent/model/verify")
@@ -1644,12 +1655,14 @@ def verify_model_connection(
     _require_operator(principal)
     if req.api_key and req.provider:
         provider, model, api_key = req.provider.lower(), req.model or "", req.api_key
+        base_url = req.base_url
     else:
         cred = db.get_decrypted_model_credential(principal.name)
         if not cred:
             raise HTTPException(status_code=404, detail="no model connection to verify")
         provider, model, api_key = cred["provider"], cred["model"], cred["api_key"]
-    return model_verify.verify_credential(provider, model, api_key)
+        base_url = cred.get("base_url")
+    return model_verify.verify_credential(provider, model, api_key, base_url=base_url)
 
 
 # --- Co-pilot chat (operator's connected model + arena context) -------------
@@ -1748,7 +1761,8 @@ def agent_chat(req: ChatRequest, principal: Principal = Depends(require_principa
 
     def gen():
         yield from model_chat.stream_chat(
-            cred["provider"], cred["model"], cred["api_key"], system, messages
+            cred["provider"], cred["model"], cred["api_key"], system, messages,
+            base_url=cred.get("base_url"),
         )
 
     return StreamingResponse(gen(), media_type="text/plain; charset=utf-8")
@@ -2048,6 +2062,11 @@ def _exec_setup_command(instance_id, record, sess, node, command, timeout, actor
         instance_id, setup_phase.SETUP_STEP,
         {"session_id": sess["session_id"], "node": node, "command": command[:512],
          "exit_code": result.get("exit_code"), "ok": result.get("exit_code") == 0,
+         # Persist the real output so the operator console can show it as a live
+         # setup terminal (agent-proposed steps had no visible feedback before).
+         # Bounded; the operator + the configurator agent (via await) may see it.
+         "stdout": (result.get("stdout") or "")[:SETUP_OUTPUT_CAP],
+         "stderr": (result.get("stderr") or "")[:SETUP_OUTPUT_CAP],
          "via": via, "actor": actor},
         actor=actor,
     )
@@ -2235,7 +2254,7 @@ def setup_generate_proposals(
     def complete(system, messages):
         reply = model_chat.complete_chat(
             cred["provider"], cred["model"], cred["api_key"], system, messages,
-            max_tokens=2048, json_mode=True,
+            max_tokens=2048, json_mode=True, base_url=cred.get("base_url"),
         )
         if reply.lstrip().startswith(model_chat.ERROR_SENTINEL):
             clean = reply.replace(model_chat.ERROR_SENTINEL, "").strip()
@@ -2544,15 +2563,22 @@ def _arena_http_fn(record: dict, node: str):
         path = path if path.startswith("/") else f"/{path}"
         query = f"?{urllib.parse.urlencode(params)}" if params else ""
         url = f"http://{ip}:{port}{path}{query}"
+        q = shlex.quote(url)
+        # Probe from the foothold: prefer curl (gives the real HTTP status), fall
+        # back to wget (status unknown -> 200 sentinel; the reflected-XSS/marker
+        # validators check the body, not the code). No tool or no response -> no
+        # marker -> the caller records "unknown", never a false "refuted".
         cmd = (
-            f"curl -sS -m 8 -o - -w '{marker}%{{http_code}}' "
-            f"{shlex.quote(url)} 2>/dev/null"
+            "if command -v curl >/dev/null 2>&1; then "
+            f"curl -sS -m 8 -o - -w '{marker}%{{http_code}}' {q} 2>/dev/null; "
+            "elif command -v wget >/dev/null 2>&1; then "
+            f"b=$(wget -qO- --content-on-error -T 8 {q} 2>/dev/null); "
+            f'[ -n "$b" ] && printf "%s{marker}200" "$b"; '
+            "fi"
         )
         res = orch.exec_in_node(instance_id, foothold, cmd, timeout=12)
         if not res.get("success"):
             raise RuntimeError(res.get("error", "exec failed"))
-        if res.get("exit_code") in (126, 127):  # curl absent / not executable
-            raise RuntimeError("curl unavailable on foothold")
         out = res.get("stdout") or ""
         if marker not in out:
             raise RuntimeError("probe produced no HTTP status (target unreachable)")

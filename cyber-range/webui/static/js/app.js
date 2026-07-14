@@ -44,6 +44,12 @@
       svg: '<svg viewBox="0 0 24 24"><path d="M8.5 3v4M15.5 3v4M6 10a6 6 0 0112 0v4a6 6 0 01-12 0z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' },
     local: { name: "Local model", color: "#22d3ee", model: "",
       svg: '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>' },
+    openrouter: { name: "OpenRouter", color: "#7a83ff", model: "anthropic/claude-3.5-sonnet",
+      svg: '<svg viewBox="0 0 24 24"><path d="M4 12h5l3-4 3 8 3-4h2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' },
+    huggingface: { name: "Hugging Face", color: "#ffb300", model: "meta-llama/Llama-3.1-8B-Instruct",
+      svg: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8.5 10h.01M15.5 10h.01M8.5 14.5c1.6 1.6 5.4 1.6 7 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>' },
+    custom: { name: "Custom · OpenAI-compatible", color: "#22d3ee", model: "",
+      svg: '<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zM2 12h20M12 2c3 3 3 17 0 20M12 2c-3 3-3 17 0 20" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>' },
   };
   const FALLBACK = { name: "AI model", color: "#6b7280",
     svg: '<svg viewBox="0 0 24 24"><rect x="5" y="8" width="14" height="10" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 4v4M9.5 13h.01M14.5 13h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>' };
@@ -54,8 +60,11 @@
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
-  const PROVIDERS = ["anthropic", "openai", "gemini", "deepseek", "ollama", "local"];
-  const KEYLESS = ["local", "ollama"]; // local runtimes may run without a key
+  const PROVIDERS = ["anthropic", "openai", "openrouter", "huggingface", "gemini",
+    "deepseek", "ollama", "local", "custom"];
+  const KEYLESS = ["local", "ollama", "custom"]; // local/self-hosted may run without a key
+  // Providers where a base URL is relevant (OpenAI-compatible). anthropic is fixed.
+  const NEEDS_BASE = ["openrouter", "huggingface", "ollama", "local", "custom"];
 
   let modelConn = null;   // {configured, provider, model, key_last4, status, updated_at}
   let liveAgent = null;   // {connected, provider, model, stance, ...} self-declared
@@ -155,6 +164,15 @@
     if (!keepModel) document.getElementById("model-form-model").value = b.model || "";
     document.getElementById("model-form-key").placeholder =
       KEYLESS.includes(provider) ? "(optional for local runtimes)" : "paste your key";
+    // Per-connection base URL: shown for OpenAI-compatible providers, prefilled
+    // when re-opening the current connection.
+    const baseRow = document.getElementById("model-form-base-row");
+    if (baseRow) baseRow.hidden = !NEEDS_BASE.includes(provider);
+    const baseInp = document.getElementById("model-form-base-url");
+    if (baseInp) {
+      const cur = modelConn && modelConn.configured && modelConn.provider === provider;
+      baseInp.value = (cur && modelConn.base_url) ? modelConn.base_url : "";
+    }
     renderVerify(null, "clear");
     showModalMeta();
   }
@@ -170,6 +188,7 @@
       const rows = [
         ["Status", active ? "active" : "standby (waiting)"],
         ["Stored key", modelConn.key_last4 ? "•••• " + modelConn.key_last4 : "—"],
+        ...(modelConn.base_url ? [["Base URL", modelConn.base_url]] : []),
         ["Updated", modelConn.updated_at || "—"],
       ];
       kv.innerHTML = rows.map(([k, v]) => "<dt>" + k + "</dt><dd>" + escapeHtml(v) + "</dd>").join("");
@@ -209,7 +228,11 @@
     const provider = pickProvider;
     const model = document.getElementById("model-form-model").value.trim();
     const key = document.getElementById("model-form-key").value;
+    const baseUrl = (document.getElementById("model-form-base-url").value || "").trim();
     if (!model) { setFormError("Enter a model id."); return false; }
+    if (provider === "custom" && !baseUrl) {
+      setFormError("A custom endpoint needs a Base URL (https://host/v1)."); return false;
+    }
     // Blank key is allowed only when keeping an existing same-provider key, or
     // for keyless local runtimes — the orchestrator enforces the same rule.
     const reusing = modelConn && modelConn.configured && modelConn.provider === provider;
@@ -222,7 +245,7 @@
     fetch("/api/model-connection", {
       method: "PUT",
       headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken() },
-      body: JSON.stringify({ provider: provider, model: model, api_key: key }),
+      body: JSON.stringify({ provider: provider, model: model, api_key: key, base_url: baseUrl || null }),
     })
       .then((r) => r.json().then((b) => ({ ok: r.ok, b: b || {} })))
       .then(({ ok, b }) => {
@@ -273,7 +296,8 @@
   function testModel() {
     const key = document.getElementById("model-form-key").value;
     const model = document.getElementById("model-form-model").value.trim();
-    const body = key ? { provider: pickProvider, model: model, api_key: key } : {};
+    const baseUrl = (document.getElementById("model-form-base-url").value || "").trim();
+    const body = key ? { provider: pickProvider, model: model, api_key: key, base_url: baseUrl || null } : {};
     renderVerify(null, "pending");
     fetch("/api/model-connection/verify", {
       method: "POST",
@@ -535,6 +559,17 @@
     engTimer = setInterval(engRefresh, 4000);
   }
 
+  // Configurator lives in an overlay modal (opened from its overview card); the
+  // 4s engRefresh keeps its board/console fresh whether it's open or closed.
+  function openConfigurator() {
+    const m = document.getElementById("configurator-modal");
+    if (m) { m.hidden = false; engRefresh(); }
+  }
+  function closeConfigurator() {
+    const m = document.getElementById("configurator-modal");
+    if (m) m.hidden = true;
+  }
+
   function engRefresh() {
     const pBind = fetch("/api/arenas/" + engArena + "/bindings")
       .then((r) => r.json()).then((d) => d.bindings || []).catch(() => []);
@@ -713,6 +748,16 @@
     if (stEl) {
       stEl.className = "badge badge--" + (open ? (exp ? "danger" : "ok") : "idle");
       stEl.textContent = open ? (exp ? "expired" : "setup open") : "not started";
+    }
+    // Closed-state overview line (the arena page shows this without opening the modal).
+    const ov = document.getElementById("cfg-overview-summary");
+    if (ov) {
+      ov.textContent = !engActive
+        ? "Arena is not active."
+        : open
+          ? engSetupDriver(setup.mode) + " · " + setup.steps_run + "/" + setup.command_budget +
+            " steps" + (exp ? " · session expired" : "")
+          : "Not started — bring the software-under-test up on the victim before positioning an agent.";
     }
     if (open) {
       board.innerHTML = '<div class="cfg-meta" style="padding:14px 18px">' +
@@ -1825,12 +1870,12 @@
     openModelModal, closeModelModal, openModelConfig, saveModel, removeModel, testModel,
     toggleSidebar, toggleCopilot, sendCopilot,
     openAgentConfig, closeAgentConfig, revokeAgent, pauseAgent, resumeAgent,
-    initEngagement, engDecide,
+    initEngagement, engDecide, openConfigurator, closeConfigurator,
     initAgents,
     fit: function () { const cy = specCy["topo"]; if (cy) cy.fit(null, 36); },
   };
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") { closeModelModal(); }
+    if (e.key === "Escape") { closeModelModal(); closeConfigurator(); }
   });
   document.addEventListener("DOMContentLoaded", function () {
     // Restore the persisted collapsed-sidebar preference (desktop only).

@@ -499,6 +499,13 @@ select[multiple] option { padding:6px 8px; border-radius:6px; }
 .kv dt { color:var(--faint); font-family:var(--mono); } .kv dd { margin:0; color:var(--text); }
 .modal__foot { font-size:11.5px; color:var(--faint); margin:14px 0 0; line-height:1.5; }
 
+/* wide modal (configurator: method chooser + console) — content owns its padding */
+.modal__card--wide { width:min(1040px, 100vw - 40px); max-height:92vh; overflow-y:auto; padding:0; }
+.modal__card--wide .modal__head { padding:18px 18px 12px; margin:0; border-bottom:1px solid var(--line-soft); }
+/* configurator overview trigger row (the closed state) */
+.cfg-overview { display:flex; align-items:center; gap:14px; padding:16px 18px; }
+.cfg-overview .pos-ic { flex:none; color:var(--accent); }
+
 /* ---------- co-pilot drawer ---------- */
 .copilot { position:fixed; right:0; top:0; bottom:0; width:min(440px, 100vw); z-index:120;
   background:var(--surface); border-left:1px solid var(--line); box-shadow:var(--shadow); display:flex; flex-direction:column; }

@@ -219,8 +219,23 @@ def test_arena_detail_renders_challenges_panel(client, monkeypatch):
             return _FakeResp({"user_id": "lab-x", "status": "active", "outputs": {}})
         if url.rstrip("/").endswith("/score") or "/score?" in url:
             return _FakeResp({
+                "arena_id": "abc", "scenario": "s", "mode": "benchmark",
+                "score": {"value": 0.5, "value_kind": "numeric",
+                          "answer": "1/2 known vulnerabilities discovered",
+                          "explanation": "", "evidence": {}, "metadata": {}},
+                "progress_rate": 0.6, "tier": "partial",
+                "milestones": [
+                    {"id": "foothold", "reached": True, "detail": "x"},
+                    {"id": "recon", "reached": True, "detail": "x"},
+                    {"id": "first_blood", "reached": True, "detail": "x"},
+                    {"id": "verified_exploit", "reached": False, "detail": "x"},
+                    {"id": "full_clear", "reached": False, "detail": "x"},
+                ],
                 "total_vulnerabilities": 2, "found": ["sqli-login"], "missed": ["xss"],
+                "confirmed": [], "confirmed_findings": 0,
                 "points_earned": 1, "points_total": 2, "findings_submitted": 1,
+                "signals": {"counts": {}, "distinct_fault_sites": 0, "fault_nodes": []},
+                "metrics": {"steps": 3},
                 "manifest": [
                     {"id": "sqli-login", "title": "SQL injection", "cwe": "CWE-89",
                      "node": "victim", "severity": "high"},
@@ -234,10 +249,55 @@ def test_arena_detail_renders_challenges_panel(client, monkeypatch):
     _login(client)
     html = client.get("/arena/abc").data.decode()
 
+    assert "Assessment" in html          # the mode-aware result panel
+    assert "known-vuln lab" in html       # benchmark framing
     assert "Challenges" in html
     assert "SQL injection" in html and "CWE-89" in html
     assert "1 / 2 found" in html
     assert "found" in html and "open" in html  # the discovered one + the missed one
+
+
+def test_arena_detail_renders_discovery_score_and_findings(client, monkeypatch):
+    """A SUT / discovery arena (no manifest) still shows the Assessment panel and
+    a Findings list — the gap this fixes."""
+    import app as webui_module
+
+    class _R:
+        status_code = 200
+
+        def __init__(self, p):
+            self._p = p
+
+        def json(self):
+            return self._p
+
+    def fake_get(url, **kwargs):
+        if "/status/" in url:
+            return _R({"user_id": "sut-x", "status": "active", "scenario": "custom:x",
+                       "outputs": {}})
+        if "/score" in url:
+            return _R({"mode": "discovery", "score": {"value": 1.0, "answer": "1 fault site"},
+                       "progress_rate": 1.0, "tier": "complete", "total_vulnerabilities": 0,
+                       "found": [], "missed": [], "confirmed": [], "confirmed_findings": 1,
+                       "points_earned": 0, "points_total": 0, "findings_submitted": 1,
+                       "signals": {"counts": {"crash": 1}, "distinct_fault_sites": 1,
+                                   "fault_nodes": ["victim"]},
+                       "milestones": [{"id": "foothold", "reached": True, "detail": "x"}],
+                       "manifest": []})
+        if "/events" in url:
+            return _R({"events": [{"id": 1, "type": "finding", "ts": "t",
+                                   "payload": {"title": "crash via input", "cwe": "CWE-89",
+                                               "node": "victim", "matched_vuln_id": None,
+                                               "validation": {"confirmed": True, "method": "crash_signal"}}}]})
+        return _R({"events": []})
+
+    monkeypatch.setattr(webui_module.requests, "get", fake_get)
+    _login(client)
+    html = client.get("/arena/sut-x").data.decode()
+    assert "Assessment" in html and "discovery" in html
+    assert "Findings" in html and "crash via input" in html
+    assert "confirmed" in html
+    assert "Challenges" not in html  # no manifest -> no spoiler panel for a SUT
 
 
 def test_current_agent_disconnected_when_no_session(client):

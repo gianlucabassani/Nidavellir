@@ -114,8 +114,8 @@ concerns (OAuth, hosting, purple-team, VNC console) are deliberately deferred. F
 | Milestone | Horizon | Focus | Status |
 |------|------|-------|--------|
 | **M1** | Flagship (spine) | Reliable *repo → running-service* provisioning (deterministic build + verified LLM Dockerfile synthesis) | ✅ **done** — introspection + Dockerfile tier + verified loop + package install |
-| **M2** | Flagship (spine) | Deep monitoring + crash oracle + structured scoring | 🔴 **next** — monitor sidecar + deterministic validators + partial credit (the moat) |
-| **M3** | Flagship (spine) | Benchmark & eval layer **+ the flagship demo/benchmark** | ◻ model+scaffold+cost rows, reference harness, OTel/OpenInference traces, replay |
+| **M2** | Flagship (spine) | Deep monitoring + crash oracle + structured scoring | ✅ **done** — crash oracle + deterministic validators + structured `Score` (discovery & benchmark modes) + milestone partial credit (**the moat**) |
+| **M3** | Flagship (spine) | Benchmark & eval layer **+ the flagship demo/benchmark** | 🟡 **in progress** — eval-export (OpenInference-aligned traces) + reference harness + concurrency-capped suite + deterministic replay done; the recorded flagship demo remains |
 | **M4** | Internal harness | Agent-grade arena tooling (browser, code-exec sandbox, proxy, file transfer, tunnel) + fail-closed guardrails | ◻ *answers "is the tooling enough for a real agent?"* |
 | **M5** | Internal harness | Regression & eval pipeline (agent vN vs vN+1, export to Langfuse/Phoenix) | ◻ planned |
 | **M6** | Internal harness | *(opportunistic)* LLM-application-as-target arenas (OWASP LLM / Agentic Top 10) | ◻ planned |

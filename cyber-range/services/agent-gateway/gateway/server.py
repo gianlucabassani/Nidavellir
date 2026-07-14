@@ -108,11 +108,18 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
 
         @mcp.tool()
         def report_finding(arena_id: str, title: str, cwe: str | None = None,
-                           node: str | None = None, evidence: str | None = None) -> dict:
-            """Report a discovered vulnerability (the engagement goal). Include
-            the `cwe` (e.g. 'CWE-89') and `node` so it can be scored."""
+                           node: str | None = None, evidence: str | None = None,
+                           path: str | None = None, param: str | None = None,
+                           payload: str | None = None, oast_token: str | None = None) -> dict:
+            """Report a discovered vulnerability (the engagement goal). Include the
+            `cwe` (e.g. 'CWE-89') and `node` so it can be scored. To have the finding
+            PROVEN (not just claimed), also pass the verification inputs: `path` +
+            `param` + `payload` for a reflected-XSS / SQLi vector, or `oast_token`
+            for an out-of-band callback."""
             return tools.report_finding(
-                ctx(), arena_id=arena_id, title=title, cwe=cwe, node=node, evidence=evidence
+                ctx(), arena_id=arena_id, title=title, cwe=cwe, node=node,
+                evidence=evidence, path=path, param=param, payload=payload,
+                oast_token=oast_token,
             )
 
     elif stance is Stance.defender:
