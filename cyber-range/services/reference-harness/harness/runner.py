@@ -16,9 +16,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import tempfile
 from dataclasses import dataclass
 from typing import Callable, Protocol
 
+from harness import claude_code
 from harness.loop import Brain, Budget, ToolsInterface, run_engagement
 
 
@@ -112,6 +115,75 @@ async def run_suite(
 
     rows = await asyncio.gather(*(_one(s) for s in scenarios))
     return {"rows": list(rows), "summary": summarize(rows)}
+
+
+async def run_single_claude_code(
+    *,
+    scenario: str,
+    control: ControlPlane,
+    mcp_config: dict,
+    prompt_template: str,
+    server_name: str = claude_code.DEFAULT_SERVER_NAME,
+    model: str | None = None,
+    claude_runner=None,
+    config: SingleRunConfig | None = None,
+) -> dict:
+    """Play one arena with **Claude Code** as the BYO agent (the subscription
+    path, ADR-0010): deploy → bind → point Claude Code at the gateway via
+    `--mcp-config` → `claude -p` → eval-export → destroy. Returns the same scored
+    eval row as `run_single`, enriched with Claude Code's reported cost/usage.
+
+    `prompt_template` may contain `{arena_id}`. `claude_runner` is injected
+    (subprocess.run signature) so this is testable without the `claude` binary."""
+    config = config or SingleRunConfig()
+    arena_id = None
+    cfg_path = None
+    try:
+        arena_id = await asyncio.to_thread(control.deploy, scenario)
+        if not await asyncio.to_thread(control.wait_active, arena_id, config.active_timeout):
+            return _error_row(scenario, arena_id, "arena did not become active")
+        await asyncio.to_thread(control.bind_agent, arena_id, config.agent_name, config.stance)
+
+        fd, cfg_path = tempfile.mkstemp(prefix=f"nvmcp-{arena_id}-", suffix=".json")
+        os.close(fd)
+        claude_code.write_mcp_config(cfg_path, mcp_config)
+        argv = claude_code.build_claude_command(
+            prompt=prompt_template.format(arena_id=arena_id), mcp_config=cfg_path,
+            server_name=server_name, model=model,
+        )
+        run = await asyncio.to_thread(claude_code.run_claude_code, argv, runner=claude_runner)
+
+        row = await asyncio.to_thread(control.eval_export, arena_id)
+        row["run"] = {"agent": "claude-code", **run.to_dict()}
+        row.setdefault("scenario", scenario)
+        _enrich_cost(row, run)
+        return row
+    except Exception as e:  # noqa: BLE001
+        return _error_row(scenario, arena_id, f"{type(e).__name__}: {e}")
+    finally:
+        if cfg_path and os.path.exists(cfg_path):
+            try:
+                os.remove(cfg_path)
+            except OSError:
+                pass
+        if arena_id and config.destroy_after:
+            try:
+                await asyncio.to_thread(control.destroy, arena_id)
+            except Exception:  # noqa: BLE001
+                pass
+
+
+def _enrich_cost(row: dict, run) -> None:
+    """Fold Claude Code's reported cost/usage into the eval row's metadata (the
+    subscription path can report real token/cost even when the agent never called
+    announce_agent)."""
+    meta = row.setdefault("metadata", {})
+    if run.cost_usd is not None and meta.get("cost_usd") is None:
+        meta["cost_usd"] = run.cost_usd
+    if isinstance(run.usage, dict) and meta.get("tokens") is None:
+        tokens = sum(v for v in run.usage.values() if isinstance(v, (int, float)))
+        if tokens:
+            meta["tokens"] = tokens
 
 
 def _error_row(scenario: str, arena_id: str | None, error: str) -> dict:

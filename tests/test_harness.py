@@ -6,12 +6,20 @@ brains, the single/suite runner, and deterministic replay — all with injected
 fakes (no MCP, no orchestrator, no model).
 """
 import asyncio
+import json
 
 import harness
 from harness import Budget, ScriptedBrain, run_engagement
 from harness.brains import AnthropicBrain
 from harness.loop import EngagementState
-from harness.runner import SingleRunConfig, run_single, run_suite, summarize
+from harness import claude_code
+from harness.runner import (
+    SingleRunConfig,
+    run_single,
+    run_single_claude_code,
+    run_suite,
+    summarize,
+)
 from harness.replay import plan_from_transcript, replay_run
 
 TOOLS = [
@@ -322,7 +330,87 @@ def test_rest_control_plane_wait_active_gives_up_on_failure():
     assert cp.wait_active("rh-1", timeout=5) is False
 
 
+# --- Claude Code (subscription) path -----------------------------------------
+
+
+def test_gateway_mcp_server_is_minimal_and_scoped():
+    s = claude_code.gateway_mcp_server(
+        agent_key="cg_agent", stance="attacker", api_url="http://127.0.0.1:8099",
+        gateway_pythonpath="/gw", python="python3")
+    assert s["type"] == "stdio" and s["command"] == "python3"
+    assert s["args"] == ["-m", "gateway.server"]
+    # only the gateway's own overrides — no unrelated environment leaks in.
+    assert set(s["env"]) == {"PYTHONPATH", "NIDAVELLIR_AGENT_KEY", "NIDAVELLIR_STANCE",
+                             "NIDAVELLIR_API_URL", "NIDAVELLIR_GATEWAY_TRANSPORT"}
+    assert s["env"]["NIDAVELLIR_AGENT_KEY"] == "cg_agent"
+
+
+def test_build_mcp_config_and_command():
+    server = claude_code.gateway_mcp_server(
+        agent_key="k", stance="attacker", api_url="http://x", gateway_pythonpath="/gw")
+    cfg = claude_code.build_mcp_config(server)
+    assert cfg == {"mcpServers": {"nidavellir-arena": server}}
+
+    argv = claude_code.build_claude_command(prompt="play arena a1", mcp_config="/tmp/c.json",
+                                            model="opus")
+    assert argv[0] == "claude" and "-p" in argv and "play arena a1" in argv
+    assert "--mcp-config" in argv and "/tmp/c.json" in argv
+    i = argv.index("--allowedTools")
+    assert argv[i + 1] == "mcp__nidavellir-arena__*"
+    assert "--output-format" in argv and "json" in argv
+    assert "--strict-mcp-config" in argv  # hermetic: only our gateway server
+    assert argv[argv.index("--model") + 1] == "opus"
+
+
+class _Proc:
+    def __init__(self, returncode=0, stdout=""):
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = ""
+
+
+def _claude_runner(returncode=0, stdout=""):
+    def run(argv, capture_output=True, text=True, timeout=None, env=None):
+        run.argv = argv
+        return _Proc(returncode, stdout)
+    return run
+
+
+def test_run_claude_code_parses_json_output():
+    out = json.dumps({"result": "found SQLi", "total_cost_usd": 0.021,
+                      "usage": {"input_tokens": 1200, "output_tokens": 300},
+                      "session_id": "sess-1"})
+    res = claude_code.run_claude_code(["claude"], runner=_claude_runner(0, out))
+    assert res.ok and res.result_text == "found SQLi"
+    assert res.cost_usd == 0.021 and res.session_id == "sess-1"
+
+
+def test_run_claude_code_handles_nonjson_and_failure():
+    plain = claude_code.run_claude_code(["claude"], runner=_claude_runner(0, "just text"))
+    assert plain.result_text == "just text" and plain.cost_usd is None
+    failed = claude_code.run_claude_code(["claude"], runner=_claude_runner(2, ""))
+    assert failed.ok is False and failed.returncode == 2
+
+
+def test_run_single_claude_code_produces_enriched_row():
+    control = FakeControl(row={"run_id": "x", "score": {"value": 1.0}, "metadata": {"pass@1": 1}})
+    out = json.dumps({"result": "reported CWE-89", "total_cost_usd": 0.05,
+                      "usage": {"input_tokens": 900, "output_tokens": 200}})
+    cfg = claude_code.build_mcp_config(claude_code.gateway_mcp_server(
+        agent_key="k", stance="attacker", api_url="http://x", gateway_pythonpath="/gw"))
+    row = _run(run_single_claude_code(
+        scenario="container_web_pentest", control=control, mcp_config=cfg,
+        prompt_template="play {arena_id}", claude_runner=_claude_runner(0, out),
+    ))
+    assert row["run"]["agent"] == "claude-code"
+    assert row["run"]["result_text"] == "reported CWE-89"
+    # cost/usage folded into the eval row's metadata.
+    assert row["metadata"]["cost_usd"] == 0.05
+    assert row["metadata"]["tokens"] == 1100
+    assert control.destroyed  # arena torn down
+
+
 def test_package_exports():
-    for name in ("run_engagement", "run_single", "run_suite", "replay_run",
-                 "ScriptedBrain", "AnthropicBrain", "Budget"):
+    for name in ("run_engagement", "run_single", "run_single_claude_code", "run_suite",
+                 "replay_run", "ScriptedBrain", "AnthropicBrain", "Budget", "claude_code"):
         assert hasattr(harness, name)
