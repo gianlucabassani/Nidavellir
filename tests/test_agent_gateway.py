@@ -253,6 +253,30 @@ def test_calls_are_traced_without_leaking_the_key(tmp_path):
     assert entry["tool"] == "deploy_arena"
     assert entry["agent_id"].startswith("agent-")
     assert "cg_secret_key" not in line  # the raw API key must never be traced
+    # OpenInference / OTel-GenAI alignment (ADR-0010): a tool call is a TOOL span.
+    assert entry["span_kind"] == "execute_tool"
+    assert entry["attributes"]["openinference.span.kind"] == "TOOL"
+    assert entry["attributes"]["tool.name"] == "deploy_arena"
+
+
+def test_trace_span_kind_distinguishes_agent_scope_tools():
+    from gateway import trace
+
+    def kind(tool):
+        e = _capture_entry(trace, tool)
+        return e["span_kind"], e["attributes"]["openinference.span.kind"]
+
+    assert kind("run_command") == ("execute_tool", "TOOL")
+    assert kind("report_finding") == ("invoke_agent", "AGENT")
+    assert kind("announce_agent") == ("invoke_agent", "AGENT")
+
+
+def _capture_entry(trace, tool):
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        path = trace.record(d, agent_id="agent-x", stance="attacker", tool=tool,
+                            args={}, ok=True, arena_id="arena-1", now=1.0)
+        return json.loads(path.read_text().strip())
 
 
 # --- REST client -------------------------------------------------------------

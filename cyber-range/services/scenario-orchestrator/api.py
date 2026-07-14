@@ -23,6 +23,7 @@ import build_planner
 import catalog
 import config
 import dockerfile_synth
+import eval_export
 import generator
 import image_check
 import images
@@ -2721,7 +2722,13 @@ def arena_score(
     record = db.get_deployment(instance_id)
     if not record:
         raise HTTPException(status_code=404, detail="Arena not found")
+    return _score_report(instance_id, record, mode)
 
+
+def _score_report(instance_id: str, record: dict, mode: str | None) -> dict:
+    """Assemble the structured score for an arena from its event stream (shared by
+    the score + eval-export endpoints). Applies passive crash correlation (a
+    finding on a node the crash oracle flagged is confirmed by that fault)."""
     manifest = scenarios.scenario_manifest(record.get("scenario")) or []
     events = db.list_events(lab_id=instance_id, limit=EVENTS_MAX_LIMIT)
     findings = [e["payload"] for e in events
@@ -2729,10 +2736,8 @@ def arena_score(
     signals = [e["payload"] for e in events
                if e.get("type") == "monitor_signal" and isinstance(e.get("payload"), dict)]
 
-    # Passive correlation (ADR-0009 item 6): a finding on a node the crash oracle
-    # flagged is confirmed by that fault, even with no active probe. Applies in
-    # both modes and is NOT gated on a manifest match — in discovery, "the agent
-    # made it fall over" is the whole point.
+    # Passive correlation (ADR-0009 item 6): NOT gated on a manifest match — in
+    # discovery, "the agent made it fall over" is the whole point.
     for f in findings:
         if (f.get("validation") or {}).get("confirmed") is True:
             continue
@@ -2748,6 +2753,45 @@ def arena_score(
         signals=signals,
         run_metrics=_run_metrics(events),
         mode=mode,
+    )
+
+
+def _scenario_meta(scenario_id: str | None) -> dict | None:
+    """Title/difficulty/tags for a registered scenario, or None for a custom/SUT
+    arena whose label isn't a registered id."""
+    if not scenario_id:
+        return None
+    spec = scenarios.load_scenario_spec(scenario_id)
+    if spec is None:
+        return None
+    return {"name": spec.name, "title": spec.title,
+            "difficulty": spec.difficulty, "tags": list(spec.tags)}
+
+
+@app.get("/arenas/{instance_id}/eval-export")
+def arena_eval_export(
+    instance_id: str,
+    mode: str | None = None,
+    principal: Principal = Depends(require_principal),
+):
+    """Export the run as an eval-dataset row (ROADMAP M3, ADR-0010): the convergent
+    `input / expected_output / metadata / tags / source_trace_id` shape with the
+    embedded M2 Score and the full model+scaffold+cost result tuple, ready to drop
+    into Langfuse / Phoenix / Braintrust. Operator/admin only — `expected_output`
+    is the hidden ground-truth manifest."""
+    _require_operator(principal)
+    if mode is not None and mode not in (scoring.BENCHMARK, scoring.DISCOVERY):
+        raise HTTPException(status_code=400, detail="mode must be 'benchmark' or 'discovery'")
+    record = db.get_deployment(instance_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    report = _score_report(instance_id, record, mode)
+    return eval_export.build_eval_record(
+        arena_id=instance_id,
+        record=record,
+        scenario_meta=_scenario_meta(record.get("scenario")),
+        score_report=report,
+        events=db.list_events(lab_id=instance_id, limit=EVENTS_MAX_LIMIT),
     )
 
 

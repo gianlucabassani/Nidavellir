@@ -191,3 +191,30 @@ def test_score_mode_override_is_validated(operator, agent):
     iid = _arena(agent.db, "score-badmode")
     assert operator.get(f"/arenas/{iid}/score?mode=nonsense").status_code == 400
     assert operator.get(f"/arenas/{iid}/score?mode=discovery").status_code == 200
+
+
+# --- M3: eval-export (ADR-0010) ----------------------------------------------
+
+
+def test_eval_export_shape_and_operator_only(agent, operator):
+    iid = _arena(agent.db, "eval-export")
+    # The agent announces its model, exercises the arena, and reports.
+    agent.db.record_event(iid, "agent_session",
+                          {"model": "claude-fable-5", "provider": "anthropic",
+                           "stance": "attacker"}, actor="agent-findings")
+    agent.post(f"/arenas/{iid}/findings",
+               json={"title": "SQLi", "cwe": "CWE-89", "node": "victim"})
+
+    # Ground truth in expected_output -> operator-only.
+    assert agent.get(f"/arenas/{iid}/eval-export").status_code == 403
+    rec = operator.get(f"/arenas/{iid}/eval-export").json()
+    assert set(rec) >= {"run_id", "input", "expected_output", "metadata", "tags",
+                        "source_trace_id", "score"}
+    assert rec["metadata"]["gen_ai.request.model"] == "claude-fable-5"
+    assert rec["metadata"]["attributed"] is True
+    assert rec["expected_output"]["known_vulnerabilities"]  # DVWA manifest present
+    assert "mode:benchmark" in rec["tags"]
+
+
+def test_eval_export_unknown_arena_is_404(operator):
+    assert operator.get("/arenas/ghost/eval-export").status_code == 404

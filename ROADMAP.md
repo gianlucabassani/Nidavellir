@@ -198,11 +198,20 @@ validators & eval).**
 
 ---
 
-### 🟠 M3 — Benchmark, eval layer & the flagship proof · **H1 · M**
+### 🟠 M3 — Benchmark, eval layer & the flagship proof · **H1 · M · IN PROGRESS**
 
 **Goal.** Every arena run is a comparable, replayable, exportable eval — and this is
 the milestone that makes Nidavellir a **flagship** rather than a codebase: it ships
 the demo and the public benchmark.
+
+**Progress (2026-07-14, ADR-0010).** The eval-export spine landed: a run projects to
+the convergent dataset row (`input / expected_output / metadata / tags /
+source_trace_id` + embedded M2 Score) with the full model+scaffold+cost result tuple
+(`eval_export.py`, `GET /arenas/{id}/eval-export`, operator-only), and the gateway
+trace is OpenInference/OTel-GenAI aligned (`span_kind` + `gen_ai.*` attributes) for
+zero-reshape import into Langfuse/Phoenix. **Remaining:** the reference harness (the
+thin BYO agentic loop that auto-plays an arena), deterministic replay, difficulty/
+guided modes, SSE live feed, and the recorded flagship demo.
 
 **The flagship proof (the deliverable that earns attention).** One unforgettable
 end-to-end, on one screen, in two minutes: *point at a well-known OSS repo → a BYO
