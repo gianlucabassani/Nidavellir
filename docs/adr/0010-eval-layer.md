@@ -1,8 +1,9 @@
 # ADR-0010: Eval layer — run records, trace→dataset export, reference harness, replay
 
-- **Status:** Proposed (ROADMAP M3; this increment lands the run/eval-export record
-  + OpenInference trace alignment — the reference harness and deterministic replay
-  are specified here and follow)
+- **Status:** Accepted (2026-07-14 — run/eval-export record + OpenInference trace
+  alignment landed; the reference harness, scalable batch suite runner, and
+  deterministic replay land in this same increment; the recorded flagship demo is
+  the remaining M3 acceptance item)
 - **Date:** 2026-07-14
 - **Deciders:** Gianluca Bassani
 
@@ -52,19 +53,23 @@ increment lands parts 1–2; parts 3–4 are specified here and follow.**
    so a trace flows into Langfuse / Phoenix / Braintrust without reshaping. Backward
    compatible — new fields are additive.
 
-3. **Reference harness (M3, to build).** A thin, optional Claude/Anthropic-SDK agentic
-   loop that connects to the MCP gateway and plays an arena autonomously (recon →
-   exploit → `report_finding`), budget-bounded. The model call is injected so the
-   loop is testable offline and credential-free; a default Anthropic-SDK brain runs
-   when a key is present. Dual-purpose: it powers the flagship demo now, and in
-   Horizon 2 it is the neutral baseline the enterprise's own agent is measured
-   against. It ships **no AI of our own** — it is thin wiring over the operator's BYO
-   model (scope boundary, ADR-standing-principles).
+3. **Reference harness (landed — `reference-harness/harness/`).** A thin, optional
+   agentic loop (`loop.run_engagement`) that plays an arena over the MCP gateway
+   (recon → exploit → `report_finding`), budget-bounded (steps / findings /
+   wall-clock, fail-safe). The `Brain` and `ToolsInterface` are injected, so the
+   loop is fully unit-testable offline; `ScriptedBrain` gives a credential-free
+   smoke agent and `AnthropicBrain` is the real BYO-Claude reference agent (SDK
+   tool-use ↔ MCP bridge, lazily imported). `runner.py` adds single-run + a
+   **concurrency-capped batch suite** that emits a dataset JSONL + aggregate summary
+   (the benchmark runner and M5 seed); `rest_control.py` is the production control
+   plane; `mcp_tools.py` binds the gateway (arena-scoped, auto-injecting `arena_id`).
+   Ships **no AI of our own** — the model/key are the operator's (scope boundary).
 
-4. **Deterministic replay (M3, to build).** Checkpoint the frozen scenario spec + the
-   recorded event/trace stream so a run can be re-run or forked byte-for-byte
-   (Inspect's `.eval` transcript is the model). A run that can't be reproduced is a
-   bug, not a result.
+4. **Deterministic replay (landed — `harness/replay.py`).** `replay_run` re-deploys an
+   identical arena from the pinned scenario and re-executes the recorded transcript
+   (a `ScriptedBrain` fed from it), then checks the fresh score reproduces the
+   original's deterministic slice (value + found/confirmed sets). A run that can't be
+   reproduced is flagged, not hidden — the regression primitive M5 builds on.
 
 Difficulty tiers / First-Solve-Time, guided-vs-unguided modes, a held-out set, and
 MITRE ATT&CK / ATLAS / OWASP-LLM technique tagging are carried as `metadata`/`tags`

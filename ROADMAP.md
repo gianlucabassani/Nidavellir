@@ -204,14 +204,23 @@ validators & eval).**
 the milestone that makes Nidavellir a **flagship** rather than a codebase: it ships
 the demo and the public benchmark.
 
-**Progress (2026-07-14, ADR-0010).** The eval-export spine landed: a run projects to
-the convergent dataset row (`input / expected_output / metadata / tags /
-source_trace_id` + embedded M2 Score) with the full model+scaffold+cost result tuple
-(`eval_export.py`, `GET /arenas/{id}/eval-export`, operator-only), and the gateway
-trace is OpenInference/OTel-GenAI aligned (`span_kind` + `gen_ai.*` attributes) for
-zero-reshape import into Langfuse/Phoenix. **Remaining:** the reference harness (the
-thin BYO agentic loop that auto-plays an arena), deterministic replay, difficulty/
-guided modes, SSE live feed, and the recorded flagship demo.
+**Progress (2026-07-14, ADR-0010).** Most of the eval layer landed:
+- **Eval-export** — a run projects to the convergent dataset row (`input /
+  expected_output / metadata / tags / source_trace_id` + embedded M2 Score) with the
+  full model+scaffold+cost tuple (`eval_export.py`, `GET /arenas/{id}/eval-export`,
+  operator-only). Gateway trace OpenInference/OTel-GenAI aligned for zero-reshape
+  import into Langfuse/Phoenix.
+- **Reference harness** (`cyber-range/services/reference-harness/`) — an injectable
+  BYO agentic loop that plays an arena over MCP (ScriptedBrain + AnthropicBrain),
+  budget-bounded; a **concurrency-capped batch suite** that emits a dataset JSONL +
+  summary; a production REST control plane; and **deterministic replay**.
+  Live-verified: a scripted agent drove the real gateway against a real docker arena
+  and produced a scored eval row, keyless.
+
+**Remaining:** difficulty tiers / First-Solve-Time, guided-vs-unguided modes, a
+held-out set, the SSE live feed / monitor panel, and the recorded **flagship demo**
+(a BYO Claude agent finding & proving a real bug in a well-known OSS repo) — the M3
+acceptance deliverable.
 
 **The flagship proof (the deliverable that earns attention).** One unforgettable
 end-to-end, on one screen, in two minutes: *point at a well-known OSS repo → a BYO
