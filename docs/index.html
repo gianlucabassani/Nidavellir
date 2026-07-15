@@ -1098,7 +1098,12 @@
     
     .docs-layout {
       display: grid;
-      grid-template-columns: 260px 1fr;
+      grid-template-columns: 250px minmax(0, 1fr);
+      /* Cap + center the whole reader so it stays contained (matching the site's
+         1200px sections) instead of stranding the text left with a huge right
+         gutter on wide screens. */
+      max-width: 1260px;
+      margin-inline: auto;
       min-height: calc(100vh - 70px);
       position: relative;
     }
@@ -1177,16 +1182,18 @@
       font-weight: 600;
     }
 
-    /* Document Reader Content */
+    /* Document Reader Content — a comfortable reading measure, centered in its
+       column (auto side-margins) so wide screens read as balanced, not empty. */
     .docs-content {
-      padding: 40px 60px;
-      max-width: 900px;
+      padding: 52px 56px 96px;
+      max-width: 840px;
       width: 100%;
+      margin-inline: auto;
       overflow-y: auto;
     }
     @media (max-width: 768px) {
       .docs-content {
-        padding: 30px 24px;
+        padding: 30px 22px 64px;
       }
     }
 
@@ -1896,12 +1903,24 @@
         <!-- SIDEBAR -->
         <aside class="docs-sidebar">
           <div>
-            <div class="docs-section-title">Core System</div>
+            <div class="docs-section-title">Start here</div>
             <ul class="docs-nav-list">
-              <li class="docs-nav-item active" data-doc="API.md" onclick="loadDoc('API.md')">API Reference</li>
+              <li class="docs-nav-item active" data-doc="OVERVIEW.md" onclick="loadDoc('OVERVIEW.md')">Overview</li>
+            </ul>
+          </div>
+          <div>
+            <div class="docs-section-title">Reference</div>
+            <ul class="docs-nav-list">
+              <li class="docs-nav-item" data-doc="API.md" onclick="loadDoc('API.md')">API Reference</li>
               <li class="docs-nav-item" data-doc="SCENARIOS.md" onclick="loadDoc('SCENARIOS.md')">Authoring Scenarios</li>
               <li class="docs-nav-item" data-doc="OPERATIONS.md" onclick="loadDoc('OPERATIONS.md')">Operations Guide</li>
               <li class="docs-nav-item" data-doc="SECURITY.md" onclick="loadDoc('SECURITY.md')">Security & Control</li>
+            </ul>
+          </div>
+          <div>
+            <div class="docs-section-title">Deep dive</div>
+            <ul class="docs-nav-list">
+              <li class="docs-nav-item" data-doc="INTERNALS.md" onclick="loadDoc('INTERNALS.md')">Internals</li>
               <li class="docs-nav-item" data-doc="ROADMAP.md" onclick="loadDoc('ROADMAP.md')">System Roadmap</li>
             </ul>
           </div>

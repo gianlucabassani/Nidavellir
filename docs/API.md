@@ -385,26 +385,44 @@ Three **modes** (the consent choice): `operator` (the operator scripts steps —
 - `POST /arenas/{id}/setup/finish` — close the session, revoke egress + the configurator
   capability (callable by the operator or the configurator agent).
 
-### Known-vulnerability manifest, findings & scoring
+### Findings, deterministic validation & structured scoring (M2/M3, ADR-0009/0010)
 
-The benchmark model (replaces CTF flags): a scenario plants a **known-vulnerability
-manifest** (ground truth). The agent's goal is to **discover** those vulnerabilities;
-the manifest is operator-only and never shown to an agent.
+Two scoring modes. **Benchmark**: a scenario plants a hidden **known-vulnerability
+manifest** (ground truth) and self-reported findings are matched + verified against
+it. **Discovery** (custom / SUT arenas, no manifest): the agent's findings and the
+crash-oracle signals are scored directly — "the agent made it fall over" is
+first-class evidence. The manifest is operator-only and never shown to an agent.
 
 - `GET /scenarios/{scenario_id}/vulnerabilities` — **reveal** the manifest (the
   benchmark baseline). **operator/admin only** (`403` for an `agent` key); `404`
   unknown scenario.
-- `POST /arenas/{instance_id}/findings` — an attacker self-reports a finding
-  (the MCP `report_finding` backend). Matched against the hidden manifest by
-  **CWE + node**; the match is recorded for scoring but the response is a neutral
-  ack (no oracle — the agent can't learn whether it was right).
+- `POST /arenas/{instance_id}/findings` — an attacker self-reports a finding (the
+  MCP `report_finding` backend). Matched against the hidden manifest by **CWE +
+  node**, and **deterministically verified** (ADR-0009 item 6): supply the optional
+  proof inputs and the platform confirms the finding against the arena — a
+  reflected-XSS nonce reflected unescaped (`path`+`param`+`payload`), an injected
+  marker, an OAST callback (`oast_token`), or passive crash-oracle correlation.
+  The match **and** the verdict are recorded operator-only; the response stays a
+  neutral ack (no oracle — the agent can't learn whether it worked).
   ```json
-  { "title": "SQLi on login", "cwe": "CWE-89", "node": "victim", "evidence": "..." }
+  { "title": "SQLi on login", "cwe": "CWE-89", "node": "victim",
+    "path": "/vulnerabilities/sqli/", "param": "id", "payload": "1' OR '1'='1",
+    "evidence": "..." }
   → { "recorded": true, "finding_id": "7097421dd9fc" }
   ```
-- `GET /arenas/{instance_id}/score` — **scorecard**: `found`/`missed` vuln ids,
-  `points_earned`/`points_total`, `findings_submitted`, and the `manifest`.
-  **operator/admin only** (`403` for an `agent` key).
+- `GET /arenas/{instance_id}/score[?mode=benchmark|discovery]` — the structured,
+  Inspect-style **scorecard**. **operator/admin only**. Mode auto-selects on the
+  manifest's presence (overridable via `?mode=`). Carries the typed `score`
+  (`value` + `answer` + `explanation` + `evidence` + `metadata`), a milestone
+  **Progress Rate** (`milestones[]`, `progress_rate`, `tier`) that scores even a
+  failed run, the benchmark view (`found`/`missed`/`confirmed`/`points_*`), the
+  discovery view (`signals` = crash-oracle counts + `distinct_fault_sites`,
+  `confirmed_findings`), and derived `metrics` (steps, wall-clock).
+- `GET /arenas/{instance_id}/eval-export[?mode=…]` (M3, ADR-0010) — project the run
+  into a Langfuse/Phoenix-ready **eval-dataset row**: `input` / `expected_output`
+  (the manifest — ground truth) / `metadata` (the model+scaffold+cost+`pass@1`
+  tuple) / `tags` / `source_trace_id` + the embedded `score`. **operator/admin
+  only.**
 
 ### Service-under-test monitor (M2, ADR-0009)
 
