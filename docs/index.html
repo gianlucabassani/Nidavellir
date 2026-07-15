@@ -1096,16 +1096,14 @@
 
     /* --- DOCUMENTATION PORTAL VIEW --- */
     
+    /* Full-bleed two-column reader: the sidebar hugs the left viewport edge and
+       the content column takes the rest. The reading measure is capped and
+       centered inside the content column (see .docs-content), so wide screens
+       get balanced whitespace without dragging the sidebar off the edge. */
     .docs-layout {
       display: grid;
-      grid-template-columns: 250px minmax(0, 1fr);
-      /* Cap + center the whole reader so it stays contained (matching the site's
-         1200px sections) instead of stranding the text left with a huge right
-         gutter on wide screens. */
-      max-width: 1260px;
-      margin-inline: auto;
+      grid-template-columns: 260px minmax(0, 1fr);
       min-height: calc(100vh - 70px);
-      position: relative;
     }
     @media (max-width: 768px) {
       .docs-layout {
@@ -1182,14 +1180,14 @@
       font-weight: 600;
     }
 
-    /* Document Reader Content — a comfortable reading measure, centered in its
-       column (auto side-margins) so wide screens read as balanced, not empty. */
+    /* Document Reader Content — a comfortable reading measure (~72ch),
+       centered within the content column via auto side-margins. */
     .docs-content {
-      padding: 52px 56px 96px;
-      max-width: 840px;
       width: 100%;
+      max-width: 860px;
       margin-inline: auto;
-      overflow-y: auto;
+      padding: 52px 48px 96px;
+      min-width: 0;
     }
     @media (max-width: 768px) {
       .docs-content {
@@ -1202,6 +1200,7 @@
       color: var(--text);
       font-size: 15px;
       line-height: 1.7;
+      overflow-wrap: break-word;
     }
     .markdown-body > *:first-child {
       margin-top: 0;
@@ -1300,9 +1299,11 @@
       opacity: 1;
     }
 
-    /* Markdown Tables */
+    /* Markdown Tables — scroll horizontally instead of blowing out the measure */
     .markdown-body table {
-      width: 100%;
+      display: block;
+      max-width: 100%;
+      overflow-x: auto;
       border-collapse: collapse;
       margin-bottom: 24px;
       font-size: 14px;
@@ -2053,7 +2054,10 @@
     // Custom marked options & config
     marked.setOptions({
       gfm: true,
-      breaks: true,
+      /* breaks:false — source .md files hard-wrap their lines; honoring those
+         newlines as <br> chops paragraphs mid-sentence instead of letting the
+         text reflow to the reading measure. */
+      breaks: false,
       headerIds: true,
       mangle: false,
       highlight: function(code, lang) {
@@ -2218,8 +2222,8 @@
         }
       });
       
-      // Scroll documentation layout frame to top
-      document.querySelector('.docs-content').scrollTop = 0;
+      // The page (not .docs-content) is the scroll container
+      window.scrollTo(0, 0);
     }
 
     // Render Error page inside doc viewer
