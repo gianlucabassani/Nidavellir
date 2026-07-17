@@ -408,9 +408,13 @@
     }
     .shell-cmd {
       color: var(--text);
+      min-width: 0;
+      overflow-wrap: anywhere;
     }
     .shell-comment {
       color: var(--faint);
+      min-width: 0;
+      overflow-wrap: anywhere;
     }
     .shell-btn-copy {
       position: absolute;
@@ -472,7 +476,13 @@
     }
     @media (max-width: 900px) {
       .gallery-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 640px) {
+      .gallery-grid {
         grid-template-columns: 1fr;
+        gap: 18px;
       }
     }
     .gallery-card {
@@ -1389,6 +1399,107 @@
     
     .markdown-alert-caution { border-left-color: var(--danger); }
     .markdown-alert-caution .markdown-alert-title { color: var(--danger); }
+
+    /* ===== Responsive / mobile refinements ===== */
+    .label-short { display: none; }
+
+    @media (max-width: 900px) {
+      /* background-attachment: fixed repaints on every scroll frame on mobile
+         (and iOS Safari ignores it) — fall back to scroll */
+      body { background-attachment: scroll; }
+      .hero { padding: 64px 0 64px; }
+      .hero h1 { font-size: 42px; }
+    }
+
+    @media (max-width: 700px) {
+      .container { padding: 0 18px; }
+      header { height: 60px; }
+      main { padding-top: 60px; }
+
+      /* Compact navbar: smaller logo, no tagline, short labels, icon-only GitHub */
+      .brand { gap: 10px; font-size: 16px; }
+      .brand .logo-mark { width: 34px; height: 34px; }
+      .brand .wordmark small { display: none; }
+      .nav-links { gap: 2px; }
+      .nav-btn { padding: 7px 10px; font-size: 13px; }
+      .label-full { display: none; }
+      .label-short { display: inline; }
+      .ext-icon { display: none; }
+
+      /* Hero */
+      .hero { padding: 44px 0 52px; }
+      .hero-split { gap: 28px; }
+      .hero h1 { font-size: 31px; margin-bottom: 16px; }
+      .hero-desc { font-size: 15.5px; margin-bottom: 28px; }
+      .hero-eyebrow { font-size: 10px; letter-spacing: 0.14em; padding: 4px 10px; margin-bottom: 18px; }
+      .hero-logo-card { width: 180px; height: 180px; }
+      .hero-cta .btn { flex: 1 1 auto; justify-content: center; }
+
+      /* Shell terminal: copy button flows above the commands instead of
+         overlapping them */
+      .shell-body { padding: 14px; font-size: 12px; }
+      .shell-btn-copy { position: static; margin: 0 0 12px auto; }
+
+      /* Section rhythm */
+      .showcase-section { padding: 52px 0; }
+      .section-head { margin-bottom: 32px; }
+      .section-head h2 { font-size: 24px; }
+      .section-head p { font-size: 14.5px; }
+
+      .pillar-card { padding: 24px 20px; }
+      .architecture-box { padding: 20px 14px; gap: 18px; }
+      .arch-svg-container { padding: 12px; }
+
+      .roadmap-timeline { padding-left: 26px; }
+      .roadmap-badge { left: -26px; width: 14px; height: 14px; }
+      .roadmap-horizon { margin-left: -26px; }
+      .roadmap-content { padding: 16px; }
+
+      .callout { padding: 18px 20px; font-size: 14.5px; }
+
+      .cta-section { padding: 64px 0; }
+      .cta-section h2 { font-size: 26px; }
+
+      .lightbox-content { max-width: 94%; }
+
+      /* Docs reader */
+      .docs-content { padding: 26px 18px 56px; }
+      .markdown-body { font-size: 14.5px; }
+      .markdown-body h1 { font-size: 26px; }
+      .markdown-body h2 { font-size: 20px; }
+      .markdown-body h3 { font-size: 16.5px; }
+
+      /* Fenced code blocks: wrap instead of forcing a horizontal slide.
+         Long unbreakable tokens (URLs, API keys) break mid-string so a code
+         example is always fully readable without scrolling sideways. */
+      .markdown-body pre {
+        padding: 14px 14px;
+        font-size: 12px;
+        line-height: 1.55;
+      }
+      .markdown-body pre code {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+      .markdown-body code { overflow-wrap: anywhere; }
+      /* Keep the copy button clear of wrapped first lines */
+      .code-copy-btn { opacity: 1; }
+    }
+
+    @media (max-width: 360px) {
+      .brand .wordmark { display: none; }
+      .nav-btn { padding: 6px 8px; font-size: 12.5px; }
+    }
+
+    /* Touch devices have no hover: keep copy buttons visible and skip
+       the hover-lift transforms so cards don't stick mid-animation */
+    @media (hover: none) {
+      .code-copy-btn { opacity: 1; }
+      .gallery-card:hover, .pillar-card:hover, .feature-card:hover,
+      .flow-step:hover, .hero-logo-card:hover,
+      .cta-btn:hover, .btn--primary:hover { transform: none; }
+    }
   </style>
 </head>
 <body>
@@ -1407,11 +1518,11 @@
       </div>
       <nav class="nav-links">
         <button class="nav-btn active" id="nav-btn-showcase" onclick="switchView('showcase')">Showcase</button>
-        <button class="nav-btn" id="nav-btn-docs" onclick="switchView('docs')">Documentation</button>
+        <button class="nav-btn" id="nav-btn-docs" onclick="switchView('docs')"><span class="label-full">Documentation</span><span class="label-short">Docs</span></button>
         <a class="nav-btn" href="https://github.com/gianlucabassani/Nidavellir" target="_blank">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.35 3.12.88.01.64.01 1.25.01 1.42 0 .21-.15.46-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>
-          GitHub
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+          <span class="label-full">GitHub</span>
+          <svg class="ext-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
         </a>
       </nav>
     </div>
