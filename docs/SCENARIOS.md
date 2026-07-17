@@ -1,4 +1,4 @@
-# Authoring scenarios (schema v3)
+# Authoring Scenarios (schema v3)
 
 A **scenario** is a provider-agnostic, data-defined topology: arbitrary
 `nodes[]` on named network `segments[]`, plus `objectives` and optional

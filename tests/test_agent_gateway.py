@@ -63,11 +63,11 @@ class _FakeRestClient:
         return {"node": node, "exit_code": 0, "stdout": f"ran: {command}\n", "stderr": ""}
 
     def report_finding(self, api_key, arena_id, title, cwe=None, node=None, evidence=None,
-                       path=None, param=None, payload=None, oast_token=None):
+                       path=None, param=None, payload=None, oast_token=None, poc=None):
         self.calls.append(("report_finding", api_key, arena_id, title, cwe, node))
         self.last_finding = {"title": title, "cwe": cwe, "node": node, "evidence": evidence,
                              "path": path, "param": param, "payload": payload,
-                             "oast_token": oast_token}
+                             "oast_token": oast_token, "poc": poc}
         return {"recorded": True, "finding_id": "abc123"}
 
     def announce_agent(self, api_key, arena_id, model, provider, stance=None):

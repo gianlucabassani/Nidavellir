@@ -1,4 +1,4 @@
-# Nidavellir — Internals
+# Internals
 
 How every subsystem works, end to end. Companion to [`OVERVIEW.md`](./OVERVIEW.md)
 (the high-level tour) and the ADRs in [`adr/`](./adr) (the decisions). Paths are

@@ -1055,6 +1055,7 @@ def manual_finding_proxy(instance_id):
         "cwe": (body.get("cwe") or "").strip() or None,
         "node": (body.get("node") or "").strip() or None,
         "evidence": (body.get("evidence") or "").strip() or None,
+        "poc": (body.get("poc") or "").strip() or None,
     }
     data, code = _api_post(f"/arenas/{instance_id}/findings/manual", payload)
     return jsonify(data), code

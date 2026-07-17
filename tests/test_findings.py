@@ -277,6 +277,25 @@ def test_verify_requires_operator_and_valid_inputs(agent, operator):
                          json={"verdict": "confirmed"}).status_code == 404
 
 
+def test_finding_poc_is_recorded_and_visible_to_its_author(agent, operator):
+    iid = _arena(agent.db, "finding-poc")
+    poc = "curl -s \"http://victim/vulnerabilities/sqli/?id=1' OR '1'='1\" | grep -i admin"
+    agent.post(f"/arenas/{iid}/findings",
+               json={"title": "SQLi", "cwe": "CWE-89", "node": "victim", "poc": poc})
+
+    # Operator sees the PoC alongside the match/verdict.
+    op_f = next(e["payload"] for e in operator.get(f"/deployments/{iid}/events").json()["events"]
+                if e["type"] == "finding")
+    assert op_f["poc"] == poc
+
+    # The agent that authored it sees its own PoC (not ground truth), but still
+    # NOT the manifest match / verification verdict.
+    ag_f = next(e["payload"] for e in agent.get(f"/deployments/{iid}/events").json()["events"]
+                if e["type"] == "finding")
+    assert ag_f["poc"] == poc
+    assert "matched_vuln_id" not in ag_f and "validation" not in ag_f
+
+
 def test_manual_finding_is_operator_only_and_matches(agent, operator):
     iid = _arena(agent.db, "manual-finding")
     # agent can't add a manual (operator) finding

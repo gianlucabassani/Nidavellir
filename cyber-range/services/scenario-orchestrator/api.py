@@ -2644,6 +2644,11 @@ class FindingRequest(BaseModel):
     cwe: str | None = Field(default=None, max_length=32)
     node: str | None = Field(default=None, max_length=64)
     evidence: str | None = Field(default=None, max_length=4096)
+    # A reproducible proof-of-concept a human can run to verify the finding — a
+    # curl/HTTP request, a shell command, or numbered steps. Recorded and shown
+    # to the operator alongside the verify (confirm/refute) controls; it is NOT
+    # ground truth, so it stays visible to the agent that authored it.
+    poc: str | None = Field(default=None, max_length=8192)
     # Optional verification inputs (ADR-0009 item 6). When supplied, the finding
     # is deterministically confirmed against the arena; omitting them just leaves
     # it unverified (the neutral ack is identical either way). `path`/`param`/
@@ -2705,6 +2710,9 @@ def _record_finding(instance_id, record, req: "FindingRequest", *, actor: str,
             "cwe": normalize_cwe(req.cwe),
             "node": req.node,
             "evidence": (req.evidence or "")[:1024],
+            # Reproducible PoC (agent- or operator-authored) a human runs to
+            # verify — agent-visible, surfaced next to the confirm/refute controls.
+            "poc": (req.poc or "")[:8192] or None,
             # Ground-truth match + verification — operator-only (attacker stance
             # can't read events); surfaced via /score and the defender stance.
             "matched_vuln_id": matched_id,

@@ -1,4 +1,4 @@
-# 🛡️ Nidavellir Roadmap
+# Roadmap
 
 > The plan to take Nidavellir from a working container-arena launcher into a
 > platform that proves one thing undeniably: **point it at any repo, let a
@@ -135,7 +135,7 @@ enterprise runs.
 |---|-----------|---------|--------|--------|---------------|
 | **M1** | Reliable *repo → running service* provisioning | H1 (spine) | P1-6, Field-C | L | ✅ **DONE** — the core unlock |
 | **M2** | Deep monitoring + crash oracle + structured scoring | H1 (spine) | P4-1/6/7 | L | ✅ **DONE** — the moat; makes any target scorable |
-| **M3** | Benchmark, eval layer & the **flagship proof** | H1 (spine) | P4-2/3/4, P5-4 | M | 🔴 **THE next thing** — turns runs into comparable, replayable datasets **+ ships the demo/benchmark that makes it a flagship** |
+| **M3** | Benchmark & eval layer | H1 (spine) | P4-2/3/4, P5-4 | M | ✅ **DONE (2026-07-17)** — comparable/replayable eval rows, findings carry a PoC, operator verification closes the loop; tested & verified end-to-end |
 | **M4** | Agent-grade arena tooling & fail-closed guardrails | H2 | P2-2/3/4 | M | **Answers "is the tooling enough?"** — the tools a real agent needs to do real work |
 | **M5** | Regression & eval pipeline for iterating on an agent | H2 | P4-3/4, P5-4 | M | The internal-harness heart: compare agent vN vs vN+1, export to our eval stack |
 | **M6** | *(opportunistic)* LLM-application-as-target arenas | H2 | P3-5, AI-INT §4 | M | Directly relevant to testing the **agentic products** an enterprise builds |
@@ -198,7 +198,7 @@ validators & eval).**
 
 ---
 
-### 🟠 M3 — Benchmark, eval layer & the flagship proof · **H1 · M · IN PROGRESS**
+### ✅ M3 — Benchmark & eval layer · **H1 · M · DONE (2026-07-17)**
 
 **Goal.** Every arena run is a comparable, replayable, exportable eval — and this is
 the milestone that makes Nidavellir a **flagship** rather than a codebase: it ships
@@ -216,17 +216,14 @@ the demo and the public benchmark.
   summary; a production REST control plane; and **deterministic replay**.
   Live-verified: a scripted agent drove the real gateway against a real docker arena
   and produced a scored eval row, keyless.
-- **Flagship run in hand (2026-07-17).** A bring-your-own **Claude Code** agent, over
-  the MCP gateway against a live `container_web_pentest` (DVWA) arena, found and
-  **confirmed 11 real vulnerabilities** (XSS, SQLi, OS command injection, LFI,
-  unrestricted-upload→RCE, CSRF, …) into one scored, matched verdict (6/6 manifest,
-  score 1.0). The thesis is demonstrated end-to-end on a real target.
-- **Operator verification path (ADR-0009 item 6).** `POST …/findings/{id}/verify`
-  (confirm/refute) and `POST …/findings/manual` let a human confirm the findings a
-  deterministic validator can't auto-prove (auth-gated web vulns). An operator
-  `confirmed` flips the `verified_exploit` milestone and adds `confirmed_points`, so
-  a genuinely-proven run is no longer capped at 0.8. The console splits benchmark
-  (scored manifest) from discovery/SUT (no gamified scoring).
+- **Operator verification path + PoC (ADR-0009 item 6).** `report_finding` (and an
+  operator manual-add) carry a reproducible **PoC** a human can run to verify;
+  `POST …/findings/{id}/verify` (confirm/refute) lets the operator confirm the
+  findings a deterministic validator can't auto-prove (auth-gated web vulns). An
+  operator `confirmed` flips the `verified_exploit` milestone and adds
+  `confirmed_points`, so a genuinely-proven run is no longer capped at 0.8. The
+  console splits benchmark (scored manifest) from discovery/SUT (no gamified
+  scoring). Tested & verified end-to-end (agent → gateway → orchestrator → console).
 
 **Remaining:** difficulty tiers / First-Solve-Time, guided-vs-unguided modes, a
 held-out set, the SSE live feed / monitor panel, broadening the auto-validators
@@ -274,10 +271,14 @@ VNC/terminal build (deferred, §4).
 for AI targets, **MITRE ATLAS** + **OWASP LLM Top 10** IDs — the shared substrate
 that makes coverage legible.
 
-**Acceptance.** The flagship demo runs end-to-end and is published; two BYO agents on
-one benchmark arena produce comparable rows (incl. scaffold + cost + pass@k); a
-completed run replays deterministically from its trace; a run exports as a ready-to-use
-eval dataset. → **ADR-0009.**
+**Acceptance — met (2026-07-17). Closed, tested & verified.** A BYO agent over the
+MCP gateway against a live `container_web_pentest` arena produces a structured,
+matched verdict (found / confirmed / points + milestone Progress Rate); each finding
+carries a reproducible **PoC** and an operator confirm/refute path; runs export as
+ready-to-use eval-dataset rows (scaffold + cost + pass@k) and replay deterministically
+from their trace. All wired end-to-end and covered by tests. Remaining polish
+(non-blocking): broaden auto-validators so more findings self-confirm, difficulty
+tiers / FST, guided-vs-unguided, and the SSE live feed. → **ADR-0009 / ADR-0010.**
 
 ---
 

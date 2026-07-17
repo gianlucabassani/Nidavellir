@@ -95,13 +95,14 @@ class RestClient:
                        cwe: str | None = None, node: str | None = None,
                        evidence: str | None = None, path: str | None = None,
                        param: str | None = None, payload: str | None = None,
-                       oast_token: str | None = None) -> dict:
+                       oast_token: str | None = None, poc: str | None = None) -> dict:
         body: dict = {"title": title}
         # Only send set fields; path/param/payload/oast_token are the optional
-        # verification inputs that let the orchestrator ACTIVELY confirm a finding.
+        # verification inputs that let the orchestrator ACTIVELY confirm a finding;
+        # `poc` is the reproducible proof a human can run to verify it.
         for key, val in (("cwe", cwe), ("node", node), ("evidence", evidence),
                          ("path", path), ("param", param), ("payload", payload),
-                         ("oast_token", oast_token)):
+                         ("oast_token", oast_token), ("poc", poc)):
             if val:
                 body[key] = val
         return self._request("POST", f"/arenas/{arena_id}/findings", api_key, json=body)

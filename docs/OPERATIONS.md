@@ -1,4 +1,4 @@
-# Nidavellir — setup & operations
+# Setup & Operations
 
 Detailed run/operate notes. For what Nidavellir is and the roadmap, see the
 [top-level README](../README.md).

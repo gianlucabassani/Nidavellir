@@ -1,10 +1,10 @@
-# 🔌 Nidavellir API Reference
+# API Reference
 
 Base URL: `http://localhost:8000`
 
 
 
-## 📋 Overview
+## Overview
 
 The Nidavellir API provides RESTful endpoints for managing arena deployments.
  All operations are **asynchronous**.
@@ -404,9 +404,14 @@ first-class evidence. The manifest is operator-only and never shown to an agent.
   marker, an OAST callback (`oast_token`), or passive crash-oracle correlation.
   The match **and** the verdict are recorded operator-only; the response stays a
   neutral ack (no oracle — the agent can't learn whether it worked).
+  Include a **`poc`** — a reproducible proof (a `curl`/HTTP request, shell command,
+  or numbered steps) a human can run to verify the finding. It is recorded and
+  shown to the operator next to the confirm/refute controls (agent-visible, since
+  it's the reporter's own repro — not ground truth).
   ```json
   { "title": "SQLi on login", "cwe": "CWE-89", "node": "victim",
     "path": "/vulnerabilities/sqli/", "param": "id", "payload": "1' OR '1'='1",
+    "poc": "curl \"http://victim/vulnerabilities/sqli/?id=1' OR '1'='1\" | grep admin",
     "evidence": "..." }
   → { "recorded": true, "finding_id": "7097421dd9fc" }
   ```
@@ -481,7 +486,7 @@ All responses are JSON with the following structure:
 ```
 
 
-## 🚀 Endpoints
+## Endpoints
 
 ### 1. Deploy Lab
 
@@ -749,7 +754,7 @@ DELETE /deployments
 
 
 
-## 📊 Workflow Example
+## Workflow example
 
 ### Complete Deployment Lifecycle
 ```bash
@@ -788,7 +793,7 @@ curl -X DELETE http://localhost:8000/destroy/lab-prod-001
 
 ---
 
-## 🔍 Output Fields Reference
+## Output fields reference
 
 ### Attack VM (Kali Linux)
 - `attack_vm_name`: VM hostname
@@ -816,7 +821,7 @@ curl -X DELETE http://localhost:8000/destroy/lab-prod-001
 
 
 
-## ⚡ Performance Notes
+## Performance notes
 
 ### Timeouts
 - **Deployment:** 15-30 minutes (depending on cloud provider)
@@ -837,7 +842,7 @@ curl -X DELETE http://localhost:8000/destroy/lab-prod-001
 
 
 
-## 🧪 Testing with Mock Mode
+## Testing with mock mode
 
 When `MOCK_MODE=true`, deployments simulate infrastructure without real provisioning:
 ```bash

@@ -1246,6 +1246,16 @@
   }
 
   /* ---- Findings card: operator verify + manual add (arena detail) -------- */
+  window.copyPoc = function (btn) {
+    const pre = btn.parentNode.querySelector("pre");
+    if (!pre) return;
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const i = btn.querySelector("i");
+      const prev = i ? i.className : null;
+      if (i) i.className = "fa-solid fa-check";
+      setTimeout(() => { if (i && prev) i.className = prev; }, 1200);
+    });
+  };
   window.toggleManualFinding = function () {
     const f = document.getElementById("mf-form");
     if (f) f.hidden = !f.hidden;
@@ -1271,6 +1281,7 @@
       cwe: (document.getElementById("mf-cwe").value || "").trim(),
       node: (document.getElementById("mf-node").value || "").trim(),
       evidence: (document.getElementById("mf-evidence").value || "").trim(),
+      poc: (document.getElementById("mf-poc").value || "").trim(),
     }).then(({ status, data }) => {
       if (status === 200) location.reload();
       else if (err) err.textContent = data.error || data.detail || "HTTP " + status;

@@ -306,6 +306,7 @@ def report_finding(
     param: str | None = None,
     payload: str | None = None,
     oast_token: str | None = None,
+    poc: str | None = None,
 ) -> dict:
     """Report a discovered vulnerability. The engagement goal is to DISCOVER the
     arena's known weaknesses; this records your finding for scoring. Pass the
@@ -314,14 +315,17 @@ def report_finding(
     Supply the optional verification inputs so the finding can be PROVEN, not just
     claimed: `path` (a request path on the target), `param` + `payload` (the field
     and value that trigger it — e.g. an XSS/SQLi vector), and/or `oast_token` (an
-    out-of-band callback token). The acknowledgement stays deliberately neutral —
-    it won't tell you whether you were right, or whether verification passed."""
+    out-of-band callback token). Always include a `poc`: a short, reproducible
+    proof a human can run to verify it — a `curl`/HTTP request, a shell command,
+    or numbered steps (include the observed result). The acknowledgement stays
+    deliberately neutral — it won't tell you whether you were right, or whether
+    verification passed."""
     _guard(ctx, "report_finding")
     trace_args = {"title": title[:256], "cwe": cwe, "node": node}
     try:
         res = ctx.client.report_finding(
             ctx.session.api_key, arena_id, title, cwe=cwe, node=node, evidence=evidence,
-            path=path, param=param, payload=payload, oast_token=oast_token,
+            path=path, param=param, payload=payload, oast_token=oast_token, poc=poc,
         )
     except Exception:
         _trace(ctx, "report_finding", trace_args, ok=False, arena_id=arena_id)

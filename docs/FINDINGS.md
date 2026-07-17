@@ -1,4 +1,4 @@
-# Nidavellir — Bugs & Improvement Vectors
+# Bugs & Improvement Vectors
 
 Findings from building and live-verifying M2 (scoring), the MCP loop, and M3 (eval
 layer + reference harness). Two categories: **bugs** (defects, with the two found

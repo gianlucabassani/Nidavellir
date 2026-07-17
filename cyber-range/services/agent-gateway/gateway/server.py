@@ -54,10 +54,11 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
             "rules of engagement).\n"
             "3. Work the target with the stance's tools (e.g. run_command from the "
             "foothold).\n"
-            "4. For every vulnerability you confirm, call report_finding — and "
-            "whenever possible pass the structured verification inputs "
-            "(path, param, payload, oast_token) in addition to free-text evidence, "
-            "so the platform can deterministically verify the finding."
+            "4. For every vulnerability you confirm, call report_finding — pass "
+            "the structured verification inputs (path, param, payload, oast_token) "
+            "when you have them, and ALWAYS include a `poc`: a short, reproducible "
+            "proof a human can run to verify it (a curl/HTTP request, a shell "
+            "command, or numbered steps, with the observed result)."
         ),
     )
 
@@ -129,16 +130,19 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
         def report_finding(arena_id: str, title: str, cwe: str | None = None,
                            node: str | None = None, evidence: str | None = None,
                            path: str | None = None, param: str | None = None,
-                           payload: str | None = None, oast_token: str | None = None) -> dict:
+                           payload: str | None = None, oast_token: str | None = None,
+                           poc: str | None = None) -> dict:
             """Report a discovered vulnerability (the engagement goal). Include the
             `cwe` (e.g. 'CWE-89') and `node` so it can be scored. To have the finding
             PROVEN (not just claimed), also pass the verification inputs: `path` +
             `param` + `payload` for a reflected-XSS / SQLi vector, or `oast_token`
-            for an out-of-band callback."""
+            for an out-of-band callback. Always include a `poc` — a short,
+            reproducible proof a human can run to verify it (a curl/HTTP request, a
+            shell command, or numbered steps, with the observed result)."""
             return tools.report_finding(
                 ctx(), arena_id=arena_id, title=title, cwe=cwe, node=node,
                 evidence=evidence, path=path, param=param, payload=payload,
-                oast_token=oast_token,
+                oast_token=oast_token, poc=poc,
             )
 
     elif stance is Stance.defender:

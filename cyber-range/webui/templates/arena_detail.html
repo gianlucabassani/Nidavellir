@@ -234,6 +234,7 @@
     <input class="input" id="mf-cwe" placeholder="CWE — e.g. CWE-89">
     <input class="input" id="mf-node" placeholder="Node — e.g. victim">
     <input class="input" id="mf-evidence" placeholder="Evidence / notes (optional)" style="grid-column:1 / -1">
+    <textarea class="input" id="mf-poc" placeholder="PoC — reproducible command / request / steps a human can run to verify (optional)" rows="2" style="grid-column:1 / -1;font-family:var(--mono, monospace);resize:vertical"></textarea>
     <div style="grid-column:1 / -1">
       <button class="btn btn-primary btn-sm" onclick="addManualFinding()">Add</button>
       <span class="muted" id="mf-err" style="margin-left:10px;font-size:12px"></span>
@@ -248,6 +249,13 @@
       <tr>
         <td><b>{{ f.title }}</b>
           {% if f.evidence %}<div class="faint" style="font-size:11.5px;max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ f.evidence }}">{{ f.evidence }}</div>{% endif %}
+          {% if f.poc %}<details style="margin-top:6px">
+            <summary class="muted" style="cursor:pointer;font-size:11.5px"><i class="fa-solid fa-flask"></i> PoC — run to verify</summary>
+            <div style="position:relative;margin-top:6px">
+              <button class="btn btn-sm" style="position:absolute;top:6px;right:6px" title="Copy PoC" onclick="copyPoc(this)"><i class="fa-regular fa-copy"></i></button>
+              <pre class="mono" style="white-space:pre-wrap;background:var(--surface-2);border:1px solid var(--line-soft);border-radius:6px;padding:10px 10px;margin:0;font-size:11.5px;max-width:460px;overflow-x:auto">{{ f.poc }}</pre>
+            </div>
+          </details>{% endif %}
         </td>
         <td class="mono">{{ f.cwe or '—' }}</td>
         <td class="mono">{{ f.node or '—' }}</td>

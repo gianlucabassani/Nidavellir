@@ -1,4 +1,4 @@
-# Nidavellir — Security Posture & Threat Model
+# Security Posture & Threat Model
 
 > **Status (2026-06): NOT safe to expose to an untrusted network.**
 > API-key auth, input validation, CSRF and rate limiting are in place, but the
