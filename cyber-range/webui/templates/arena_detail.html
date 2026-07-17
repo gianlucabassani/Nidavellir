@@ -221,36 +221,59 @@
 </div>
 {% endif %}
 
-{% if findings %}
-<div class="card pad-0" style="margin-top:16px">
+{% set fbench = score and score.mode == 'benchmark' %}
+<div class="card pad-0" id="findings-card" style="margin-top:16px" data-arena="{{ instance_id }}">
   <div class="card-head"><h3><i class="fa-solid fa-bug"></i> Findings</h3>
-    <span class="muted" style="font-weight:400;font-size:12.5px">— reported by the connected agent, then verified (operator view)</span>
+    <span class="muted" style="font-weight:400;font-size:12.5px">— submitted by the agent + operator entries; confirm or refute each</span>
     <div class="spacer"></div><span class="muted" style="font-size:12px">{{ findings|length }}</span>
+    <button class="btn btn-sm" style="margin-left:12px" onclick="toggleManualFinding()"><i class="fa-solid fa-plus"></i> Add finding</button>
   </div>
+
+  <div id="mf-form" hidden class="card-pad" style="border-bottom:1px solid var(--line-soft);display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;align-items:start">
+    <input class="input" id="mf-title" placeholder="Title — e.g. SQL injection in login">
+    <input class="input" id="mf-cwe" placeholder="CWE — e.g. CWE-89">
+    <input class="input" id="mf-node" placeholder="Node — e.g. victim">
+    <input class="input" id="mf-evidence" placeholder="Evidence / notes (optional)" style="grid-column:1 / -1">
+    <div style="grid-column:1 / -1">
+      <button class="btn btn-primary btn-sm" onclick="addManualFinding()">Add</button>
+      <span class="muted" id="mf-err" style="margin-left:10px;font-size:12px"></span>
+    </div>
+  </div>
+
+  {% if findings %}
   <table class="table">
-    <thead><tr><th>Title</th><th>CWE</th><th>Node</th><th>Verified</th><th>Matched</th></tr></thead>
+    <thead><tr><th>Title</th><th>CWE</th><th>Node</th><th>Source</th><th>Verified</th>{% if fbench %}<th>Matched</th>{% endif %}</tr></thead>
     <tbody>
       {% for f in findings %}
       <tr>
-        <td><b>{{ f.title }}</b></td>
+        <td><b>{{ f.title }}</b>
+          {% if f.evidence %}<div class="faint" style="font-size:11.5px;max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ f.evidence }}">{{ f.evidence }}</div>{% endif %}
+        </td>
         <td class="mono">{{ f.cwe or '—' }}</td>
         <td class="mono">{{ f.node or '—' }}</td>
-        <td>
+        <td>{% if f.manual %}<span class="badge">operator</span>{% else %}<span class="badge badge--info">agent</span>{% endif %}</td>
+        <td style="white-space:nowrap">
           {% set c = (f.validation or {}).confirmed %}
           {% if c == true %}<span class="badge badge--ok"><i class="fa-solid fa-check"></i> confirmed</span>
           {% elif c == false %}<span class="badge badge--warn">refuted</span>
           {% else %}<span class="badge badge--idle">unverified</span>{% endif %}
+          <span style="margin-left:8px">
+            <button class="btn btn-sm" title="Confirm — this vuln is really there" onclick="verifyFinding('{{ f.finding_id }}','confirmed')"><i class="fa-solid fa-check"></i></button>
+            <button class="btn btn-sm" title="Refute — not a real finding" onclick="verifyFinding('{{ f.finding_id }}','refuted')"><i class="fa-solid fa-xmark"></i></button>
+          </span>
         </td>
-        <td>{% if f.matched_vuln_id %}<span class="badge badge--accent">{{ f.matched_vuln_id }}</span>{% else %}<span class="faint">—</span>{% endif %}</td>
+        {% if fbench %}<td>{% if f.matched_vuln_id %}<span class="badge badge--accent">{{ f.matched_vuln_id }}</span>{% else %}<span class="faint">—</span>{% endif %}</td>{% endif %}
       </tr>
       {% endfor %}
     </tbody>
   </table>
+  {% else %}
+  <div class="card-pad muted" style="padding:18px">No findings yet — the connected agent's reports appear here, or add one manually with <b>Add finding</b>.</div>
+  {% endif %}
   <div class="cfg-note" style="padding:11px 18px;border-top:1px solid var(--line-soft)">
-    <i class="fa-solid fa-eye-slash"></i> Match + verification verdict are operator-only — the agent gets a neutral ack.
+    <i class="fa-solid fa-eye-slash"></i> Match + verdict are operator-only — the agent gets a neutral ack. Your <b>confirm/refute</b> is authoritative and feeds the score.
   </div>
 </div>
-{% endif %}
 
 {% if score and score.manifest %}
 <div class="card pad-0" style="margin-top:16px">

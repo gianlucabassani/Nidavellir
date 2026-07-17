@@ -701,28 +701,43 @@
     host.querySelector('[data-eng="grant"]').addEventListener("click", engGrant);
   }
 
+  function _copyfield(value, id) {
+    return '<div class="copyfield"><input class="input mono" readonly value="' +
+      escapeHtml(value) + '" id="' + id + '">' +
+      '<button class="btn btn-sm" onclick="copyField(\'' + id + '\')">' +
+      '<i class="fa-regular fa-copy"></i></button></div>';
+  }
+  window.downloadMcpConfig = function (gw) {
+    const cfg = { mcpServers: { "nidavellir-arena": { type: "http", url: gw } } };
+    const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = ".mcp.json";
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(a.href);
+  };
   function engRenderRecipe() {
     const host = document.getElementById("pos-recipe");
     if (!host || engRecipeDone) return;
     engRecipeDone = true;
-    const gw = escapeHtml(engGateway || "http://localhost:9000/mcp");
+    const gw = engGateway || "http://localhost:9000/mcp";
+    const arena = escapeHtml(engArena || "<arena_id>");
+    const upCmd = "NIDAVELLIR_AGENT_KEY=<agent-key> NIDAVELLIR_STANCE=attacker " +
+      "docker compose --profile agent-gateway up -d agent-gateway";
     host.innerHTML =
       '<details class="pos-recipe"><summary><i class="fa-solid fa-plug"></i> ' +
-      "How to connect your agent app (then tell IT to attack)</summary>" +
+      "Connect your agent app — one command, no hand-written config</summary>" +
       '<ol class="pos-recipe__steps">' +
-      '<li>Create an agent key (admin):<div class="copyfield"><input class="input mono" readonly ' +
-        'value="docker exec nidavellir-orchestrator python auth.py create-key red-team-1 agent" id="rc-key">' +
-        '<button class="btn btn-sm" onclick="copyField(\'rc-key\')"><i class="fa-regular fa-copy"></i></button></div></li>' +
-      "<li>Authorize it above: stance <b>attacker</b>, key name <span class=\"mono\">red-team-1</span> → Authorize.</li>" +
-      '<li>Point your agent app (e.g. Claude Code) at the gateway:' +
-        '<div class="copyfield"><input class="input mono" readonly ' +
-        'value="claude mcp add --transport http nidavellir ' + gw + '" id="rc-mcp">' +
-        '<button class="btn btn-sm" onclick="copyField(\'rc-mcp\')"><i class="fa-regular fa-copy"></i></button></div>' +
-        '<div class="muted" style="font-size:12px;margin-top:4px">The gateway carries that agent key &amp; stance ' +
-        '(<span class="mono">NIDAVELLIR_AGENT_KEY</span>, <span class="mono">NIDAVELLIR_STANCE=attacker</span>) — ' +
-        "one key &amp; stance per gateway process.</div></li>" +
-      '<li>In your agent app, instruct it to start — e.g. <i>“attack this arena from the foothold and report findings”</i>. ' +
-        "Authorization is live per tool-call; every action streams into <b>Live activity</b> below, where you can Pause or Revoke.</li>" +
+      '<li>Create an agent key (admin) and Authorize it above (stance <b>attacker</b>):' +
+        _copyfield("docker exec nidavellir-orchestrator python auth.py create-key red-team-1 agent", "rc-key") + "</li>" +
+      '<li>Start the gateway carrying that key + stance:' + _copyfield(upCmd, "rc-up") + "</li>" +
+      '<li>Add it to Claude Code — one line, no file to edit:' +
+        _copyfield("claude mcp add --transport http nidavellir-arena " + gw, "rc-mcp") +
+        '<button class="btn btn-sm" style="margin-top:6px" onclick="downloadMcpConfig(\'' + escapeHtml(gw) + '\')">' +
+        '<i class="fa-solid fa-download"></i> or download .mcp.json</button></li>' +
+      '<li>Tell your agent to work this arena — pass <b>arena_id=<span class="mono">' + arena + '</span></b>, ' +
+        'e.g. <i>“announce yourself, then attack arena ' + arena + ' from the foothold and report findings”</i>. ' +
+        "Every action streams into <b>Live activity</b> below, where you can Pause or Revoke.</li>" +
       "</ol></details>";
   }
 
@@ -1229,6 +1244,38 @@
       r.json().then((d) => ({ status: r.status, data: d })).catch(() => ({ status: r.status, data: {} }))
     );
   }
+
+  /* ---- Findings card: operator verify + manual add (arena detail) -------- */
+  window.toggleManualFinding = function () {
+    const f = document.getElementById("mf-form");
+    if (f) f.hidden = !f.hidden;
+  };
+  window.verifyFinding = function (fid, verdict) {
+    const card = document.getElementById("findings-card");
+    if (!card) return;
+    postJson("/api/arenas/" + card.dataset.arena + "/findings/" + encodeURIComponent(fid) + "/verify",
+      { verdict: verdict })
+      .then(({ status, data }) => {
+        if (status === 200) location.reload();
+        else alert(data.error || data.detail || "HTTP " + status);
+      });
+  };
+  window.addManualFinding = function () {
+    const card = document.getElementById("findings-card");
+    if (!card) return;
+    const err = document.getElementById("mf-err");
+    const title = (document.getElementById("mf-title").value || "").trim();
+    if (!title) { if (err) err.textContent = "Title is required."; return; }
+    postJson("/api/arenas/" + card.dataset.arena + "/findings/manual", {
+      title: title,
+      cwe: (document.getElementById("mf-cwe").value || "").trim(),
+      node: (document.getElementById("mf-node").value || "").trim(),
+      evidence: (document.getElementById("mf-evidence").value || "").trim(),
+    }).then(({ status, data }) => {
+      if (status === 200) location.reload();
+      else if (err) err.textContent = data.error || data.detail || "HTTP " + status;
+    });
+  };
 
   // device icons — inline 2D line-art (Packet-Tracer flavour). Colour is baked
   // per kind because a Cytoscape background-image can't be tinted by CSS.

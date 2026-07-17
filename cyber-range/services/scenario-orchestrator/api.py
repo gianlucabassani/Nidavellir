@@ -2671,12 +2671,21 @@ def report_finding(
     if not record:
         raise HTTPException(status_code=404, detail="Arena not found")
     _require_binding(principal, instance_id, bindings.CAP_EXEC)  # D1
+    finding_id = _record_finding(instance_id, record, req, actor=principal.name)
+    return {"recorded": True, "finding_id": finding_id}
 
-    # Custom/SUT arenas store a synthetic label (e.g. "custom:kali-cli+dvwa")
-    # that is not a registered scenario id, so there is no manifest to match
-    # against — these run in *discovery mode*: the finding is recorded and ack'd
-    # but never scored by CWE. A manifest for custom arenas is future work
-    # (operator-supplied manifest / SUT crash-oracle scoring, ROADMAP P4-7).
+
+def _record_finding(instance_id, record, req: "FindingRequest", *, actor: str,
+                    manual: bool = False) -> str:
+    """Record a `finding` event (shared by the agent's report_finding and the
+    operator's manual-add). Matches the finding against the arena's HIDDEN
+    manifest by CWE + node and runs best-effort deterministic verification; both
+    are operator-only. `manual=True` flags an operator-entered finding.
+
+    Custom/SUT arenas carry a synthetic label (not a registered scenario id) so
+    there is no manifest — those run in *discovery mode*: the finding is recorded
+    and ack'd but never scored by CWE (crash-oracle + operator verification carry
+    the evidence instead)."""
     manifest = scenarios.scenario_manifest(record.get("scenario")) or []
     claimed = {
         (e.get("payload") or {}).get("matched_vuln_id")
@@ -2685,11 +2694,6 @@ def report_finding(
     claimed.discard(None)
     matched_id = _match_vuln_id(req.node, req.cwe, manifest, claimed)
     matched_vuln = next((v for v in manifest if v["id"] == matched_id), None)
-
-    # Deterministic verification (ADR-0009 item 6): confirm the finding against
-    # the arena when the agent supplied enough to probe. Best-effort and neutral —
-    # the result is operator-only (redacted from the agent's event feed) so it
-    # can't leak whether the exploit worked.
     validation = _validate_finding(record, req, matched_vuln)
 
     finding_id = uuid.uuid4().hex[:12]
@@ -2705,11 +2709,62 @@ def report_finding(
             # can't read events); surfaced via /score and the defender stance.
             "matched_vuln_id": matched_id,
             "validation": validation,
-            "actor": principal.name,
+            "manual": manual,
+            "actor": actor,
         },
+        actor=actor,
+    )
+    return finding_id
+
+
+class VerifyFindingRequest(BaseModel):
+    verdict: str = Field(pattern="^(confirmed|refuted)$")
+    note: str | None = Field(default=None, max_length=1024)
+
+
+@app.post("/arenas/{instance_id}/findings/manual")
+def add_manual_finding(
+    instance_id: str,
+    req: FindingRequest,
+    principal: Principal = Depends(require_principal),
+):
+    """Operator-entered finding — a vuln a human found or wants on the record.
+    Same manifest match + verification as the agent's report_finding, but marked
+    `manual` and attributed to the operator. Operator/admin only."""
+    _require_operator(principal)
+    record = db.get_deployment(instance_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    finding_id = _record_finding(instance_id, record, req, actor=principal.name, manual=True)
+    return {"recorded": True, "finding_id": finding_id, "manual": True}
+
+
+@app.post("/arenas/{instance_id}/findings/{finding_id}/verify")
+def verify_finding(
+    instance_id: str,
+    finding_id: str,
+    req: VerifyFindingRequest,
+    principal: Principal = Depends(require_principal),
+):
+    """Operator verdict on a reported finding — the human verification path
+    (ADR-0009 item 6). Records a `finding_verification` event; the scorer treats
+    an operator `confirmed` as a deterministic confirmation (flips the
+    verified_exploit milestone and counts toward confirmed points), and `refuted`
+    as unconfirmed. The newest verdict per finding wins. Operator/admin only."""
+    _require_operator(principal)
+    record = db.get_deployment(instance_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    known = {(e.get("payload") or {}).get("finding_id") for e in _finding_events(instance_id)}
+    if finding_id not in known:
+        raise HTTPException(status_code=404, detail="Finding not found in this arena")
+    db.record_event(
+        instance_id, "finding_verification",
+        {"finding_id": finding_id, "verdict": req.verdict,
+         "note": (req.note or "")[:1024], "actor": principal.name},
         actor=principal.name,
     )
-    return {"recorded": True, "finding_id": finding_id}
+    return {"verified": True, "finding_id": finding_id, "verdict": req.verdict}
 
 
 def _run_metrics(events: list[dict]) -> dict:
@@ -2770,6 +2825,31 @@ def _score_report(instance_id: str, record: dict, mode: str | None) -> dict:
         corr = validators.correlate_crash(f.get("node"), signals)
         if corr.confirmed is True:
             f["validation"] = corr.to_dict()
+
+    # Operator verification verdicts (the human verification path) overlay LAST —
+    # a human's confirm/refute is authoritative and overrides an auto-verdict.
+    # Newest verdict per finding wins.
+    verdicts: dict[str, dict] = {}
+    for e in events:
+        if e.get("type") != "finding_verification":
+            continue
+        p = e.get("payload") or {}
+        fid = p.get("finding_id")
+        if not fid:
+            continue
+        prev = verdicts.get(fid)
+        if prev is None or str(e.get("ts") or "") >= str(prev.get("_ts") or ""):
+            verdicts[fid] = {**p, "_ts": e.get("ts")}
+    for f in findings:
+        v = verdicts.get(f.get("finding_id"))
+        if not v:
+            continue
+        f["validation"] = {
+            "confirmed": v.get("verdict") == "confirmed",
+            "method": "operator",
+            "by": v.get("actor"),
+            "note": v.get("note") or None,
+        }
 
     return scoring.score_arena(
         arena_id=instance_id,

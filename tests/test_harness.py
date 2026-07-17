@@ -295,20 +295,25 @@ def test_rest_control_plane_lifecycle():
     from harness.rest_control import RestControlPlane
 
     http = _RecordingHttp({
-        ("POST", "/deploy"): _Resp(200, {"queued": True}),
+        # The real /deploy assigns its own system id and echoes it back.
+        ("POST", "/deploy"): _Resp(200, {"status": "accepted", "instance_id": "sys-uuid-123"}),
         ("POST", "/bindings"): _Resp(200, {"bound": True}),
         ("GET", "/eval-export"): _Resp(200, {"run_id": "x", "score": {"value": 1.0}}),
     })
     cp = RestControlPlane(api_url="http://orch:8000", operator_key="cg_op", http=http)
     arena = cp.deploy("container_web_pentest")
-    assert arena.startswith("rh-")
+    # deploy returns the API-assigned system id, not the friendly label.
+    assert arena == "sys-uuid-123"
     cp.bind_agent(arena, "reference-harness", "attacker")
     row = cp.eval_export(arena)
     assert row["score"]["value"] == 1.0
-    # deploy sent the generated instance_id + scenario.
+    # deploy sent a generated friendly instance_id + scenario in the body.
     deploy_body = next(j for (m, _u, j) in http.requests if m == "POST" and j and "instance_id" in j)
     assert deploy_body["scenario"] == "container_web_pentest"
-    assert deploy_body["instance_id"] == arena
+    assert deploy_body["instance_id"].startswith("rh-")
+    # the rest of the lifecycle addresses the arena by the system id.
+    assert any(u.endswith("/arenas/sys-uuid-123/bindings") for (_m, u, _j) in http.requests)
+    assert any(u.endswith("/arenas/sys-uuid-123/eval-export") for (_m, u, _j) in http.requests)
 
 
 def test_rest_control_plane_wait_active_transitions():

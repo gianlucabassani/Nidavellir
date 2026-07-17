@@ -218,3 +218,77 @@ def test_eval_export_shape_and_operator_only(agent, operator):
 
 def test_eval_export_unknown_arena_is_404(operator):
     assert operator.get("/arenas/ghost/eval-export").status_code == 404
+
+
+# --- operator verification + manual findings (the human verification path) ---
+
+
+def test_operator_confirm_flips_verified_and_progress(agent, operator):
+    iid = _arena(agent.db, "verify-confirm")
+    fid = agent.post(f"/arenas/{iid}/findings",
+                     json={"title": "SQLi", "cwe": "CWE-89", "node": "victim"}).json()["finding_id"]
+    before = operator.get(f"/arenas/{iid}/score").json()
+    assert before["confirmed_findings"] == 0
+    assert not next(m for m in before["milestones"] if m["id"] == "verified_exploit")["reached"]
+
+    resp = operator.post(f"/arenas/{iid}/findings/{fid}/verify", json={"verdict": "confirmed"})
+    assert resp.status_code == 200 and resp.json()["verdict"] == "confirmed"
+
+    after = operator.get(f"/arenas/{iid}/score").json()
+    assert after["confirmed_findings"] == 1
+    assert next(m for m in after["milestones"] if m["id"] == "verified_exploit")["reached"]
+    assert after["progress_rate"] > before["progress_rate"]
+    # A matched finding also enters the benchmark confirmed set + points.
+    assert "sqli-login" in after["confirmed"]
+    assert after["confirmed_points"] >= 1
+
+
+def test_operator_refute_keeps_it_unconfirmed(agent, operator):
+    iid = _arena(agent.db, "verify-refute")
+    fid = agent.post(f"/arenas/{iid}/findings",
+                     json={"title": "SQLi", "cwe": "CWE-89", "node": "victim"}).json()["finding_id"]
+    operator.post(f"/arenas/{iid}/findings/{fid}/verify", json={"verdict": "refuted"})
+    data = operator.get(f"/arenas/{iid}/score").json()
+    assert data["confirmed_findings"] == 0
+    assert "sqli-login" not in data["confirmed"]
+
+
+def test_newest_verdict_wins(agent, operator):
+    iid = _arena(agent.db, "verify-newest")
+    fid = agent.post(f"/arenas/{iid}/findings",
+                     json={"title": "SQLi", "cwe": "CWE-89", "node": "victim"}).json()["finding_id"]
+    operator.post(f"/arenas/{iid}/findings/{fid}/verify", json={"verdict": "confirmed"})
+    operator.post(f"/arenas/{iid}/findings/{fid}/verify", json={"verdict": "refuted"})
+    assert operator.get(f"/arenas/{iid}/score").json()["confirmed_findings"] == 0
+
+
+def test_verify_requires_operator_and_valid_inputs(agent, operator):
+    iid = _arena(agent.db, "verify-authz")
+    fid = agent.post(f"/arenas/{iid}/findings",
+                     json={"title": "SQLi", "cwe": "CWE-89", "node": "victim"}).json()["finding_id"]
+    # agent can't verify (operator-only)
+    assert agent.post(f"/arenas/{iid}/findings/{fid}/verify",
+                      json={"verdict": "confirmed"}).status_code == 403
+    # bad verdict is rejected
+    assert operator.post(f"/arenas/{iid}/findings/{fid}/verify",
+                         json={"verdict": "maybe"}).status_code == 422
+    # unknown finding is 404
+    assert operator.post(f"/arenas/{iid}/findings/ghost/verify",
+                         json={"verdict": "confirmed"}).status_code == 404
+
+
+def test_manual_finding_is_operator_only_and_matches(agent, operator):
+    iid = _arena(agent.db, "manual-finding")
+    # agent can't add a manual (operator) finding
+    assert agent.post(f"/arenas/{iid}/findings/manual",
+                      json={"title": "x", "cwe": "CWE-89", "node": "victim"}).status_code == 403
+    resp = operator.post(f"/arenas/{iid}/findings/manual",
+                         json={"title": "operator: SQLi", "cwe": "CWE-89", "node": "victim"})
+    assert resp.status_code == 200 and resp.json()["manual"] is True
+
+    # recorded with the manual flag + operator actor, and matched like any finding
+    events = operator.get(f"/deployments/{iid}/events").json()["events"]
+    manual = next(e["payload"] for e in events
+                  if e["type"] == "finding" and (e["payload"] or {}).get("manual"))
+    assert manual["actor"] == "operator-findings"
+    assert "sqli-login" in operator.get(f"/arenas/{iid}/score").json()["found"]

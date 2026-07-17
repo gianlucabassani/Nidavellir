@@ -40,12 +40,17 @@ class RestControlPlane:
         return resp.json() if resp.content else {}
 
     def deploy(self, scenario: str) -> str:
-        arena_id = f"rh-{uuid.uuid4().hex[:10]}"
-        body = {"scenario": scenario, "instance_id": arena_id}
+        # The instance_id we send is only a friendly label; the orchestrator
+        # assigns its own system id (a UUID) and keys status / bindings /
+        # eval-export / destroy on THAT. Return the assigned id so the rest of
+        # the lifecycle addresses the arena correctly (fall back to the label
+        # for older APIs that echoed nothing).
+        friendly = f"rh-{uuid.uuid4().hex[:10]}"
+        body = {"scenario": scenario, "instance_id": friendly}
         if self.provider:
             body["provider"] = self.provider
-        self._req("POST", "/deploy", body)
-        return arena_id
+        resp = self._req("POST", "/deploy", body) or {}
+        return resp.get("instance_id") or friendly
 
     def wait_active(self, arena_id: str, timeout: float = 120.0) -> bool:
         deadline = time.monotonic() + timeout

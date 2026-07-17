@@ -259,13 +259,30 @@ def _score(instance_id):
 
 
 def _findings(instance_id):
-    """The arena's reported findings (operator view — includes the match + the
-    verification verdict). Type-filtered so a burst of activity can't push them
-    out of the window. Newest first."""
+    """The arena's reported findings (operator view — includes the manifest match
+    and the verification verdict). Merges the newest operator verify verdict onto
+    each finding (a human confirm/refute overrides any auto-verdict). Newest
+    first. Fetches untyped so `finding` + `finding_verification` come together."""
+    events = _events(instance_id, limit=200)
+    verdicts = {}
+    for e in events:  # newest-first → first seen per finding wins
+        if e.get("type") == "finding_verification":
+            p = e.get("payload") or {}
+            fid = p.get("finding_id")
+            if fid and fid not in verdicts:
+                verdicts[fid] = p
     out = []
-    for e in _events(instance_id, limit=100, type="finding"):
-        p = e.get("payload") or {}
-        p = {**p, "ts": e.get("ts")}
+    for e in events:
+        if e.get("type") != "finding":
+            continue
+        p = {**(e.get("payload") or {}), "ts": e.get("ts")}
+        v = verdicts.get(p.get("finding_id"))
+        if v:
+            p["operator_verdict"] = v.get("verdict")
+            p["validation"] = {
+                "confirmed": v.get("verdict") == "confirmed",
+                "method": "operator", "by": v.get("actor"), "note": v.get("note"),
+            }
         out.append(p)
     return out
 
@@ -1026,6 +1043,33 @@ def revoke_binding_proxy(instance_id, agent_name):
     if resp.status_code == 200:
         return jsonify(resp.json())
     return jsonify({"error": _api_error(resp)}), resp.status_code
+
+
+@app.route("/api/arenas/<instance_id>/findings/manual", methods=["POST"])
+def manual_finding_proxy(instance_id):
+    """Operator-entered finding (proxies POST /arenas/<id>/findings/manual).
+    CSRF-protected."""
+    body = request.get_json(silent=True) or {}
+    payload = {
+        "title": (body.get("title") or "").strip(),
+        "cwe": (body.get("cwe") or "").strip() or None,
+        "node": (body.get("node") or "").strip() or None,
+        "evidence": (body.get("evidence") or "").strip() or None,
+    }
+    data, code = _api_post(f"/arenas/{instance_id}/findings/manual", payload)
+    return jsonify(data), code
+
+
+@app.route("/api/arenas/<instance_id>/findings/<finding_id>/verify", methods=["POST"])
+def verify_finding_proxy(instance_id, finding_id):
+    """Operator verdict on a finding (proxies POST …/verify). CSRF-protected."""
+    body = request.get_json(silent=True) or {}
+    payload = {
+        "verdict": (body.get("verdict") or "").strip(),
+        "note": (body.get("note") or "").strip() or None,
+    }
+    data, code = _api_post(f"/arenas/{instance_id}/findings/{finding_id}/verify", payload)
+    return jsonify(data), code
 
 
 @app.route("/api/arenas/<instance_id>/bindings/<agent_name>/pause", methods=["POST"])

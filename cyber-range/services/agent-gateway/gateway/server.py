@@ -42,7 +42,24 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
     builds even before an agent key is set — handy for introspection/tests).
     """
     cfg = cfg or GatewayConfig()
-    mcp = FastMCP("nidavellir-agent-gateway", host=cfg.host, port=cfg.port)
+    mcp = FastMCP(
+        "nidavellir-agent-gateway", host=cfg.host, port=cfg.port,
+        instructions=(
+            "You are a bring-your-own security agent connected to a contained "
+            "Nidavellir cyber-range arena over MCP. Do this in order:\n"
+            "1. FIRST call announce_agent(arena_id, model, provider) once, before "
+            "anything else, so the operator console shows which agent is driving "
+            "the arena.\n"
+            "2. Call get_briefing and get_topology to orient (objective, targets, "
+            "rules of engagement).\n"
+            "3. Work the target with the stance's tools (e.g. run_command from the "
+            "foothold).\n"
+            "4. For every vulnerability you confirm, call report_finding — and "
+            "whenever possible pass the structured verification inputs "
+            "(path, param, payload, oast_token) in addition to free-text evidence, "
+            "so the platform can deterministically verify the finding."
+        ),
+    )
 
     holder = {"ctx": context}
 
@@ -78,9 +95,11 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
 
     @mcp.tool()
     def announce_agent(arena_id: str, model: str, provider: str) -> dict:
-        """Declare the connected agent's model + provider so the operator console
-        can show which AI is driving this arena. Telemetry only — the harness
-        calls this, not the model."""
+        """Call this FIRST, once, before any other tool. Declare who you are —
+        your model (e.g. "opus", "gpt-4o") and provider (e.g. "anthropic",
+        "openai") — so the operator console registers this session and shows
+        which agent is driving the arena. Safe to call again to update the
+        declaration."""
         return tools.announce_agent(ctx(), arena_id=arena_id, model=model, provider=provider)
 
     # Per-stance tools: only register what the bound stance may use, so an
