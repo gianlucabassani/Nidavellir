@@ -410,6 +410,20 @@ first-class evidence. The manifest is operator-only and never shown to an agent.
     "evidence": "..." }
   → { "recorded": true, "finding_id": "7097421dd9fc" }
   ```
+- `POST /arenas/{instance_id}/findings/manual` — an **operator-entered** finding
+  (a vuln a human found, or one to put on the record). Same body + manifest match +
+  verification as `report_finding`, but flagged `manual` and attributed to the
+  operator. **operator/admin only.**
+- `POST /arenas/{instance_id}/findings/{finding_id}/verify` — the **human
+  verification path** (ADR-0009 item 6). Records an operator verdict on a reported
+  finding; an operator `confirmed` counts as a deterministic confirmation (flips the
+  `verified_exploit` milestone and adds `confirmed_points`), `refuted` marks it
+  unconfirmed. The newest verdict per finding wins and overrides any auto-verdict.
+  **operator/admin only.**
+  ```json
+  { "verdict": "confirmed", "note": "UNION dump reproduced" }
+  → { "verified": true, "finding_id": "7097421dd9fc", "verdict": "confirmed" }
+  ```
 - `GET /arenas/{instance_id}/score[?mode=benchmark|discovery]` — the structured,
   Inspect-style **scorecard**. **operator/admin only**. Mode auto-selects on the
   manifest's presence (overridable via `?mode=`). Carries the typed `score`

@@ -216,11 +216,22 @@ the demo and the public benchmark.
   summary; a production REST control plane; and **deterministic replay**.
   Live-verified: a scripted agent drove the real gateway against a real docker arena
   and produced a scored eval row, keyless.
+- **Flagship run in hand (2026-07-17).** A bring-your-own **Claude Code** agent, over
+  the MCP gateway against a live `container_web_pentest` (DVWA) arena, found and
+  **confirmed 11 real vulnerabilities** (XSS, SQLi, OS command injection, LFI,
+  unrestricted-upload→RCE, CSRF, …) into one scored, matched verdict (6/6 manifest,
+  score 1.0). The thesis is demonstrated end-to-end on a real target.
+- **Operator verification path (ADR-0009 item 6).** `POST …/findings/{id}/verify`
+  (confirm/refute) and `POST …/findings/manual` let a human confirm the findings a
+  deterministic validator can't auto-prove (auth-gated web vulns). An operator
+  `confirmed` flips the `verified_exploit` milestone and adds `confirmed_points`, so
+  a genuinely-proven run is no longer capped at 0.8. The console splits benchmark
+  (scored manifest) from discovery/SUT (no gamified scoring).
 
 **Remaining:** difficulty tiers / First-Solve-Time, guided-vs-unguided modes, a
-held-out set, the SSE live feed / monitor panel, and the recorded **flagship demo**
-(a BYO Claude agent finding & proving a real bug in a well-known OSS repo) — the M3
-acceptance deliverable.
+held-out set, the SSE live feed / monitor panel, broadening the auto-validators
+(command-injection / LFI / upload-RCE so more findings self-confirm), and the
+polished, **recorded flagship demo** cut — the last M3 acceptance deliverable.
 
 **The flagship proof (the deliverable that earns attention).** One unforgettable
 end-to-end, on one screen, in two minutes: *point at a well-known OSS repo → a BYO

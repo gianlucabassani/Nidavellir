@@ -90,6 +90,23 @@ Key environment variables (see [`.env.example`](../.env.example)):
 - **Agents** — BYO agents connected via the MCP gateway, by stance and arena.
 - **Settings / Profile** — model connection (BYO key), preferences, identity.
 
+## Connect your agent & review the engagement
+
+Open an active arena and use the **Agent positioning** card to authorize a
+bring-your-own agent (attacker / MITM / defender) — enter your **agent key's name**
+(from `auth.py create-key <name> agent`), pick a stance, and Authorize. The card's
+recipe gives a one-line `claude mcp add --transport http nidavellir-arena <gateway>`
+and a downloadable `.mcp.json` — no hand-written config. Then tell your agent to work
+the arena (pass the `arena_id`); every tool call streams into **Live activity**,
+where you can Pause or Revoke.
+
+The **Findings** card lists what the agent submitted plus any operator-entered
+findings. For each, **confirm** or **refute** it — an operator *confirmed* is
+authoritative and counts toward the score (it flips the `verified_exploit` milestone),
+which closes the gap for real web vulns a deterministic validator can't auto-prove.
+**Benchmark** arenas show the scored manifest/challenges; **discovery / SUT** arenas
+drop the gamified scoring and show findings + crash-oracle signals + your verdicts.
+
 ## Built-in scenarios
 
 | Scenario | Provider | Notes |
