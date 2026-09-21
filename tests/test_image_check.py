@@ -20,6 +20,7 @@ def test_parse_other_registry_or_digest_is_unknown():
     assert image_check.parse_ref("ghcr.io/owner/app:1.0") is None      # non-hub registry
     assert image_check.parse_ref("localhost:5000/x:1") is None
     assert image_check.parse_ref("ubuntu@sha256:deadbeef") is None     # digest-pinned
+    assert image_check.parse_ref("sha256:" + "a" * 64) is None       # local image ID
     assert image_check.parse_ref("") is None
 
 

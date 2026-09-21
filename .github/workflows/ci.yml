@@ -16,28 +16,14 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.11.14"
           cache: pip
 
       - name: Install dependencies
-        run: pip install -r requirements-dev.txt
+        run: pip install -r requirements-lock.txt
 
-      - name: Install OpenTofu (for the provisioning integration test)
-        uses: opentofu/setup-opentofu@v1
-        with:
-          tofu_version: "1.6.0"
-          tofu_wrapper: false
-
-      - name: Lint (ruff)
-        run: ruff check cyber-range tests
-
-      - name: Security scan (bandit)
-        # -ll = medium+ severity. Blocking since the Phase-1 hardening pass
-        # (2026-06-10) brought the tree to zero findings.
-        run: bandit -r cyber-range -ll
-
-      - name: Run tests with coverage
-        run: pytest --cov=cyber-range/services/scenario-orchestrator --cov-report=term-missing
+      - name: Run SQLite release gate
+        run: make verify-sqlite
 
   postgres-compat:
     # ADR-0004: SQLite is the default test backend (job above); this job
@@ -66,14 +52,14 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.11.14"
           cache: pip
 
       - name: Install dependencies
-        run: pip install -r requirements-dev.txt
+        run: pip install -r requirements-lock.txt
 
       - name: Run tests against PostgreSQL
-        run: pytest
+        run: make verify-postgres
 
   docker-build:
     name: Build container images

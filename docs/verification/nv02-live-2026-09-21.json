@@ -1,0 +1,51 @@
+{
+  "schema": "nidavellir/verification/nv02-live/v1",
+  "recorded_at": "2026-09-21T21:13:04+02:00",
+  "command": "make verify-nv02-live",
+  "result": "passed",
+  "environment": {
+    "docker_client": "29.7.2",
+    "docker_server": "29.7.2",
+    "docker_api": "1.55",
+    "host_os": "Manjaro Linux",
+    "host_architecture": "x86_64",
+    "kernel": "6.18.49-1-MANJARO",
+    "fixture_platform": "linux/amd64",
+    "fixture_image_id": "sha256:4dcef4c96c535611b04d777acc9fccdede780e7eb6b483e377fc6ed8bd26f3f3"
+  },
+  "deployment_ids": [
+    "d65b9dc7-4aad-4608-ba83-1eb55a73dfae",
+    "9dceb094-ee84-4cd1-bc37-41899fd47174",
+    "59bb13cc-1852-4235-a811-c02c7506fa7a",
+    "17f77547-15f5-4e2b-84ec-8516f49977d3",
+    "5439426e-da65-444b-9080-126699655d22"
+  ],
+  "reset_operation_ids": [
+    "703a177f-ee85-4408-bc71-5ab161613b2e",
+    "f12be803-278b-4dfd-8b21-c68e06d299aa"
+  ],
+  "recipe_digest": "sha256:298583bc8180abcda75d4a3c16471d3d778c451a5040e8572555cc40c9b473ef",
+  "observed_state_digest": "sha256:0c1c1c9ef7b324e3f1a2f89cb3969889f3faf60dd231286c8da5d06faf5aa260",
+  "retained_evidence": {
+    "transaction_digest": "sha256:fc942ba7cea07337836fcaa39baf8d52dc7f68465c09df9df19c3a2f9812ba6a",
+    "finding_id": "367ae9b103d1",
+    "source_record_readable_after_teardown": true,
+    "replacement_inherited_bindings": false,
+    "first_reset_initiated_through_csrf_console": true
+  },
+  "recovery": {
+    "worker_killed_during_deployment": "destroyed",
+    "worker_unavailable_during_teardown_enqueue": "destroyed"
+  },
+  "final_owned_resource_counts": {
+    "containers": 0,
+    "networks": 0,
+    "volumes": 0,
+    "images": 0
+  },
+  "failures_resolved_before_passing_run": [
+    "Local sha256 image IDs were incorrectly sent to Docker Hub validation.",
+    "Concurrent destroy retries treated an already-removed Docker network as failure."
+  ],
+  "sanitization": "No credentials, raw response bodies, databases, or container logs are retained."
+}

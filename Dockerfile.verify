@@ -1,0 +1,26 @@
+ARG PYTHON_IMAGE=python:3.11.14-slim-bookworm
+FROM ${PYTHON_IMAGE}
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git make \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+COPY requirements-dev.txt /workspace/requirements-dev.txt
+COPY requirements-lock.txt /workspace/requirements-lock.txt
+COPY cyber-range/services/scenario-orchestrator/requirements.txt /workspace/cyber-range/services/scenario-orchestrator/requirements.txt
+COPY cyber-range/services/agent-gateway/requirements.txt /workspace/cyber-range/services/agent-gateway/requirements.txt
+COPY cyber-range/webui/requirements.txt /workspace/cyber-range/webui/requirements.txt
+RUN python -m pip install --no-cache-dir -r requirements-lock.txt
+COPY . /workspace
+RUN mkdir -p /app \
+    && ln -s /workspace/cyber-range/services/scenario-orchestrator/templates /app/templates \
+    && ln -s /workspace/cyber-range/infra/terraform /app/terraform \
+    && ln -s /workspace/cyber-range/infra/terraform-aws /app/terraform-aws \
+    && ln -s /workspace/cyber-range/infra/terraform-libvirt /app/terraform-libvirt
+
+CMD ["make", "verify-sqlite"]

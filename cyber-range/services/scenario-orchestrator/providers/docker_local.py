@@ -19,6 +19,7 @@ Notes:
 """
 import io
 import hashlib
+import json
 import logging
 import os
 import re
@@ -33,6 +34,7 @@ from pathlib import PurePosixPath
 
 import config
 import images
+import lifecycle_manifest
 import netguard
 import source_bundle
 from providers.base import RangeProvider
@@ -44,6 +46,14 @@ logger = logging.getLogger(__name__)
 LABEL_LAB_ID = "nidavellir.lab_id"
 LABEL_ROLE = "nidavellir.role"
 LABEL_NODE = "nidavellir.node"
+
+
+def _already_absent(exc: Exception) -> bool:
+    """Docker removal races are successful when the resource is already gone."""
+    status = getattr(exc, "status_code", None)
+    if status is None:
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+    return status == 404
 
 # Sentinel segment for nodes that declare none — realized as the per-arena
 # default bridge, named WITHOUT a segment suffix so legacy/flat single-network
@@ -219,7 +229,7 @@ class DockerLocalProvider(RangeProvider):
         if self._client is None:
             import docker
 
-            self._client = docker.from_env()
+            self._client = docker.from_env(timeout=config.DOCKER_API_TIMEOUT_SECONDS)
         return self._client
 
     # --- helpers -------------------------------------------------------------
@@ -706,7 +716,7 @@ class DockerLocalProvider(RangeProvider):
 
         except Exception as e:
             # Roll back whatever was created so nothing leaks.
-            self.destroy(instance_id)
+            cleanup = self.destroy(instance_id)
             import docker  # lazy: the SDK is present here (we used self.client above)
             if isinstance(e, (docker.errors.ImageNotFound, docker.errors.NotFound)):
                 msg = (
@@ -716,10 +726,10 @@ class DockerLocalProvider(RangeProvider):
                 )
                 logger.error(f"[{instance_id}] docker-local deploy failed: {msg}")
                 return {"success": False, "error": msg, "phase": phase,
-                        "error_kind": "image_not_found"}
+                        "error_kind": "image_not_found", "cleanup": cleanup}
             logger.error(f"[{instance_id}] docker-local deploy failed (phase: {phase}): {e}")
             return {"success": False, "error": str(e), "phase": phase,
-                    "error_kind": type(e).__name__}
+                    "error_kind": type(e).__name__, "cleanup": cleanup}
 
     def _run_node(self, instance_id, node, networks, ingress, labels, locked,
                   mirror=None, whitebox=None, sut_sources=None):
@@ -2131,45 +2141,157 @@ class DockerLocalProvider(RangeProvider):
         return {"success": True, "bridge": bridge, "segment": net.name,
                 "packets": len(flows), "flows": flows}
 
-    def destroy(self, instance_id):
-        try:
-            label_filter = {"label": f"{LABEL_LAB_ID}={instance_id}"}
+    def observe_lifecycle(self, instance_id):
+        label_filter = {"label": f"{LABEL_LAB_ID}={instance_id}"}
+        nodes = []
+        for container in self.client.containers.list(all=True, filters=label_filter):
+            if (container.labels or {}).get(LABEL_ROLE) in {"browser", "http"}:
+                continue
+            container.reload()
+            attrs = container.attrs or {}
+            image_id = attrs.get("Image") or getattr(getattr(container, "image", None), "id", None)
+            image_attrs = getattr(getattr(container, "image", None), "attrs", {}) or {}
+            nodes.append({
+                "node": (container.labels or {}).get(LABEL_NODE),
+                "role": (container.labels or {}).get(LABEL_ROLE),
+                "image_id": image_id,
+                "os": image_attrs.get("Os"),
+                "architecture": image_attrs.get("Architecture"),
+                "state": (attrs.get("State") or {}).get("Status"),
+            })
+        nodes.sort(key=lambda item: (item.get("node") or "", item.get("role") or ""))
+        return {"provider": self.name, "nodes": nodes}
 
-            for container in self.client.containers.list(all=True, filters=label_filter):
+    def check_readiness(self, instance_id, outputs, policy):
+        if not isinstance(policy, dict) or policy.get("type") != "http":
+            return {"ready": False, "status": "unsupported", "error": "bounded HTTP policy required"}
+        node = policy.get("node")
+        port = policy.get("port")
+        path = policy.get("path", "/health")
+        scheme = policy.get("scheme", "http")
+        if not isinstance(node, str) or not isinstance(port, int):
+            return {"ready": False, "status": "invalid", "error": "readiness node and port required"}
+        ip = outputs.get(f"node_{node}_private_ip")
+        if not ip:
+            return {"ready": False, "status": "unavailable", "error": "readiness node unavailable"}
+        response = self.http_request(instance_id, node, ip, port, scheme, path)
+        if not response.get("success"):
+            return {"ready": False, "status": "transport_failure", "error": response.get("error")}
+        expected = int(policy.get("expected_status", 200))
+        ready = response.get("status") == expected and not response.get("redirect_location")
+        body = response.get("body", "")
+        try:
+            state = json.loads(body)
+        except (TypeError, json.JSONDecodeError):
+            state = body
+        expected_state = policy.get("expected_state")
+        if expected_state is not None and state != expected_state:
+            ready = False
+        return {
+            "ready": ready,
+            "status": "passed" if ready else "failed",
+            "http_status": response.get("status"),
+            "state_digest": lifecycle_manifest.digest(state),
+            "body_digest": response.get("body_sha256"),
+        }
+
+    def destroy(self, instance_id):
+        label_filter = {"label": f"{LABEL_LAB_ID}={instance_id}"}
+        errors = []
+        mounted_volumes = set()
+
+        try:
+            containers = self.client.containers.list(all=True, filters=label_filter)
+        except Exception as exc:  # noqa: BLE001
+            return {"success": False, "error": f"could not enumerate owned containers: {exc}"}
+        for container in containers:
+            try:
+                container.reload()
+                for mount in (container.attrs or {}).get("Mounts") or []:
+                    if mount.get("Type") == "volume" and mount.get("Name"):
+                        mounted_volumes.add(mount["Name"])
                 logger.info(f"[{instance_id}] Removing container {container.name}")
                 container.remove(force=True)
+            except Exception as exc:  # noqa: BLE001
+                if not _already_absent(exc):
+                    errors.append(f"container {getattr(container, 'name', '?')}: {exc}")
 
-            for network in self.client.networks.list(filters=label_filter):
+        try:
+            networks = self.client.networks.list(filters=label_filter)
+        except Exception as exc:  # noqa: BLE001
+            networks = []
+            errors.append(f"could not enumerate owned networks: {exc}")
+        for network in networks:
+            try:
                 logger.info(f"[{instance_id}] Removing network {network.name}")
                 network.remove()
+            except Exception as exc:  # noqa: BLE001
+                if not _already_absent(exc):
+                    errors.append(f"network {getattr(network, 'name', '?')}: {exc}")
 
-            # Reclaim any per-arena SUT image built from source (P1-6); without
-            # this a from-source build leaks one image per arena. Best-effort —
-            # an image still referenced elsewhere may refuse removal. The shared
-            # package-mirror image is unlabeled, so it is never matched here.
-            for image in self.client.images.list(filters=label_filter):
-                image_id = getattr(image, "id", None)
-                try:
-                    self.client.images.remove(image_id, force=True)
-                    logger.info(f"[{instance_id}] Removing built image {image_id}")
-                except Exception as e:
-                    logger.warning(
-                        f"[{instance_id}] could not remove image {image_id}: {e}"
-                    )
+        # Images are arena-built and labeled. Refuse to conceal an in-use error;
+        # the operation remains retryable and shared/unlabelled images are untouched.
+        try:
+            images = self.client.images.list(filters=label_filter)
+        except Exception as exc:  # noqa: BLE001
+            images = []
+            errors.append(f"could not enumerate owned images: {exc}")
+        for image in images:
+            image_id = getattr(image, "id", None)
+            try:
+                self.client.images.remove(image_id, force=False)
+                logger.info(f"[{instance_id}] Removing built image {image_id}")
+            except Exception as exc:  # noqa: BLE001
+                if not _already_absent(exc):
+                    errors.append(f"image {image_id}: {exc}")
 
-            # Reclaim per-arena white-box source volumes (P2-10); a leaked volume
-            # would persist the cloned source across teardowns.
-            for volume in self.client.volumes.list(filters=label_filter):
-                try:
-                    volume.remove(force=True)
-                    logger.info(f"[{instance_id}] Removing source volume {volume.name}")
-                except Exception as e:
-                    logger.warning(
-                        f"[{instance_id}] could not remove volume "
-                        f"{getattr(volume, 'name', None)}: {e}"
-                    )
+        try:
+            volumes = self.client.volumes.list(filters=label_filter)
+        except Exception as exc:  # noqa: BLE001
+            volumes = []
+            errors.append(f"could not enumerate owned volumes: {exc}")
+        owned_volumes = {
+            getattr(volume, "name", None): volume
+            for volume in volumes
+        }
+        # Anonymous volumes have no arena labels, but their ownership is proven by
+        # the mount of an arena-labelled container observed before its removal.
+        for name in mounted_volumes:
+            if name in owned_volumes:
+                continue
+            try:
+                volume = self.client.volumes.get(name)
+            except Exception as exc:  # noqa: BLE001
+                if not _already_absent(exc):
+                    errors.append(f"volume {name}: lookup failed: {exc}")
+                continue
+            if not (getattr(volume, "attrs", {}) or {}).get("Labels"):
+                owned_volumes[name] = volume
+        for name, volume in owned_volumes.items():
+            try:
+                volume.remove(force=True)
+                logger.info(f"[{instance_id}] Removing volume {name}")
+            except Exception as exc:  # noqa: BLE001
+                if not _already_absent(exc):
+                    errors.append(f"volume {name}: {exc}")
 
-            return {"success": True}
-        except Exception as e:
-            logger.error(f"[{instance_id}] docker-local destroy failed: {e}")
-            return {"success": False, "error": str(e)}
+        remaining = {}
+        enumerators = {
+            "containers": lambda: self.client.containers.list(all=True, filters=label_filter),
+            "networks": lambda: self.client.networks.list(filters=label_filter),
+            "images": lambda: self.client.images.list(filters=label_filter),
+            "volumes": lambda: self.client.volumes.list(filters=label_filter),
+        }
+        for kind, enumerate_owned in enumerators.items():
+            try:
+                remaining[kind] = len(enumerate_owned())
+            except Exception as exc:  # noqa: BLE001
+                remaining[kind] = -1
+                errors.append(f"could not verify owned {kind}: {exc}")
+        if any(remaining.values()):
+            errors.append(f"owned resources remain: {remaining}")
+        if errors:
+            error = "; ".join(errors)
+            logger.error(f"[{instance_id}] docker-local destroy incomplete: {error}")
+            return {"success": False, "error": error, "remaining": remaining}
+        return {"success": True}

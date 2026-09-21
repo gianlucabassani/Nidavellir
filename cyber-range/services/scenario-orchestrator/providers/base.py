@@ -212,3 +212,15 @@ class RangeProvider(ABC):
         raise NotImplementedError(
             f"the {self.name!r} provider does not support arena HTTP requests yet"
         )
+
+    def observe_lifecycle(self, instance_id: str) -> dict:
+        """Return stable runtime identities for reset equivalence."""
+        raise NotImplementedError(
+            f"the {self.name!r} provider does not support lifecycle observation"
+        )
+
+    def check_readiness(self, instance_id: str, outputs: dict, policy: dict) -> dict:
+        """Execute a bounded, arena-scoped application readiness observation."""
+        raise NotImplementedError(
+            f"the {self.name!r} provider does not support application readiness"
+        )

@@ -17,11 +17,14 @@ from datetime import datetime
 from pathlib import Path
 from threading import Lock
 
-from sqlalchemy import create_engine, or_, select
+from sqlalchemy import create_engine, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from crypto import decrypt_secret, encrypt_secret
-from models import ApiKey, Base, Deployment, Event, ModelConnection
+from models import (
+    ApiKey, Base, Deployment, Event, LifecycleRecipe, ModelConnection, ResetOperation,
+)
 from states import LabStatus, validate_transition
 
 # Labs in these states are still "live" (have or may have real infrastructure)
@@ -34,7 +37,12 @@ LIVE_STATES = (
 )
 # Transient states a healthy worker moves through quickly; if a lab sits here
 # untouched it means the worker driving it is gone (the "stuck pending" bug).
-STUCK_STATES = (LabStatus.PENDING, LabStatus.DEPLOYING, LabStatus.DESTROYING)
+STUCK_STATES = (
+    LabStatus.PENDING,
+    LabStatus.DEPLOYING,
+    LabStatus.DESTROYING,
+    LabStatus.ERROR_DESTROYING,
+)
 
 # Legacy SQLite location (kept for compose stacks that set DATABASE_PATH)
 DB_PATH = os.getenv(
@@ -111,6 +119,7 @@ class Database:
             "outputs": _read_outputs(dep.outputs),
             "error": dep.error,
             "provider": dep.provider,
+            "effective_provider": dep.effective_provider,
             "expires_at": _stringify(dep.expires_at),
         }
 
@@ -130,7 +139,7 @@ class Database:
 
     def create_deployment(
         self, deployment_id, user_id, scenario, provider=None, actor="system",
-        expires_at=None,
+        expires_at=None, effective_provider=None,
     ):
         with self._session() as session:
             session.add(
@@ -143,6 +152,7 @@ class Database:
                     updated_at=datetime.now(),
                     outputs="{}",
                     provider=provider,
+                    effective_provider=effective_provider,
                     expires_at=expires_at,
                 )
             )
@@ -151,7 +161,10 @@ class Database:
                 deployment_id,
                 actor,
                 "created",
-                {"scenario": scenario, "provider": provider, "name": user_id},
+                {
+                    "scenario": scenario, "provider": provider,
+                    "effective_provider": effective_provider, "name": user_id,
+                },
             )
             session.commit()
         return deployment_id
@@ -185,6 +198,214 @@ class Database:
                 dep.error = error
             dep.updated_at = datetime.now()
             session.commit()
+
+    def transition_deployment(self, deployment_id, expected, new, *, actor="system"):
+        """Atomically claim a lifecycle transition and append its audit event.
+
+        Returns False when another worker moved the record first. Idempotence is
+        handled by callers deliberately rather than hiding a stale claim.
+        """
+        expected = tuple(str(value) for value in expected)
+        with self._session() as session:
+            dep = session.get(Deployment, deployment_id)
+            if dep is None or dep.status not in expected:
+                return False
+            validate_transition(dep.status, new)
+            old = dep.status
+            result = session.execute(
+                update(Deployment)
+                .where(Deployment.id == deployment_id, Deployment.status == old)
+                .values(status=new, updated_at=datetime.now())
+            )
+            if result.rowcount != 1:
+                session.rollback()
+                return False
+            if old != new:
+                self._append_event(
+                    session, deployment_id, actor, "status", {"from": old, "to": new}
+                )
+            session.commit()
+            return True
+
+    # --- NV-02 lifecycle recipes / reset operations -------------------------
+
+    def save_lifecycle_recipe(self, deployment_id, recipe):
+        encoded = encrypt_secret(json.dumps(recipe, sort_keys=True))
+        with self._session() as session:
+            row = session.get(LifecycleRecipe, deployment_id)
+            if row is None:
+                row = LifecycleRecipe(
+                    deployment_id=deployment_id,
+                    digest=recipe["recipe_digest"],
+                    encrypted_payload=encoded,
+                    created_at=datetime.now(),
+                )
+                session.add(row)
+            elif row.digest != recipe["recipe_digest"]:
+                raise ValueError("a lifecycle recipe is immutable once recorded")
+            session.commit()
+
+    def get_lifecycle_recipe(self, deployment_id):
+        with self._session() as session:
+            row = session.get(LifecycleRecipe, deployment_id)
+            if row is None:
+                return None
+            plaintext = decrypt_secret(row.encrypted_payload)
+            if plaintext is None:
+                raise ValueError("lifecycle recipe could not be decrypted")
+            return json.loads(plaintext)
+
+    @staticmethod
+    def _reset_to_dict(row):
+        if row is None:
+            return None
+        return {
+            "id": row.id,
+            "source_id": row.source_id,
+            "replacement_id": row.replacement_id,
+            "idempotency_key": row.idempotency_key,
+            "recipe_digest": row.recipe_digest,
+            "status": row.status,
+            "stage": row.stage,
+            "deadline": _stringify(row.deadline),
+            "created_at": _stringify(row.created_at),
+            "updated_at": _stringify(row.updated_at),
+            "error": row.error,
+            "result": json.loads(row.result) if row.result else None,
+        }
+
+    def create_reset_operation(
+        self, *, operation_id, source_id, replacement_id, idempotency_key,
+        recipe_digest, deadline,
+    ):
+        now = datetime.now()
+        with self._session() as session:
+            existing = session.scalar(
+                select(ResetOperation).where(
+                    ResetOperation.source_id == source_id,
+                    ResetOperation.idempotency_key == idempotency_key,
+                )
+            )
+            if existing is not None:
+                return self._reset_to_dict(existing), False
+            row = ResetOperation(
+                id=operation_id,
+                source_id=source_id,
+                replacement_id=replacement_id,
+                idempotency_key=idempotency_key,
+                active_source=source_id,
+                recipe_digest=recipe_digest,
+                status="pending",
+                stage="claimed",
+                deadline=deadline,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(row)
+            try:
+                session.commit()
+            except IntegrityError as exc:
+                session.rollback()
+                existing = session.scalar(
+                    select(ResetOperation).where(
+                        ResetOperation.source_id == source_id,
+                        ResetOperation.idempotency_key == idempotency_key,
+                    )
+                )
+                if existing is not None:
+                    return self._reset_to_dict(existing), False
+                raise ValueError("another reset is already in flight for this arena") from exc
+            return self._reset_to_dict(row), True
+
+    def get_reset_operation(self, operation_id):
+        with self._session() as session:
+            return self._reset_to_dict(session.get(ResetOperation, operation_id))
+
+    def get_reset_operation_by_replacement(self, replacement_id):
+        with self._session() as session:
+            return self._reset_to_dict(session.scalar(
+                select(ResetOperation).where(ResetOperation.replacement_id == replacement_id)
+            ))
+
+    def list_reset_operations(self, source_id=None, *, active_only=False):
+        with self._session() as session:
+            stmt = select(ResetOperation).order_by(ResetOperation.created_at.desc())
+            if source_id is not None:
+                stmt = stmt.where(ResetOperation.source_id == source_id)
+            if active_only:
+                stmt = stmt.where(ResetOperation.active_source.is_not(None))
+            return [self._reset_to_dict(row) for row in session.scalars(stmt).all()]
+
+    def update_reset_operation(self, operation_id, *, status=None, stage=None,
+                               error=None, result=None, terminal=False):
+        with self._session() as session:
+            row = session.get(ResetOperation, operation_id)
+            if row is None:
+                return False
+            if status is not None:
+                row.status = status
+            if stage is not None:
+                row.stage = stage
+            if error is not None:
+                row.error = str(error)[:4000]
+            if result is not None:
+                row.result = json.dumps(result, sort_keys=True)
+            if terminal:
+                row.active_source = None
+            row.updated_at = datetime.now()
+            session.commit()
+            return True
+
+    def claim_reset_operation(self, operation_id, *, actor_stage="destroying_source"):
+        """Atomically claim a pending reset for one worker.
+
+        Celery delivery is at-least-once. A conditional UPDATE makes duplicate
+        deliveries harmless on both SQLite and PostgreSQL without relying on a
+        process-local lock.
+        """
+        with self._session() as session:
+            result = session.execute(
+                update(ResetOperation)
+                .where(
+                    ResetOperation.id == operation_id,
+                    ResetOperation.status == "pending",
+                    ResetOperation.active_source.is_not(None),
+                )
+                .values(
+                    status="running",
+                    stage=actor_stage,
+                    updated_at=datetime.now(),
+                )
+            )
+            session.commit()
+            return result.rowcount == 1
+
+    def recover_stale_reset_operations(self, stale_before):
+        """Return stale running operations to pending so the reaper can resume them."""
+        now = datetime.now()
+        with self._session() as session:
+            ids = list(session.scalars(
+                select(ResetOperation.id).where(
+                    ResetOperation.status == "running",
+                    ResetOperation.active_source.is_not(None),
+                    ResetOperation.updated_at < stale_before,
+                )
+            ))
+            recovered = []
+            for operation_id in ids:
+                result = session.execute(
+                    update(ResetOperation)
+                    .where(
+                        ResetOperation.id == operation_id,
+                        ResetOperation.status == "running",
+                        ResetOperation.updated_at < stale_before,
+                    )
+                    .values(status="pending", stage="recovery_pending", updated_at=now)
+                )
+                if result.rowcount == 1:
+                    recovered.append(operation_id)
+            session.commit()
+            return recovered
 
     def get_deployment(self, deployment_id):
         with self._session() as session:

@@ -3,6 +3,7 @@ import json
 import os
 import re
 import time
+import uuid
 from datetime import datetime, timedelta
 from urllib.parse import quote, urlencode
 
@@ -84,7 +85,7 @@ def _api_post(path, payload=None, timeout=15):
         data = resp.json()
     except ValueError:
         data = {}
-    if resp.status_code != 200:
+    if resp.status_code not in (200, 202):
         data = {"error": _api_error(resp)}
     return data, resp.status_code
 
@@ -916,6 +917,10 @@ def arena_detail(instance_id):
         for artifact in (f.get("evidence_artifacts") or [])
     ]
     preflight, preflight_ok = _api_get(f"/arenas/{instance_id}/preflight")
+    lifecycle, lifecycle_ok = _api_get(f"/arenas/{instance_id}/lifecycle")
+    if not isinstance(lifecycle, dict) or not isinstance(lifecycle.get("classification"), dict):
+        lifecycle = None
+        lifecycle_ok = False
     workspaces_data, _ = _api_get(f"/arenas/{instance_id}/workspaces")
     workspaces = (workspaces_data or {}).get("workspaces") or []
     # Trace/attribution only exists once a BYO agent has actually worked the arena.
@@ -976,6 +981,7 @@ def arena_detail(instance_id):
         trace=trace,
         created_at=data.get("created_at"),
         expires_at=data.get("expires_at"),
+        lifecycle=lifecycle if lifecycle_ok else None,
     )
 
 
@@ -1330,6 +1336,23 @@ def destroy_lab_form(instance_id):
     ok, message = _request_destroy(instance_id)
     flash(message, "info" if ok else "danger")
     return redirect(url_for("engagements"))
+
+
+@app.route("/reset/<instance_id>", methods=["POST"])
+def reset_lab_form(instance_id):
+    data, status = _api_post(
+        f"/arenas/{instance_id}/reset",
+        {"idempotency_key": f"webui-{uuid.uuid4()}"},
+        timeout=15,
+    )
+    if status not in (200, 202):
+        flash(data.get("error", "Reset rejected"), "danger")
+    else:
+        flash(
+            f"Reset started; replacement arena {data.get('replacement_id')}",
+            "info",
+        )
+    return redirect(url_for("arena_detail", instance_id=instance_id))
 
 
 @app.route("/archive/delete/<instance_id>", methods=["POST"])

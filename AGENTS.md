@@ -2,17 +2,18 @@
 
 Before making material changes, read these sources in order:
 
-1. `README.md` — product purpose: enterprise cyber arena for testing skills
-   and AI agents; provisions N-node topologies, exposed via MCP gateways to
-   bring-your-own agents as attacker/MITM/defender.
-2. `ROADMAP.md` — authoritative sequenced plan, "Where the project stands",
-   audit punch list (mostly fixed), and the two structural limits still open:
-   (1) deploy path still tied to a frozen 3-VM OpenStack template instead of
-   arbitrary N-node topologies; (2) the agent runtime (MCP gateways, stances)
-   doesn't exist yet — that's the core of the product and isn't built.
-3. `.lab.yaml` — quick commands (`docker compose up -d`, `pytest tests/`) and
-   milestone checklist (kept in sync manually — cross-check against ROADMAP).
-4. `git log` — only when the above are silent on something recent.
+1. `README.md` — reproducible local vulnerability research and BYO-agent evaluation.
+2. `ROADMAP.md` — product/design detail and dated verification boundaries.
+3. `TODO.md` — canonical delivery order, stable NV task IDs, dependencies and acceptance.
+4. Relevant `docs/adr/` decisions — preserve existing architecture boundaries.
+5. Latest `docs/JOURNAL.md` entry, then `.lab.yaml` for quick commands.
+6. `git log` — when the sources above are silent or disagree with current code.
+
+Dynamic N-node Docker arenas, stance-scoped MCP gateways and HTTP transaction replay
+are implemented. Current work is NV-01–05: reproducible verification, target reset,
+confined PoC execution, durable budgets/stop and scoped access. Durable paired experiments
+and Bughunt integration remain planned. Docker-local is the implementation focus;
+OpenStack/AWS/libvirt drivers do not establish live provider support.
 
 ## Stack / gotchas
 
@@ -28,8 +29,10 @@ Before making material changes, read these sources in order:
 - Guiding principle: **correctness and security before features** — the
   platform turns input into real infrastructure and gives agents command
   execution inside it. Treat any shortcut here as a regression, not a detail.
-- Repo was last committed ~10 weeks ago (as of this file's creation) — verify
-  current state against ROADMAP before assuming any punch-list item's status.
+- Review 2026-09-07: Ruff and source-only Bandit passed; 121 focused tests passed.
+  Full host Python 3.14 tests stalled in TestClient. No main Compose stack was running;
+  no live arena or PostgreSQL suite was verified. NV-01 restores the Python 3.11 gate
+  and fixes Bandit's nested `venv` exclusion; the old 808-test gate is historical.
 
 ## Shared knowledge base
 
@@ -45,6 +48,10 @@ from a terminal rooted at `~/Projects/Nidavellir` with a concrete, scoped
 task description referencing the exact ROADMAP/ADR item.
 
 ## Reporting
+
+After material changes, append a dated `docs/JOURNAL.md` entry with outcome, files,
+verification, unresolved risks and next concrete step. Complete a checklist item only
+when its acceptance is met; planning does not implement a product feature.
 
 Use the `project-status-report` skill for scheduled/on-demand status reports.
 

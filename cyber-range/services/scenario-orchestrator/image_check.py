@@ -23,7 +23,7 @@ def parse_ref(ref: str):
     name). ``ubuntu:22.04`` → ("library", "ubuntu", "22.04")."""
     if not ref or not isinstance(ref, str):
         return None
-    if "@" in ref:  # digest-pinned — not checkable by tag
+    if "@" in ref or ref.startswith("sha256:"):  # digest/image ID — not a Hub tag
         return None
     # A registry host is the first segment when it contains '.' or ':' or is
     # 'localhost' — those aren't Docker Hub, so we can't check them.

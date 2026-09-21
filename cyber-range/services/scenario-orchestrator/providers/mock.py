@@ -74,6 +74,16 @@ class MockProvider(RangeProvider):
         logger.info(f"[{instance_id}] 🎭 SIMULATING DESTROY...")
         return {"success": True}
 
+    def observe_lifecycle(self, instance_id):
+        return {"provider": self.name, "simulated": True, "nodes": []}
+
+    def check_readiness(self, instance_id, outputs, policy):
+        return {
+            "ready": False,
+            "status": "unverified",
+            "error": "mock mode cannot prove application readiness",
+        }
+
     def exec_in_node(self, instance_id, node, command, timeout=30):
         logger.info(f"[{instance_id}] 🎭 SIMULATING exec on {node}: {command!r}")
         return {

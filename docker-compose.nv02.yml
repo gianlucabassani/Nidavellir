@@ -1,0 +1,101 @@
+name: nidavellir-nv02
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nidavellir_nv02
+      POSTGRES_USER: nidavellir
+      POSTGRES_PASSWORD: nv02-local-only
+    tmpfs: [/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nidavellir -d nidavellir_nv02"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    tmpfs: [/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  orchestrator:
+    build:
+      context: ./cyber-range/services/scenario-orchestrator
+    environment: &orchestrator-env
+      MOCK_MODE: "false"
+      RANGE_PROVIDER: docker-local
+      BOOTSTRAP_API_KEY: nv02-acceptance-key
+      BOOTSTRAP_API_KEY_ROLE: admin
+      DATABASE_URL: postgresql+psycopg://nidavellir:nv02-local-only@postgres:5432/nidavellir_nv02
+      DATA_DIR: /app/data
+      RUNS_DIR: /app/runs
+      KEYS_DIR: /app/keys
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      RATE_LIMIT_ENABLED: "false"
+      REAPER_INTERVAL_SECONDS: "2"
+      LAB_STUCK_MINUTES: "0"
+      HTTP_TIMEOUT_SECONDS: "5"
+      PYTHONPATH: /app
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    ports: ["18000:8000"]
+    volumes:
+      - nv02-data:/app/data
+      - nv02-runs:/app/runs
+      - nv02-keys:/app/keys
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  worker:
+    build:
+      context: ./cyber-range/services/scenario-orchestrator
+    command: celery -A tasks worker --loglevel=info --concurrency=2
+    environment: *orchestrator-env
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      orchestrator: {condition: service_healthy}
+    volumes:
+      - nv02-data:/app/data
+      - nv02-runs:/app/runs
+      - nv02-keys:/app/keys
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  beat:
+    build:
+      context: ./cyber-range/services/scenario-orchestrator
+    command: celery -A tasks beat --loglevel=info --schedule /tmp/nv02-beat
+    environment: *orchestrator-env
+    depends_on:
+      redis: {condition: service_healthy}
+      postgres: {condition: service_healthy}
+
+  webui:
+    build:
+      context: ./cyber-range/webui
+    environment:
+      ORCHESTRATOR_URL: http://orchestrator:8000
+      ORCHESTRATOR_API_KEY: nv02-acceptance-key
+      SECRET_KEY: nv02-local-only
+      WEBUI_USERNAME: admin
+      WEBUI_PASSWORD: nv02-local-only
+      MOCK_MODE: "false"
+    depends_on:
+      orchestrator: {condition: service_healthy}
+    ports: ["15000:5000"]
+
+volumes:
+  nv02-data:
+  nv02-runs:
+  nv02-keys:

@@ -1,6 +1,12 @@
 # Ruff configuration (used by `make lint` and CI's `ruff check cyber-range tests`).
 
 exclude = [
+    # Local environments may exist below a service while debugging. They are
+    # third-party code, never part of the Nidavellir source gate.
+    ".venv",
+    "venv",
+    "**/.venv/**",
+    "**/venv/**",
     # Legacy one-shot provisioning script, syntactically invalid Python.
     # Tracked as backlog P0-7: repair or delete; until then keep it out of
     # lint so the gate stays meaningful for live code.

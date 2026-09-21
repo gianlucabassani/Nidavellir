@@ -8,7 +8,7 @@ never through editing these models alone.
 """
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, Text
+from sqlalchemy import DateTime, Integer, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -28,7 +28,40 @@ class Deployment(Base):
     outputs: Mapped[str | None] = mapped_column(Text)  # JSON text, flat {name: value}
     error: Mapped[str | None] = mapped_column(Text)
     provider: Mapped[str | None] = mapped_column(Text)  # backend recorded at deploy
+    effective_provider: Mapped[str | None] = mapped_column(Text)  # resolved backend snapshot
     expires_at: Mapped[datetime | None] = mapped_column(DateTime)  # TTL; NULL = no expiry
+
+
+class LifecycleRecipe(Base):
+    __tablename__ = "lifecycle_recipes"
+
+    deployment_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    digest: Mapped[str] = mapped_column(Text, nullable=False)
+    encrypted_payload: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class ResetOperation(Base):
+    __tablename__ = "reset_operations"
+    __table_args__ = (
+        UniqueConstraint("source_id", "idempotency_key", name="uq_reset_source_key"),
+    )
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    source_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    replacement_id: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
+    # Equal to source_id while in flight and NULL when terminal. The unique
+    # column is an atomic, cross-database one-reset-per-source claim.
+    active_source: Mapped[str | None] = mapped_column(Text, unique=True)
+    recipe_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    stage: Mapped[str] = mapped_column(Text, nullable=False)
+    deadline: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    error: Mapped[str | None] = mapped_column(Text)
+    result: Mapped[str | None] = mapped_column(Text)
 
 
 class ApiKey(Base):

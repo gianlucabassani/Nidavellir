@@ -222,6 +222,12 @@ DEBUG_MODE = os.getenv("DEBUG_MODE", "False").lower() == "true"
 # WORKER CONFIGURATION
 WORKER_CONCURRENCY = int(os.getenv("WORKER_CONCURRENCY", "3"))
 WORKER_LOG_LEVEL = os.getenv("WORKER_LOG_LEVEL", "INFO")
+# Bound provider calls and Celery lifecycle tasks. A hard worker loss is then
+# reconciled by the durable state/reaper path instead of hanging indefinitely.
+DOCKER_API_TIMEOUT_SECONDS = int(os.getenv("DOCKER_API_TIMEOUT_SECONDS", "60"))
+LAB_DEPLOY_TIMEOUT_SECONDS = int(os.getenv("LAB_DEPLOY_TIMEOUT_SECONDS", "900"))
+LAB_DESTROY_TIMEOUT_SECONDS = int(os.getenv("LAB_DESTROY_TIMEOUT_SECONDS", "300"))
+LAB_RESET_TIMEOUT_SECONDS = int(os.getenv("LAB_RESET_TIMEOUT_SECONDS", "600"))
 
 # LAB LIFECYCLE / REAPER (audit #9)
 # Every lab gets an expiry (created_at + LAB_TTL_MINUTES); a Celery-beat reaper

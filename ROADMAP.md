@@ -20,28 +20,33 @@
 > that discovery work produces the verified, held-out material that makes
 > evaluation credible.
 
-This roadmap was reorganized on 2026-08-10 around the console product model, and
-extended on 2026-08-19 to state the discovery objective explicitly. The engine and
-the console are now shipped; the remaining work splits into a shared research
-runtime, a discovery lane, and an evaluation lane.
+## Current delivery order — updated 2026-09-07
 
-The sequence is therefore:
+[TODO.md](TODO.md) is the canonical ordered checklist with stable NV task IDs,
+dependencies and acceptance criteria. This roadmap retains product/design detail;
+S/C/R/D/E/P labels below are subject areas, not a competing execution order.
+The operator requested this reorganization after reviewing both Nidavellir and Bughunt.
+No planned runtime, evaluation or integration feature is implemented by this update.
 
-1. preserve the shipped engine;
-2. establish a coherent GUI product model and migrate existing workflows into it
-   (**done**);
-3. finish the research runtime both objectives need — HTTP primitive, confined
-   execution, pivoting, durable budgets and kill switches;
-4. build the discovery lane: patch-diff and variant hunting, a fuzzing and crash
-   triage path into the existing oracle, binary/appliance/VM intake, and
-   campaign-level dedup and disclosure output;
-5. build GUI-driven agent regression evaluation on the corpus discovery produces;
-6. publish the held-out proof.
+1. **P0 / NV-01–05:** restore a repeatable Python 3.11 release gate; prove pinned target
+   lifecycle/reset; complete confined PoC execution, durable budgets/stop and scoped access.
+2. **P1 / NV-06–10:** strengthen independent validation; persist experiments and paired
+   trials; maintain a small challenge library; prove usefulness with a Bughunt workflow;
+   restore research/evaluation records on a clean installation.
+3. **P2 / NV-11–15:** affected-versus-fixed replay, targeted variant/fuzzing work,
+   binary/local VM intake and research campaign/disclosure output as concrete targets need
+   them; held-out comparison and active episodes follow suitable evidence.
 
-Steps 4 and 5 are dual, not sequential-by-necessity: step 3 is the shared
-prerequisite, and either lane can lead. The order above reflects one judgment —
-that verified challenges from real research are what make an agent comparison
-defensible, and that they cannot be bought or borrowed.
+Discovery and evaluation remain first-class objectives. One local calibration workflow
+can prove operational usefulness before a broad discovery toolkit or private corpus
+exists. Calibration must not be advertised as held-out capability evidence. Bughunt owns
+live bounty campaigns; Nidavellir owns controlled environments, independent validators
+and repeated experiments. BH-13/NV-09 exchange synthetic versioned test/evidence manifests,
+not real campaign credentials. Integration remains planned.
+
+Preserve Docker-local as the supported implementation focus. Cloud parity, hosted concerns,
+and multi-agent breadth remain deferred; local VM intake requires a selected research need.
+The previous August sequence remains traceable in Git and the milestone mapping below.
 
 Correctness, containment, and independent verification remain ahead of feature
 count. The authoritative product boundary is
@@ -79,8 +84,8 @@ is a discovery session.
 They also feed each other in one direction that matters: **verified findings from
 real research are the only honest source of held-out challenges.** Public CTFs and
 known-CVE packs are calibration, and any agent comparison built solely on them is
-contestable. This is why the discovery lane is sequenced ahead of the comparison
-workbench, and why P1's proof corpus is drawn from it.
+contestable. This is why the held-out proof corpus must come from verified research. A small
+calibration comparison can land first under NV-07–09 without making that stronger claim.
 
 ### 1.2 Operator journeys
 
@@ -179,11 +184,13 @@ Shipped:
 - Git change intelligence for staged, unstaged, and selected untracked files;
 - SHA-256 patch evidence artifacts attachable to findings;
 - bounded foothold upload/download with body-free audit metadata;
-- target-scoped disposable headless browser shared with the XSS validator.
+- target-scoped disposable headless browser shared with the XSS validator;
+- arena-target HTTP requests, content-addressed transactions, replay/modify, MCP tools,
+  console controls and finding attachment by digest (R1 code implemented August 24).
 
 Still required:
 
-- structured HTTP inspect/replay/modify proxy;
+- fresh supported-runtime and live verification of the implemented HTTP path (NV-01–02);
 - confined Python/PoC sandbox through a worker-owned isolation boundary;
 - foothold-scoped SSH tunnel lifecycle;
 - durable fail-closed step/time/token/cost budgets;
@@ -192,14 +199,32 @@ Still required:
 
 ### Verified health boundary
 
-- Python 3.11 is the declared CI/runtime line; the last full container gate
-  (2026-08-18) recorded 808 passing tests and 6 skips that need a Docker daemon or
-  the tofu binary, Ruff clean, and no medium/high Bandit findings.
-- Host Python 3.13 currently hangs in Starlette `TestClient`, including a minimal
-  FastAPI reproduction. Do not describe a host-3.13 run as green; use the declared
-  Python 3.11 gate until compatibility is deliberately added.
-- Docker-local is the only provider whose complete lifecycle is regularly
-  live-verified.
+NV-01 completion on 2026-09-16 supersedes the release-gate portion of the
+2026-09-07 review below. The documented `make release-check` command builds a
+clean Python 3.11.14 verifier from an exact dependency lock, excludes local
+environments and `.env` files, and starts with disposable database state. Ruff
+0.6.9 passed; Bandit 1.9.4 found zero medium/high issues. NV-02's final 2026-09-21
+gate passed 863 tests on SQLite (one PostgreSQL-only concurrency test skipped)
+and 864 on PostgreSQL, with six declared integration deselections on each backend.
+Alembic clean migration plus API, console and MCP-gateway readiness smokes passed.
+The isolated live Docker gate then proved two resets across three deployments,
+retained evidence, deployment/teardown recovery and a zero-resource final inventory.
+
+Review on 2026-09-07: no main stack services running under this Compose project; a stopped
+agent-gateway and cached images exist. Ruff passed. Source-only Bandit (excluding both
+`.venv` and nested `venv`) reported no medium/high findings. 121 focused unit tests passed
+for scenarios, source bundles, HTTP/evidence storage, scoring, validators and gateway.
+
+The full host Python 3.14 run stalled in Starlette TestClient and was interrupted; this
+is not a full pass. `make check` also scans a nested virtual environment because its Bandit
+exclusion only names `.venv`; NV-01 repairs that verification workflow. The cached Python
+3.11 orchestrator image lacks the full test dependencies. No live arena lifecycle or
+PostgreSQL suite was rerun in this review.
+
+The historical Python 3.11 gate (2026-08-18) recorded 808 passes and six integration skips,
+Ruff clean and no medium/high Bandit findings. Keep that historical result distinct from
+current verification. Docker-local is the historically live-verified provider; cloud/VM
+support and current deployment health must not be inferred from driver files.
 
 ---
 
@@ -449,7 +474,7 @@ agent drives the same bounded operation over MCP — one implementation, two
 callers, identical scope checks and audit records. A tool that only an agent can
 reach will not be exercised often enough to be trustworthy.
 
-### R1 — HTTP research primitive
+### R1 — HTTP research primitive · code implemented; fresh live gate pending
 
 Ship structured, arena-target-only HTTP inspect/replay/modify over REST and
 attacker MCP. Accept node plus relative path—not arbitrary URLs. Bound and hash
@@ -475,10 +500,12 @@ a PoC in the sandbox, transfers payload/evidence, inspects and replays HTTP, and
 tunnels to an internal service. Every action is scoped and traced; a breached
 budget freezes further work; containment tests remain green.
 
-### Immediate next steps (2026-08-19)
+### R1 implementation slices — historical plan, reconciled 2026-09-07
 
-R1 is the active milestone, taken in six shippable slices so each one lands with
-its own tests and live verification rather than as one large drop:
+The six slices below now exist in code, including the console and finding attachment.
+Retain them as the acceptance/design reference; fresh full/live verification is NV-01–02.
+The next feature work is NV-03 confined execution, followed by NV-04–05 durable guardrails
+and scoped access. These six slices are not six open implementation tasks:
 
 1. **Provider primitive** — `http_request` across `base` (refuse), `docker-local`
    (disposable arena-bound runner, mirroring the headless-browser pattern), and
@@ -814,9 +841,9 @@ multi-agent/purple-team.
 | M5 regression/eval pipeline | E1–E5, now explicitly GUI-driven |
 | M6 LLM-app targets | P2, optional after proof |
 | Former console/SSE items | C1–C4 |
-| OAuth, multi-tenancy, cloud/VM, purple-team, VNC | §7 deferred |
+| OAuth, multi-tenancy, cloud, purple-team, VNC | §9 deferred; local VM intake is NV-13 |
 
-Detailed historical `Pn-m` implementation records remain in
+Current task mapping is in [TODO.md](TODO.md). Detailed historical `Pn-m` implementation records remain in
 [`.agent/backlog/BACKLOG.md`](.agent/backlog/BACKLOG.md) and git history.
 
 ---
@@ -833,6 +860,7 @@ Detailed historical `Pn-m` implementation records remain in
 - ADR-0010 — eval export, reference harness, and replay.
 - ADR-0011 — reproducible research sessions and change intelligence.
 - **ADR-0012 — GUI-first product model and console information architecture.**
+- **ADR-0013 — replacement reset, immutable recipes and observed equivalence.**
 
 The detailed state-of-the-art references behind the shipped design remain in the
 ADRs and repository history. New evaluation work should integrate with established

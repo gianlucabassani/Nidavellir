@@ -25,6 +25,13 @@
   </div>
   <div class="actions">
     <a href="{{ url_for('engagements') }}" class="btn btn-ghost"><i class="fa-solid fa-arrow-left"></i> Back</a>
+    {% if lifecycle and lifecycle.classification.runtime_reset.status == 'eligible' and state in ('active', 'destroyed') %}
+    <form method="post" action="{{ url_for('reset_lab_form', instance_id=instance_id) }}" style="display:inline"
+          onsubmit="return confirm('Replace this arena from its immutable baseline? The current record and evidence will remain readable.')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-secondary"><i class="fa-solid fa-rotate"></i> Reset</button>
+    </form>
+    {% endif %}
     {% if not read_only %}
     <button onclick="destroyInstance('{{ instance_id }}')" class="btn btn-danger"><i class="fa-solid fa-trash-can"></i> Destroy</button>
     {% endif %}
@@ -647,6 +654,19 @@
       <dt>Arena id</dt><dd class="mono">{{ instance_id }}</dd>
       <dt>Egress</dt><dd class="mono">{{ outputs.egress or 'blocked' }}</dd>
       <dt>State</dt><dd class="mono">{{ state }}</dd>
+      {% if lifecycle and lifecycle.recipe %}
+      <dt>Recipe</dt><dd class="mono">{{ lifecycle.recipe.recipe_digest }}</dd>
+      <dt>Build reproducibility</dt><dd>{{ lifecycle.classification.build_reproducibility.status }} · {{ lifecycle.classification.build_reproducibility.reason }}</dd>
+      <dt>Reset</dt><dd>{{ lifecycle.classification.runtime_reset.status }} · {{ lifecycle.classification.runtime_reset.reason }}</dd>
+      {% if lifecycle.observation %}<dt>Observed baseline</dt><dd class="mono">{{ lifecycle.observation.observed_state_digest }}</dd>{% endif %}
+      {% if lifecycle.resets %}
+      <dt>Latest reset</dt><dd>
+        {% set latest_reset = lifecycle.resets[0] %}
+        {{ latest_reset.status }} · {{ latest_reset.stage }}
+        {% if latest_reset.replacement_id %}<a href="{{ url_for('arena_detail', instance_id=latest_reset.replacement_id) }}">replacement</a>{% endif %}
+      </dd>
+      {% endif %}
+      {% endif %}
     </dl>
   </div>
   </div>

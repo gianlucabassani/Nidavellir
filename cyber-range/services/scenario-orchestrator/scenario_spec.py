@@ -300,6 +300,9 @@ class ScenarioSpec(BaseModel):
     vulnerabilities: list[Vulnerability] = Field(default_factory=list)
     ttl_hours: int | None = None
     tags: list[str] = Field(default_factory=list)
+    # NV-02 reset contract. Providers ignore this declarative block; the
+    # lifecycle service validates and executes its bounded readiness policy.
+    lifecycle: dict = Field(default_factory=dict)
 
     # --- cross-field structural checks (hard errors) ----------------------
 

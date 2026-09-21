@@ -15,7 +15,36 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 docker compose -f docker-compose.yml -f docker-compose.dev.yml down   # stop
 ```
 
-`make check` runs the gate (ruff + bandit + pytest, mock mode — no Redis needed).
+`make check` runs the fast host gate (ruff + source-only Bandit + hermetic pytest +
+readiness smoke) and requires Python 3.11. The reproducible clean-checkout release gate is:
+
+```bash
+make release-check
+```
+
+It builds a clean `python:3.11.14-slim-bookworm` verifier from
+`requirements-lock.txt`, runs lint/security,
+the SQLite suite and migration/API/UI/MCP readiness smoke, then repeats the test
+suite against a disposable PostgreSQL 16 service. Live Docker-provider tests and
+the OpenTofu integration test are marked `integration` and explicitly excluded;
+run them separately with `make test-integration` on a suitably provisioned host.
+
+NV-02 has a separate destructive-to-its-own-project live acceptance gate:
+
+```bash
+make verify-nv02-live
+```
+
+It uses `docker-compose.nv02.yml`, host ports 18000/15000, disposable PostgreSQL
+and named volumes, and a synthetic local HTTP fixture. It deploys and mutates the
+fixture, resets it twice from an immutable image identity, checks retained evidence,
+kills the dedicated worker during another deployment, withholds the worker from a
+queued teardown, verifies reaper cleanup for both interruption paths, and then removes
+only the isolated `nidavellir-nv02` project. It never prunes Docker or
+touches arenas from another project. The Docker socket is mounted only into the
+dedicated orchestrator and worker because the live docker-local provider requires it.
+A sanitized passing record is retained in
+[`verification/nv02-live-2026-09-21.json`](verification/nv02-live-2026-09-21.json).
 
 ## Deployment modes
 
@@ -48,7 +77,8 @@ internet); opt out per scenario with `requires.egress: open`. See
 Four processes — Redis, the Celery worker, the FastAPI orchestrator, the Flask console:
 
 ```bash
-# 0. Prereqs: Python 3.10+, Redis, (OpenTofu/Terraform only for VM providers)
+# 0. Prereqs: Python 3.11 (pinned in .python-version), Redis,
+#    OpenTofu/Terraform only for VM providers
 mkdir -p data runs cache/terraform-plugins keys
 redis-server &   # or: docker run -d -p 6379:6379 redis:alpine
 

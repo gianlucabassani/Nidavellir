@@ -99,6 +99,20 @@ def test_stuck_destroying_lab_is_reapable():
     assert reapable[lab_id]["reason"] == "stuck"
 
 
+def test_cleanup_error_is_retried_as_stuck():
+    db = Database()
+    now = _now()
+    lab_id = _lab(
+        db, ("destroying", "error_destroying"),
+        expires_at=now + timedelta(hours=2),
+    )
+    _force_updated_at(db, lab_id, now - timedelta(minutes=45))
+
+    reapable = {r["id"]: r for r in db.find_reapable(now, now - timedelta(minutes=30))}
+    assert lab_id in reapable
+    assert reapable[lab_id]["reason"] == "stuck"
+
+
 def test_terminal_labs_are_never_reapable():
     db = Database()
     now = _now()

@@ -9,18 +9,21 @@ Thanks for helping build Nidavellir. This guide gets you from clone to green tes
 git clone https://github.com/gianlucabassani/Nidavellir.git
 cd Nidavellir
 
-# 2. Create a virtualenv
-python3 -m venv .venv && source .venv/bin/activate
+# 2. Create a virtualenv with the supported interpreter (.python-version)
+python3.11 -m venv .venv && source .venv/bin/activate
 
-# 3. Install runtime + dev dependencies
-make install-dev      # == pip install -r requirements-dev.txt
+# 3. Install the verified runtime + dev dependency lock
+make install-dev      # == pip install -r requirements-lock.txt
 
-# 4. Run the checks
-make check            # lint + security scan + tests
+# 4. Run the clean release gate (recommended before claiming a task complete)
+make release-check    # pinned Python 3.11, SQLite + PostgreSQL, smoke checks
 ```
 
 You do **not** need OpenStack or Redis to develop or run the test suite — the
-tests run in `MOCK_MODE=true` and stub the task queue.
+tests run in `MOCK_MODE=true` and stub the task queue. `make check` is the faster
+host loop and intentionally refuses non-3.11 Python. The release gate needs Docker
+but does not mount its socket into the verifier; the five live-Docker tests and one
+OpenTofu test are explicitly excluded by the `integration` marker.
 
 ## Running the app locally
 
@@ -58,7 +61,9 @@ make down
 |------|------|---------|
 | Lint | ruff | `make lint` |
 | Security | bandit | `make security` |
-| Tests | pytest | `make test` |
+| Hermetic tests | pytest | `make test-unit` |
+| Migrations/readiness | Alembic + service clients | `make smoke` |
+| Clean SQLite + PostgreSQL | Docker/Python 3.11.14 | `make release-check` |
 
 ## Adding tests
 

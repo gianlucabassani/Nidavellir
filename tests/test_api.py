@@ -6,6 +6,7 @@ we assert the HTTP contract and the synchronous DB side effects, not the async
 provisioning (that belongs in an integration test against a live worker).
 """
 import uuid
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -35,12 +36,15 @@ def client(monkeypatch):
 
     monkeypatch.setattr(api, "deploy_lab", _FakeTask())
     monkeypatch.setattr(api, "destroy_lab", _FakeTask())
+    reset_task = _FakeTask()
+    monkeypatch.setattr(api, "reset_arena", reset_task)
 
     key = auth.generate_api_key()
     Database().create_api_key(auth.hash_api_key(key), name="tests", role="admin")
 
     test_client = TestClient(api.app)
     test_client.headers["X-API-Key"] = key
+    test_client.fake_reset = reset_task
     return test_client
 
 
@@ -148,6 +152,88 @@ def test_destroy_known_marks_destroying(client):
     assert resp.status_code == 200
     assert resp.json()["status"] == "accepted"
     assert client.get(f"/status/{system_id}").json()["status"] == "destroying"
+
+
+def test_reset_is_operator_only_durable_and_idempotent(client, monkeypatch):
+    import api
+    import auth
+    import lifecycle_manifest
+    from database import Database
+    from states import LabStatus
+
+    scenario = {
+        "schema": "nidavellir/v3",
+        "name": "api-reset",
+        "requires": {"provider_class": "container"},
+        "network": {"segments": [{"name": "lab"}]},
+        "nodes": [{
+            "name": "target", "role": "victim",
+            "image": "example/reset@sha256:" + "a" * 64,
+            "segments": ["lab"], "ports": [8080],
+        }],
+    }
+    readiness = {
+        "type": "http", "node": "target", "port": 8080, "path": "/state",
+        "expected_status": 200, "expected_state": {"value": 0},
+    }
+    expires = datetime.now() + timedelta(hours=1)
+    recipe = lifecycle_manifest.build_recipe(
+        scenario=scenario, scenario_name="api-reset", requested_provider="docker-local",
+        effective_provider="docker-local", expires_at=expires.isoformat(),
+        readiness=readiness, seed={"value": 0},
+    )
+    db = Database()
+    db.create_deployment(
+        "api-reset-source", "api-reset", "api-reset",
+        provider="docker-local", effective_provider="docker-local", expires_at=expires,
+    )
+    db.transition_deployment("api-reset-source", (LabStatus.PENDING,), LabStatus.DEPLOYING)
+    db.transition_deployment("api-reset-source", (LabStatus.DEPLOYING,), LabStatus.ACTIVE)
+    db.save_lifecycle_recipe("api-reset-source", recipe)
+    monkeypatch.setattr(api, "resolve_provider_name", lambda _name=None: "docker-local")
+    grant = client.post(
+        "/arenas/api-reset-source/bindings",
+        json={"agent_name": "bound-only-to-source", "stance": "attacker"},
+    )
+    assert grant.status_code == 200
+
+    first = client.post(
+        "/arenas/api-reset-source/reset",
+        json={"idempotency_key": "stable-reset-key"},
+    )
+    assert first.status_code == 202, first.text
+    second = client.post(
+        "/arenas/api-reset-source/reset",
+        json={"idempotency_key": "stable-reset-key"},
+    )
+    assert second.status_code == 202, second.text
+    assert second.json()["operation_id"] == first.json()["operation_id"]
+    assert second.json()["replacement_id"] == first.json()["replacement_id"]
+    assert len(client.fake_reset.calls) == 2
+    replacement = db.get_deployment(first.json()["replacement_id"])
+    assert replacement["status"] == LabStatus.PENDING
+    assert replacement["expires_at"] == str(expires)
+    assert len(client.get("/arenas/api-reset-source/bindings").json()["bindings"]) == 1
+    assert client.get(
+        f"/arenas/{first.json()['replacement_id']}/bindings"
+    ).json() == {"bindings": []}
+
+    lifecycle = client.get("/arenas/api-reset-source/lifecycle")
+    assert lifecycle.status_code == 200
+    assert lifecycle.json()["classification"]["runtime_reset"]["status"] == "eligible"
+
+    agent_key = auth.generate_api_key()
+    db.create_api_key(auth.hash_api_key(agent_key), name="reset-agent", role="agent")
+    agent = TestClient(api.app)
+    agent.headers["X-API-Key"] = agent_key
+    assert agent.get("/arenas/api-reset-source/lifecycle").status_code == 403
+    assert agent.post(
+        "/arenas/api-reset-source/reset",
+        json={"idempotency_key": "agent-reset-key"},
+    ).status_code == 403
+    # This test stubs Celery, so explicitly close its synthetic in-flight claim
+    # rather than leaking it into later reaper tests in the shared test database.
+    db.update_reset_operation(first.json()["operation_id"], status="failed", terminal=True)
 
 
 # --- deploy-time hallucinated-image gate (docker-local only) -------------------

@@ -5,9 +5,15 @@ __pycache__/
 *.so
 .Python
 venv/
+.venv/
+**/venv/
+**/.venv/
 env/
 ENV/
 *.egg-info/
+.env
+.env.*
+!.env.example
 
 # Data directories (mounted as volumes)
 data/

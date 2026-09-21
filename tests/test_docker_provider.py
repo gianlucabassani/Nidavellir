@@ -447,6 +447,9 @@ class _FakeVolumes:
         key, _, val = filters["label"].partition("=")
         return [v for v in self.created if not v.removed and v.labels.get(key) == val]
 
+    def get(self, name):
+        return next(v for v in self.created if not v.removed and v.name == name)
+
 
 class _FakeClient:
     def __init__(self, exit_nodes=None, mirror_image_present=True):
@@ -523,6 +526,35 @@ def test_destroy_removes_everything_and_is_idempotent():
 
     # Second destroy finds nothing — still success.
     assert provider.destroy("abcd1234") == {"success": True}
+
+
+def test_destroy_reports_removal_failure_as_retryable_cleanup():
+    client = _FakeClient()
+    provider = DockerLocalProvider(client=client)
+    provider.deploy(CONTAINER_SCENARIO, "cleanup-failure")
+    network = client.networks.created[0]
+
+    def fail_remove():
+        raise RuntimeError("network busy")
+
+    network.remove = fail_remove
+    result = provider.destroy("cleanup-failure")
+    assert result["success"] is False
+    assert result["remaining"]["networks"] == 1
+    assert "network busy" in result["error"]
+
+
+def test_destroy_reclaims_anonymous_volume_proven_by_arena_mount():
+    client = _FakeClient()
+    provider = DockerLocalProvider(client=client)
+    provider.deploy(CONTAINER_SCENARIO, "anonymous-volume")
+    volume = client.volumes.create(name="daemon-generated", labels={})
+    client.containers.created[0].attrs["Mounts"] = [
+        {"Type": "volume", "Name": volume.name}
+    ]
+
+    assert provider.destroy("anonymous-volume") == {"success": True}
+    assert volume.removed is True
 
 
 def test_failed_deploy_rolls_back(monkeypatch):

@@ -132,16 +132,21 @@ product model that gives every function a home. What remains splits into a share
 that both objectives need, a **discovery lane** (patch-diff and variant hunting, fuzzing into the
 existing crash oracle, binary/appliance/VM intake, campaigns and disclosure output), and an
 **evaluation lane** (durable experiment records and paired build comparison). Full detail is in
-[`ROADMAP.md`](ROADMAP.md).
+[`ROADMAP.md`](ROADMAP.md). The canonical ordered checklist is
+[`TODO.md`](TODO.md), updated 2026-09-21: reliable local runtime first, then independently
+validated repeated experiments, followed by research breadth driven by selected targets.
+NV-01 restored the pinned Python 3.11 SQLite/PostgreSQL release gate on 2026-09-16.
+NV-02 completed the live target lifecycle/reset gate on 2026-09-21. NV-03 confined
+PoC execution is next.
 
 | Stage | Focus | Status |
 |---|---|---|
 | **Shipped engine** | Dynamic arenas, target intake, repo→service, monitoring, validators, scoring, eval export and replay | ✅ shipped |
-| **Research session** | Change evidence, file transfer, browser; proxy/sandbox/tunnel/durable guardrails remain | 🟢 partially shipped |
+| **Research session** | Change evidence, file transfer, browser, HTTP capture/replay and finding attachment; sandbox/tunnel/durable guardrails remain | 🟢 partially shipped |
 | **Console architecture** | Engagements, Evaluations, Library, Activity, unified creation, contextual workspace and SSE | ✅ shipped |
-| **Research-ready runtime** | HTTP replay, confined PoC execution, tunnelling, fail-closed budgets and kill switches — the shared prerequisite | 🟡 **next** |
+| **Research-ready runtime** | NV-03–05: confined PoC, scoped access, durable budgets and stop controls (NV-01–02 complete) | 🟡 **next** |
 | **Discovery lane** | Patch-diff & variant hunting, fuzzing + crash triage, binary/appliance/VM intake, campaigns & disclosure output | ◻ planned |
-| **Evaluation workbench** | Agent registry, suites, trials, active episodes and GUI comparison of build N vs N+1 | ◻ planned |
+| **Evaluation workbench** | NV-06–10: independent validation, durable paired trials, small challenge library, Bughunt proof and recovery | ◻ planned |
 | **Held-out proof** | A real vulnerability found and proven on-platform; then a comparison over challenges drawn from that work | ◻ planned |
 | **Deferred** | OAuth/multi-tenancy, live cloud/VM providers, purple-team, VNC and hosted-product concerns | ◻ deferred |
 

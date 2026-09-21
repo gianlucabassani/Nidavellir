@@ -44,6 +44,12 @@ class Orchestrator:
         logger.info(f"[{instance_id}] Destroy requested (provider: {self.provider.name})")
         return self.provider.destroy(instance_id)
 
+    def observe_lifecycle(self, instance_id: str):
+        return self.provider.observe_lifecycle(instance_id)
+
+    def check_readiness(self, instance_id: str, outputs: dict, policy: dict):
+        return self.provider.check_readiness(instance_id, outputs, policy)
+
     def exec_in_node(self, instance_id: str, node: str, command: str, timeout: int = 30):
         """Run a command inside an arena node (MCP attacker stance). Delegates
         to the provider, which must run on the SAME backend the arena was

@@ -36,6 +36,7 @@ import generator
 import http_transactions
 import image_check
 import images
+import lifecycle_manifest
 import model_chat
 import model_verify
 import netguard
@@ -61,7 +62,7 @@ from providers import (
 )
 from scenario_spec import ScenarioSpec, normalize_cwe, normalized_nodes, topology_view
 from states import IllegalTransition, LabStatus
-from tasks import deploy_lab, destroy_lab
+from tasks import deploy_lab, destroy_lab, reset_arena
 from config import validate_config
 
 
@@ -180,6 +181,38 @@ def _record_engagement_intent(
     )
 
 
+def _record_lifecycle_recipe(
+    deployment_id: str,
+    *,
+    scenario_name: str,
+    scenario_config: dict,
+    requested_provider: str | None,
+    expires_at: datetime,
+    target_manifest: dict | None = None,
+    setup: dict | None = None,
+) -> dict:
+    lifecycle = scenario_config.get("lifecycle") or {}
+    recipe = lifecycle_manifest.build_recipe(
+        scenario=scenario_config,
+        scenario_name=scenario_name,
+        requested_provider=requested_provider,
+        effective_provider=resolve_provider_name(requested_provider),
+        target_manifest=target_manifest,
+        expires_at=expires_at.isoformat(),
+        readiness=lifecycle.get("readiness"),
+        seed=lifecycle.get("seed"),
+        setup=setup,
+    )
+    db.save_lifecycle_recipe(deployment_id, recipe)
+    db.record_event(
+        deployment_id,
+        "lifecycle_recipe",
+        lifecycle_manifest.public_recipe(recipe),
+        actor="api",
+    )
+    return recipe
+
+
 class DeployRequest(EngagementIntentRequest):
     scenario: str = Field(min_length=1, max_length=64)
     instance_id: str = Field(  # the user's friendly name, not the system UUID
@@ -209,6 +242,10 @@ class DeployRequest(EngagementIntentRequest):
                 f"unknown provider '{value}' — see GET /providers"
             )
         return value
+
+
+class ResetRequest(BaseModel):
+    idempotency_key: str | None = Field(default=None, min_length=8, max_length=128)
 
 
 def _check_provider_compatibility(scenario_id: str, provider_name: str | None):
@@ -725,8 +762,13 @@ def deploy_custom_arena(
     db.create_deployment(
         system_id, req.instance_id, label,
         provider=req.provider, actor=principal.name, expires_at=expires_at,
+        effective_provider=resolve_provider_name(req.provider),
     )
     _record_engagement_intent(system_id, req, principal, source="challenge")
+    _record_lifecycle_recipe(
+        system_id, scenario_name=label, scenario_config=spec,
+        requested_provider=req.provider, expires_at=expires_at,
+    )
     _autobind_deployer(principal, system_id)  # D1: the deployer owns its sandbox
     logger.info(
         f"Queuing custom arena '{req.instance_id}' ({system_id}): "
@@ -739,6 +781,7 @@ def deploy_custom_arena(
         variables={},
         provider=req.provider,
         scenario_config=spec,
+        effective_provider=resolve_provider_name(req.provider),
     )
     return {"status": "accepted", "instance_id": system_id}
 
@@ -949,6 +992,7 @@ def deploy_sut_arena(
     db.create_deployment(
         system_id, req.instance_id, label,
         provider=req.provider, actor=principal.name, expires_at=expires_at,
+        effective_provider=resolve_provider_name(req.provider),
     )
     _record_engagement_intent(system_id, req, principal, source="target")
 
@@ -982,6 +1026,11 @@ def deploy_sut_arena(
          "build_plan": plan.to_dict(), "auto_build": auto_build},
         actor=principal.name,
     )
+    _record_lifecycle_recipe(
+        system_id, scenario_name=label, scenario_config=spec,
+        requested_provider=req.provider, expires_at=expires_at,
+        target_manifest=target_manifest, setup=prearm,
+    )
     logger.info(
         f"Queuing SUT arena '{req.instance_id}' ({system_id}): repo={req.repo} "
         f"ref={target['resolved_commit']} mode={req.setup_mode} build={plan.strategy}"
@@ -989,7 +1038,9 @@ def deploy_sut_arena(
     )
     deploy_lab.delay(
         instance_id=system_id, scenario_name=label, user_id=req.instance_id,
-        variables={}, provider=req.provider, scenario_config=spec, setup_prearm=prearm,
+        variables={}, provider=req.provider, scenario_config=spec,
+        setup_prearm=prearm,
+        effective_provider=resolve_provider_name(req.provider),
     )
     return {
         "status": "accepted",
@@ -1166,6 +1217,7 @@ def deploy_oci_arena(
         provider=req.provider,
         actor=principal.name,
         expires_at=expires_at,
+        effective_provider=resolve_provider_name(req.provider),
     )
     _record_engagement_intent(system_id, req, principal, source="target")
     manifest = research_session.oci_target_manifest(
@@ -1191,6 +1243,11 @@ def deploy_oci_arena(
         {**prearm, "target": target},
         actor=principal.name,
     )
+    _record_lifecycle_recipe(
+        system_id, scenario_name=label, scenario_config=spec,
+        requested_provider=req.provider, expires_at=expires_at,
+        target_manifest=manifest, setup=prearm,
+    )
     logger.info(
         "Queuing OCI arena %r (%s): image=%s digest=%s by %r",
         req.instance_id,
@@ -1207,6 +1264,7 @@ def deploy_oci_arena(
         provider=req.provider,
         scenario_config=spec,
         setup_prearm=prearm,
+        effective_provider=resolve_provider_name(req.provider),
     )
     return {
         "status": "accepted",
@@ -1420,6 +1478,7 @@ def deploy_source_bundle_arena(
         provider=req.provider,
         actor=principal.name,
         expires_at=expires_at,
+        effective_provider=resolve_provider_name(req.provider),
     )
     _record_engagement_intent(system_id, req, principal, source="target")
     manifest = research_session.source_bundle_target_manifest(
@@ -1446,6 +1505,11 @@ def deploy_source_bundle_arena(
         {**prearm, "artifact": artifact},
         actor=principal.name,
     )
+    _record_lifecycle_recipe(
+        system_id, scenario_name=label, scenario_config=spec,
+        requested_provider=req.provider, expires_at=expires_at,
+        target_manifest=manifest, setup=prearm,
+    )
     logger.info(
         "Queuing source-bundle arena %r (%s): artifact=%s by %r",
         req.instance_id,
@@ -1461,6 +1525,7 @@ def deploy_source_bundle_arena(
         provider=req.provider,
         scenario_config=spec,
         setup_prearm=prearm,
+        effective_provider=resolve_provider_name(req.provider),
     )
     return {
         "status": "accepted",
@@ -1632,6 +1697,9 @@ def deploy(
     # id = UUID, user_id = Friendly Name; provider recorded so destroy
     # later runs on the same backend; expires_at gives the reaper a TTL.
     expires_at = _engagement_expires_at(req)
+    scenario_config = scenarios.load_scenario(req.scenario)
+    if scenario_config is None:
+        raise HTTPException(status_code=404, detail=f"unknown scenario '{req.scenario}'")
     db.create_deployment(
         system_id,
         friendly_name,
@@ -1639,8 +1707,13 @@ def deploy(
         provider=req.provider,
         actor=principal.name,
         expires_at=expires_at,
+        effective_provider=resolve_provider_name(req.provider),
     )
     _record_engagement_intent(system_id, req, principal, source="challenge")
+    _record_lifecycle_recipe(
+        system_id, scenario_name=req.scenario, scenario_config=scenario_config,
+        requested_provider=req.provider, expires_at=expires_at,
+    )
     _autobind_deployer(principal, system_id)  # D1: the deployer owns its sandbox
 
     # 4. Dispatch Async Task using the UUID
@@ -1650,6 +1723,8 @@ def deploy(
         user_id=friendly_name,
         variables={},
         provider=req.provider,
+        scenario_config=scenario_config,
+        effective_provider=resolve_provider_name(req.provider),
     )
 
     return {"status": "accepted", "instance_id": system_id}
@@ -1671,13 +1746,16 @@ def destroy(
         raise HTTPException(status_code=404, detail="Instance not found")
     _require_binding(principal, instance_id, bindings.CAP_LIFECYCLE)
 
+    record = db.get_deployment(instance_id) or {}
     try:
-        db.update_deployment(
-            instance_id, status=LabStatus.DESTROYING, actor=principal.name
+        claimed = db.transition_deployment(
+            instance_id, (record.get("status"),), LabStatus.DESTROYING,
+            actor=principal.name,
         )
     except IllegalTransition as e:
-        # e.g. the lab is already destroyed — nothing to tear down
         raise HTTPException(status_code=409, detail=str(e)) from e
+    if not claimed:
+        raise HTTPException(status_code=409, detail="arena lifecycle changed concurrently")
 
     logger.info(
         f"Queuing destroy for {instance_id} "
@@ -1686,6 +1764,158 @@ def destroy(
     destroy_lab.delay(instance_id)
 
     return {"status": "accepted"}
+
+
+@app.get("/arenas/{instance_id}/lifecycle")
+def arena_lifecycle(
+    instance_id: str,
+    principal: Principal = Depends(require_principal),
+):
+    _require_operator(principal)
+    if not db.get_deployment(instance_id):
+        raise HTTPException(status_code=404, detail="Instance not found")
+    recipe = db.get_lifecycle_recipe(instance_id)
+    observations = db.list_events(
+        instance_id, limit=1, types=("lifecycle_observation",)
+    )
+    resets = db.list_reset_operations(source_id=instance_id)
+    if recipe is None:
+        return {
+            "recipe": None,
+            "classification": {
+                "runtime_reset": {"status": "unsupported", "reason": "legacy_record"}
+            },
+            "observation": None,
+            "resets": resets,
+        }
+    related_reset = resets[0] if resets else db.get_reset_operation_by_replacement(instance_id)
+    observed_equivalence = {"status": "unverified", "reason": "no_reset_completed"}
+    if related_reset and related_reset["status"] == "succeeded":
+        observed_equivalence = {
+            "status": "verified", "reason": "observed_starting_state_digest_matched"
+        }
+    elif related_reset and related_reset["stage"] == "comparison":
+        observed_equivalence = {
+            "status": "mismatch", "reason": "observed_starting_state_digest_differed"
+        }
+    public_recipe = lifecycle_manifest.public_recipe(recipe)
+    public_recipe["observed_equivalence"] = observed_equivalence
+    return {
+        "recipe": public_recipe,
+        "classification": {
+            "build_reproducibility": recipe["build_reproducibility"],
+            "runtime_reset": recipe["runtime_reset"],
+            "observed_equivalence": observed_equivalence,
+        },
+        "observation": observations[0]["payload"] if observations else None,
+        "resets": resets,
+    }
+
+
+@app.post("/arenas/{instance_id}/reset", status_code=202)
+@limiter.limit(RATE_LIMIT_DESTROY)
+def reset(
+    request: Request,
+    instance_id: str,
+    req: ResetRequest,
+    principal: Principal = Depends(require_principal),
+):
+    _require_operator(principal)
+    source = db.get_deployment(instance_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail="Instance not found")
+    if source["status"] not in (LabStatus.ACTIVE, LabStatus.DESTROYED):
+        raise HTTPException(
+            status_code=409,
+            detail=f"reset requires an active or destroyed arena, not {source['status']}",
+        )
+    recipe = db.get_lifecycle_recipe(instance_id)
+    if recipe is None:
+        raise HTTPException(status_code=409, detail="legacy arena has no immutable reset recipe")
+    if (recipe.get("runtime_reset") or {}).get("status") != "eligible":
+        reason = (recipe.get("runtime_reset") or {}).get("reason", "unsupported")
+        raise HTTPException(status_code=409, detail=f"arena is not reset-eligible: {reason}")
+    if recipe.get("effective_provider") != source.get("effective_provider"):
+        raise HTTPException(status_code=409, detail="effective provider no longer matches recipe")
+    if resolve_provider_name(recipe.get("effective_provider")) != recipe.get("effective_provider"):
+        raise HTTPException(status_code=409, detail="effective provider no longer matches recipe")
+    target = recipe.get("target")
+    if target and not (target.get("authorization") or {}).get("confirmed"):
+        raise HTTPException(status_code=403, detail="target authorization is not confirmed")
+    if not source.get("expires_at"):
+        raise HTTPException(status_code=409, detail="arena has no durable engagement deadline")
+    expires_at = datetime.fromisoformat(source["expires_at"])
+    if expires_at <= datetime.now():
+        raise HTTPException(status_code=409, detail="engagement deadline has expired")
+    key = req.idempotency_key or request.headers.get("Idempotency-Key")
+    if not key or not re.fullmatch(r"[A-Za-z0-9._:-]{8,128}", key):
+        raise HTTPException(
+            status_code=422,
+            detail="an 8-128 character Idempotency-Key is required",
+        )
+
+    operation_id = str(uuid.uuid4())
+    replacement_id = str(uuid.uuid4())
+    try:
+        operation, created = db.create_reset_operation(
+            operation_id=operation_id,
+            source_id=instance_id,
+            replacement_id=replacement_id,
+            idempotency_key=key,
+            recipe_digest=recipe["recipe_digest"],
+            deadline=min(expires_at, datetime.now() + timedelta(minutes=10)),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not created:
+        if operation["status"] == "pending":
+            reset_arena.delay(operation["id"])
+        return {"operation_id": operation["id"], **operation}
+
+    try:
+        db.create_deployment(
+            replacement_id,
+            f"{source.get('user_id') or 'arena'}-reset"[:40],
+            recipe["scenario_name"],
+            provider=recipe.get("requested_provider"),
+            actor=principal.name,
+            expires_at=expires_at,
+            effective_provider=recipe["effective_provider"],
+        )
+        db.save_lifecycle_recipe(replacement_id, recipe)
+        link = {
+            "operation_id": operation_id,
+            "source_id": instance_id,
+            "replacement_id": replacement_id,
+            "recipe_digest": recipe["recipe_digest"],
+        }
+        db.record_event(instance_id, "reset_requested", link, actor=principal.name)
+        db.record_event(replacement_id, "reset_replacement_created", link, actor=principal.name)
+    except Exception as exc:  # noqa: BLE001
+        db.update_reset_operation(
+            operation_id, status="failed", stage="creating_replacement",
+            error=exc, terminal=True,
+        )
+        raise HTTPException(status_code=500, detail="could not create reset replacement") from exc
+    reset_arena.delay(operation_id)
+    return {
+        "status": "pending",
+        "operation_id": operation_id,
+        "source_id": instance_id,
+        "replacement_id": replacement_id,
+    }
+
+
+@app.get("/reset-operations/{operation_id}")
+def get_reset_operation(
+    operation_id: str,
+    principal: Principal = Depends(require_principal),
+):
+    _require_operator(principal)
+    operation = db.get_reset_operation(operation_id)
+    if operation is None:
+        raise HTTPException(status_code=404, detail="reset operation not found")
+    return operation
 
 # Records in these states describe infrastructure that no longer exists (or
 # never came up) — only they may be deleted from history. Live labs must go
@@ -1954,7 +2184,9 @@ def _http_target(record: dict, node: str) -> tuple[str, int, str]:
 
 def _run_arena_http(record: dict, req: HttpRequestRequest) -> dict:
     ip, port, scheme = _http_target(record, req.node)
-    orch = Orchestrator(provider_name=record.get("provider"))
+    orch = Orchestrator(
+        provider_name=record.get("effective_provider") or record.get("provider")
+    )
     return orch.http_request(
         record["id"], req.node, ip, port, scheme, req.path, req.params,
         method=req.method, headers=req.headers, body=req.body,
@@ -1966,7 +2198,9 @@ def _run_arena_browser(
     *, wait_ms: int = 1500, execution_marker: str | None = None,
 ) -> dict:
     ip, port, scheme = _browser_target(record, node)
-    orch = Orchestrator(provider_name=record.get("provider"))
+    orch = Orchestrator(
+        provider_name=record.get("effective_provider") or record.get("provider")
+    )
     return orch.browser_visit(
         record["id"], node, ip, port, scheme, path, params,
         wait_ms=wait_ms, execution_marker=execution_marker,
@@ -2251,7 +2485,9 @@ def upload_arena_file(
         raise HTTPException(status_code=422, detail="content_b64 is not valid base64") from exc
     if len(content) > config.TRANSFER_MAX_FILE_BYTES:
         raise HTTPException(status_code=413, detail="transfer file exceeds configured limit")
-    orch = Orchestrator(provider_name=record.get("provider"))
+    orch = Orchestrator(
+        provider_name=record.get("effective_provider") or record.get("provider")
+    )
     try:
         result = orch.write_transfer_file(instance_id, node, path, content)
     except NotImplementedError as exc:
@@ -2281,7 +2517,9 @@ def download_arena_file(
     _require_binding(principal, instance_id, bindings.CAP_EXEC)
     node = _transfer_foothold(record, req.node)
     path = _transfer_path(req.path)
-    orch = Orchestrator(provider_name=record.get("provider"))
+    orch = Orchestrator(
+        provider_name=record.get("effective_provider") or record.get("provider")
+    )
     try:
         content = orch.read_transfer_file(instance_id, node, path)
     except NotImplementedError as exc:
@@ -2372,7 +2610,9 @@ def exec_in_arena(
             detail=f"Unknown node '{req.node}' (arena nodes: {sorted(known)})",
         )
 
-    orch = Orchestrator(provider_name=record.get("provider"))
+    orch = Orchestrator(
+        provider_name=record.get("effective_provider") or record.get("provider")
+    )
     try:
         result = orch.exec_in_node(instance_id, req.node, req.command, req.timeout)
     except NotImplementedError as e:
@@ -2428,7 +2668,9 @@ def mitm_observe(
         )
     _require_binding(principal, instance_id, bindings.CAP_OBSERVE)  # D1
 
-    orch = Orchestrator(provider_name=record.get("provider"))
+    orch = Orchestrator(
+        provider_name=record.get("effective_provider") or record.get("provider")
+    )
     try:
         result = orch.capture_traffic(
             instance_id, seconds=req.seconds, max_packets=req.max_packets
@@ -3146,7 +3388,9 @@ def get_arena_workspace_diff(
     binding = _require_binding(principal, instance_id, bindings.CAP_WORKSPACE)
     workspace = _authorized_workspace(record, principal, binding, workspace_node)
 
-    orch = Orchestrator(provider_name=record.get("provider"))
+    orch = Orchestrator(
+        provider_name=record.get("effective_provider") or record.get("provider")
+    )
     try:
         result = orch.workspace_diff(
             instance_id,
@@ -3268,7 +3512,9 @@ def export_workspace_patch(
         )
     binding = _require_binding(principal, instance_id, bindings.CAP_WORKSPACE)
     workspace = _authorized_workspace(record, principal, binding, workspace_node)
-    orch = Orchestrator(provider_name=record.get("provider"))
+    orch = Orchestrator(
+        provider_name=record.get("effective_provider") or record.get("provider")
+    )
     try:
         summary, patch = _complete_workspace_diff(orch, instance_id, workspace, req)
         included_untracked = []
@@ -3394,7 +3640,9 @@ def _open_setup_egress(instance_id: str, record: dict, nodes: list[str], session
     """Open internet egress on the victim node(s) for the setup phase. On a
     provider that can't toggle egress, or any failure, roll back and close the
     just-opened session so nothing is left half-open. Returns True on success."""
-    orch = Orchestrator(provider_name=record.get("provider"))
+    orch = Orchestrator(
+        provider_name=record.get("effective_provider") or record.get("provider")
+    )
     opened: list[str] = []
     try:
         for node in nodes:
@@ -3438,7 +3686,9 @@ def _close_setup_egress(instance_id: str, record: dict, session: dict) -> None:
     `setup_egress` consent so we never miss a revoke."""
     if not session.get("setup_egress"):
         return
-    orch = Orchestrator(provider_name=record.get("provider"))
+    orch = Orchestrator(
+        provider_name=record.get("effective_provider") or record.get("provider")
+    )
     for node in session.get("nodes") or []:
         try:
             orch.set_node_egress(instance_id, node, False)
@@ -3607,7 +3857,9 @@ def _exec_setup_command(instance_id, record, sess, node, command, timeout, actor
             status_code=403,
             detail=f"node '{node}' is not in the consented victim scope {sess['nodes']}",
         )
-    orch = Orchestrator(provider_name=record.get("provider"))
+    orch = Orchestrator(
+        provider_name=record.get("effective_provider") or record.get("provider")
+    )
     try:
         result = orch.exec_in_node(instance_id, node, command, timeout)
     except NotImplementedError as e:
@@ -4129,7 +4381,9 @@ def _arena_http_fn(record: dict, node: str):
     if target is None:
         return None
     ip, port = target
-    orch = Orchestrator(provider_name=record.get("provider"))
+    orch = Orchestrator(
+        provider_name=record.get("effective_provider") or record.get("provider")
+    )
     instance_id = record["id"]
     marker = "__NV_HTTP_STATUS__"
 

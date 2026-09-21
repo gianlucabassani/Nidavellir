@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+
+compose_file="docker-compose.verify.yml"
+
+cleanup() {
+    docker compose -f "$compose_file" down --volumes --remove-orphans
+}
+trap cleanup EXIT HUP INT TERM
+
+# A prior interrupted/manual verifier must never supply database state to this
+# run. The project name is dedicated in docker-compose.verify.yml.
+cleanup
+docker compose -f "$compose_file" build sqlite
+docker compose -f "$compose_file" run --rm sqlite
+docker compose -f "$compose_file" run --rm postgres-gate

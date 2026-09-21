@@ -1,0 +1,44 @@
+name: nidavellir-verify
+
+x-verify-image: &verify-image
+  build:
+    context: .
+    dockerfile: Dockerfile.verify
+    args:
+      PYTHON_IMAGE: python:3.11.14-slim-bookworm
+  image: nidavellir-verify:python-3.11.14
+  environment:
+    MOCK_MODE: "true"
+    RATE_LIMIT_ENABLED: "false"
+    SECRETS_ENCRYPTION_KEY: ""
+
+services:
+  sqlite:
+    <<: *verify-image
+    command: ["make", "verify-sqlite"]
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nidavellir_verify
+      POSTGRES_USER: nidavellir
+      POSTGRES_PASSWORD: verify-only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nidavellir -d nidavellir_verify"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  postgres-gate:
+    <<: *verify-image
+    command: ["make", "verify-postgres"]
+    environment:
+      MOCK_MODE: "true"
+      RATE_LIMIT_ENABLED: "false"
+      SECRETS_ENCRYPTION_KEY: ""
+      DATABASE_URL: postgresql+psycopg://nidavellir:verify-only@postgres:5432/nidavellir_verify
+    depends_on:
+      postgres:
+        condition: service_healthy

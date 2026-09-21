@@ -1,16 +1,19 @@
 import os
 import logging
+import time
 import uuid
 from datetime import datetime, timedelta
 
 from celery import Celery
 
 import config
+import lifecycle_manifest
 import monitor
 import research_session
 import setup_phase
 from database import Database
 from orchestrator import Orchestrator
+from providers import resolve_provider_name
 from states import IllegalTransition, LabStatus
 
 # Broker Configuration
@@ -50,9 +53,13 @@ MONITOR_EVENT = "monitor_signal"
 
 logger = logging.getLogger(__name__)
 
-@app.task(name="deploy_lab", bind=True)
+@app.task(
+    name="deploy_lab", bind=True, acks_late=True, reject_on_worker_lost=True,
+    soft_time_limit=config.LAB_DEPLOY_TIMEOUT_SECONDS,
+    time_limit=config.LAB_DEPLOY_TIMEOUT_SECONDS + 30,
+)
 def deploy_lab(self, instance_id, scenario_name, user_id, variables=None, provider=None,
-               scenario_config=None, setup_prearm=None):
+               scenario_config=None, setup_prearm=None, effective_provider=None):
     """
     Async Task: Deploys a laboratory environment.
     bind=True allows access to the task instance (e.g., self.request.id).
@@ -64,12 +71,19 @@ def deploy_lab(self, instance_id, scenario_name, user_id, variables=None, provid
     automatically from it instead of the operator wiring it up after the fact.
     """
     db = Database()
-    orch = Orchestrator(provider_name=provider)
+    runtime_provider = effective_provider or provider
+    orch = Orchestrator(provider_name=runtime_provider)
 
     logger.info(f"[{instance_id}] Task received. Scenario: {scenario_name}")
 
-    # 1. Update DB: Set status to deploying
-    db.update_deployment(instance_id, status="deploying", actor="worker")
+    # Claim once. Duplicate delivery must not provision a second copy, and a
+    # teardown that won the race must not be reversed by a late deploy task.
+    if not db.transition_deployment(
+        instance_id, (LabStatus.PENDING,), LabStatus.DEPLOYING, actor="worker"
+    ):
+        record = db.get_deployment(instance_id) or {}
+        logger.warning("[%s] deploy skipped from state %s", instance_id, record.get("status"))
+        return {"success": False, "error": "deployment is no longer pending", "skipped": True}
 
     # 2. Execute Deployment. Wrapped: a *raised* exception must not leave the arena
     # stuck in 'deploying' with no audit trail — turn it into an observable failure
@@ -86,9 +100,61 @@ def deploy_lab(self, instance_id, scenario_name, user_id, variables=None, provid
     # 3. Handle Result
     if result.get("success"):
         logger.info(f"[{instance_id}] Deployment successful. Updating DB.")
-        db.update_deployment(
-            instance_id, status="active", outputs=result["outputs"], actor="worker"
-        )
+        recipe = db.get_lifecycle_recipe(instance_id)
+        if recipe and recipe.get("readiness"):
+            deadline = time.monotonic() + min(
+                max(int(recipe["readiness"].get("timeout_seconds", 30)), 1), 120
+            )
+            readiness = {"ready": False, "status": "timeout"}
+            while time.monotonic() < deadline:
+                try:
+                    readiness = orch.check_readiness(
+                        instance_id, result["outputs"], recipe["readiness"]
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    readiness = {
+                        "ready": False,
+                        "status": "check_error",
+                        "error": str(exc),
+                    }
+                    break
+                if readiness.get("ready"):
+                    break
+                time.sleep(min(float(recipe["readiness"].get("interval_seconds", 1)), 5.0))
+            try:
+                runtime = orch.observe_lifecycle(instance_id)
+            except Exception as exc:  # noqa: BLE001
+                runtime = {"provider": provider, "observation_error": str(exc)}
+                readiness = {
+                    "ready": False,
+                    "status": "observation_error",
+                    "error": str(exc),
+                }
+            observed = lifecycle_manifest.observation(
+                recipe=recipe, provider_observation=runtime, readiness_result=readiness
+            )
+            db.record_event(instance_id, "lifecycle_observation", observed, actor="worker")
+            if not readiness.get("ready"):
+                cleanup = orch.destroy(instance_id)
+                err = f"application readiness failed: {readiness.get('error') or readiness.get('status')}"
+                if not cleanup.get("success"):
+                    err += f"; cleanup incomplete: {cleanup.get('error')}"
+                _terminalize_deploy_failure(db, instance_id, err, cleanup)
+                db.record_event(
+                    instance_id, "deploy_failed",
+                    {"provider": runtime_provider, "phase": "application_readiness", "error": err},
+                    actor="worker",
+                )
+                return {"success": False, "error": err, "phase": "application_readiness"}
+        db.update_deployment(instance_id, outputs=result["outputs"], actor="worker")
+        if not db.transition_deployment(
+            instance_id, (LabStatus.DEPLOYING,), LabStatus.ACTIVE, actor="worker"
+        ):
+            cleanup = orch.destroy(instance_id)
+            logger.warning(
+                "[%s] deployment completed after state changed; cleanup=%s", instance_id, cleanup
+            )
+            return {"success": False, "error": "deployment superseded by teardown"}
         preflight_ready = True
         if setup_prearm and setup_prearm.get("target_manifest"):
             preflight = research_session.evaluate_preflight(
@@ -125,12 +191,20 @@ def deploy_lab(self, instance_id, scenario_name, user_id, variables=None, provid
     else:
         err = result.get("error", "unknown error")
         logger.error(f"[{instance_id}] Deployment failed ({result.get('phase', '?')}): {err}")
-        db.update_deployment(instance_id, status="failed", error=err, actor="worker")
+        cleanup = result.get("cleanup")
+        if not isinstance(cleanup, dict):
+            try:
+                cleanup = orch.destroy(instance_id)
+            except Exception as exc:  # noqa: BLE001
+                cleanup = {"success": False, "error": f"cleanup crashed: {exc}"}
+        if not cleanup.get("success"):
+            err = f"{err}; cleanup incomplete: {cleanup.get('error', 'unknown error')}"
+        _terminalize_deploy_failure(db, instance_id, err, cleanup)
         # Audit trail for the failure — previously invisible in the events stream
         # (only a bare 'failed' status), which is why deploy failures were opaque.
         db.record_event(
             instance_id, "deploy_failed",
-            {"provider": provider or "default",
+            {"provider": runtime_provider or "default",
              "phase": result.get("phase", "unknown"),
              "error_kind": result.get("error_kind"),
              "error": str(err)[:2000]},
@@ -138,6 +212,23 @@ def deploy_lab(self, instance_id, scenario_name, user_id, variables=None, provid
         )
 
     return result
+
+
+def _terminalize_deploy_failure(db, instance_id, error, cleanup):
+    """Record a failed deploy without hiding an outstanding cleanup obligation."""
+    if cleanup.get("success"):
+        db.transition_deployment(
+            instance_id, (LabStatus.DEPLOYING,), LabStatus.FAILED, actor="worker"
+        )
+    else:
+        db.transition_deployment(
+            instance_id, (LabStatus.DEPLOYING,), LabStatus.DESTROYING, actor="worker"
+        )
+        db.transition_deployment(
+            instance_id, (LabStatus.DESTROYING,), LabStatus.ERROR_DESTROYING,
+            actor="worker",
+        )
+    db.update_deployment(instance_id, error=error, actor="worker")
 
 
 def _open_prearmed_setup(db, provider, instance_id, outputs, prearm):
@@ -177,7 +268,11 @@ def _open_prearmed_setup(db, provider, instance_id, outputs, prearm):
         f"(mode={prearm['mode']} scope={scope} egress={'open' if egress_open else 'off'})"
     )
 
-@app.task(name="destroy_lab")
+@app.task(
+    name="destroy_lab", acks_late=True, reject_on_worker_lost=True,
+    soft_time_limit=config.LAB_DESTROY_TIMEOUT_SECONDS,
+    time_limit=config.LAB_DESTROY_TIMEOUT_SECONDS + 30,
+)
 def destroy_lab(instance_id):
     """
     Async Task: Destroys a laboratory environment.
@@ -188,23 +283,202 @@ def destroy_lab(instance_id):
     """
     db = Database()
     record = db.get_deployment(instance_id) or {}
-    orch = Orchestrator(provider_name=record.get("provider"))
+    orch = Orchestrator(
+        provider_name=record.get("effective_provider") or record.get("provider")
+    )
 
     logger.info(f"[{instance_id}] Destroy task received.")
     
-    # Update DB status before starting operation
-    db.update_deployment(instance_id, status="destroying", actor="worker")
-    
-    result = orch.destroy(instance_id)
+    # API/reaper normally claimed DESTROYING already; direct/retried tasks may
+    # claim a live state. A terminal record makes this task idempotent.
+    if record.get("status") == LabStatus.DESTROYED:
+        return {"success": True, "already_destroyed": True}
+    if record.get("status") != LabStatus.DESTROYING:
+        if not db.transition_deployment(
+            instance_id,
+            (LabStatus.PENDING, LabStatus.DEPLOYING, LabStatus.ACTIVE,
+             LabStatus.FAILED, LabStatus.ERROR_DESTROYING),
+            LabStatus.DESTROYING,
+            actor="worker",
+        ):
+            return {"success": False, "error": "arena could not be claimed for destroy"}
+
+    try:
+        result = orch.destroy(instance_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("[%s] destroy task crashed", instance_id)
+        result = {"success": False, "error": f"destroy crashed: {exc}"}
     
     if result["success"]:
-        db.update_deployment(instance_id, status="destroyed", actor="worker")
-    else:
-        db.update_deployment(
-            instance_id, status="error_destroying", error=result["error"], actor="worker"
+        finalized = db.transition_deployment(
+            instance_id, (LabStatus.DESTROYING,), LabStatus.DESTROYED, actor="worker"
         )
+        if not finalized:
+            current = db.get_deployment(instance_id) or {}
+            if current.get("status") == LabStatus.ERROR_DESTROYING:
+                db.transition_deployment(
+                    instance_id, (LabStatus.ERROR_DESTROYING,), LabStatus.DESTROYING,
+                    actor="worker",
+                )
+                db.transition_deployment(
+                    instance_id, (LabStatus.DESTROYING,), LabStatus.DESTROYED,
+                    actor="worker",
+                )
+    else:
+        if db.transition_deployment(
+            instance_id, (LabStatus.DESTROYING,), LabStatus.ERROR_DESTROYING,
+            actor="worker",
+        ):
+            db.update_deployment(instance_id, error=result["error"], actor="worker")
+        elif (db.get_deployment(instance_id) or {}).get("status") == LabStatus.DESTROYED:
+            return {"success": True, "already_destroyed": True, "cleanup_race": True}
 
     return result
+
+
+def _latest_observation(db, arena_id):
+    events = db.list_events(arena_id, limit=1, types=("lifecycle_observation",))
+    return events[0].get("payload") if events else None
+
+
+@app.task(
+    name="reset_arena", acks_late=True, reject_on_worker_lost=True,
+    soft_time_limit=config.LAB_RESET_TIMEOUT_SECONDS,
+    time_limit=config.LAB_RESET_TIMEOUT_SECONDS + 30,
+)
+def reset_arena(operation_id):
+    """Replace an arena from its immutable recipe and compare observed state."""
+    db = Database()
+    operation = db.get_reset_operation(operation_id)
+    if operation is None:
+        return {"success": False, "error": "reset operation not found"}
+    if operation["status"] in {"succeeded", "failed"}:
+        return {"success": operation["status"] == "succeeded", "idempotent": True}
+    if not db.claim_reset_operation(operation_id):
+        operation = db.get_reset_operation(operation_id) or {}
+        return {
+            "success": operation.get("status") == "succeeded",
+            "skipped": True,
+            "status": operation.get("status", "missing"),
+        }
+    operation = db.get_reset_operation(operation_id)
+    deadline = datetime.fromisoformat(operation["deadline"])
+    if deadline <= datetime.now():
+        db.update_reset_operation(
+            operation_id, status="failed", stage="expired",
+            error="reset deadline expired", terminal=True,
+        )
+        return {"success": False, "error": "reset deadline expired"}
+
+    source_id = operation["source_id"]
+    replacement_id = operation["replacement_id"]
+    source = db.get_deployment(source_id) or {}
+    replacement = db.get_deployment(replacement_id) or {}
+    if not source or not replacement:
+        db.update_reset_operation(
+            operation_id, status="failed", stage="records",
+            error="source or replacement deployment record is unavailable", terminal=True,
+        )
+        return {"success": False, "error": "reset deployment records unavailable"}
+    recipe = db.get_lifecycle_recipe(source_id)
+    if recipe is None or recipe.get("recipe_digest") != operation["recipe_digest"]:
+        db.update_reset_operation(
+            operation_id, status="failed", stage="recipe", error="immutable recipe unavailable",
+            terminal=True,
+        )
+        return {"success": False, "error": "immutable recipe unavailable"}
+    target = recipe.get("target") or {}
+    authorization = target.get("authorization") or {}
+    expires_at = source.get("expires_at")
+    policy_error = None
+    if (recipe.get("runtime_reset") or {}).get("status") != "eligible":
+        policy_error = "immutable recipe is no longer reset-eligible"
+    elif target and not authorization.get("confirmed"):
+        policy_error = "target authorization is not confirmed"
+    elif not expires_at or datetime.fromisoformat(expires_at) <= datetime.now():
+        policy_error = "engagement deadline expired before reset execution"
+    elif resolve_provider_name(recipe.get("effective_provider")) != recipe.get(
+        "effective_provider"
+    ):
+        policy_error = "effective runtime provider no longer matches the recipe"
+    if policy_error:
+        db.update_reset_operation(
+            operation_id, status="failed", stage="policy", error=policy_error, terminal=True
+        )
+        return {"success": False, "error": policy_error}
+
+    if source.get("status") != LabStatus.DESTROYED:
+        result = destroy_lab(source_id)
+        if not result.get("success"):
+            db.transition_deployment(
+                replacement_id, (LabStatus.PENDING,), LabStatus.FAILED, actor="reset-worker"
+            )
+            db.update_reset_operation(
+                operation_id, status="failed", stage="destroying_source",
+                error=result.get("error"), terminal=True,
+            )
+            return result
+
+    db.update_reset_operation(operation_id, stage="deploying_replacement")
+    if replacement.get("status") == LabStatus.ACTIVE:
+        deploy_result = {"success": True, "resumed": True}
+    elif replacement.get("status") == LabStatus.PENDING:
+        deploy_result = deploy_lab(
+            replacement_id,
+            recipe["scenario_name"],
+            replacement.get("user_id"),
+            variables={},
+            provider=recipe["effective_provider"],
+            scenario_config=recipe["scenario"],
+            setup_prearm=None,
+            effective_provider=recipe["effective_provider"],
+        )
+    else:
+        deploy_result = {
+            "success": False,
+            "error": (
+                "replacement cannot be resumed from state "
+                f"{replacement.get('status', 'missing')}"
+            ),
+        }
+    if not deploy_result.get("success"):
+        db.update_reset_operation(
+            operation_id, status="failed", stage="deploying_replacement",
+            error=deploy_result.get("error"), terminal=True,
+        )
+        return deploy_result
+
+    before = _latest_observation(db, source_id)
+    after = _latest_observation(db, replacement_id)
+    if not before or not after or not lifecycle_manifest.equivalent(before, after):
+        result = {
+            "equivalent": False,
+            "source_observation": before and before.get("observed_state_digest"),
+            "replacement_observation": after and after.get("observed_state_digest"),
+        }
+        db.record_event(replacement_id, "reset_mismatch", result, actor="reset-worker")
+        cleanup = destroy_lab(replacement_id)
+        if not cleanup.get("success"):
+            result["cleanup_error"] = cleanup.get("error")
+        db.update_reset_operation(
+            operation_id, status="failed", stage="comparison",
+            error="replacement starting state did not match source baseline",
+            result=result, terminal=True,
+        )
+        return {"success": False, **result}
+
+    result = {
+        "equivalent": True,
+        "source_id": source_id,
+        "replacement_id": replacement_id,
+        "observed_state_digest": after["observed_state_digest"],
+    }
+    db.record_event(source_id, "reset_replaced_by", result, actor="reset-worker")
+    db.record_event(replacement_id, "reset_replacement_of", result, actor="reset-worker")
+    db.update_reset_operation(
+        operation_id, status="succeeded", stage="complete", result=result, terminal=True
+    )
+    return {"success": True, **result}
 
 
 @app.task(name="reap_labs")
@@ -233,7 +507,11 @@ def reap_labs():
         try:
             # destroying->destroying is a legal no-op (a stuck destroy just
             # gets retried); pending/deploying/active->destroying are legal.
-            db.update_deployment(lab_id, status=LabStatus.DESTROYING, actor="reaper")
+            if not db.transition_deployment(
+                lab_id, (from_status,), LabStatus.DESTROYING, actor="reaper"
+            ):
+                skipped += 1
+                continue
             db.record_event(
                 lab_id, "reaped", {"reason": reason, "from": from_status}, actor="reaper"
             )
@@ -249,13 +527,38 @@ def reap_labs():
             logger.exception(f"[{lab_id}] Reap failed")
 
     revoked = _revoke_expired_setup_egress(db, now)
+    # A reset may have committed before its Celery message was published. Safe
+    # duplicate enqueue is enough for pending operations; the task itself is
+    # idempotent after terminalization.
+    recovered_reset_ids = set(db.recover_stale_reset_operations(stuck_before))
+    reset_requeued = 0
+    for operation in db.list_reset_operations(active_only=True):
+        if operation["status"] == "pending":
+            if not (
+                db.get_deployment(operation["source_id"])
+                and db.get_deployment(operation["replacement_id"])
+            ):
+                db.update_reset_operation(
+                    operation["id"], status="failed", stage="records",
+                    error="source or replacement deployment record is unavailable",
+                    terminal=True,
+                )
+                continue
+            reset_arena.delay(operation["id"])
+            reset_requeued += 1
 
     if reaped or skipped or revoked:
         logger.info(
             f"Reaper run: {reaped} reaped, {skipped} skipped, "
             f"{revoked} setup-egress revoked"
         )
-    return {"reaped": reaped, "skipped": skipped, "setup_egress_revoked": revoked}
+    return {
+        "reaped": reaped,
+        "skipped": skipped,
+        "setup_egress_revoked": revoked,
+        "reset_requeued": reset_requeued,
+        "reset_recovered": len(recovered_reset_ids),
+    }
 
 
 def _revoke_expired_setup_egress(db, now):
@@ -282,7 +585,9 @@ def _revoke_expired_setup_egress(db, now):
                 continue
             if not setup_phase.is_expired(sess, now):
                 continue
-            orch = Orchestrator(provider_name=dep.get("provider"))
+            orch = Orchestrator(
+                provider_name=dep.get("effective_provider") or dep.get("provider")
+            )
             for node in sess.get("nodes") or []:
                 try:
                     orch.set_node_egress(dep["id"], node, False)
@@ -321,7 +626,9 @@ def monitor_arenas():
             continue
         instance_id = dep["id"]
         try:
-            orch = Orchestrator(provider_name=dep.get("provider"))
+            orch = Orchestrator(
+                provider_name=dep.get("effective_provider") or dep.get("provider")
+            )
             result = orch.collect_monitor_signals(instance_id)
         except NotImplementedError:
             continue  # provider can't introspect a running workload yet
