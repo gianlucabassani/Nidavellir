@@ -40,7 +40,7 @@ def test_upgrade_head_builds_full_schema(tmp_path, monkeypatch):
     tables = set(inspector.get_table_names())
     assert {
         "deployments", "api_keys", "events", "lifecycle_recipes",
-        "reset_operations", "alembic_version",
+        "reset_operations", "poc_jobs", "alembic_version",
     } <= tables
 
     dep_cols = {c["name"] for c in inspector.get_columns("deployments")}
@@ -60,6 +60,15 @@ def test_upgrade_head_builds_full_schema(tmp_path, monkeypatch):
         "recipe_digest", "status", "stage", "deadline", "created_at", "updated_at",
         "error", "result",
     }
+    poc_cols = {c["name"] for c in inspector.get_columns("poc_jobs")}
+    assert poc_cols == {
+        "id", "arena_id", "principal", "principal_role", "binding_stance",
+        "idempotency_key", "input_digest", "encrypted_payload", "runner_image",
+        "runner_image_id", "target_node", "target_policy", "limits", "deadline",
+        "state", "worker_claim", "cancel_requested", "result", "cleanup_state",
+        "cleanup_error", "active_arena_slot", "active_global_slot", "created_at",
+        "updated_at", "started_at", "completed_at",
+    }
 
 
 def test_migrated_schema_matches_models_create_all(tmp_path, monkeypatch):
@@ -76,6 +85,7 @@ def test_migrated_schema_matches_models_create_all(tmp_path, monkeypatch):
     migrated, created = inspect(create_engine(migrated_url)), inspect(created_engine)
     for table in (
         "deployments", "api_keys", "events", "lifecycle_recipes", "reset_operations",
+        "poc_jobs",
     ):
         migrated_cols = {c["name"]: c["type"].__class__.__name__
                          for c in migrated.get_columns(table)}

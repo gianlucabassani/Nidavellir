@@ -1746,6 +1746,112 @@
     if (panel && panel.dataset.digest) httpAttach(panel.dataset.digest);
   }
 
+  /* ---- Confined PoC workspace (NV-03) ---------------------------------- */
+  let pocArena = null;
+  let pocReadOnly = false;
+  let pocPollTimer = null;
+
+  function initPocWorkspace() {
+    const card = document.getElementById("poc-card");
+    if (!card) return;
+    pocArena = card.dataset.arena;
+    pocReadOnly = card.dataset.readonly === "1";
+    pocLoad();
+  }
+
+  function pocToggleForm() {
+    const form = document.getElementById("poc-form");
+    if (form && !pocReadOnly) form.hidden = !form.hidden;
+  }
+
+  function pocLoad() {
+    const list = document.getElementById("poc-list");
+    if (!list || !pocArena) return;
+    fetch("/api/arenas/" + encodeURIComponent(pocArena) + "/poc-jobs")
+      .then((r) => r.json()).then((data) => {
+        const jobs = data.jobs || [];
+        if (!jobs.length) {
+          list.innerHTML = '<div class="card-pad muted" style="padding:18px">No confined PoC jobs yet.</div>';
+          return;
+        }
+        let active = false;
+        const rows = jobs.map((job) => {
+          active = active || job.state === "queued" || job.state === "running";
+          const canCancel = !pocReadOnly && (job.state === "queued" || job.state === "running");
+          return "<tr><td class=\"mono\">" + httpEsc((job.created_at || "").replace("T", " ").slice(0, 19)) +
+            "</td><td><span class=\"badge badge--" +
+            (job.state === "succeeded" ? "ok" : job.state === "failed" ? "danger" : "idle") + "\">" +
+            httpEsc(job.state) + "</span><div class=\"faint mono\" style=\"font-size:11px\">" +
+            httpEsc(job.cleanup_state) + " cleanup</div></td><td>" + httpEsc(job.target_node || "networkless") +
+            "</td><td class=\"mono\" title=\"" + httpEsc(job.input_digest) + "\">" +
+            httpEsc(String(job.input_digest || "").slice(7, 19)) + "…</td><td style=\"white-space:nowrap\">" +
+            '<button class="btn btn-sm" onclick="Nidavellir.pocInspect(\'' + httpEsc(job.id) + '\')"><i class="fa-solid fa-magnifying-glass"></i></button> ' +
+            (canCancel ? '<button class="btn btn-sm btn-danger" onclick="Nidavellir.pocCancel(\'' + httpEsc(job.id) + '\')"><i class="fa-solid fa-stop"></i></button>' : "") +
+            "</td></tr>";
+        }).join("");
+        list.innerHTML = '<table class="table"><thead><tr><th>Submitted</th><th>State</th><th>Target</th><th>Input</th><th></th></tr></thead><tbody>' + rows + "</tbody></table>";
+        if (pocPollTimer) clearTimeout(pocPollTimer);
+        if (active) pocPollTimer = setTimeout(pocLoad, 1500);
+      }).catch(() => {
+        list.innerHTML = '<div class="card-pad muted" style="padding:18px">PoC job store unavailable.</div>';
+      });
+  }
+
+  function pocSubmit() {
+    const err = document.getElementById("poc-err");
+    const source = document.getElementById("poc-source").value;
+    const files = (document.getElementById("poc-files").value || "")
+      .split(",").map((v) => v.trim()).filter(Boolean);
+    const payload = {
+      source: source,
+      target_node: document.getElementById("poc-target").value || null,
+      transfer_files: files,
+      timeout_seconds: Number(document.getElementById("poc-timeout").value || 30),
+      memory_mb: Number(document.getElementById("poc-memory").value || 128),
+      pids: Number(document.getElementById("poc-pids").value || 32),
+      idempotency_key: "console-" + (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())),
+    };
+    if (err) err.textContent = "Submitting…";
+    postJson("/api/arenas/" + encodeURIComponent(pocArena) + "/poc-jobs", payload)
+      .then(({ status, data }) => {
+        if (status === 202) {
+          if (err) err.textContent = "Accepted";
+          document.getElementById("poc-form").hidden = true;
+          pocLoad();
+        } else if (err) err.textContent = data.error || data.detail || ("HTTP " + status);
+      }).catch(() => { if (err) err.textContent = "submission failed"; });
+  }
+
+  function pocInspect(jobId) {
+    fetch("/api/arenas/" + encodeURIComponent(pocArena) + "/poc-jobs/" + encodeURIComponent(jobId))
+      .then((r) => r.json()).then((data) => {
+        const job = data.job || {};
+        const result = job.result || {};
+        const artifacts = (result.artifacts || []).map((a) => ({
+          path: a.path, bytes: a.bytes, sha256: a.sha256
+        }));
+        document.getElementById("poc-inspect-title").textContent = job.id || jobId;
+        document.getElementById("poc-inspect-output").textContent = [
+          "state: " + (job.state || "unknown"),
+          "cleanup: " + (job.cleanup_state || "unknown"),
+          "input: " + (job.input_digest || ""),
+          "stdout sha256: " + (result.stdout_sha256 || ""),
+          "stderr sha256: " + (result.stderr_sha256 || ""),
+          "\nstdout:\n" + (result.stdout || ""),
+          "\nstderr:\n" + (result.stderr || ""),
+          "\nartifacts:\n" + JSON.stringify(artifacts, null, 2),
+          result.error ? "\nerror: " + result.error : "",
+          job.cleanup_error ? "\ncleanup error: " + job.cleanup_error : "",
+        ].join("\n");
+        document.getElementById("poc-inspect").hidden = false;
+      });
+  }
+
+  function pocCancel(jobId) {
+    postJson("/api/arenas/" + encodeURIComponent(pocArena) + "/poc-jobs/" +
+      encodeURIComponent(jobId) + "/cancel", {}).then(() => pocLoad());
+  }
+
   /* ---- Findings card: operator verify + manual add (arena detail) -------- */
   window.copyPoc = function (btn) {
     const pre = btn.parentNode.querySelector("pre");
@@ -2563,6 +2669,7 @@
     initAgents,
     initHttpWorkspace, httpToggleForm, httpSend, httpInspect, httpReplay,
     httpAttach, httpAttachFromInspect, httpRefresh,
+    initPocWorkspace, pocToggleForm, pocSubmit, pocInspect, pocCancel,
     fit: function () { const cy = specCy["topo"]; if (cy) { cy.resize(); cy.fit(null, 36); } },
   };
   document.addEventListener("keydown", (e) => {

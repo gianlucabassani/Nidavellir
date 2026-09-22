@@ -619,6 +619,69 @@ def report_finding(
     return res
 
 
+def submit_poc(
+    ctx: GatewayContext, arena_id: str, source: str, target_node: str | None = None,
+    transfer_files: list[str] | None = None, timeout_seconds: int = 30,
+    memory_mb: int = 128, cpu_millis: int = 500, pids: int = 32,
+    idempotency_key: str | None = None,
+) -> dict:
+    """Submit Python to the worker-owned networkless runner.
+
+    Target access, when selected, is only through ``nidavellir.request`` inside
+    the PoC. Source and file bodies are deliberately omitted from the trace.
+    """
+    _guard(ctx, "submit_poc")
+    _check_budget(ctx)
+    key = idempotency_key or f"mcp-{uuid.uuid4().hex}"
+    meta = {
+        "target_node": target_node, "transfer_files": transfer_files or [],
+        "timeout_seconds": timeout_seconds, "source_bytes": len(source.encode("utf-8")),
+    }
+    try:
+        result = ctx.client.submit_poc(
+            ctx.session.api_key, arena_id, source, target_node=target_node,
+            transfer_files=transfer_files, timeout_seconds=timeout_seconds,
+            memory_mb=memory_mb, cpu_millis=cpu_millis, pids=pids,
+            idempotency_key=key,
+        )
+    except Exception:
+        _trace(ctx, "submit_poc", meta, ok=False, arena_id=arena_id)
+        raise
+    ctx.steps_used += 1
+    meta["job_id"] = ((result or {}).get("job") or {}).get("id")
+    _trace(ctx, "submit_poc", meta, ok=True, arena_id=arena_id)
+    return result
+
+
+def poc_status(ctx: GatewayContext, arena_id: str, job_id: str) -> dict:
+    _guard(ctx, "poc_status")
+    result = ctx.client.poc_job(ctx.session.api_key, arena_id, job_id)
+    job = (result or {}).get("job") or {}
+    # Status intentionally excludes stdout/stderr/artifact bodies.
+    job = {key: value for key, value in job.items() if key != "result"}
+    _trace(ctx, "poc_status", {"job_id": job_id, "state": job.get("state")},
+           ok=True, arena_id=arena_id)
+    return {"job": job}
+
+
+def poc_result(ctx: GatewayContext, arena_id: str, job_id: str) -> dict:
+    _guard(ctx, "poc_result")
+    result = ctx.client.poc_job(ctx.session.api_key, arena_id, job_id)
+    job = (result or {}).get("job") or {}
+    _trace(ctx, "poc_result", {
+        "job_id": job_id, "state": job.get("state"),
+        "input_digest": job.get("input_digest"),
+    }, ok=True, arena_id=arena_id)
+    return result
+
+
+def cancel_poc(ctx: GatewayContext, arena_id: str, job_id: str) -> dict:
+    _guard(ctx, "cancel_poc")
+    result = ctx.client.cancel_poc(ctx.session.api_key, arena_id, job_id)
+    _trace(ctx, "cancel_poc", {"job_id": job_id}, ok=True, arena_id=arena_id)
+    return result
+
+
 # --- defender stance ---------------------------------------------------------
 
 

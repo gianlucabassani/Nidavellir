@@ -3,6 +3,68 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-09-23 — NV-03 confined PoC execution complete
+
+**Outcome:** Completed NV-03: durable confined Python jobs, REST/console/attacker
+MCP, fixed-target Unix HTTP relay, browser proxy, worker-owned HTTP/browser
+dispatch, encrypted source/results, admission slots, cancellation and recovery.
+The selected-target PoC and all required live denial, interruption and cleanup
+checks passed. The runner client is installed in the immutable trusted image.
+
+**Closure failures found and fixed:** Docker archive APIs could not collect tmpfs
+artifacts (use bounded trusted tar exec); proxy readiness was shorter than measured
+startup; cancellation before helper creation lost its terminal state; teardown
+raced in-flight helper creation; failed cleanup was not retried; expired queued
+jobs retained slots; cancellation could race a claim; idempotency was not bound to
+principal; the MCP verifier assumed structured rather than JSON text content.
+Exit publication is now atomic and Docker exec exit status is polled after EOF.
+
+**Files:** orchestrator models/migration/database/API/tasks/providers and trusted
+runner/relay/proxy; helper_jobs.py; gateway tools; console routes/template/JS;
+dedicated docker-compose.nv03.yml and live verifier; PoC/provider/gateway/migration
+tests; ADR-0014 and API/operations/README guidance.
+
+**Verification:** Final `make release-check` passed on pinned Python 3.11.14:
+Ruff passed, Bandit found zero medium/high source findings, SQLite reported
+879 passed/one PostgreSQL-only skip and PostgreSQL 880 passed, with six
+integration deselections each. Clean migrations and API/UI/gateway smoke passed.
+`make verify-nv02-live` passed after the lifecycle/worker changes.
+Final rebuilt `make verify-nv03-live` passed on Docker server 29.7.2 and worker
+Python 3.11.16. It exercised a useful selected-target PoC, transfer/artifacts,
+positive controls for external and other-arena canaries, explicit direct-route
+denials, relay rejection, browser redirects/subresources, resource pressure,
+cancellation, console/MCP flows, killed-worker recovery without replay and reset
+while a helper existed. Its final owned container/network/volume counts are all
+zero. Sanitized IDs, image digests, outcomes and inventories are retained in
+`docs/verification/nv03-live-2026-09-22.json`.
+
+**Risks / next step:** Docker containers share the host kernel, so this remains
+a Docker-local research boundary, not VM-grade hostile multi-tenancy. Raw TCP/UDP,
+runtime package installs, durable aggregate budgets/system stop and general
+foothold access remain unsupported or planned. Implement NV-04 next.
+
+## 2026-09-22 — Astra review and NV-03 handoff for Sol
+
+**Outcome:** Reviewed committed NV-01/02 status and replaced the completed NV-02
+handoff with the NV-03 confined-PoC plan for Sol: durable worker-owned jobs,
+target-scoped relay enforcement, bounded IO, cancellation/recovery, shared
+authorization, REST/MCP/console workflow and isolated live acceptance.
+NV-03 remains unchecked; no product feature is implemented by this plan.
+
+**Files:** tmp-implementationPlan.md and this journal. The prior handoff remains
+in commit 349e804. Local .lab.yaml still marks NV-02 open; canonical TODO and the
+committed acceptance artifact take precedence over that stale local note.
+
+**Verification:** Inspected delivery docs, relevant ADRs, recorded acceptance,
+helper network/provider code, API/binding/gateway seams and verification entry
+points. Documentation checked with git diff --check. No tests/live gates rerun;
+prior passing counts remain historical evidence.
+
+**Risks / next step:** Arena-segment attachment does not prove selected-target-only
+policy, especially for arbitrary sockets/browser subrequests. Sol must implement
+and prove containment, interruption cleanup and usable console/MCP behavior before
+closing NV-03. Implementation and accepted ADRs remain unchanged.
+
 ## 2026-09-21 — Complete NV-02 target lifecycle and reset reproducibility
 
 **Outcome:** NV-02 is complete. Deploy creation now persists an encrypted immutable

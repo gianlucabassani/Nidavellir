@@ -1,0 +1,117 @@
+{
+  "arenas": [
+    "8ab8b038-d08f-46c4-b968-e0610c49f32e",
+    "d0d5620a-dca3-4c2b-aaa5-46c88a86eafd",
+    "9183ab81-8979-4f0d-a2f8-b0c4a02edcb4"
+  ],
+  "deadline": "2026-09-22 17:37:42.340175",
+  "denied_paths": [
+    "control_plane",
+    "decoy",
+    "external_canary",
+    "host_gateway",
+    "ipv6",
+    "metadata",
+    "other_arena",
+    "selected_direct"
+  ],
+  "docker_server": "29.7.2",
+  "final_resources": {
+    "8ab8b038-d08f-46c4-b968-e0610c49f32e": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "9183ab81-8979-4f0d-a2f8-b0c4a02edcb4": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "d0d5620a-dca3-4c2b-aaa5-46c88a86eafd": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0
+    }
+  },
+  "fixture_image": "sha256:a647c2dc50479ed9da2581d6f977a078492b9f29ba95aff3ff0bbc8a73b9e162",
+  "input_digest": "sha256:8ef2751873d94857deab8b75c5edbc151bacf47a721ad993a518436a5c8315cf",
+  "interrupted_job": {
+    "cleanup": "complete",
+    "id": "02ee6314-5557-47a1-8d5f-4d54322cfa8a",
+    "state": "failed"
+  },
+  "limits": {
+    "artifact_bytes": 1048576,
+    "artifact_count": 8,
+    "cpu_millis": 250,
+    "memory_mb": 64,
+    "pids": 16,
+    "stderr_bytes": 65536,
+    "stdout_bytes": 65536,
+    "timeout_seconds": 6,
+    "workspace_bytes": 8388608
+  },
+  "mcp": {
+    "cross_arena_denied": true,
+    "job_id": "8a05c883-ce45-4ef3-a11a-bbb9f4b40b70",
+    "status_result_cancel": true
+  },
+  "network_errors": {
+    "control_plane": 101,
+    "decoy": 101,
+    "external_canary": 101,
+    "host_gateway": 101,
+    "ipv6": 101,
+    "metadata": 101,
+    "other_arena": 101,
+    "selected_direct": 101
+  },
+  "positive_controls": {
+    "control_plane": true,
+    "decoy": true,
+    "external_canary": true,
+    "other_arena": true,
+    "selected": true
+  },
+  "relay_denied": {
+    "absolute": true,
+    "authority": true,
+    "connect": true
+  },
+  "reset_operation": "09769d59-c8c4-40ef-908c-7b0af71461bc",
+  "runner_image": "sha256:1d3b6b1424ba3bdac1da921c2b3df9483985a3bba12f70448ebce9ab564b261b",
+  "runner_interfaces": [
+    "lo"
+  ],
+  "schema": "nidavellir/nv03-live/v1",
+  "stdout_sha256": "sha256:e92f206c389d9f34ff5b8135df98a29ba0912215890a8c3203ea322fc9d92b76",
+  "stress_outcomes": {
+    "cancel": {
+      "cleanup": "complete",
+      "state": "cancelled"
+    },
+    "exception": {
+      "cleanup": "complete",
+      "state": "failed"
+    },
+    "memory": {
+      "cleanup": "complete",
+      "state": "failed"
+    },
+    "output": {
+      "cleanup": "complete",
+      "state": "succeeded"
+    },
+    "pids": {
+      "cleanup": "complete",
+      "state": "succeeded"
+    },
+    "timeout": {
+      "cleanup": "complete",
+      "state": "timed_out"
+    }
+  },
+  "useful_job": "00d85229-2985-437c-9cc6-d6e5b653e4b6",
+  "verified_at": "2026-09-22T17:39:26Z",
+  "worker_python": "Python 3.11.16"
+}

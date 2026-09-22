@@ -25,11 +25,13 @@ import os
 import re
 import shlex
 import shutil
+import socket
 import subprocess  # nosec B404 — fixed argv (no shell), timeout, SSRF-guarded host
 import tarfile
 import tempfile
 import time
 import urllib.parse
+import uuid
 from pathlib import PurePosixPath
 
 import config
@@ -46,6 +48,7 @@ logger = logging.getLogger(__name__)
 LABEL_LAB_ID = "nidavellir.lab_id"
 LABEL_ROLE = "nidavellir.role"
 LABEL_NODE = "nidavellir.node"
+LABEL_POC_JOB = "nidavellir.poc_job"
 
 
 def _already_absent(exc: Exception) -> bool:
@@ -278,6 +281,7 @@ class DockerLocalProvider(RangeProvider):
     def browser_visit(
         self, instance_id, node, target_ip, port, scheme, path, params=None,
         *, wait_ms=1500, execution_marker=None,
+        job_id=None,
     ):
         """Render a target page in a disposable, arena-network-only Chrome.
 
@@ -309,26 +313,88 @@ class DockerLocalProvider(RangeProvider):
         wait_ms = max(0, min(int(wait_ms), 5000))
         query = urllib.parse.urlencode(params or {})
         url = f"{scheme}://{target_ip}:{port}{path}" + (f"?{query}" if query else "")
+        helper_id = uuid.uuid4().hex[:12]
+        helper_network_name = f"nv-browser-{self._short(instance_id)}-{helper_id}"
         command = [
             "--headless=new",
             "--no-sandbox",
             "--disable-dev-shm-usage",
             "--disable-gpu",
+            "--disable-background-networking",
+            "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+            "--disable-quic",
             "--ignore-certificate-errors",
+            "--proxy-bypass-list=<-loopback>",
             "--user-data-dir=/run/nidavellir-browser/profile",
             f"--virtual-time-budget={wait_ms}",
             "--dump-dom",
             url,
         ]
-        runner = None
+        runner = proxy = helper_network = None
+        job_labels = {LABEL_POC_JOB: job_id} if job_id else {}
         try:
+            helper_network = self.client.networks.create(
+                helper_network_name,
+                driver="bridge",
+                internal=True,
+                labels={LABEL_LAB_ID: instance_id, LABEL_ROLE: "browser-network", **job_labels},
+            )
+            proxy = self.client.containers.create(
+                image=config.POC_RUNNER_IMAGE,
+                entrypoint="python3",
+                command=[
+                    "-E", "/opt/nidavellir/proxy.py",
+                    "--host", target_ip, "--port", str(port),
+                    "--scheme", scheme,
+                    "--timeout", str(config.HEADLESS_BROWSER_TIMEOUT_SECONDS),
+                ],
+                name=f"nv-browser-proxy-{helper_id}", detach=True,
+                network=helper_network_name,
+                labels={LABEL_LAB_ID: instance_id, LABEL_ROLE: "browser-proxy", **job_labels},
+                user="65532:65532", cap_drop=["ALL"],
+                security_opt=["no-new-privileges:true"], read_only=True,
+                tmpfs={"/tmp": "rw,noexec,nosuid,nodev,size=1m"},  # nosec B108 - private container tmpfs
+                environment={}, mem_limit="32m", nano_cpus=250_000_000,
+                pids_limit=16,
+            )
+            self.client.networks.get(network).connect(proxy)
+            proxy.start()
+            proxy.reload()
+            proxy_networks = (proxy.attrs.get("NetworkSettings") or {}).get("Networks") or {}
+            proxy_ip = (proxy_networks.get(helper_network_name) or {}).get("IPAddress")
+            if not proxy_ip:
+                raise RuntimeError("browser proxy did not receive an isolated address")
+            # Starting a container does not mean its listener is accepting yet.
+            # Chrome retries a refused proxy for long enough to consume the
+            # entire synchronous API budget, so establish readiness from inside
+            # the trusted proxy container before launching the untrusted page.
+            proxy_ready_deadline = time.monotonic() + 8
+            while time.monotonic() < proxy_ready_deadline:
+                probe = proxy.exec_run([
+                    "python3", "-E", "-c",
+                    (
+                        "import socket; s=socket.create_connection("
+                        "('127.0.0.1',8080),.2); s.close()"
+                    ),
+                ])
+                probe_code = probe.exit_code if hasattr(probe, "exit_code") else probe[0]
+                if probe_code == 0:
+                    break
+                proxy.reload()
+                proxy_state = (proxy.attrs.get("State") or {}).get("Status")
+                if proxy_state in {"exited", "dead"}:
+                    raise RuntimeError("browser proxy exited before becoming ready")
+                time.sleep(0.05)
+            else:
+                raise RuntimeError("browser proxy did not become ready")
+            command.insert(-2, f"--proxy-server=http://{proxy_ip}:8080")
             runner = self.client.containers.run(
                 image=config.HEADLESS_BROWSER_IMAGE,
                 entrypoint="chromium-browser",
                 command=command,
                 detach=True,
-                network=network,
-                labels={LABEL_LAB_ID: instance_id, LABEL_ROLE: "browser"},
+                network=helper_network_name,
+                labels={LABEL_LAB_ID: instance_id, LABEL_ROLE: "browser", **job_labels},
                 cap_drop=["ALL"],
                 security_opt=["no-new-privileges:true"],
                 read_only=True,
@@ -385,6 +451,20 @@ class DockerLocalProvider(RangeProvider):
                     logger.warning(
                         f"[{instance_id}] could not remove browser runner: {cleanup_error}"
                     )
+            if proxy is not None:
+                try:
+                    proxy.remove(force=True)
+                except Exception as cleanup_error:  # noqa: BLE001
+                    logger.warning(
+                        f"[{instance_id}] could not remove browser proxy: {cleanup_error}"
+                    )
+            if helper_network is not None:
+                try:
+                    helper_network.remove()
+                except Exception as cleanup_error:  # noqa: BLE001
+                    logger.warning(
+                        f"[{instance_id}] could not remove browser network: {cleanup_error}"
+                    )
 
     @staticmethod
     def _validated_http_headers(headers):
@@ -413,7 +493,7 @@ class DockerLocalProvider(RangeProvider):
 
     def http_request(
         self, instance_id, node, target_ip, port, scheme, path, params=None,
-        *, method="GET", headers=None, body=None,
+        *, method="GET", headers=None, body=None, job_id=None,
     ):
         """Perform one arena-bound HTTP request in a disposable curl runner.
 
@@ -490,7 +570,8 @@ class DockerLocalProvider(RangeProvider):
                 command=command,
                 detach=True,
                 network=network,
-                labels={LABEL_LAB_ID: instance_id, LABEL_ROLE: "http"},
+                labels={LABEL_LAB_ID: instance_id, LABEL_ROLE: "http",
+                        **({LABEL_POC_JOB: job_id} if job_id else {})},
                 cap_drop=["ALL"],
                 security_opt=["no-new-privileges:true"],
                 read_only=True,
@@ -569,6 +650,357 @@ class DockerLocalProvider(RangeProvider):
             "truncated": truncated,
             "elapsed_ms": elapsed_ms,
         }
+
+    @staticmethod
+    def _poc_input_archive(payload: dict) -> bytes:
+        """Build the exact bounded workspace transferred through the Docker API."""
+        archive_bytes = io.BytesIO()
+        entries = [("main.py", payload["source"].encode("utf-8"))]
+        for item in payload.get("files") or []:
+            import base64
+            entries.append((f"input/{item['path']}", base64.b64decode(item["content_b64"])))
+        entries.append((".ready", b""))
+        with tarfile.open(fileobj=archive_bytes, mode="w") as archive:
+            for name, content in entries:
+                info = tarfile.TarInfo(name)
+                info.size = len(content)
+                info.mode = 0o400
+                info.uid = 65532
+                info.gid = 65532
+                info.mtime = 0
+                archive.addfile(info, io.BytesIO(content))
+        return archive_bytes.getvalue()
+
+    def _copy_poc_input(self, container, payload: dict) -> None:
+        """Stream the safe archive through a fixed tar exec into writable tmpfs.
+
+        Docker rejects ``put_archive`` for a read-only-root container even when
+        the destination is tmpfs. Exec keeps the root read-only and gives only
+        this trusted, shell-free extractor write access to /workspace.
+        """
+        created = self.client.api.exec_create(
+            container.id,
+            ["tar", "-x", "-f", "-", "-C", "/workspace"],
+            stdin=True,
+            stdout=True,
+            stderr=True,
+            user="65532:65532",
+        )
+        exec_id = created["Id"]
+        stream = self.client.api.exec_start(exec_id, socket=True, tty=False)
+        raw_socket = getattr(stream, "_sock", stream)
+        try:
+            raw_socket.sendall(self._poc_input_archive(payload))
+            raw_socket.shutdown(socket.SHUT_WR)
+            while raw_socket.recv(65536):
+                pass
+        finally:
+            stream.close()
+        if self._poc_exec_exit_code(exec_id) != 0:
+            raise RuntimeError("trusted PoC input extraction failed")
+
+    def _poc_exec_exit_code(self, exec_id):
+        # Stream EOF can precede the daemon publishing the process exit code.
+        deadline = time.monotonic() + 2
+        while True:
+            inspected = self.client.api.exec_inspect(exec_id)
+            code = inspected.get("ExitCode")
+            if code is not None or time.monotonic() >= deadline:
+                return code
+            time.sleep(0.02)
+
+    def _poc_artifacts(self, container) -> tuple[list[dict], str | None]:
+        """Collect bounded regular artifacts; links and special files are refused.
+
+        Docker's archive endpoint reads the container layer and cannot see a
+        tmpfs mount.  Use the immutable image's tar binary through a fixed exec
+        instead; the command and source path are never supplied by the PoC.
+        """
+        import base64
+        artifacts = []
+        total = 0
+        try:
+            created = self.client.api.exec_create(
+                container.id,
+                ["/bin/tar", "-c", "-f", "-", "-C", "/workspace", "artifacts"],
+                stdout=True,
+                stderr=True,
+                user="65532:65532",
+            )
+            exec_id = created["Id"]
+            chunks = self.client.api.exec_start(
+                exec_id, stream=True, demux=True, tty=False,
+            )
+            raw_parts = []
+            archive_bytes = 0
+            stderr_parts = []
+            stderr_bytes = 0
+            # A tar adds headers/padding. Bound the daemon stream itself so a
+            # malicious sparse/archive response is never buffered without limit.
+            archive_cap = config.POC_MAX_ARTIFACT_BYTES + (config.POC_MAX_ARTIFACTS + 4) * 1024
+            for chunk in chunks:
+                if isinstance(chunk, tuple):
+                    stdout_chunk, stderr_chunk = chunk
+                else:  # compatibility with Docker clients lacking demux tuples
+                    stdout_chunk, stderr_chunk = chunk, None
+                stdout_chunk = stdout_chunk or b""
+                stderr_chunk = stderr_chunk or b""
+                archive_bytes += len(stdout_chunk)
+                if archive_bytes > archive_cap:
+                    return [], "artifact archive exceeds the configured limit"
+                raw_parts.append(stdout_chunk)
+                if stderr_bytes < 4096:
+                    remaining = 4096 - stderr_bytes
+                    stderr_parts.append(stderr_chunk[:remaining])
+                    stderr_bytes += len(stderr_chunk[:remaining])
+            if self._poc_exec_exit_code(exec_id) != 0:
+                message = b"".join(stderr_parts).decode("utf-8", "replace")
+                if "no such file" in message.lower():
+                    return [], None
+                return [], f"artifact collection failed: {message or 'trusted tar failed'}"
+            raw = b"".join(raw_parts)
+        except Exception as exc:
+            return [], f"artifact collection failed: {exc}"
+        try:
+            with tarfile.open(fileobj=io.BytesIO(raw), mode="r:*") as archive:
+                for member in archive:
+                    if member.isdir():
+                        continue
+                    if not member.isfile() or member.issym() or member.islnk():
+                        return [], "artifact output contains a link or special file"
+                    path = PurePosixPath(member.name)
+                    if path.is_absolute() or ".." in path.parts:
+                        return [], "artifact output contains an unsafe path"
+                    if len(artifacts) >= config.POC_MAX_ARTIFACTS:
+                        return [], "artifact count exceeds the configured limit"
+                    extracted = archive.extractfile(member)
+                    content = extracted.read(config.POC_MAX_ARTIFACT_BYTES + 1) if extracted else b""
+                    total += len(content)
+                    if (
+                        len(content) > config.POC_MAX_ARTIFACT_BYTES
+                        or total > config.POC_MAX_ARTIFACT_BYTES
+                    ):
+                        return [], "artifact bytes exceed the configured limit"
+                    artifacts.append({
+                        "path": str(path), "bytes": len(content),
+                        "sha256": f"sha256:{hashlib.sha256(content).hexdigest()}",
+                        "content_b64": base64.b64encode(content).decode("ascii"),
+                    })
+        except (tarfile.TarError, OSError) as exc:
+            return [], f"artifact archive is invalid: {exc}"
+        return artifacts, None
+
+    def _cleanup_poc_resources(self, job_id: str) -> dict:
+        label = {"label": f"{LABEL_POC_JOB}={job_id}"}
+        errors = []
+        try:
+            for container in self.client.containers.list(all=True, filters=label):
+                try:
+                    container.remove(force=True)
+                except Exception as exc:  # noqa: BLE001
+                    if not _already_absent(exc):
+                        errors.append(f"container cleanup failed: {exc}")
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"container enumeration failed: {exc}")
+        try:
+            for volume in self.client.volumes.list(filters=label):
+                try:
+                    volume.remove(force=True)
+                except Exception as exc:  # noqa: BLE001
+                    if not _already_absent(exc):
+                        errors.append(f"volume cleanup failed: {exc}")
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"volume enumeration failed: {exc}")
+        try:
+            for network in self.client.networks.list(filters=label):
+                try:
+                    network.remove()
+                except Exception as exc:  # noqa: BLE001
+                    if not _already_absent(exc):
+                        errors.append(f"network cleanup failed: {exc}")
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"network enumeration failed: {exc}")
+        remaining = {"containers": 0, "volumes": 0, "networks": 0}
+        try:
+            remaining["containers"] = len(self.client.containers.list(all=True, filters=label))
+            remaining["volumes"] = len(self.client.volumes.list(filters=label))
+            remaining["networks"] = len(self.client.networks.list(filters=label))
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"cleanup verification failed: {exc}")
+        if any(remaining.values()):
+            errors.append(f"PoC resources remain: {remaining}")
+        return {"success": not errors, "error": "; ".join(errors) or None,
+                "remaining": remaining}
+
+    def cleanup_poc_job(self, job_id: str) -> dict:
+        return self._cleanup_poc_resources(job_id)
+
+    def run_poc(
+        self, instance_id, job_id, payload, target_policy, limits, cancel_check=None,
+    ):
+        """Run untrusted Python without an IP network and with a fixed HTTP relay."""
+        labels = {
+            LABEL_LAB_ID: instance_id,
+            LABEL_POC_JOB: job_id,
+        }
+        runner = relay = None
+        outcome = {"success": False, "error": "PoC helper did not start"}
+        cleanup = {"success": False, "error": "cleanup did not run"}
+        try:
+            from docker.types import LogConfig
+
+            # Refuse implicit pulls. The operator prebuilds this trusted image.
+            image = self.client.images.get(config.POC_RUNNER_IMAGE)
+            image_id = getattr(image, "id", None)
+            attrs = getattr(image, "attrs", {}) or {}
+            platform = f"{attrs.get('Os', 'unknown')}/{attrs.get('Architecture', 'unknown')}"
+            if cancel_check and cancel_check():
+                return {
+                    "success": False,
+                    "state": "cancelled",
+                    "cancelled": True,
+                    "cleanup": {"success": True},
+                }
+
+            relay_volume_name = f"nv-poc-{job_id[:12]}"
+            self.client.volumes.create(name=relay_volume_name, labels=labels)
+            volumes = {relay_volume_name: {"bind": "/run/nidavellir", "mode": "ro"}}
+            if target_policy:
+                target = self._find_node_container(instance_id, target_policy["node"])
+                if target is None:
+                    raise ValueError("selected target node is unavailable")
+                target.reload()
+                networks = (target.attrs.get("NetworkSettings") or {}).get("Networks") or {}
+                network = next((name for name, data in networks.items()
+                                if data.get("IPAddress") == target_policy["ip"]), None)
+                if network is None or not network.startswith(
+                    f"nidavellir-{self._short(instance_id)}"
+                ):
+                    raise ValueError("selected target address is not owned by this arena")
+                relay = self.client.containers.create(
+                    image=image_id,
+                    entrypoint="python3",
+                    command=[
+                        "-E", "/opt/nidavellir/relay.py",
+                        "--socket", "/run/nidavellir/relay.sock",
+                        "--host", target_policy["ip"],
+                        "--port", str(target_policy["port"]),
+                        "--scheme", target_policy["scheme"],
+                        "--timeout", str(min(int(limits["timeout_seconds"]), 15)),
+                    ],
+                    name=f"nv-poc-relay-{job_id[:12]}", detach=True, network=network,
+                    labels={**labels, LABEL_ROLE: "poc-relay"},
+                    volumes={relay_volume_name: {"bind": "/run/nidavellir", "mode": "rw"}},
+                    user="65532:65532", cap_drop=["ALL"],
+                    security_opt=["no-new-privileges:true"], read_only=True,
+                    tmpfs={"/tmp": "rw,noexec,nosuid,nodev,size=1m"},  # nosec B108 - private container tmpfs
+                    environment={}, mem_limit="32m", nano_cpus=250_000_000,
+                    pids_limit=16, network_disabled=False,
+                    log_config=LogConfig(
+                        type=LogConfig.types.JSON,
+                        config={"max-size": "64k", "max-file": "1"},
+                    ),
+                )
+                relay.start()
+
+            runner = self.client.containers.create(
+                image=image_id,
+                name=f"nv-poc-runner-{job_id[:12]}", detach=True,
+                network_mode="none", network_disabled=True,
+                labels={**labels, LABEL_ROLE: "poc-runner"}, volumes=volumes,
+                user="65532:65532", cap_drop=["ALL"],
+                security_opt=["no-new-privileges:true"], read_only=True,
+                tmpfs={
+                    "/workspace": (
+                        f"rw,nosuid,nodev,size={int(limits['workspace_bytes'])},uid=65532,gid=65532"
+                    ),
+                    "/tmp": "rw,noexec,nosuid,nodev,size=8m,uid=65532,gid=65532",  # nosec B108 - private container tmpfs
+                },
+                environment={"PYTHONDONTWRITEBYTECODE": "1"},
+                mem_limit=f"{int(limits['memory_mb'])}m",
+                nano_cpus=int(limits["cpu_millis"]) * 1_000_000,
+                pids_limit=int(limits["pids"]),
+                log_config=LogConfig(
+                    type=LogConfig.types.JSON,
+                    config={"max-size": "128k", "max-file": "1"},
+                ),
+            )
+            runner.start()
+            self._copy_poc_input(runner, payload)
+
+            deadline = time.monotonic() + int(limits["timeout_seconds"])
+            terminal_reason = None
+            child_exit_code = None
+            state = {}
+            while time.monotonic() < deadline:
+                if cancel_check and cancel_check():
+                    terminal_reason = "cancelled"
+                    break
+                runner.reload()
+                state = (runner.attrs or {}).get("State") or {}
+                if state.get("Status") in {"exited", "dead"}:
+                    break
+                probe = runner.exec_run(["cat", "/workspace/.nidavellir-exit"])
+                if hasattr(probe, "exit_code"):
+                    probe_code, probe_output = probe.exit_code, probe.output
+                else:
+                    probe_code, probe_output = probe
+                if probe_code == 0:
+                    child_exit_code = int(bytes(probe_output).decode().strip())
+                    break
+                time.sleep(0.1)
+            else:
+                terminal_reason = "timed_out"
+            # A completed child leaves its parent alive specifically so tmpfs
+            # artifacts can be collected below. Timeouts/cancellation also end
+            # the whole cgroup before collection.
+            if terminal_reason:
+                try:
+                    runner.kill()
+                except Exception:  # noqa: BLE001
+                    pass
+                runner.reload()
+                state = (runner.attrs or {}).get("State") or state
+
+            stdout_raw = runner.logs(stdout=True, stderr=False) or b""
+            stderr_raw = runner.logs(stdout=False, stderr=True) or b""
+            if not isinstance(stdout_raw, bytes):
+                stdout_raw = str(stdout_raw).encode()
+            if not isinstance(stderr_raw, bytes):
+                stderr_raw = str(stderr_raw).encode()
+            artifacts, artifact_error = self._poc_artifacts(runner)
+            if child_exit_code is not None:
+                try:
+                    runner.kill()
+                except Exception:  # noqa: BLE001
+                    pass
+            cap = config.POC_MAX_OUTPUT_BYTES
+            exit_code = child_exit_code if child_exit_code is not None else state.get("ExitCode")
+            outcome = {
+                "success": terminal_reason is None and exit_code == 0 and not artifact_error,
+                "state": terminal_reason or ("succeeded" if exit_code == 0 else "failed"),
+                "exit_code": exit_code,
+                "stdout": stdout_raw[:cap].decode("utf-8", "replace"),
+                "stderr": stderr_raw[:cap].decode("utf-8", "replace"),
+                "stdout_bytes": len(stdout_raw), "stderr_bytes": len(stderr_raw),
+                "stdout_sha256": f"sha256:{hashlib.sha256(stdout_raw).hexdigest()}",
+                "stderr_sha256": f"sha256:{hashlib.sha256(stderr_raw).hexdigest()}",
+                "output_truncated": len(stdout_raw) > cap or len(stderr_raw) > cap,
+                "oom_killed": bool(state.get("OOMKilled")),
+                "artifacts": artifacts, "artifact_error": artifact_error,
+                "runner_image_id": image_id, "runner_platform": platform,
+                "network_mode": "none", "target_transport": "unix-http-relay" if relay else "none",
+            }
+            if terminal_reason == "cancelled":
+                outcome["cancelled"] = True
+            if terminal_reason == "timed_out":
+                outcome["timed_out"] = True
+        except Exception as exc:  # noqa: BLE001
+            outcome = {"success": False, "state": "failed", "error": str(exc)[:2000]}
+        finally:
+            cleanup = self._cleanup_poc_resources(job_id)
+        outcome["cleanup"] = cleanup
+        return outcome
 
     # --- interface -----------------------------------------------------------
 

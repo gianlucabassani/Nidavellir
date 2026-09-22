@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from celery import Celery
 
 import config
+import bindings
 import lifecycle_manifest
 import monitor
 import research_session
@@ -50,6 +51,123 @@ app.conf.beat_schedule = {
 # Event type for a recorded monitor signal (audit stream + defender feed + the
 # M2 scorer's input).
 MONITOR_EVENT = "monitor_signal"
+
+
+@app.task(
+    name="run_poc_job", bind=True, acks_late=True, reject_on_worker_lost=True,
+    soft_time_limit=config.POC_MAX_TIMEOUT_SECONDS + 30,
+    time_limit=config.POC_MAX_TIMEOUT_SECONDS + 60,
+)
+def run_poc_job(self, job_id):
+    """Worker-owned confined execution. Interrupted jobs are never replayed."""
+    db = Database()
+    claim = getattr(self.request, "id", None) or uuid.uuid4().hex
+    if not db.claim_poc_job(job_id, claim):
+        job = db.get_poc_job(job_id) or {}
+        return {"success": job.get("state") == "succeeded", "skipped": True,
+                "state": job.get("state", "missing")}
+    job = db.get_poc_job(job_id, include_payload=True)
+    record = db.get_deployment(job["arena_id"]) or {}
+
+    def cancelled():
+        current = db.get_poc_job(job_id) or {}
+        arena = db.get_deployment(job["arena_id"]) or {}
+        return bool(current.get("cancel_requested")) or arena.get("status") != LabStatus.ACTIVE
+
+    policy_error = None
+    if record.get("status") != LabStatus.ACTIVE:
+        policy_error = "arena is no longer active"
+    elif datetime.fromisoformat(job["deadline"]) <= datetime.now():
+        policy_error = "PoC execution deadline expired before worker start"
+    elif job["principal_role"] == "agent":
+        events = db.list_events(
+            job["arena_id"], limit=bindings.BINDING_EVENT_WINDOW,
+            types=bindings.BINDING_EVENT_TYPES,
+        )
+        binding = bindings.binding_for(events, job["principal"])
+        if binding is None or not bindings.stance_permits(binding.get("stance"), bindings.CAP_EXEC):
+            policy_error = "agent binding was revoked or no longer permits execution"
+        elif binding.get("paused"):
+            policy_error = "agent binding is paused"
+    if policy_error:
+        result = {"error": policy_error}
+        db.finish_poc_job(job_id, state="cancelled", result=result,
+                          cleanup_state="not_started")
+        db.record_event(job["arena_id"], "poc_job_cancelled",
+                        {"job_id": job_id, "reason": policy_error}, actor="poc-worker")
+        return {"success": False, **result}
+
+    # The durable absolute deadline, rather than queue latency, bounds how long
+    # the provider may run. Keep the API-selected timeout only when it is lower.
+    remaining = max(1, int((datetime.fromisoformat(job["deadline"]) - datetime.now()).total_seconds()))
+    effective_limits = {**job["limits"]}
+    effective_limits["timeout_seconds"] = min(
+        int(effective_limits["timeout_seconds"]), remaining
+    )
+
+    orch = Orchestrator(
+        provider_name=record.get("effective_provider") or record.get("provider")
+    )
+    try:
+        if job["payload"].get("primitive") in {"http", "browser"}:
+            target = job["target_policy"]
+            kind = job["payload"]["primitive"]
+            try:
+                if cancelled():
+                    outcome = {"success": False, "state": "cancelled"}
+                else:
+                    method = orch.provider.http_request if kind == "http" else orch.provider.browser_visit
+                    outcome = method(
+                        job["arena_id"], target["node"], target["ip"],
+                        target["port"], target["scheme"],
+                        **job["payload"]["arguments"], job_id=job_id,
+                    )
+            finally:
+                cleanup_result = orch.cleanup_poc_job(job_id)
+            outcome["cleanup"] = cleanup_result
+        else:
+            outcome = orch.run_poc(
+                job["arena_id"], job_id, job["payload"], job["target_policy"],
+                effective_limits, cancel_check=cancelled,
+            )
+    except NotImplementedError as exc:
+        outcome = {"success": False, "state": "failed", "error": str(exc),
+                   "cleanup": {"success": True}}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("[%s/%s] PoC execution crashed", job["arena_id"], job_id)
+        outcome = {"success": False, "state": "failed", "error": str(exc)[:2000],
+                   "cleanup": {"success": False, "error": "worker execution crashed"}}
+
+    cleanup = outcome.pop("cleanup", {}) or {}
+    state = outcome.pop("state", "succeeded" if outcome.get("success") else "failed")
+    if state not in {"succeeded", "failed", "timed_out", "cancelled"}:
+        state = "failed"
+    if not cleanup.get("success"):
+        state = "failed"
+    elif cancelled():
+        state = "cancelled"
+        outcome["success"] = False
+        outcome["cancelled"] = True
+    db.finish_poc_job(
+        job_id, state=state, result=outcome,
+        runner_image_id=outcome.get("runner_image_id"),
+        cleanup_state="complete" if cleanup.get("success") else "incomplete",
+        cleanup_error=cleanup.get("error"),
+    )
+    state = (db.get_poc_job(job_id) or {}).get("state", state)
+    db.record_event(
+        job["arena_id"], "poc_job_finished",
+        {
+            "job_id": job_id, "state": state, "input_digest": job["input_digest"],
+            "exit_code": outcome.get("exit_code"),
+            "stdout_sha256": outcome.get("stdout_sha256"),
+            "stderr_sha256": outcome.get("stderr_sha256"),
+            "artifact_digests": [a.get("sha256") for a in outcome.get("artifacts", [])],
+            "cleanup_state": "complete" if cleanup.get("success") else "incomplete",
+        },
+        actor="poc-worker",
+    )
+    return {"success": state == "succeeded", "state": state}
 
 logger = logging.getLogger(__name__)
 
@@ -282,6 +400,7 @@ def destroy_lab(instance_id):
     name was recorded on the deployment at deploy time.
     """
     db = Database()
+    db.request_cancel_arena_poc_jobs(instance_id)
     record = db.get_deployment(instance_id) or {}
     orch = Orchestrator(
         provider_name=record.get("effective_provider") or record.get("provider")
@@ -304,6 +423,14 @@ def destroy_lab(instance_id):
             return {"success": False, "error": "arena could not be claimed for destroy"}
 
     try:
+        # A claimed PoC may still be inside a Docker create call when destroy
+        # is requested. Wait for its finally/cleanup before inventory removal;
+        # otherwise that late create can outlive a successful arena teardown.
+        drain_deadline = time.monotonic() + config.POC_MAX_TIMEOUT_SECONDS + 65
+        while any(job["state"] == "running" for job in db.list_poc_jobs(instance_id)):
+            if time.monotonic() >= drain_deadline:
+                raise RuntimeError("waiting for confined execution cleanup; destroy is retryable")
+            time.sleep(0.1)
         result = orch.destroy(instance_id)
     except Exception as exc:  # noqa: BLE001
         logger.exception("[%s] destroy task crashed", instance_id)
@@ -547,6 +674,39 @@ def reap_labs():
             reset_arena.delay(operation["id"])
             reset_requeued += 1
 
+    poc_stale_before = now - timedelta(seconds=config.POC_STALE_SECONDS)
+    recovered_poc_ids = db.recover_stale_poc_jobs(poc_stale_before)
+    poc_cleanup_failed = 0
+    for job in db.list_poc_cleanup_obligations():
+        job_id = job["id"]
+        arena = db.get_deployment(job.get("arena_id")) or {}
+        try:
+            cleanup = Orchestrator(
+                provider_name=arena.get("effective_provider") or arena.get("provider")
+            ).cleanup_poc_job(job_id)
+            db.record_poc_cleanup(
+                job_id, success=bool(cleanup.get("success")), error=cleanup.get("error")
+            )
+            if not cleanup.get("success"):
+                poc_cleanup_failed += 1
+        except NotImplementedError:
+            db.record_poc_cleanup(
+                job_id, success=False, error="provider does not support PoC cleanup"
+            )
+            poc_cleanup_failed += 1
+        except Exception as exc:  # noqa: BLE001
+            db.record_poc_cleanup(job_id, success=False, error=str(exc)[:2000])
+            poc_cleanup_failed += 1
+            logger.exception("[%s] stale PoC cleanup failed", job_id)
+    poc_requeued = 0
+    for job in db.list_active_poc_jobs():
+        if job["state"] == "queued":
+            if datetime.fromisoformat(job["deadline"]) <= now:
+                db.request_cancel_poc_job(job["id"])
+            else:
+                run_poc_job.delay(job["id"])
+                poc_requeued += 1
+
     if reaped or skipped or revoked:
         logger.info(
             f"Reaper run: {reaped} reaped, {skipped} skipped, "
@@ -558,6 +718,9 @@ def reap_labs():
         "setup_egress_revoked": revoked,
         "reset_requeued": reset_requeued,
         "reset_recovered": len(recovered_reset_ids),
+        "poc_recovered": len(recovered_poc_ids),
+        "poc_cleanup_failed": poc_cleanup_failed,
+        "poc_requeued": poc_requeued,
     }
 
 

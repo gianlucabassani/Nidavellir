@@ -191,7 +191,7 @@ Shipped:
 Still required:
 
 - fresh supported-runtime and live verification of the implemented HTTP path (NV-01–02);
-- confined Python/PoC sandbox through a worker-owned isolation boundary;
+- confined Python/PoC sandbox through a worker-owned isolation boundary (NV-03 complete);
 - foothold-scoped SSH tunnel lifecycle;
 - durable fail-closed step/time/token/cost budgets;
 - arena and system kill switches that drain or stop work predictably;
@@ -504,8 +504,8 @@ budget freezes further work; containment tests remain green.
 
 The six slices below now exist in code, including the console and finding attachment.
 Retain them as the acceptance/design reference; fresh full/live verification is NV-01–02.
-The next feature work is NV-03 confined execution, followed by NV-04–05 durable guardrails
-and scoped access. These six slices are not six open implementation tasks:
+NV-03 confined execution is complete; NV-04–05 durable guardrails and scoped access
+are next. These six slices are not six open implementation tasks:
 
 1. **Provider primitive** — `http_request` across `base` (refuse), `docker-local`
    (disposable arena-bound runner, mirroring the headless-browser pattern), and

@@ -64,6 +64,49 @@ class ResetOperation(Base):
     result: Mapped[str | None] = mapped_column(Text)
 
 
+class PocJob(Base):
+    """Durable, worker-owned confined PoC execution (ADR-0014).
+
+    Active slot columns are nullable unique leases.  Clearing them at every
+    terminal transition makes admission atomic on SQLite and PostgreSQL without
+    relying on process-local counters.
+    """
+
+    __tablename__ = "poc_jobs"
+    __table_args__ = (
+        UniqueConstraint("arena_id", "idempotency_key", name="uq_poc_arena_key"),
+    )
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    arena_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    principal: Mapped[str] = mapped_column(Text, nullable=False)
+    principal_role: Mapped[str] = mapped_column(Text, nullable=False)
+    binding_stance: Mapped[str | None] = mapped_column(Text)
+    idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
+    input_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    encrypted_payload: Mapped[str] = mapped_column(Text, nullable=False)
+    runner_image: Mapped[str] = mapped_column(Text, nullable=False)
+    runner_image_id: Mapped[str | None] = mapped_column(Text)
+    target_node: Mapped[str | None] = mapped_column(Text)
+    target_policy: Mapped[str | None] = mapped_column(Text)
+    limits: Mapped[str] = mapped_column(Text, nullable=False)
+    deadline: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    state: Mapped[str] = mapped_column(Text, nullable=False)
+    worker_claim: Mapped[str | None] = mapped_column(Text)
+    cancel_requested: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    result: Mapped[str | None] = mapped_column(Text)
+    cleanup_state: Mapped[str] = mapped_column(Text, nullable=False)
+    cleanup_error: Mapped[str | None] = mapped_column(Text)
+    active_arena_slot: Mapped[str | None] = mapped_column(Text, unique=True)
+    active_global_slot: Mapped[str | None] = mapped_column(Text, unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
 class ApiKey(Base):
     __tablename__ = "api_keys"
 

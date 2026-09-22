@@ -275,6 +275,54 @@
   </div>
 </section>
 
+{# ── Confined PoC: durable worker-owned Python jobs (NV-03) ── #}
+{% if tabs | selectattr('id', 'equalto', 'poc') | list %}
+<section class="ws-panel" id="wspanel-poc" role="tabpanel" aria-labelledby="wstab-poc" data-tab="poc" hidden>
+  <div class="card pad-0" id="poc-card" data-arena="{{ instance_id }}" data-readonly="{{ '1' if read_only else '' }}">
+    <div class="card-head">
+      <h3><i class="fa-solid fa-terminal"></i> Confined PoC</h3>
+      <span class="muted" style="font-weight:400;font-size:12.5px">— disposable networkless Python; optional fixed-target HTTP relay</span>
+      <div class="spacer"></div>
+      {% if not read_only %}<button class="btn btn-sm" onclick="Nidavellir.pocToggleForm()"><i class="fa-solid fa-plus"></i> New PoC</button>{% endif %}
+    </div>
+    {% if not read_only %}
+    <div id="poc-form" class="card-pad" hidden>
+      <label class="label" for="poc-source">Python source</label>
+      <textarea class="input mono" id="poc-source" rows="12" spellcheck="false" style="resize:vertical">import nidavellir
+
+response = nidavellir.request("/")
+print(response["status"])
+print(response["body"].decode("utf-8", "replace")[:1000])</textarea>
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:8px;margin-top:10px">
+        <label class="workspace-control"><span>Target</span>
+          <select class="input" id="poc-target">
+            <option value="">No network access</option>
+            {% for n in nodes %}{% if not n.foothold and (n.ports or n.url) %}<option value="{{ n.name }}">{{ n.name }}</option>{% endif %}{% endfor %}
+          </select>
+        </label>
+        <label class="workspace-control"><span>Timeout</span><input class="input" id="poc-timeout" type="number" min="1" max="120" value="30"></label>
+        <label class="workspace-control"><span>Memory MiB</span><input class="input" id="poc-memory" type="number" min="32" max="256" value="128"></label>
+        <label class="workspace-control"><span>PID limit</span><input class="input" id="poc-pids" type="number" min="8" max="128" value="32"></label>
+      </div>
+      <label class="label" for="poc-files" style="margin-top:10px">Foothold transfer files (comma-separated relative paths, optional)</label>
+      <input class="input mono" id="poc-files" placeholder="payload.bin, corpus/request.txt">
+      <div class="flexrow" style="margin-top:10px">
+        <button class="btn btn-primary btn-sm" onclick="Nidavellir.pocSubmit()"><i class="fa-solid fa-play"></i> Run confined</button>
+        <span class="muted" id="poc-err" style="font-size:12px"></span>
+      </div>
+    </div>
+    {% endif %}
+    <div id="poc-inspect" class="card-pad" hidden style="border-top:1px solid var(--line-soft)">
+      <div class="flexrow"><b id="poc-inspect-title" class="mono"></b><div class="spacer"></div>
+        <button class="btn btn-sm" onclick="document.getElementById('poc-inspect').hidden=true"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <pre class="mono" id="poc-inspect-output" style="white-space:pre-wrap;background:var(--surface-2);border:1px solid var(--line-soft);border-radius:6px;padding:10px;margin-top:10px;max-height:420px;overflow:auto"></pre>
+    </div>
+    <div id="poc-list"><div class="card-pad muted" style="padding:18px">Loading…</div></div>
+  </div>
+</section>
+{% endif %}
+
 <section class="ws-panel" id="wspanel-findings" role="tabpanel" aria-labelledby="wstab-findings" data-tab="findings" hidden>
   <div class="card pad-0" id="findings-card" data-arena="{{ instance_id }}">
     <div class="card-head"><h3><i class="fa-solid fa-bug"></i> Findings</h3>
@@ -717,6 +765,7 @@
   Nidavellir.initWorkspaceTabs();
   Nidavellir.initArena();
   Nidavellir.initHttpWorkspace();
+  Nidavellir.initPocWorkspace();
   if (document.getElementById("positioning-card")) {
     Nidavellir.initEngagement(
       {{ instance_id | tojson }},

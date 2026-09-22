@@ -213,6 +213,26 @@ class RangeProvider(ABC):
             f"the {self.name!r} provider does not support arena HTTP requests yet"
         )
 
+    def run_poc(
+        self, instance_id: str, job_id: str, payload: dict,
+        target_policy: dict | None, limits: dict, cancel_check=None,
+    ) -> dict:
+        """Run one disposable, confined PoC helper owned by a worker.
+
+        Providers must return process outcome separately from cleanup outcome.
+        The default is deliberately unsupported: no cloud/VM backend may claim
+        Docker-local confinement by falling through to a generic shell.
+        """
+        raise NotImplementedError(
+            f"the {self.name!r} provider does not support confined PoC execution"
+        )
+
+    def cleanup_poc_job(self, job_id: str) -> dict:
+        """Reclaim a stale/interrupted provider-owned PoC helper by stable label."""
+        raise NotImplementedError(
+            f"the {self.name!r} provider does not support PoC cleanup"
+        )
+
     def observe_lifecycle(self, instance_id: str) -> dict:
         """Return stable runtime identities for reset equivalence."""
         raise NotImplementedError(

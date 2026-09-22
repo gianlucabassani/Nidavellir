@@ -53,13 +53,20 @@ Administration  Providers & capacity · Security · Settings
 ```
 
 Opening an engagement gives a **contextual workspace** — Overview · Live · Target · Findings ·
-Evidence · Changes · Agent · Trace · Score · Infrastructure — where only the applicable tabs render
+Evidence · Changes · PoC · Agent · Trace · Score · Infrastructure — where only the applicable tabs render
 and the active tab lives in the URL, so `#findings` is a shareable deep link. Setup is a phase of the
 engagement rather than a permanent page block. Arena state, audit events, agent actions, findings,
 and monitor signals stream over **SSE**, resuming exactly on reconnect. When an arena is destroyed
 its engagement becomes a **read-only record**: no live actions and no stale claims about running
 nodes, but findings, evidence, score, and trace stay reviewable — evidence outlives the
 infrastructure it came from.
+
+The **PoC** tab runs Python in disposable, resource-limited Docker helpers. Choose
+one target for HTTP(S) through `nidavellir.request("/path")`, or leave the job
+networkless. Explicitly selected transfer files are copied into `/workspace/input`;
+write small result files under `/workspace/artifacts`. Output, artifact hashes,
+cancellation and cleanup state remain available after teardown. Raw TCP/UDP and
+runtime package installs are unsupported. See [confined execution](docs/API.md#confined-poc-execution).
 
 ## Three engine pillars
 
@@ -133,18 +140,19 @@ that both objectives need, a **discovery lane** (patch-diff and variant hunting,
 existing crash oracle, binary/appliance/VM intake, campaigns and disclosure output), and an
 **evaluation lane** (durable experiment records and paired build comparison). Full detail is in
 [`ROADMAP.md`](ROADMAP.md). The canonical ordered checklist is
-[`TODO.md`](TODO.md), updated 2026-09-21: reliable local runtime first, then independently
+[`TODO.md`](TODO.md), updated 2026-09-23: reliable local runtime first, then independently
 validated repeated experiments, followed by research breadth driven by selected targets.
 NV-01 restored the pinned Python 3.11 SQLite/PostgreSQL release gate on 2026-09-16.
 NV-02 completed the live target lifecycle/reset gate on 2026-09-21. NV-03 confined
-PoC execution is next.
+PoC execution completed its release and live gates on 2026-09-22; NV-04 durable
+budgets and stop controls are next.
 
 | Stage | Focus | Status |
 |---|---|---|
 | **Shipped engine** | Dynamic arenas, target intake, repo→service, monitoring, validators, scoring, eval export and replay | ✅ shipped |
-| **Research session** | Change evidence, file transfer, browser, HTTP capture/replay and finding attachment; sandbox/tunnel/durable guardrails remain | 🟢 partially shipped |
+| **Research session** | Change evidence, file transfer, browser, HTTP capture/replay, finding attachment and confined PoC; tunnel/durable guardrails remain | 🟢 partially shipped |
 | **Console architecture** | Engagements, Evaluations, Library, Activity, unified creation, contextual workspace and SSE | ✅ shipped |
-| **Research-ready runtime** | NV-03–05: confined PoC, scoped access, durable budgets and stop controls (NV-01–02 complete) | 🟡 **next** |
+| **Research-ready runtime** | NV-01–03 complete; NV-04–05 durable budgets, stop controls and scoped access next | 🟡 **in progress** |
 | **Discovery lane** | Patch-diff & variant hunting, fuzzing + crash triage, binary/appliance/VM intake, campaigns & disclosure output | ◻ planned |
 | **Evaluation workbench** | NV-06–10: independent validation, durable paired trials, small challenge library, Bughunt proof and recovery | ◻ planned |
 | **Held-out proof** | A real vulnerability found and proven on-platform; then a comparison over challenges drawn from that work | ◻ planned |

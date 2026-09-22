@@ -2,6 +2,53 @@
 
 Base URL: `http://localhost:8000`
 
+## Confined PoC execution
+
+Docker-local arenas support `POST /arenas/{id}/poc-jobs` (202),
+`GET /arenas/{id}/poc-jobs`, `GET /arenas/{id}/poc-jobs/{job_id}`, and
+`POST /arenas/{id}/poc-jobs/{job_id}/cancel`. Submission requires an active
+arena and `CAP_EXEC`; agents must have a live attacker binding and can read or
+cancel only their own jobs. Results remain available to authorized readers after
+arena destruction. Cross-arena job IDs are rejected.
+
+Example body:
+
+```json
+{
+  "source": "import nidavellir\nprint(nidavellir.request('/health')['status'])\n",
+  "target_node": "web",
+  "transfer_files": [],
+  "timeout_seconds": 10,
+  "memory_mb": 64,
+  "cpu_millis": 250,
+  "pids": 16,
+  "idempotency_key": "health-proof-001"
+}
+```
+
+Use `target_node: null` for fully networkless work. The fixed HTTP(S) relay accepts
+relative paths, optional method/headers/body, and returns a dictionary with status,
+headers and a bytes body. It never follows redirects. Direct TCP/UDP, arbitrary
+URLs, caller images and runtime package installation are unsupported.
+
+Selected files come from the arena transfer area and are copied to
+`/workspace/input/<path>`; no host or foothold volume is mounted. Source is capped
+at 64 KiB, transfer input at eight files / 1 MiB, stdout and stderr at 64 KiB each,
+and artifacts at eight regular files / 1 MiB by default. Write artifacts under
+`/workspace/artifacts`. Traversal, links and special-file artifacts are refused.
+
+Responses wrap a `job` with input digest, resolved target policy, resource limits,
+deadline, state, cleanup state and timestamps. Detail adds bounded output,
+artifact content/digests and the actual runner image identity. A repeated key
+reuses the original job only when principal, input, target, image and limits match.
+Capacity and conflicting idempotency requests return 409. Cancellation is durable;
+poll until terminal and inspect `cleanup_state` separately. A lost worker's job
+fails without replay, and the reaper reconciles its labelled resources.
+
+HTTP/browser routes retain their synchronous response shape but execute on the
+worker using durable jobs. The console's PoC workspace and attacker MCP tools
+`submit_poc`, `poc_status`, `poc_result`, `cancel_poc` use these same contracts.
+
 
 
 ## Overview

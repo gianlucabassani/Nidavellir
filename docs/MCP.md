@@ -54,7 +54,7 @@ orchestrator re-checks the stance's capability on every call (defence in depth).
 
 | Stance | Purpose | Stance tools |
 |---|---|---|
-| **attacker** | offensive testing from the foothold | `get_topology`, `list_targets`, `run_command`, `browser_visit`, `http_request`, `list_http_transactions`, `get_http_transaction`, `replay_http_transaction`, `upload_file`, `download_file`, `workspace_status`, `workspace_diff`, `workspace_patch_artifact`, `report_finding` |
+| **attacker** | offensive testing from the foothold | `get_topology`, `list_targets`, `run_command`, `submit_poc`, `poc_status`, `poc_result`, `cancel_poc`, `browser_visit`, `http_request`, `list_http_transactions`, `get_http_transaction`, `replay_http_transaction`, `upload_file`, `download_file`, `workspace_status`, `workspace_diff`, `workspace_patch_artifact`, `report_finding` |
 | **defender** | detection over the event feed | `get_topology`, `query_events` |
 | **mitm** | in-path traffic observation | `get_topology`, `observe_traffic` |
 | **configurator** | bring a software-under-test up before the engagement | `get_setup_brief`, `workspace_status`, `workspace_diff`, `workspace_patch_artifact`, `propose_setup_step`, `await_setup_step`, `run_setup_step`, `upload_file`, `finish_setup` |

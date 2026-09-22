@@ -171,6 +171,35 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
             )
 
         @mcp.tool()
+        def submit_poc(
+            arena_id: str, source: str, target_node: str | None = None,
+            transfer_files: list[str] | None = None, timeout_seconds: int = 30,
+            memory_mb: int = 128, cpu_millis: int = 500, pids: int = 32,
+            idempotency_key: str | None = None,
+        ) -> dict:
+            """Run Python in a disposable networkless helper. For target HTTP,
+            import nidavellir and call nidavellir.request(relative_path)."""
+            return tools.submit_poc(
+                ctx(), arena_id, source, target_node, transfer_files,
+                timeout_seconds, memory_mb, cpu_millis, pids, idempotency_key,
+            )
+
+        @mcp.tool()
+        def poc_status(arena_id: str, job_id: str) -> dict:
+            """Read confined PoC state and cleanup status without output bodies."""
+            return tools.poc_status(ctx(), arena_id, job_id)
+
+        @mcp.tool()
+        def poc_result(arena_id: str, job_id: str) -> dict:
+            """Read bounded stdout/stderr, digests and artifacts for a terminal PoC."""
+            return tools.poc_result(ctx(), arena_id, job_id)
+
+        @mcp.tool()
+        def cancel_poc(arena_id: str, job_id: str) -> dict:
+            """Request cancellation and helper reclamation for a PoC job."""
+            return tools.cancel_poc(ctx(), arena_id, job_id)
+
+        @mcp.tool()
         def browser_visit(
             arena_id: str, node: str, path: str = "/",
             params: dict[str, str] | None = None, wait_ms: int = 1500,

@@ -120,6 +120,23 @@ class _FakeRestClient:
             "transaction_digest": "sha256:" + "e" * 64,
         }
 
+    def submit_poc(self, api_key, arena_id, source, **options):
+        self.calls.append(("submit_poc", api_key, arena_id, source, options))
+        return {"created": True, "job": {
+            "id": "poc-1", "state": "queued", "input_digest": "sha256:" + "1" * 64,
+        }}
+
+    def poc_job(self, api_key, arena_id, job_id):
+        self.calls.append(("poc_job", api_key, arena_id, job_id))
+        return {"job": {
+            "id": job_id, "state": "succeeded", "input_digest": "sha256:" + "1" * 64,
+            "result": {"stdout": "proof", "stdout_sha256": "sha256:" + "2" * 64},
+        }}
+
+    def cancel_poc(self, api_key, arena_id, job_id):
+        self.calls.append(("cancel_poc", api_key, arena_id, job_id))
+        return {"job": {"id": job_id, "state": "cancelled"}}
+
     def report_finding(self, api_key, arena_id, title, cwe=None, node=None, evidence=None,
                        path=None, param=None, payload=None, oast_token=None, poc=None,
                        evidence_artifact_digests=None, transaction_digests=None):
@@ -542,7 +559,27 @@ def test_attacker_session_also_registers_the_attacker_tools():
             "workspace_status", "workspace_diff", "workspace_patch_artifact",
             "upload_file", "download_file", "browser_visit",
             "http_request", "list_http_transactions",
-            "get_http_transaction", "replay_http_transaction"} <= names
+            "get_http_transaction", "replay_http_transaction", "submit_poc",
+            "poc_status", "poc_result", "cancel_poc"} <= names
+
+
+def test_poc_tools_are_budgeted_stance_gated_and_trace_no_source(tmp_path):
+    ctx = _ctx(stance=Stance.attacker, trace_dir=str(tmp_path))
+    ctx.step_budget = 1
+    result = tools.submit_poc(
+        ctx, "a1", "print('source-secret')", target_node="web",
+        idempotency_key="mcp-poc-key",
+    )
+    assert result["job"]["id"] == "poc-1"
+    assert tools.poc_status(ctx, "a1", "poc-1")["job"]["state"] == "succeeded"
+    assert tools.poc_result(ctx, "a1", "poc-1")["job"]["result"]["stdout"] == "proof"
+    assert tools.cancel_poc(ctx, "a1", "poc-1")["job"]["state"] == "cancelled"
+    trace = (tmp_path / "a1.jsonl").read_text()
+    assert "source-secret" not in trace
+    with pytest.raises(tools.BudgetExceeded):
+        tools.submit_poc(ctx, "a1", "print(2)")
+    with pytest.raises(ToolNotAllowed):
+        tools.submit_poc(_ctx(stance=Stance.defender), "a1", "print(2)")
 
 
 def test_workspace_tools_proxy_and_are_stance_gated():

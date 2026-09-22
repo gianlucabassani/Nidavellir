@@ -845,6 +845,7 @@ _WORKSPACE_TABS = (
     ("live", "Live", "fa-wave-square"),
     ("target", "Target", "fa-bullseye"),
     ("http", "HTTP", "fa-paper-plane"),
+    ("poc", "PoC", "fa-terminal"),
     ("findings", "Findings", "fa-bug"),
     ("evidence", "Evidence", "fa-box-archive"),
     ("changes", "Changes", "fa-code-compare"),
@@ -933,6 +934,7 @@ def arena_detail(instance_id):
     # a web-capable target, or any stored transaction — so a destroyed arena's
     # records stay reviewable. Driving is refused server-side when read-only.
     http_total = (_api_get(f"/arenas/{instance_id}/http/transactions?limit=1")[0] or {}).get("total", 0)
+    poc_jobs = (_api_get(f"/arenas/{instance_id}/poc-jobs")[0] or {}).get("jobs", [])
     web_capable = any(
         (n.get("ports") or n.get("url")) and not n.get("foothold")
         for n in _parse_nodes(outputs)
@@ -943,6 +945,7 @@ def arena_detail(instance_id):
         "live": True,
         "target": is_sut or bool(preflight_ok and preflight),
         "http": bool(http_total) or web_capable,
+        "poc": bool(poc_jobs) or (state == "active" and web_capable),
         "findings": True,
         "evidence": bool(evidence_artifacts or monitor_signals),
         "changes": bool(workspaces),
@@ -955,6 +958,7 @@ def arena_detail(instance_id):
         "evidence": len(evidence_artifacts) + len(monitor_signals),
         "changes": len(workspaces),
         "http": http_total,
+        "poc": len(poc_jobs),
     })
 
     return render_template(
@@ -982,6 +986,7 @@ def arena_detail(instance_id):
         created_at=data.get("created_at"),
         expires_at=data.get("expires_at"),
         lifecycle=lifecycle if lifecycle_ok else None,
+        poc_jobs=poc_jobs,
     )
 
 
@@ -1767,6 +1772,31 @@ def http_replay_proxy(instance_id, digest):
         f"/arenas/{instance_id}/http/transactions/"
         f"{quote(digest, safe='')}/replay",
         body,
+    )
+    return jsonify(data), code
+
+
+@app.route("/api/arenas/<instance_id>/poc-jobs", methods=["GET", "POST"])
+def poc_jobs_proxy(instance_id):
+    """Thin console proxy; confinement and authorization remain in the API."""
+    if request.method == "GET":
+        data, ok = _api_get(f"/arenas/{instance_id}/poc-jobs")
+        return jsonify(data or {"jobs": []}), (200 if ok else 502)
+    body = request.get_json(silent=True) or {}
+    data, code = _api_post(f"/arenas/{instance_id}/poc-jobs", body)
+    return jsonify(data), code
+
+
+@app.route("/api/arenas/<instance_id>/poc-jobs/<job_id>", methods=["GET"])
+def poc_job_proxy(instance_id, job_id):
+    data, ok = _api_get(f"/arenas/{instance_id}/poc-jobs/{quote(job_id, safe='')}")
+    return jsonify(data or {"error": "not found"}), (200 if ok else 404)
+
+
+@app.route("/api/arenas/<instance_id>/poc-jobs/<job_id>/cancel", methods=["POST"])
+def poc_job_cancel_proxy(instance_id, job_id):
+    data, code = _api_post(
+        f"/arenas/{instance_id}/poc-jobs/{quote(job_id, safe='')}/cancel", {}
     )
     return jsonify(data), code
 

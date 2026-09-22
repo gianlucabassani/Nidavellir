@@ -1,9 +1,9 @@
 # Nidavellir — ordered delivery checklist
 
-Updated 2026-09-21 after completing the NV-02 lifecycle/reset gate.
+Updated 2026-09-23 after completing the NV-03 confined-PoC gate.
 This is the canonical work queue. [ROADMAP.md](ROADMAP.md) retains product scope,
-design detail and legacy milestone mapping. Unchecked means unfinished; this update
-implements no product feature. Verification history is in [docs/JOURNAL.md](docs/JOURNAL.md).
+design detail and legacy milestone mapping. Unchecked means unfinished.
+Verification history is in [docs/JOURNAL.md](docs/JOURNAL.md).
 
 ## Scope and success
 
@@ -28,7 +28,7 @@ demonstrated target need. Bughunt owns live bounty campaigns and their agent wor
   repo reproducibility. **Depends:** NV-01.
   **Accept:** repeated deploy/reset produces equivalent starting conditions; interrupted
   deploy/destroy leaves no orphan resources; evidence remains readable after teardown.
-- [ ] **NV-03 — Confined PoC execution.** Worker-owned disposable Python/PoC helpers with
+- [x] **NV-03 — Confined PoC execution.** Worker-owned disposable Python/PoC helpers with
   CPU/RAM/PID/time limits, minimal filesystem and no external egress; explicitly allow only
   required arena targets and transfer paths. Integrate existing HTTP/browser/file primitives
   with the same capability and audit model. Do not expand control-plane Docker authority.

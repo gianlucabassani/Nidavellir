@@ -113,7 +113,7 @@ HEADLESS_BROWSER_IMAGE = os.getenv(
     "HEADLESS_BROWSER_IMAGE", "zenika/alpine-chrome:124"
 )
 HEADLESS_BROWSER_TIMEOUT_SECONDS = int(
-    os.getenv("HEADLESS_BROWSER_TIMEOUT_SECONDS", "20")
+    os.getenv("HEADLESS_BROWSER_TIMEOUT_SECONDS", "12")
 )
 HEADLESS_BROWSER_MAX_OUTPUT_BYTES = int(
     os.getenv("HEADLESS_BROWSER_MAX_OUTPUT_BYTES", str(64 * 1024))
@@ -228,6 +228,24 @@ DOCKER_API_TIMEOUT_SECONDS = int(os.getenv("DOCKER_API_TIMEOUT_SECONDS", "60"))
 LAB_DEPLOY_TIMEOUT_SECONDS = int(os.getenv("LAB_DEPLOY_TIMEOUT_SECONDS", "900"))
 LAB_DESTROY_TIMEOUT_SECONDS = int(os.getenv("LAB_DESTROY_TIMEOUT_SECONDS", "300"))
 LAB_RESET_TIMEOUT_SECONDS = int(os.getenv("LAB_RESET_TIMEOUT_SECONDS", "600"))
+
+# Confined PoC helpers (NV-03 / ADR-0014). The image must already exist on the
+# worker's Docker daemon; execution never pulls or builds participant-controlled
+# images. Per-job limits are further clamped by the API.
+POC_RUNNER_IMAGE = os.getenv("NIDAVELLIR_POC_RUNNER_IMAGE", "nidavellir/poc-runner:py311")
+POC_MAX_SOURCE_BYTES = int(os.getenv("NIDAVELLIR_POC_MAX_SOURCE_BYTES", "65536"))
+POC_MAX_TRANSFER_FILES = int(os.getenv("NIDAVELLIR_POC_MAX_TRANSFER_FILES", "8"))
+POC_MAX_TRANSFER_BYTES = int(os.getenv("NIDAVELLIR_POC_MAX_TRANSFER_BYTES", "1048576"))
+POC_MAX_OUTPUT_BYTES = int(os.getenv("NIDAVELLIR_POC_MAX_OUTPUT_BYTES", "65536"))
+POC_MAX_ARTIFACT_BYTES = int(os.getenv("NIDAVELLIR_POC_MAX_ARTIFACT_BYTES", "1048576"))
+POC_MAX_ARTIFACTS = int(os.getenv("NIDAVELLIR_POC_MAX_ARTIFACTS", "8"))
+POC_MAX_TIMEOUT_SECONDS = int(os.getenv("NIDAVELLIR_POC_MAX_TIMEOUT_SECONDS", "120"))
+POC_MAX_ARENA_JOBS = int(os.getenv("NIDAVELLIR_POC_MAX_ARENA_JOBS", "2"))
+POC_MAX_GLOBAL_JOBS = int(os.getenv("NIDAVELLIR_POC_MAX_GLOBAL_JOBS", "8"))
+POC_STALE_SECONDS = max(
+    int(os.getenv("NIDAVELLIR_POC_STALE_SECONDS", "180")),
+    POC_MAX_TIMEOUT_SECONDS + 60,
+)
 
 # LAB LIFECYCLE / REAPER (audit #9)
 # Every lab gets an expiry (created_at + LAB_TTL_MINUTES); a Celery-beat reaper

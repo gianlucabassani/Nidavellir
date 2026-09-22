@@ -34,6 +34,7 @@ import evidence_artifact
 import eval_export
 import generator
 import http_transactions
+import helper_jobs
 import image_check
 import images
 import lifecycle_manifest
@@ -41,6 +42,7 @@ import model_chat
 import model_verify
 import netguard
 import oci_intake
+import poc_execution
 import repo_introspect
 import research_session
 import scenarios
@@ -62,7 +64,7 @@ from providers import (
 )
 from scenario_spec import ScenarioSpec, normalize_cwe, normalized_nodes, topology_view
 from states import IllegalTransition, LabStatus
-from tasks import deploy_lab, destroy_lab, reset_arena
+from tasks import deploy_lab, destroy_lab, reset_arena, run_poc_job
 from config import validate_config
 
 
@@ -1756,6 +1758,7 @@ def destroy(
         raise HTTPException(status_code=409, detail=str(e)) from e
     if not claimed:
         raise HTTPException(status_code=409, detail="arena lifecycle changed concurrently")
+    db.request_cancel_arena_poc_jobs(instance_id)
 
     logger.info(
         f"Queuing destroy for {instance_id} "
@@ -2088,6 +2091,153 @@ class HttpRequestRequest(BaseModel):
         return self
 
 
+class PocJobRequest(BaseModel):
+    source: str = Field(min_length=1, max_length=config.POC_MAX_SOURCE_BYTES)
+    target_node: str | None = Field(default=None, min_length=1, max_length=64)
+    transfer_files: list[str] = Field(
+        default_factory=list, max_length=config.POC_MAX_TRANSFER_FILES
+    )
+    timeout_seconds: int = Field(default=30, ge=1, le=config.POC_MAX_TIMEOUT_SECONDS)
+    memory_mb: int = Field(default=128, ge=32, le=256)
+    cpu_millis: int = Field(default=500, ge=100, le=1000)
+    pids: int = Field(default=32, ge=8, le=128)
+    workspace_bytes: int = Field(default=8 * 1024 * 1024, ge=1024 * 1024, le=16 * 1024 * 1024)
+    idempotency_key: str | None = Field(default=None, min_length=8, max_length=128)
+
+    @field_validator("transfer_files")
+    @classmethod
+    def validate_transfer_files(cls, values):
+        normalized = [poc_execution.safe_relative_path(value) for value in values]
+        if len(set(normalized)) != len(normalized):
+            raise ValueError("selected transfer file paths must be unique")
+        return normalized
+
+
+def _poc_job_or_error(instance_id: str, job_id: str, principal: Principal) -> dict:
+    job = db.get_poc_job(job_id)
+    if job is None or job["arena_id"] != instance_id:
+        raise HTTPException(status_code=404, detail="PoC job not found in this arena")
+    _require_binding(principal, instance_id, bindings.CAP_EXEC)
+    if principal.role == "agent" and job["principal"] != principal.name:
+        raise HTTPException(status_code=403, detail="PoC job belongs to another principal")
+    return job
+
+
+@app.post("/arenas/{instance_id}/poc-jobs", status_code=202)
+@limiter.limit(RATE_LIMIT_EXEC)
+def create_poc_job(
+    request: Request,
+    instance_id: str,
+    req: PocJobRequest,
+    principal: Principal = Depends(require_principal),
+):
+    """Submit immutable Python source for worker-owned confined execution."""
+    record = _active_arena_or_error(instance_id)
+    binding = _require_binding(principal, instance_id, bindings.CAP_EXEC)
+    provider_name = record.get("effective_provider") or record.get("provider")
+    if provider_name != "docker-local":
+        raise HTTPException(
+            status_code=501,
+            detail=f"confined PoC execution is unsupported on provider {provider_name!r}",
+        )
+    key = req.idempotency_key or request.headers.get("Idempotency-Key")
+    if not key or not re.fullmatch(r"[A-Za-z0-9._:-]{8,128}", key):
+        raise HTTPException(status_code=422, detail="an 8-128 character Idempotency-Key is required")
+
+    orch = Orchestrator(provider_name=provider_name)
+    files = []
+    if req.transfer_files:
+        foothold = _transfer_foothold(record, None)
+        for path in req.transfer_files:
+            try:
+                content = orch.read_transfer_file(instance_id, foothold, _transfer_path(path))
+            except (NotImplementedError, ValueError) as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            files.append({"path": path, "content": content})
+    try:
+        payload, input_digest = poc_execution.canonical_payload(req.source, files)
+    except ValueError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
+
+    target_policy = None
+    if req.target_node:
+        ip, port, scheme = _http_target(record, req.target_node)
+        target_policy = {
+            "mode": "fixed_http_relay/v1", "node": req.target_node,
+            "ip": ip, "port": port, "scheme": scheme,
+            "raw_tcp": "unsupported", "redirects": "not_followed",
+        }
+    limits = {
+        "timeout_seconds": req.timeout_seconds, "memory_mb": req.memory_mb,
+        "cpu_millis": req.cpu_millis, "pids": req.pids,
+        "workspace_bytes": req.workspace_bytes,
+        "stdout_bytes": config.POC_MAX_OUTPUT_BYTES,
+        "stderr_bytes": config.POC_MAX_OUTPUT_BYTES,
+        "artifact_bytes": config.POC_MAX_ARTIFACT_BYTES,
+        "artifact_count": config.POC_MAX_ARTIFACTS,
+    }
+    expires_at = datetime.fromisoformat(record["expires_at"]) if record.get("expires_at") else None
+    deadline = datetime.now() + timedelta(seconds=req.timeout_seconds + 60)
+    if expires_at is not None:
+        deadline = min(deadline, expires_at)
+    try:
+        job, created = db.create_poc_job(
+            job_id=str(uuid.uuid4()), arena_id=instance_id,
+            principal=principal.name, principal_role=principal.role,
+            binding_stance=binding.get("stance") if binding else None,
+            idempotency_key=key, input_digest=input_digest, payload=payload,
+            runner_image=config.POC_RUNNER_IMAGE, target_node=req.target_node,
+            target_policy=target_policy, limits=limits, deadline=deadline,
+            max_arena_jobs=config.POC_MAX_ARENA_JOBS,
+            max_global_jobs=config.POC_MAX_GLOBAL_JOBS,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        raise HTTPException(status_code=409, detail=detail) from exc
+    if created:
+        db.record_event(
+            instance_id, "poc_job_submitted",
+            {
+                "job_id": job["id"], "input_digest": input_digest,
+                "target_node": req.target_node, "file_digests": [f["sha256"] for f in payload["files"]],
+                "limits": limits,
+            }, actor=principal.name,
+        )
+    if job["state"] == "queued":
+        run_poc_job.delay(job["id"])
+    return {"created": created, "job": poc_execution.public_job(job)}
+
+
+@app.get("/arenas/{instance_id}/poc-jobs")
+def list_poc_jobs(instance_id: str, principal: Principal = Depends(require_principal)):
+    if not db.get_deployment(instance_id):
+        raise HTTPException(status_code=404, detail="Arena not found")
+    _require_binding(principal, instance_id, bindings.CAP_EXEC)
+    jobs = db.list_poc_jobs(instance_id)
+    if principal.role == "agent":
+        jobs = [job for job in jobs if job["principal"] == principal.name]
+    return {"jobs": [poc_execution.public_job(job) for job in jobs]}
+
+
+@app.get("/arenas/{instance_id}/poc-jobs/{job_id}")
+def get_poc_job(instance_id: str, job_id: str,
+                principal: Principal = Depends(require_principal)):
+    return {"job": poc_execution.public_job(
+        _poc_job_or_error(instance_id, job_id, principal), include_result=True
+    )}
+
+
+@app.post("/arenas/{instance_id}/poc-jobs/{job_id}/cancel")
+@limiter.limit(RATE_LIMIT_EXEC)
+def cancel_poc_job(request: Request, instance_id: str, job_id: str,
+                   principal: Principal = Depends(require_principal)):
+    _poc_job_or_error(instance_id, job_id, principal)
+    job = db.request_cancel_poc_job(job_id)
+    db.record_event(instance_id, "poc_job_cancel_requested",
+                    {"job_id": job_id, "state": job["state"]}, actor=principal.name)
+    return {"job": poc_execution.public_job(job)}
+
+
 def _transfer_foothold(record: dict, requested: str | None) -> str:
     outputs = record.get("outputs") or {}
     if isinstance(outputs, str):
@@ -2182,8 +2332,13 @@ def _http_target(record: dict, node: str) -> tuple[str, int, str]:
     return ip, port, scheme
 
 
-def _run_arena_http(record: dict, req: HttpRequestRequest) -> dict:
+def _run_arena_http(record: dict, req: HttpRequestRequest, principal=None) -> dict:
     ip, port, scheme = _http_target(record, req.node)
+    if resolve_provider_name(record.get("effective_provider") or record.get("provider")) == "docker-local":
+        return helper_jobs.execute(record, "http", {
+            "node": req.node, "ip": ip, "port": port, "scheme": scheme,
+        }, {"path": req.path, "params": req.params, "method": req.method,
+            "headers": req.headers, "body": req.body}, principal)
     orch = Orchestrator(
         provider_name=record.get("effective_provider") or record.get("provider")
     )
@@ -2196,8 +2351,14 @@ def _run_arena_http(record: dict, req: HttpRequestRequest) -> dict:
 def _run_arena_browser(
     record: dict, node: str, path: str, params: dict[str, str] | None,
     *, wait_ms: int = 1500, execution_marker: str | None = None,
+    principal=None,
 ) -> dict:
     ip, port, scheme = _browser_target(record, node)
+    if resolve_provider_name(record.get("effective_provider") or record.get("provider")) == "docker-local":
+        return helper_jobs.execute(record, "browser", {
+            "node": node, "ip": ip, "port": port, "scheme": scheme,
+        }, {"path": path, "params": params, "wait_ms": wait_ms,
+            "execution_marker": execution_marker}, principal)
     orch = Orchestrator(
         provider_name=record.get("effective_provider") or record.get("provider")
     )
@@ -2220,7 +2381,7 @@ def browser_visit(
     _require_binding(principal, instance_id, bindings.CAP_EXEC)
     try:
         result = _run_arena_browser(
-            record, req.node, req.path, req.params, wait_ms=req.wait_ms
+            record, req.node, req.path, req.params, wait_ms=req.wait_ms, principal=principal
         )
     except NotImplementedError as exc:
         raise HTTPException(status_code=501, detail=str(exc)) from exc
@@ -2268,7 +2429,7 @@ def _execute_and_record_http(
     body-free audit event. Shared choke point for drives and replays."""
     instance_id = record["id"]
     try:
-        result = _run_arena_http(record, req)
+        result = _run_arena_http(record, req, principal)
     except NotImplementedError as exc:
         raise HTTPException(status_code=501, detail=str(exc)) from exc
     if not result.get("success"):

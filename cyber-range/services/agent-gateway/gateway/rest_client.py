@@ -169,6 +169,32 @@ class RestClient:
             api_key, json=payload,
         )
 
+    def submit_poc(
+        self, api_key: str, arena_id: str, source: str, *,
+        target_node: str | None = None, transfer_files: list[str] | None = None,
+        timeout_seconds: int = 30, memory_mb: int = 128,
+        cpu_millis: int = 500, pids: int = 32,
+        idempotency_key: str,
+    ) -> dict:
+        return self._request(
+            "POST", f"/arenas/{arena_id}/poc-jobs", api_key,
+            json={
+                "source": source, "target_node": target_node,
+                "transfer_files": transfer_files or [],
+                "timeout_seconds": timeout_seconds, "memory_mb": memory_mb,
+                "cpu_millis": cpu_millis, "pids": pids,
+                "idempotency_key": idempotency_key,
+            },
+        )
+
+    def poc_job(self, api_key: str, arena_id: str, job_id: str) -> dict:
+        return self._request("GET", f"/arenas/{arena_id}/poc-jobs/{job_id}", api_key)
+
+    def cancel_poc(self, api_key: str, arena_id: str, job_id: str) -> dict:
+        return self._request(
+            "POST", f"/arenas/{arena_id}/poc-jobs/{job_id}/cancel", api_key, json={}
+        )
+
     def list_events(self, api_key: str, arena_id: str, limit: int = 100) -> dict:
         return self._request(
             "GET", f"/deployments/{arena_id}/events?limit={int(limit)}", api_key

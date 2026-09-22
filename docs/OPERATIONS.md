@@ -5,6 +5,24 @@ Detailed run/operate notes. For what Nidavellir is and the roadmap, see the
 
 ## Run the stack (Docker, recommended)
 
+Confined PoC execution requires the trusted image built by `make build-poc-runner`
+(also built by the main Compose project). Workers refuse to pull an image during
+PoC execution and create containers using the resolved local image ID. Keep the
+worker and beat services running for execution and cleanup recovery. Configure
+`SECRETS_ENCRYPTION_KEY` to protect persisted source and results.
+
+`make verify-nv03-live` runs a dedicated PostgreSQL/Redis/API/worker/console/MCP
+stack on ports 18003, 15003 and 19003. It tests target access, network/relay denial,
+resource limits, interruption recovery, reset races and retained evidence, then
+removes its own labelled resources. `make release-check` is the pinned Python 3.11
+SQLite/PostgreSQL gate; `make verify-nv02-live` verifies reset compatibility.
+
+Default admission limits are two jobs per arena and eight globally, configured by
+`NIDAVELLIR_POC_MAX_ARENA_JOBS` and `NIDAVELLIR_POC_MAX_GLOBAL_JOBS`. Failed cleanup
+retains its slot and is retried by the reaper. These per-job limits do not implement
+NV-04's planned aggregate engagement budgets. Docker containers share the host
+kernel; this feature is for local research, not VM-grade hostile multitenancy.
+
 The dev stack runs everything — orchestrator, worker, Redis, console — in Docker,
 with **mock mode pinned** and live source reload. No `.env` required.
 

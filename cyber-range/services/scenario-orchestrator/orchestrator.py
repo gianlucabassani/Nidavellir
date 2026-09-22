@@ -128,6 +128,14 @@ class Orchestrator:
             method=method, headers=headers, body=body,
         )
 
+    def run_poc(self, instance_id, job_id, payload, target_policy, limits, cancel_check=None):
+        return self.provider.run_poc(
+            instance_id, job_id, payload, target_policy, limits, cancel_check
+        )
+
+    def cleanup_poc_job(self, job_id):
+        return self.provider.cleanup_poc_job(job_id)
+
     def _load_scenario(self, scenario_name: str) -> dict:
         """Load scenario YAML configuration (delegates to the registry)."""
         return load_scenario(scenario_name)

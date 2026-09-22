@@ -1,6 +1,17 @@
 
 
 services:
+  # Trusted, operator-built image used by NV-03. This one-shot service makes
+  # `docker compose up --build` load the immutable runner on the same local
+  # daemon used by the worker; jobs themselves never pull or build images.
+  poc-runner-image:
+    build:
+      context: ./cyber-range/services/scenario-orchestrator/infra/poc-runner
+      dockerfile: Dockerfile
+    image: ${NIDAVELLIR_POC_RUNNER_IMAGE:-nidavellir/poc-runner:py311}
+    entrypoint: ["/bin/true"]
+    restart: "no"
+
   # PostgreSQL (ADR-0004) — opt-in via the "postgres" profile:
   #   docker compose --profile postgres up -d
   # and point the services at it by setting in .env:
@@ -159,6 +170,8 @@ services:
     container_name: nidavellir-worker
     restart: unless-stopped
     depends_on:
+      poc-runner-image:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       orchestrator:
@@ -170,6 +183,7 @@ services:
       # MOCK_MODE=true overrides RANGE_PROVIDER and forces the mock provider.
       MOCK_MODE: ${MOCK_MODE:-false}
       RANGE_PROVIDER: ${RANGE_PROVIDER:-docker-local}
+      NIDAVELLIR_POC_RUNNER_IMAGE: ${NIDAVELLIR_POC_RUNNER_IMAGE:-nidavellir/poc-runner:py311}
       OS_AUTH_URL: ${OS_AUTH_URL:-}
       OS_USERNAME: ${OS_USERNAME:-}
       OS_PASSWORD: ${OS_PASSWORD:-}

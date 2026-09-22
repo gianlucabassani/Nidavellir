@@ -23,7 +23,8 @@ from sqlalchemy.orm import sessionmaker
 
 from crypto import decrypt_secret, encrypt_secret
 from models import (
-    ApiKey, Base, Deployment, Event, LifecycleRecipe, ModelConnection, ResetOperation,
+    ApiKey, Base, Deployment, Event, LifecycleRecipe, ModelConnection, PocJob,
+    ResetOperation,
 )
 from states import LabStatus, validate_transition
 
@@ -406,6 +407,249 @@ class Database:
                     recovered.append(operation_id)
             session.commit()
             return recovered
+
+    # --- NV-03 confined PoC jobs -------------------------------------------
+
+    @staticmethod
+    def _poc_to_dict(row, *, include_payload=False):
+        if row is None:
+            return None
+        result = decrypt_secret(row.result) if row.result else None
+        payload = decrypt_secret(row.encrypted_payload) if include_payload else None
+        return {
+            "id": row.id,
+            "arena_id": row.arena_id,
+            "principal": row.principal,
+            "principal_role": row.principal_role,
+            "binding_stance": row.binding_stance,
+            "idempotency_key": row.idempotency_key,
+            "input_digest": row.input_digest,
+            "payload": json.loads(payload) if payload else None,
+            "runner_image": row.runner_image,
+            "runner_image_id": row.runner_image_id,
+            "target_node": row.target_node,
+            "target_policy": json.loads(row.target_policy) if row.target_policy else None,
+            "limits": json.loads(row.limits),
+            "deadline": _stringify(row.deadline),
+            "state": row.state,
+            "worker_claim": row.worker_claim,
+            "cancel_requested": bool(row.cancel_requested),
+            "result": json.loads(result) if result else None,
+            "cleanup_state": row.cleanup_state,
+            "cleanup_error": row.cleanup_error,
+            "created_at": _stringify(row.created_at),
+            "updated_at": _stringify(row.updated_at),
+            "started_at": _stringify(row.started_at),
+            "completed_at": _stringify(row.completed_at),
+        }
+
+    def create_poc_job(
+        self, *, job_id, arena_id, principal, principal_role, binding_stance, idempotency_key,
+        input_digest, payload, runner_image, target_node, target_policy, limits,
+        deadline, max_arena_jobs, max_global_jobs,
+    ):
+        """Create a job and atomically reserve one arena and global slot."""
+        now = datetime.now()
+        target_json = json.dumps(target_policy, sort_keys=True)
+        limits_json = json.dumps(limits, sort_keys=True)
+
+        def assert_same_request(existing):
+            same = (
+                existing.principal == principal
+                and existing.principal_role == principal_role
+                and existing.input_digest == input_digest
+                and existing.runner_image == runner_image
+                and existing.target_node == target_node
+                and existing.target_policy == target_json
+                and existing.limits == limits_json
+            )
+            if not same:
+                raise ValueError("idempotency key was already used with different input")
+
+        with self._session() as session:
+            existing = session.scalar(select(PocJob).where(
+                PocJob.arena_id == arena_id,
+                PocJob.idempotency_key == idempotency_key,
+            ))
+            if existing is not None:
+                assert_same_request(existing)
+                return self._poc_to_dict(existing), False
+
+        for arena_slot in range(max_arena_jobs):
+            for global_slot in range(max_global_jobs):
+                with self._session() as session:
+                    # Serialize admission with the arena's destroy/reset state
+                    # transition on both SQLite and PostgreSQL. An API entry
+                    # check alone can race teardown while queueing new work.
+                    admitted = session.execute(update(Deployment).where(
+                        Deployment.id == arena_id, Deployment.status == LabStatus.ACTIVE,
+                    ).values(updated_at=Deployment.updated_at))
+                    if admitted.rowcount != 1:
+                        raise ValueError("arena is no longer active")
+                    row = PocJob(
+                        id=job_id, arena_id=arena_id, principal=principal,
+                        principal_role=principal_role,
+                        binding_stance=binding_stance, idempotency_key=idempotency_key,
+                        input_digest=input_digest,
+                        encrypted_payload=encrypt_secret(json.dumps(payload, sort_keys=True)),
+                        runner_image=runner_image, target_node=target_node,
+                        target_policy=target_json,
+                        limits=limits_json, deadline=deadline,
+                        state="queued", cleanup_state="pending",
+                        active_arena_slot=f"{arena_id}:{arena_slot}",
+                        active_global_slot=f"global:{global_slot}",
+                        created_at=now, updated_at=now,
+                    )
+                    session.add(row)
+                    try:
+                        session.commit()
+                        return self._poc_to_dict(row), True
+                    except IntegrityError:
+                        session.rollback()
+                        existing = session.scalar(select(PocJob).where(
+                            PocJob.arena_id == arena_id,
+                            PocJob.idempotency_key == idempotency_key,
+                        ))
+                        if existing is not None:
+                            assert_same_request(existing)
+                            return self._poc_to_dict(existing), False
+        raise ValueError("confined PoC execution capacity is exhausted")
+
+    def get_poc_job(self, job_id, *, include_payload=False):
+        with self._session() as session:
+            return self._poc_to_dict(session.get(PocJob, job_id), include_payload=include_payload)
+
+    def list_poc_jobs(self, arena_id):
+        with self._session() as session:
+            rows = session.scalars(
+                select(PocJob).where(PocJob.arena_id == arena_id)
+                .order_by(PocJob.created_at.desc())
+            )
+            return [self._poc_to_dict(row) for row in rows]
+
+    def list_active_poc_jobs(self):
+        with self._session() as session:
+            rows = session.scalars(
+                select(PocJob).where(PocJob.state.in_(("queued", "running")))
+                .order_by(PocJob.created_at.asc())
+            )
+            return [self._poc_to_dict(row) for row in rows]
+
+    def claim_poc_job(self, job_id, worker_claim):
+        now = datetime.now()
+        with self._session() as session:
+            result = session.execute(
+                update(PocJob).where(
+                    PocJob.id == job_id, PocJob.state == "queued",
+                    PocJob.cancel_requested == 0,
+                ).values(
+                    state="running", worker_claim=worker_claim,
+                    started_at=now, updated_at=now,
+                )
+            )
+            session.commit()
+            return result.rowcount == 1
+
+    def request_cancel_poc_job(self, job_id):
+        now = datetime.now()
+        with self._session() as session:
+            # Conditional writes prevent a queued read racing a worker claim
+            # from releasing slots while a helper is being created.
+            session.execute(update(PocJob).where(
+                PocJob.id == job_id, PocJob.state == "queued",
+            ).values(
+                state="cancelled", cancel_requested=1, cleanup_state="not_started",
+                active_arena_slot=None, active_global_slot=None,
+                completed_at=now, updated_at=now,
+            ))
+            session.execute(update(PocJob).where(
+                PocJob.id == job_id, PocJob.state == "running",
+            ).values(cancel_requested=1, updated_at=now))
+            session.commit()
+            return self._poc_to_dict(session.get(PocJob, job_id))
+
+    def request_cancel_arena_poc_jobs(self, arena_id):
+        with self._session() as session:
+            ids = list(session.scalars(select(PocJob.id).where(
+                PocJob.arena_id == arena_id, PocJob.state.in_(("queued", "running"))
+            )))
+        for job_id in ids:
+            self.request_cancel_poc_job(job_id)
+        return len(ids)
+
+    def finish_poc_job(
+        self, job_id, *, state, result=None, runner_image_id=None,
+        cleanup_state="complete", cleanup_error=None,
+    ):
+        if state not in {"succeeded", "failed", "timed_out", "cancelled"}:
+            raise ValueError("invalid terminal PoC state")
+        now = datetime.now()
+        with self._session() as session:
+            finished = session.execute(update(PocJob).where(
+                PocJob.id == job_id, PocJob.state.in_(("queued", "running")),
+            ).values(state=PocJob.state))
+            if finished.rowcount != 1:
+                return False
+            row = session.get(PocJob, job_id)
+            if row.cancel_requested and cleanup_state in {"complete", "not_started"}:
+                state = "cancelled"
+                result = {**(result or {}), "success": False, "cancelled": True}
+            row.state = state
+            row.result = encrypt_secret(json.dumps(result, sort_keys=True)) if result else None
+            row.runner_image_id = runner_image_id or row.runner_image_id
+            row.cleanup_state = cleanup_state
+            row.cleanup_error = cleanup_error
+            if cleanup_state in {"complete", "not_started"}:
+                row.active_arena_slot = None
+                row.active_global_slot = None
+            row.updated_at = now
+            row.completed_at = now
+            session.commit()
+            return True
+
+    def recover_stale_poc_jobs(self, stale_before):
+        """Never replay possibly side-effecting work after worker loss."""
+        now = datetime.now()
+        recovered = []
+        with self._session() as session:
+            ids = list(session.scalars(select(PocJob.id).where(
+                PocJob.state == "running", PocJob.updated_at < stale_before,
+            )))
+            for job_id in ids:
+                changed = session.execute(update(PocJob).where(
+                    PocJob.id == job_id, PocJob.state == "running",
+                    PocJob.updated_at < stale_before,
+                ).values(state="failed", result=encrypt_secret(json.dumps({
+                    "error": "worker claim became stale; execution was not replayed"
+                })), cleanup_state="reconcile_pending", updated_at=now, completed_at=now))
+                if changed.rowcount == 1:
+                    recovered.append(job_id)
+            session.commit()
+        return recovered
+
+    def record_poc_cleanup(self, job_id, *, success, error=None):
+        """Persist reconciliation separately from the already-terminal outcome."""
+        with self._session() as session:
+            row = session.get(PocJob, job_id)
+            if row is None:
+                return False
+            row.cleanup_state = "complete" if success else "incomplete"
+            row.cleanup_error = error
+            if success:
+                row.active_arena_slot = None
+                row.active_global_slot = None
+            row.updated_at = datetime.now()
+            session.commit()
+            return True
+
+    def list_poc_cleanup_obligations(self):
+        """Keep failed reclamation retryable after the execution is terminal."""
+        with self._session() as session:
+            rows = session.scalars(select(PocJob).where(
+                PocJob.state.in_(("failed", "succeeded", "timed_out", "cancelled")),
+                PocJob.cleanup_state.in_(("incomplete", "reconcile_pending")),
+            ))
+            return [self._poc_to_dict(row) for row in rows]
 
     def get_deployment(self, deployment_id):
         with self._session() as session:

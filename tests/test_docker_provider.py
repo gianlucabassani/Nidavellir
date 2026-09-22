@@ -124,13 +124,59 @@ def test_headless_browser_is_hardened_arena_bound_and_detects_execution_marker()
             self.kwargs = None
             self.runner = Runner()
 
+        def create(self, **kwargs):
+            class Proxy:
+                attrs = {"NetworkSettings": {"Networks": {
+                    kwargs["network"]: {"IPAddress": "172.88.0.2"}
+                }}}
+                removed = False
+
+                def start(self):
+                    return None
+
+                def reload(self):
+                    return None
+
+                def exec_run(self, command):
+                    assert command[:3] == ["python3", "-E", "-c"]
+                    return 0, b""
+
+                def remove(self, force=False):
+                    self.removed = force
+
+            return Proxy()
+
         def run(self, **kwargs):
             self.kwargs = kwargs
             return self.runner
 
+    class Network:
+        def __init__(self, name):
+            self.name = name
+            self.removed = False
+
+        def connect(self, _container):
+            return None
+
+        def remove(self):
+            self.removed = True
+
+    class Networks:
+        def __init__(self):
+            self.created = None
+
+        def create(self, name, **_kwargs):
+            self.created = Network(name)
+            return self.created
+
+        def get(self, name):
+            assert name == "nidavellir-abcd1234"
+            return Network(name)
+
     class Client:
         def __init__(self):
             self.containers = Containers()
+            self.networks = Networks()
 
     target = _FakeContainer(
         "nv-abcd1234-victim",
@@ -147,13 +193,16 @@ def test_headless_browser_is_hardened_arena_bound_and_detects_execution_marker()
     assert result["title"] == "Rendered"
     assert "diagnostic" not in result["rendered_dom"]
     kwargs = provider.client.containers.kwargs
-    assert kwargs["network"] == "nidavellir-abcd1234"
+    assert kwargs["network"].startswith("nv-browser-abcd1234-")
     assert kwargs["entrypoint"] == "chromium-browser"
     assert "--headless=new" in kwargs["command"]
+    assert any(value.startswith("--proxy-server=http://172.88.0.2:")
+               for value in kwargs["command"])
     assert kwargs["cap_drop"] == ["ALL"] and kwargs["read_only"] is True
     assert kwargs["security_opt"] == ["no-new-privileges:true"]
     assert "/search?q=a+b" in kwargs["command"][-1]
     assert provider.client.containers.runner.removed is True
+    assert provider.client.networks.created.removed is True
 
 
 def test_headless_browser_rejects_target_ip_not_owned_by_node():
