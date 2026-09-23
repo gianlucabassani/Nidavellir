@@ -3,6 +3,25 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-09-23 — NV-05 fresh-session implementation handoff
+
+**Outcome:** Replaced `tmp-implementationPlan.md` with a planning-only NV-05
+handoff for declared foothold-scoped internal TCP access and a versioned
+REST/console/MCP runtime capability manifest. NV-05 remains unchecked. The
+completed NV-04 work, its live evidence, and the separate UI rebuild proposal
+were committed locally as `f90d0e6`; nothing was pushed.
+
+**Basis / files:** Read AGENTS, README, ROADMAP, TODO, relevant ADRs, the latest
+journal entry and `.lab.yaml` in continuity order; inspected current provider,
+binding, budget, gateway and console seams. Changed this journal and the handoff
+only. No product code or verification gate changed or ran for this plan.
+
+**Risks / next step:** The Docker foothold currently exposes `docker exec`,
+not a proven SSH service. First implement and review ADR-0016 with a transport
+spike that authenticates each stream and fixes its destination without widening
+control-plane Docker access. Then build the durable lease, manifest and isolated
+NV-05 live gate; update canonical status only after all required gates pass.
+
 ## 2026-09-23 — NV-04 durable budgets and stop controls complete
 
 **Outcome:** Completed NV-04. The orchestrator now owns versioned action caps,
