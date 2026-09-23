@@ -147,6 +147,20 @@ class Service(BaseModel):
         return self
 
 
+class ForwardService(BaseModel):
+    """An explicitly declared, internal TCP destination for a scoped forward."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    port: int = Field(ge=1, le=65535)
+
+    @field_validator("id")
+    @classmethod
+    def _id_is_slug(cls, value: str) -> str:
+        return _check_slug(value, "forward service id")
+
+
 class Node(BaseModel):
     """One machine in the topology — a container or a VM, per provider."""
 
@@ -162,6 +176,9 @@ class Node(BaseModel):
     size: str = "small"
     segments: list[str] = Field(default_factory=list)
     ports: list[int] = Field(default_factory=list)
+    #: Internal TCP services available through a fixed-destination lease. These
+    #: do not publish a host port.
+    forward_services: list[ForwardService] = Field(default_factory=list)
     #: environment variables for the workload (str→str). Many imported targets
     #: (e.g. Vulhub CVE environments) only function with their compose `environment`
     #: set, so it is modeled explicitly rather than dropped by ``extra="ignore"``.
@@ -204,6 +221,9 @@ class Node(BaseModel):
                 f"node {self.name!r} has no workload: set `image`, or a "
                 "`service` (image / source / package)"
             )
+        service_ids = [service.id for service in self.forward_services]
+        if len(service_ids) != len(set(service_ids)):
+            raise ValueError(f"node {self.name!r} has duplicate forward service IDs")
         return self
 
     @property
@@ -480,6 +500,7 @@ def _canonical_node(node: dict) -> dict:
         "entrypoint": bool(node.get("entrypoint", False)),
         "command": node.get("command"),
         "services": list(node.get("services") or []),
+        "forward_services": list(node.get("forward_services") or []),
         "tools": list(node.get("tools") or []),
         "service": service,
         "whitebox": whitebox,

@@ -41,6 +41,8 @@ def _node_recipe(node: dict) -> dict:
         },
         "package": service.get("package"),
         "ports": sorted(node.get("ports") or []),
+        "forward_services": sorted(node.get("forward_services") or [],
+                                   key=lambda service: service["id"]),
         "segments": sorted(node.get("segments") or []),
         "environment": dict(sorted((node.get("environment") or {}).items())),
         "command": node.get("command"),

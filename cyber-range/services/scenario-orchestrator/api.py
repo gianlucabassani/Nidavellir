@@ -1,7 +1,7 @@
 """
 FastAPI REST Layer - Production Architecture (Redis/Celery)
 """
-from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile, WebSocket
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -9,6 +9,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 import logging
 import base64
+import asyncio
 import difflib
 import hashlib
 import json
@@ -52,7 +53,7 @@ import setup_proposer
 import source_bundle
 import validators
 import vulhub_import
-from auth import Principal, ensure_bootstrap_key, require_principal
+from auth import Principal, ensure_bootstrap_key, hash_api_key, require_principal
 from database import Database, StopDenied
 from orchestrator import Orchestrator
 from providers import (
@@ -64,7 +65,7 @@ from providers import (
 )
 from scenario_spec import ScenarioSpec, normalize_cwe, normalized_nodes, topology_view
 from states import IllegalTransition, LabStatus
-from tasks import deploy_lab, destroy_lab, reset_arena, run_poc_job
+from tasks import deploy_lab, destroy_lab, reset_arena, run_forward_stream, run_poc_job
 from config import validate_config
 
 
@@ -1867,6 +1868,7 @@ def destroy(
     if not claimed:
         raise HTTPException(status_code=409, detail="arena lifecycle changed concurrently")
     db.request_cancel_arena_poc_jobs(instance_id)
+    db.revoke_arena_forwards(instance_id, actor=principal.name, reason="arena_destroy")
 
     logger.info(
         f"Queuing destroy for {instance_id} "
@@ -2011,6 +2013,7 @@ def reset(
             error=exc, terminal=True,
         )
         raise HTTPException(status_code=500, detail="could not create reset replacement") from exc
+    db.revoke_arena_forwards(instance_id, actor=principal.name, reason="arena_reset")
     reset_arena.delay(operation_id)
     return {
         "status": "pending",
@@ -3137,6 +3140,325 @@ def _require_binding(principal: Principal, instance_id: str, capability: str) ->
     return binding
 
 
+class RuntimeOperation(BaseModel):
+    state: str
+    reason: str
+    recorded: bool
+    limits: dict = Field(default_factory=dict)
+
+
+class RuntimeCapabilities(BaseModel):
+    schema_version: str = Field(default="nidavellir.runtime-capabilities.v1", alias="schema")
+    arena_id: str
+    provider: str
+    arena_state: str
+    principal_role: str
+    binding_stance: str | None
+    budget: dict | None
+    stop: dict
+    footholds: list[str]
+    targets: list[dict]
+    operations: dict[str, RuntimeOperation]
+
+
+def _forward_nodes(instance_id: str):
+    recipe = db.get_lifecycle_recipe(instance_id)
+    if not recipe:
+        return []
+    return normalized_nodes(recipe.get("scenario") or {})
+
+
+@app.get("/arenas/{instance_id}/capabilities", response_model=RuntimeCapabilities)
+def runtime_capabilities(instance_id: str, principal: Principal = Depends(require_principal)):
+    arena = db.get_deployment(instance_id)
+    if arena is None:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    binding = None
+    if principal.role == "agent":
+        binding = bindings.binding_for(_arena_binding_events(instance_id), principal.name)
+        if binding is None:
+            raise HTTPException(status_code=403, detail="agent is not bound to this arena")
+    provider = arena.get("effective_provider") or arena.get("provider") or "unknown"
+    budget = db.budget_status(instance_id)
+    policy = budget.get("policy")
+    stopped = (not budget.get("system") or budget["system"]["state"] != "open"
+               or not budget.get("arena") or budget["arena"]["state"] != "open")
+    active = arena["status"] == "active"
+    paused = bool(binding and binding.get("paused"))
+    nodes = _forward_nodes(instance_id)
+    outputs = json.loads(arena.get("outputs") or "{}")
+
+    def permitted(capability):
+        return binding is None or bindings.stance_permits(binding.get("stance"), capability)
+
+    def operation(capability, *, provider_required=True, declared=True,
+                  runtime_ready=True, limits=None):
+        if provider_required and provider != "docker-local":
+            state, reason = "unsupported", "provider_not_implemented"
+        elif not declared:
+            state, reason = "unavailable", "no_declared_service"
+        elif not runtime_ready:
+            state, reason = "unavailable", "selected_nodes_not_ready"
+        elif not permitted(capability):
+            state, reason = "unavailable", "stance_denied"
+        elif paused:
+            state, reason = "unavailable", "binding_paused"
+        elif not active:
+            state, reason = "supported", "arena_inactive"
+        elif stopped:
+            state, reason = "unavailable", "stop_active"
+        elif not policy:
+            state, reason = "unavailable", "legacy_budget_unavailable"
+        elif datetime.fromisoformat(policy["deadline"]) <= datetime.now():
+            state, reason = "unavailable", "deadline_expired"
+        elif policy["remaining"] <= 0:
+            state, reason = "unavailable", "action_budget_exhausted"
+        else:
+            state, reason = "ready", "ok"
+        return RuntimeOperation(state=state, reason=reason, recorded=True,
+                                limits=limits or {})
+
+    can_forward = permitted(bindings.CAP_FORWARD) and not paused
+    footholds = [n["name"] for n in nodes if (n.get("role") == "attacker"
+                 or n.get("entrypoint"))] if can_forward else []
+    foot_segments = set().union(*(
+        set(n.get("segments") or ["_default"]) for n in nodes
+        if n["name"] in footholds)) if footholds else set()
+    targets = []
+    for node in nodes:
+        if node["name"] in footholds:
+            continue
+        targets.append({
+            "node": node["name"],
+            "ready": outputs.get(f"node_{node['name']}_state") == "running",
+            "forward_services": ([s["id"] for s in node.get("forward_services") or []]
+                                 if can_forward and foot_segments.intersection(
+                                     node.get("segments") or ["_default"]) else []),
+        })
+    declared = bool(footholds and any(t["forward_services"] for t in targets))
+    forward_nodes_ready = (any(outputs.get(f"node_{name}_state") == "running"
+                               for name in footholds)
+                           and any(t["ready"] and t["forward_services"] for t in targets))
+    operations = {
+        "exec": operation(bindings.CAP_EXEC, limits={"timeout_seconds": 30}),
+        "http": operation(bindings.CAP_EXEC, limits={"relative_path_only": True}),
+        "browser": operation(bindings.CAP_EXEC, limits={"selected_target_only": True}),
+        "poc": operation(bindings.CAP_EXEC, limits={"network": "selected_http_target"}),
+        "files": operation(bindings.CAP_EXEC, limits={"foothold_only": True}),
+        "setup": operation(bindings.CAP_SETUP),
+        "observe": operation(bindings.CAP_OBSERVE),
+        "forward": operation(bindings.CAP_FORWARD, declared=declared,
+                             runtime_ready=forward_nodes_ready,
+                             limits={"protocol": "tcp", "lease_seconds_max": 300,
+                                     "stream_seconds_max": 90, "streams_per_lease": 1,
+                                     "bytes_each_direction": 1048576,
+                                     "idle_seconds": 15}),
+        "recording": RuntimeOperation(state="ready", reason="audit_and_trace",
+                                      recorded=True, limits={"bodies_in_audit": False}),
+        "token_cost_hard_cap": RuntimeOperation(
+            state="unsupported", reason="external_driver_usage_unavailable",
+            recorded=False),
+    }
+    return RuntimeCapabilities(
+        arena_id=instance_id, provider=provider, arena_state=arena["status"],
+        principal_role=principal.role,
+        binding_stance=binding.get("stance") if binding else None,
+        budget=policy, stop={"system": budget.get("system"), "arena": budget.get("arena")},
+        footholds=footholds, targets=targets, operations=operations,
+    )
+
+
+class ForwardRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    foothold: str
+    target: str
+    service_id: str
+    lifetime_seconds: int = Field(default=120, ge=10, le=300)
+    idempotency_key: str = Field(min_length=8, max_length=128,
+                                 pattern=r"^[A-Za-z0-9._:-]+$")
+
+
+def _forward_public(row):
+    return {key: value for key, value in row.items()
+            if key not in {"binding_generation", "stream_id", "principal_role", "segment"}}
+
+
+def _forward_visible(row, principal):
+    if row is None:
+        raise HTTPException(status_code=404, detail="Forward not found")
+    if principal.role == "agent" and row["principal"] != principal.name:
+        raise HTTPException(status_code=404, detail="Forward not found")
+    return row
+
+
+@app.post("/arenas/{instance_id}/forwards")
+def open_forward(instance_id: str, req: ForwardRequest, request: Request,
+                 principal: Principal = Depends(require_principal)):
+    if request.headers.get("X-Token-Budget") or request.headers.get("X-Cost-Budget"):
+        raise HTTPException(status_code=422,
+                            detail="token/cost caps cannot be enforced for this driver")
+    arena = db.get_deployment(instance_id)
+    if arena is None:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    binding = _require_binding(principal, instance_id, bindings.CAP_FORWARD)
+    if (arena.get("effective_provider") or arena.get("provider")) != "docker-local":
+        raise HTTPException(status_code=422, detail="provider does not support scoped forwards")
+    recipe = db.get_lifecycle_recipe(instance_id) or {}
+    scenario = recipe.get("scenario") or {}
+    if (scenario.get("requires") or {}).get("egress") == "open":
+        raise HTTPException(status_code=422, detail="forward requires an egress-locked arena")
+    nodes = {node["name"]: node for node in normalized_nodes(scenario)}
+    foot, target = nodes.get(req.foothold), nodes.get(req.target)
+    if foot is None or target is None or req.foothold == req.target:
+        raise HTTPException(status_code=422, detail="invalid declared forward endpoints")
+    if foot.get("role") != "attacker" and not foot.get("entrypoint"):
+        raise HTTPException(status_code=422, detail="selected node is not a foothold")
+    common = set(foot.get("segments") or ["_default"]) & set(
+        target.get("segments") or ["_default"])
+    if not common:
+        raise HTTPException(status_code=422, detail="nodes do not share a declared segment")
+    service = next((svc for svc in target.get("forward_services") or []
+                    if svc["id"] == req.service_id), None)
+    if service is None:
+        raise HTTPException(status_code=422, detail="service is not declared on target")
+    digest = hashlib.sha256(req.model_dump_json(exclude={"idempotency_key"}).encode()).hexdigest()
+    try:
+        row = db.create_forward_lease(
+            instance_id, principal=principal.name, role=principal.role,
+            binding_generation=binding.get("ts") if binding else None,
+            key=req.idempotency_key, digest=digest, foothold=req.foothold,
+            target=req.target, service_id=req.service_id, segment=sorted(common)[0],
+            port=service["port"],
+            lifetime_seconds=req.lifetime_seconds)
+    except ValueError as exc:
+        status_code = (429 if "budget exhausted" in str(exc) else
+                       423 if "stop gate" in str(exc) else 409)
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    return _forward_public(row)
+
+
+@app.get("/arenas/{instance_id}/forwards")
+def list_forwards(instance_id: str, principal: Principal = Depends(require_principal)):
+    if db.get_deployment(instance_id) is None:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    if principal.role == "agent":
+        _require_binding(principal, instance_id, bindings.CAP_FORWARD)
+    return {"forwards": [_forward_public(row) for row in db.list_forward_leases(instance_id)
+                         if principal.role != "agent" or row["principal"] == principal.name]}
+
+
+@app.get("/arenas/{instance_id}/forwards/{forward_id}")
+def forward_status(instance_id: str, forward_id: str,
+                   principal: Principal = Depends(require_principal)):
+    row = _forward_visible(db.get_forward_lease(forward_id), principal)
+    if row["arena_id"] != instance_id:
+        raise HTTPException(status_code=404, detail="Forward not found")
+    return _forward_public(row)
+
+
+@app.post("/arenas/{instance_id}/forwards/{forward_id}/revoke")
+def revoke_forward(instance_id: str, forward_id: str,
+                   principal: Principal = Depends(require_principal)):
+    row = _forward_visible(db.get_forward_lease(forward_id), principal)
+    if row["arena_id"] != instance_id:
+        raise HTTPException(status_code=404, detail="Forward not found")
+    if principal.role == "agent":
+        _require_binding(principal, instance_id, bindings.CAP_FORWARD)
+    return _forward_public(db.revoke_forward_lease(forward_id, actor=principal.name))
+
+
+@app.websocket("/arenas/{instance_id}/forwards/{forward_id}/connect")
+async def connect_forward(websocket: WebSocket, instance_id: str, forward_id: str):
+    """Authenticated binary stream. Credentials are accepted only in headers."""
+    import redis.asyncio as aioredis
+
+    key = websocket.headers.get("X-API-Key")
+    record = db.get_api_key(hash_api_key(key)) if key else None
+    if record is None:
+        await websocket.close(code=4401)
+        return
+    principal = Principal(record["name"], record["role"])
+    row = db.get_forward_lease(forward_id)
+    if (row is None or row["arena_id"] != instance_id or row["principal"] != principal.name):
+        await websocket.close(code=4404)
+        return
+    try:
+        binding = _require_binding(principal, instance_id, bindings.CAP_FORWARD)
+        generation = binding.get("ts") if binding else None
+        if generation != row["binding_generation"]:
+            raise ValueError("forward binding generation changed")
+        action_id, _ = db.reserve_budget_action(
+            instance_id, key=str(uuid.uuid4()),
+            digest=hashlib.sha256(forward_id.encode()).hexdigest(),
+            kind="forward/connect", actor=principal.name)
+        try:
+            row = db.claim_forward_stream(
+                forward_id, principal=principal.name, binding_generation=generation)
+        except Exception:
+            db.settle_budget_action(action_id, outcome="released")
+            raise
+        db.settle_budget_action(action_id, outcome="spent")
+    except (HTTPException, ValueError):
+        await websocket.close(code=4403)
+        return
+    channel = f"nv:forward:{row['stream_id']}"
+    queue_in, queue_out, close_key = channel + ":in", channel + ":out", channel + ":close"
+    redis_client = aioredis.from_url(os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0"))
+    await redis_client.expire(queue_in, 120)
+    run_forward_stream.delay(forward_id)
+    await websocket.accept()
+
+    async def from_client():
+        total = 0
+        while True:
+            chunk = await websocket.receive_bytes()
+            if not chunk:
+                continue
+            total += len(chunk)
+            if len(chunk) > 16384 or total > 1048576:
+                break
+            await redis_client.rpush(queue_in, chunk)
+            await redis_client.expire(queue_in, 120)
+
+    async def to_client():
+        while True:
+            if not db.forward_stream_valid(forward_id):
+                break
+            if principal.role == "agent":
+                current = bindings.binding_for(_arena_binding_events(instance_id), principal.name)
+                if (current is None or current.get("paused")
+                        or current.get("ts") != row["binding_generation"]):
+                    break
+            item = await redis_client.blpop(queue_out, timeout=1)
+            if item is None:
+                updated = db.get_forward_lease(forward_id)
+                if updated is None or (datetime.now() - datetime.fromisoformat(
+                        updated["updated_at"])).total_seconds() > 10:
+                    break
+                continue
+            frame = item[1]
+            if frame == b"C":
+                break
+            if frame.startswith(b"D"):
+                await websocket.send_bytes(frame[1:])
+
+    sender = asyncio.create_task(from_client())
+    receiver = asyncio.create_task(to_client())
+    try:
+        await asyncio.wait([sender, receiver], return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        await redis_client.set(close_key, "1", ex=120)
+        sender.cancel()
+        receiver.cancel()
+        await asyncio.gather(sender, receiver, return_exceptions=True)
+        await redis_client.aclose()
+        try:
+            await websocket.close()
+        except RuntimeError:
+            pass
+
+
 class StopRequest(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
     idempotency_key: str = Field(min_length=8, max_length=128,
@@ -3189,6 +3511,7 @@ def stop_arena(instance_id: str, req: StopRequest,
         raise HTTPException(status_code=404, detail="Arena not found")
     epoch = db.stop_budget_gate(instance_id, actor=principal.name,
                                 reason=req.reason, key=req.idempotency_key)
+    db.revoke_arena_forwards(instance_id, actor=principal.name, reason="arena_stop")
     cancelled = db.request_cancel_arena_poc_jobs(instance_id)
     db.reconcile_budget_stop(instance_id)
     return {"epoch": epoch, "cancel_requested": cancelled,
@@ -3220,7 +3543,10 @@ def system_emergency_stop(req: StopRequest,
     if principal.role != "admin":
         raise HTTPException(status_code=403, detail="admin role required")
     epoch = db.stop_budget_gate("system", actor=principal.name,
-                                reason=req.reason, key=req.idempotency_key)
+                               reason=req.reason, key=req.idempotency_key)
+    for arena in db.list_deployments():
+        db.revoke_arena_forwards(arena["id"], actor=principal.name,
+                                 reason="system_stop")
     cancelled = sum(db.request_cancel_arena_poc_jobs(dep["id"])
                     for dep in db.list_deployments())
     db.reconcile_budget_stop("system")
@@ -3320,6 +3646,10 @@ def revoke_binding(
         {"agent_name": agent_name, "reason": "operator", "granted_by": principal.name},
         actor=principal.name,
     )
+    for lease in db.list_forward_leases(instance_id):
+        if lease["principal"] == agent_name:
+            db.revoke_forward_lease(lease["id"], actor=principal.name,
+                                    reason="binding_revoked")
     logger.info(f"Revoked agent '{agent_name}' binding on arena {instance_id} by '{principal.name}'")
     return {"revoked": True, "agent_name": agent_name}
 
@@ -3344,6 +3674,10 @@ def pause_binding(
         {"agent_name": agent_name, "granted_by": principal.name},
         actor=principal.name,
     )
+    for lease in db.list_forward_leases(instance_id):
+        if lease["principal"] == agent_name:
+            db.revoke_forward_lease(lease["id"], actor=principal.name,
+                                    reason="binding_paused")
     logger.info(f"Paused agent '{agent_name}' binding on arena {instance_id} by '{principal.name}'")
     return {"paused": True, "agent_name": agent_name}
 

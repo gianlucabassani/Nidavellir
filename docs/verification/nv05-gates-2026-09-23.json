@@ -1,0 +1,48 @@
+{
+  "schema": "nidavellir/nv05-gates/v1",
+  "date": "2026-09-23",
+  "release_check": {
+    "command": "make release-check",
+    "python": "3.11.14",
+    "ruff": "0.6.9",
+    "bandit": "1.9.4",
+    "bandit_medium": 0,
+    "bandit_high": 0,
+    "sqlite": {"passed": 891, "postgresql_only_skipped": 4, "integration_deselected": 6},
+    "postgresql": {"passed": 895, "integration_deselected": 6},
+    "clean_alembic_api_console_mcp_smoke": "passed"
+  },
+  "postgresql_races": [
+    "competing lease creation and idempotency conflict",
+    "competing single-stream claims",
+    "revoke versus connect",
+    "stop versus helper start"
+  ],
+  "docker_live": {
+    "command": "make verify-nv05-live",
+    "result": "passed",
+    "evidence": "nv05-live-2026-09-23.json"
+  },
+  "regressions_after_nv05": {
+    "nv02": {
+      "command": "make verify-nv02-live",
+      "result": "passed",
+      "arenas": 5,
+      "recipe_digest": "sha256:ab6b4c177bb143d6fe65ff4eefac4c235628581891c2e7a8e6bd77c08d9c53f5",
+      "observed_state_digest": "sha256:62a7ac248486fda85f69749d9b3530057010fbde5f22e58bbf06598d55b531fb",
+      "final_labeled_resources": 0
+    },
+    "nv03": {
+      "command": "make verify-nv03-live",
+      "result": "passed",
+      "evidence": "nv03-live-2026-09-22.json",
+      "final_labeled_resources": 0
+    },
+    "nv04": {
+      "command": "make verify-nv04-live",
+      "result": "passed",
+      "evidence": "nv04-live-2026-09-23.json",
+      "final_labeled_resources": 0
+    }
+  }
+}

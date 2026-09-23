@@ -2,7 +2,7 @@
 
 Base URL: `http://localhost:8000`
 
-## Durable research budgets and stop controls (NV-04 implementation in progress)
+## Durable research budgets and stop controls
 
 New arenas receive a versioned aggregate action cap (default 1000, configured
 with `ARENA_ACTION_BUDGET`) and an absolute deadline no later than deployment
@@ -36,6 +36,58 @@ Token and cost caps are unavailable for external BYO agents because the
 orchestrator cannot reserve trusted pre-execution model usage. Requests with
 `token_budget` or `cost_budget_usd` at engagement creation, token/cost headers
 on research actions, or token/cost fields in a policy revision are refused.
+
+## Runtime capabilities and scoped TCP forwards
+
+`GET /arenas/{id}/capabilities` returns `nidavellir.runtime-capabilities.v1`
+for the authenticated principal. Agent keys must be bound to the arena. Each
+operation has a `ready`, `supported`, `unavailable`, or `unsupported` state, a
+stable reason, recording status and bounded limits. The response includes
+visible target/foothold names, only forward service IDs reachable from that
+foothold, durable budget remaining/deadline, and arena/system stop state. It
+never contains scenario truth, private source paths, binding lists or secrets.
+`token_cost_hard_cap` is `unsupported` for external agents.
+
+A versioned scenario node may declare an internal TCP service separately from
+host-published `ports[]`:
+
+```json
+{"name":"fixture","role":"victim","image":"sha256:...",
+ "segments":["research"],"ports":[],
+ "forward_services":[{"id":"internal","port":8123}]}
+```
+
+For Docker-local, an operator or an agent with an active **attacker** binding
+may `POST /arenas/{id}/forwards` with `foothold`, `target`, `service_id`,
+`lifetime_seconds` (10–300), and an 8–128 character `idempotency_key`.
+The foothold and target must share a declared internal segment. Arbitrary
+addresses, ports, URLs, SOCKS, UDP and egress-open arenas are refused. One
+atomic budget action pays for creation; retrying the same key and input returns
+the same lease without a second charge. `GET /arenas/{id}/forwards` and
+`GET /arenas/{id}/forwards/{forward_id}` report owner-visible state, expiry,
+byte counts and cleanup; `POST .../{forward_id}/revoke` is idempotent.
+
+The binary stream is `ws(s)://API/arenas/{id}/forwards/{forward_id}/connect`.
+Send `X-API-Key` in the WebSocket **header**, never in its URL. The server
+reauthenticates the owner/binding, claims the single stream and spends a second
+action. A worker starts one labeled trusted relay on the selected internal
+segment, connected only to the resolved target IP and declared port. Each
+direction is capped at 1 MiB; the stream is capped at 90 seconds and 15 idle
+seconds. Revocation, binding pause/revoke, stop, expiry, reset and teardown
+close it. A destroyed arena retains the lease and body-free audit metadata.
+The local client binds only loopback:
+
+```bash
+export NIDAVELLIR_API_KEY='your operator or bound attacker key'
+python3 scripts/nv-forward-client.py --arena ARENA_ID --forward FORWARD_ID \
+  --listen-port 18080 --api-url http://127.0.0.1:8000
+```
+
+The client requires the pinned `websockets` dependency. The current Flask
+workspace shows the manifest and provides CSRF-protected lease create/revoke
+forms. MCP exposes `runtime_capabilities` to every bound stance and
+`open_forward`, `forward_status`, `revoke_forward` to attacker sessions; binary
+bytes remain in the authenticated WebSocket client.
 
 ## Confined PoC execution
 

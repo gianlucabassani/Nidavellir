@@ -56,6 +56,7 @@ def _guarded(start_guard, operation, *args, **kwargs):
 LABEL_ROLE = "nidavellir.role"
 LABEL_NODE = "nidavellir.node"
 LABEL_POC_JOB = "nidavellir.poc_job"
+LABEL_FORWARD = "nidavellir.forward_id"
 
 
 def _already_absent(exc: Exception) -> bool:
@@ -228,6 +229,82 @@ def _parse_tcpdump(text: str) -> list[dict]:
 class DockerLocalProvider(RangeProvider):
     name = "docker-local"
     infra_class = "container"
+
+    def cleanup_forward(self, forward_id):
+        errors = []
+        label = {"label": f"{LABEL_FORWARD}={forward_id}"}
+        try:
+            for container in self.client.containers.list(all=True, filters=label):
+                try:
+                    container.remove(force=True)
+                except Exception as exc:  # noqa: BLE001
+                    if not _already_absent(exc):
+                        errors.append(str(exc)[:300])
+            remaining = len(self.client.containers.list(all=True, filters=label))
+        except Exception as exc:  # noqa: BLE001
+            return {"success": False, "error": str(exc)[:300]}
+        if remaining:
+            errors.append(f"{remaining} forward containers remain")
+        return {"success": not errors, "error": "; ".join(errors) or None,
+                "remaining": remaining}
+
+    def open_forward_relay(self, instance_id, forward_id, foothold, target, segment, port,
+                           timeout_seconds, start_guard):
+        """Resolve owned endpoints and start one labeled, fixed TCP connector."""
+        from docker.types import LogConfig
+
+        foot = self._find_node_container(instance_id, foothold)
+        dest = self._find_node_container(instance_id, target)
+        if (foot is None or dest is None or
+                (foot.labels or {}).get(LABEL_LAB_ID) != instance_id or
+                (dest.labels or {}).get(LABEL_LAB_ID) != instance_id or
+                (foot.labels or {}).get(LABEL_NODE) != foothold or
+                (dest.labels or {}).get(LABEL_NODE) != target):
+            raise ValueError("forward endpoints are not owned arena nodes")
+        foot.reload()
+        dest.reload()
+        foot_nets = (foot.attrs.get("NetworkSettings") or {}).get("Networks") or {}
+        dest_nets = (dest.attrs.get("NetworkSettings") or {}).get("Networks") or {}
+        network = self._network_name(instance_id, segment)
+        if network not in foot_nets or network not in dest_nets:
+            raise ValueError("foothold and target have no shared owned segment")
+        owned_network = self.client.networks.get(network)
+        owned_network.reload()
+        if ((owned_network.attrs.get("Labels") or {}).get(LABEL_LAB_ID) != instance_id
+                or not owned_network.attrs.get("Internal")):
+            raise ValueError("selected segment is not an internal owned network")
+        ip = dest_nets[network].get("IPAddress")
+        if not ip or not 1 <= int(port) <= 65535:
+            raise ValueError("selected target has no valid segment address or port")
+        image = self.client.images.get(config.POC_RUNNER_IMAGE)
+        container = _guarded(
+            start_guard, self.client.containers.create,
+            image=image.id, entrypoint="python3",
+            command=["-E", "/opt/nidavellir/tcp_relay.py", ip, str(port),
+                     str(min(int(timeout_seconds), 90))],
+            name=f"nv-forward-{forward_id[:12]}", detach=True, network=network,
+            stdin_open=True, tty=False,
+            labels={LABEL_LAB_ID: instance_id, LABEL_FORWARD: forward_id,
+                    LABEL_ROLE: "forward-relay"},
+            user="65532:65532", cap_drop=["ALL"],
+            security_opt=["no-new-privileges:true"], read_only=True,
+            environment={}, mem_limit="32m", nano_cpus=250_000_000,
+            pids_limit=16, log_config=LogConfig(
+                type=LogConfig.types.JSON,
+                config={"max-size": "64k", "max-file": "1"}),
+        )
+        stream = None
+        try:
+            stream = self.client.api.attach_socket(
+                container.id, params={"stdin": 1, "stdout": 1, "stderr": 1,
+                                      "stream": 1, "logs": 0})
+            _guarded(start_guard, container.start)
+        except Exception:
+            if stream is not None:
+                stream.close()
+            self.cleanup_forward(forward_id)
+            raise
+        return stream
 
     def __init__(self, client=None):
         # Injectable for tests; lazily resolved so importing this module

@@ -1,5 +1,6 @@
 import os
 import logging
+import select
 import time
 import uuid
 from datetime import datetime, timedelta
@@ -15,6 +16,7 @@ import setup_phase
 from database import Database
 from orchestrator import Orchestrator
 from providers import resolve_provider_name
+from providers import get_provider
 from states import IllegalTransition, LabStatus
 
 # Broker Configuration
@@ -51,6 +53,114 @@ app.conf.beat_schedule = {
 # Event type for a recorded monitor signal (audit stream + defender feed + the
 # M2 scorer's input).
 MONITOR_EVENT = "monitor_signal"
+
+
+@app.task(name="run_forward_stream", bind=True, acks_late=True,
+          reject_on_worker_lost=False, soft_time_limit=110, time_limit=120)
+def run_forward_stream(self, forward_id):
+    """Worker-owned fixed TCP data path; Redis carries only bounded stream frames."""
+    import redis
+
+    db = Database()
+    claim = getattr(self.request, "id", None) or uuid.uuid4().hex
+    if not db.claim_forward_worker(forward_id, claim):
+        return {"skipped": True}
+    lease = db.get_forward_lease(forward_id)
+    arena = db.get_deployment(lease["arena_id"]) or {}
+    provider = get_provider(arena.get("effective_provider") or arena.get("provider"))
+    channel = f"nv:forward:{lease['stream_id']}"
+    queue_in, queue_out, close_key = channel + ":in", channel + ":out", channel + ":close"
+    transport = redis.Redis.from_url(REDIS_URL)
+    stream = None
+    bytes_in = bytes_out = 0
+    error = None
+    cleanup = {"success": False, "error": "cleanup did not run"}
+    try:
+        if arena.get("status") != LabStatus.ACTIVE or not db.forward_stream_valid(forward_id):
+            raise ValueError("forward is no longer active")
+        remaining = min(90, max(1, int((datetime.fromisoformat(
+            lease["expires_at"]) - datetime.now()).total_seconds())))
+        stream = provider.open_forward_relay(
+            lease["arena_id"], forward_id, lease["foothold"], lease["target"],
+            lease["segment"], lease["port"], remaining,
+            start_guard=lambda: db.forward_start_guard(forward_id),
+        )
+        raw = getattr(stream, "_sock", stream)
+        raw.setblocking(False)
+        frame_buffer = bytearray()
+        last_activity = last_check = time.monotonic()
+        while True:
+            now = time.monotonic()
+            if now - last_check >= .25:
+                if transport.exists(close_key) or not db.forward_stream_valid(forward_id):
+                    break
+                if lease["principal_role"] == "agent":
+                    events = db.list_events(
+                        lease["arena_id"], limit=bindings.BINDING_EVENT_WINDOW,
+                        types=bindings.BINDING_EVENT_TYPES)
+                    binding = bindings.binding_for(events, lease["principal"])
+                    if (binding is None or binding.get("paused")
+                            or binding.get("ts") != lease["binding_generation"]
+                            or not bindings.stance_permits(
+                                binding.get("stance"), bindings.CAP_FORWARD)):
+                        break
+                if not db.heartbeat_forward_stream(forward_id):
+                    break
+                last_check = now
+            if now - last_activity > 15:
+                break
+            incoming = transport.lpop(queue_in)
+            if incoming:
+                if bytes_in + len(incoming) > 1_048_576:
+                    raise ValueError("forward input byte cap exceeded")
+                raw.sendall(incoming)
+                bytes_in += len(incoming)
+                last_activity = now
+            readable, _, _ = select.select([raw], [], [], .05)
+            if not readable:
+                continue
+            data = raw.recv(32768)
+            if not data:
+                break
+            frame_buffer.extend(data)
+            while len(frame_buffer) >= 8:
+                size = int.from_bytes(frame_buffer[4:8], "big")
+                if size > 32768:
+                    raise ValueError("forward relay frame exceeded limit")
+                if len(frame_buffer) < size + 8:
+                    break
+                kind = frame_buffer[0]
+                payload = bytes(frame_buffer[8:8 + size])
+                del frame_buffer[:8 + size]
+                if kind == 1 and payload:
+                    if bytes_out + len(payload) > 1_048_576:
+                        raise ValueError("forward output byte cap exceeded")
+                    transport.rpush(queue_out, b"D" + payload)
+                    transport.expire(queue_out, 120)
+                    bytes_out += len(payload)
+                    last_activity = now
+                elif kind == 2 and payload:
+                    # Error content is not exposed as arbitrary stream data.
+                    logger.warning("forward relay %s reported an error", forward_id)
+    except Exception as exc:  # noqa: BLE001 - durable failure and cleanup below
+        error = str(exc)[:500]
+        logger.warning("forward %s ended: %s", forward_id, error)
+    finally:
+        if stream is not None:
+            stream.close()
+        try:
+            cleanup = provider.cleanup_forward(forward_id)
+        except Exception as exc:  # noqa: BLE001
+            cleanup = {"success": False, "error": str(exc)[:500]}
+        db.finish_forward_stream(
+            forward_id, bytes_in=bytes_in, bytes_out=bytes_out,
+            cleanup_complete=bool(cleanup.get("success")),
+            error=cleanup.get("error") or error)
+        transport.rpush(queue_out, b"C")
+        transport.expire(queue_out, 120)
+        transport.close()
+    return {"success": error is None and cleanup.get("success"),
+            "bytes_in": bytes_in, "bytes_out": bytes_out}
 
 
 @app.task(
@@ -408,6 +518,7 @@ def destroy_lab(instance_id):
     """
     db = Database()
     db.request_cancel_arena_poc_jobs(instance_id)
+    db.revoke_arena_forwards(instance_id, actor="worker", reason="arena_destroy")
     record = db.get_deployment(instance_id) or {}
     orch = Orchestrator(
         provider_name=record.get("effective_provider") or record.get("provider")
@@ -634,12 +745,15 @@ def reap_labs():
     now = datetime.now()
     for arena_id in db.expired_budget_arenas(now):
         db.stop_budget_gate(arena_id, actor="reaper", reason="wall-clock budget expired")
+        db.revoke_arena_forwards(arena_id, actor="reaper", reason="budget_expired")
     for scope in db.stopping_budget_scopes():
         if scope == "system":
             for dep in db.list_deployments():
                 db.request_cancel_arena_poc_jobs(dep["id"])
+                db.revoke_arena_forwards(dep["id"], actor="reaper", reason="system_stop")
         else:
             db.request_cancel_arena_poc_jobs(scope)
+            db.revoke_arena_forwards(scope, actor="reaper", reason="arena_stop")
     stuck_before = now - timedelta(minutes=config.LAB_STUCK_MINUTES)
 
     candidates = db.find_reapable(now, stuck_before)
@@ -724,6 +838,27 @@ def reap_labs():
 
     poc_budget_reconciled = db.reconcile_poc_budget_actions()
 
+    forward_cleanup_failed = 0
+    for lease in db.stale_forward_leases(now, now - timedelta(seconds=10)):
+        if lease["state"] in {"open", "connecting"}:
+            db.revoke_forward_lease(lease["id"], actor="reaper", reason="expired_or_stale")
+        if lease["stream_id"] is None:
+            continue
+        arena = db.get_deployment(lease["arena_id"]) or {}
+        try:
+            cleanup = get_provider(
+                arena.get("effective_provider") or arena.get("provider")
+            ).cleanup_forward(lease["id"])
+            db.finish_forward_stream(
+                lease["id"], cleanup_complete=bool(cleanup.get("success")),
+                error=cleanup.get("error"))
+            if not cleanup.get("success"):
+                forward_cleanup_failed += 1
+        except Exception as exc:  # noqa: BLE001
+            db.finish_forward_stream(
+                lease["id"], cleanup_complete=False, error=str(exc)[:500])
+            forward_cleanup_failed += 1
+
     for scope in db.stopping_budget_scopes():
         db.reconcile_budget_stop(scope)
 
@@ -742,6 +877,7 @@ def reap_labs():
         "poc_cleanup_failed": poc_cleanup_failed,
         "poc_requeued": poc_requeued,
         "poc_budget_reconciled": poc_budget_reconciled,
+        "forward_cleanup_failed": forward_cleanup_failed,
     }
 
 

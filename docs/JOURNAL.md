@@ -3,6 +3,55 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-09-23 — Complete NV-05 scoped research access and runtime capabilities
+
+**Outcome:** NV-05 is complete on Docker-local. Scenario nodes now declare named
+internal TCP services separately from host-published ports; the immutable
+lifecycle recipe and equivalence digest retain them. An attacker binding or
+operator can create an idempotent, expiring, single-stream lease to one service
+from a selected foothold segment. The worker resolves the actual owned target
+container, verifies the exact shared internal network, and owns a labeled,
+resource-limited fixed-destination relay. An independently authenticated
+WebSocket carries bytes through bounded Redis frames. Creation and stream
+opening each spend durable NV-04 actions. Revoke, expiry, binding pause/revoke,
+stop, reset, teardown and worker-loss recovery close and reclaim access.
+ADR-0016 is accepted; this is a TCP relay, not SSH. A versioned, principal-
+filtered capability manifest is available through REST, attacker and operator
+MCP discovery, and the current Flask workspace, with CSRF-protected lease
+controls.
+
+**Files:** Scenario schema and lifecycle projection; migration `0008`, lease
+model/database methods, API routes and WebSocket, worker task, Docker provider
+and trusted relay script; gateway client/tools, Flask workspace and local
+loopback client; two-segment fixture, isolated Compose/live verifier, focused
+PostgreSQL race tests; `docs/API.md`, ADR-0016, TODO, ROADMAP, README and this
+journal. `docs/UI_REBUILD_PLAN.md` and prior journal entries remain intact.
+
+**Verification:** Final `make release-check` passed on pinned Python 3.11.14:
+Ruff 0.6.9 clean, Bandit 1.9.4 with zero medium/high findings, 891 SQLite
+tests passed (four PostgreSQL-only skips), 895 PostgreSQL tests passed, six
+declared integration deselections on each backend, and clean Alembic plus
+API/console/MCP readiness smoke. PostgreSQL tests raced lease create/claim,
+revoke/connect and stop/helper-start. `make verify-nv05-live` passed: internal
+fixture bytes via the declared foothold segment, wrong destination and stance
+denial, filtered manifest, MCP and CSRF console control, loopback client,
+mock-provider unsupported state, active revoke and expiry with reconnect
+denial, binding revocation, arena and persistent system stop, stop/stream race,
+killed-worker recovery, replacement reset and zero final labeled
+containers/networks/volumes. Its active revoke closed in 0.34 s.
+The NV-02, NV-03 and NV-04 Docker live regressions passed afterward, each with
+zero final labeled resources. Evidence: `docs/verification/nv05-gates-2026-09-23.json`,
+`nv05-live-2026-09-23.json`, and refreshed NV-03/NV-04 live JSON files.
+`git diff --check` passed.
+
+**Unresolved risks / next step:** Only Docker-local has live forward support;
+cloud/VM providers explicitly refuse it. TCP is fixed destination and limited
+to one stream, 1 MiB each direction, 90 seconds and 15 idle seconds. Model
+token/cost hard caps remain unsupported for external drivers without trusted
+usage. The Docker worker retains daemon authority on the trusted local host.
+Next canonical task: NV-06 independent validation with positive, negative and
+control fixtures linked to immutable evidence.
+
 ## 2026-09-23 — NV-05 fresh-session implementation handoff
 
 **Outcome:** Replaced `tmp-implementationPlan.md` with a planning-only NV-05

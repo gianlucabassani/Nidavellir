@@ -67,6 +67,42 @@ def budget_status(ctx: GatewayContext, arena_id: str) -> dict:
     return result
 
 
+def runtime_capabilities(ctx: GatewayContext, arena_id: str) -> dict:
+    _guard(ctx, "runtime_capabilities")
+    result = ctx.client.runtime_capabilities(ctx.session.api_key, arena_id)
+    _trace(ctx, "runtime_capabilities", {}, ok=True, arena_id=arena_id)
+    return result
+
+
+def open_forward(ctx: GatewayContext, arena_id: str, foothold: str, target: str,
+                 service_id: str, lifetime_seconds: int = 120,
+                 idempotency_key: str | None = None) -> dict:
+    _guard(ctx, "open_forward")
+    result = ctx.client.open_forward(
+        ctx.session.api_key, arena_id, foothold, target, service_id,
+        lifetime_seconds, idempotency_key or uuid.uuid4().hex)
+    _trace(ctx, "open_forward", {"foothold": foothold, "target": target,
+                                  "service_id": service_id}, ok=True,
+           arena_id=arena_id)
+    return result
+
+
+def forward_status(ctx: GatewayContext, arena_id: str, forward_id: str) -> dict:
+    _guard(ctx, "forward_status")
+    result = ctx.client.forward_status(ctx.session.api_key, arena_id, forward_id)
+    _trace(ctx, "forward_status", {"forward_id": forward_id}, ok=True,
+           arena_id=arena_id)
+    return result
+
+
+def revoke_forward(ctx: GatewayContext, arena_id: str, forward_id: str) -> dict:
+    _guard(ctx, "revoke_forward")
+    result = ctx.client.revoke_forward(ctx.session.api_key, arena_id, forward_id)
+    _trace(ctx, "revoke_forward", {"forward_id": forward_id}, ok=True,
+           arena_id=arena_id)
+    return result
+
+
 def stop_arena(ctx: GatewayContext, arena_id: str, reason: str) -> dict:
     _guard(ctx, "stop_arena")
     result = ctx.client.stop_arena(ctx.session.api_key, arena_id, reason)

@@ -12,6 +12,7 @@ Status writes are validated against the lifecycle graph in `states.py`
 deletion appends to the `events` audit table with the acting principal.
 """
 import json
+import hashlib
 import os
 import uuid
 from contextlib import contextmanager
@@ -27,7 +28,7 @@ from crypto import decrypt_secret, encrypt_secret
 import setup_phase
 from models import (
     ApiKey, Base, BudgetAccount, BudgetAction, BudgetControl, BudgetGate, Deployment, Event,
-    LifecycleRecipe, ModelConnection, PocJob,
+    ForwardLease, LifecycleRecipe, ModelConnection, PocJob,
     ResetOperation,
 )
 from states import LabStatus, validate_transition
@@ -223,6 +224,220 @@ class Database:
                            "deadline": _stringify(account.deadline),
                            "token_cost": "unsupported_for_external_agents"} if account else None,
             }
+
+    @staticmethod
+    def _forward_dict(row):
+        if row is None:
+            return None
+        return {
+            "id": row.id, "arena_id": row.arena_id,
+            "principal": row.principal, "principal_role": row.principal_role,
+            "binding_generation": row.binding_generation,
+            "foothold": row.foothold, "target": row.target,
+            "service_id": row.service_id, "segment": row.segment, "port": row.port,
+            "expires_at": _stringify(row.expires_at), "state": row.state,
+            "stream_id": row.stream_id, "bytes_in": row.bytes_in,
+            "bytes_out": row.bytes_out, "cleanup_state": row.cleanup_state,
+            "cleanup_error": row.cleanup_error,
+            "created_at": _stringify(row.created_at),
+            "updated_at": _stringify(row.updated_at),
+        }
+
+    def create_forward_lease(self, arena_id, *, principal, role, binding_generation,
+                             key, digest, foothold, target, service_id, segment, port,
+                             lifetime_seconds):
+        """Serialize creation with stop and idempotency, including across PG writers."""
+        with self._session() as session:
+            system = self._lock_gate(session, "system")
+            gate = self._lock_gate(session, arena_id)
+            existing = session.scalar(select(ForwardLease).where(
+                ForwardLease.arena_id == arena_id,
+                ForwardLease.idempotency_key == key))
+            if existing:
+                if (existing.principal, existing.request_digest,
+                        existing.binding_generation) != (
+                            principal, digest, binding_generation):
+                    raise ValueError("forward idempotency key was reused with different input")
+                return self._forward_dict(existing)
+            dep = session.get(Deployment, arena_id)
+            account = self._lock_account(session, gate.account_scope) if gate else None
+            now = datetime.now()
+            if (system is None or system.state != "open" or gate is None
+                    or gate.state != "open" or dep is None or dep.status != LabStatus.ACTIVE
+                    or account is None or account.deadline <= now):
+                raise ValueError("arena, stop gate or durable budget is not active")
+            expiry = min(now + timedelta(seconds=lifetime_seconds), account.deadline)
+            if dep.expires_at:
+                expiry = min(expiry, dep.expires_at)
+            if expiry <= now:
+                raise ValueError("forward lifetime has expired")
+            if account.spent + account.reserved >= account.action_cap:
+                raise ValueError("action budget exhausted")
+            account.spent += 1
+            session.add(BudgetAction(
+                id=str(uuid.uuid4()), arena_id=arena_id, scope_id=account.scope_id,
+                action_key="forward:" + hashlib.sha256(key.encode()).hexdigest(),
+                input_digest=digest, kind="forward/create", actor=principal,
+                state="spent", epoch=gate.epoch, created_at=now, updated_at=now,
+            ))
+            row = ForwardLease(
+                id=str(uuid.uuid4()), arena_id=arena_id, principal=principal,
+                principal_role=role, binding_generation=binding_generation,
+                idempotency_key=key, request_digest=digest,
+                foothold=foothold, target=target, service_id=service_id,
+                segment=segment,
+                port=port, expires_at=expiry, state="open", stream_id=None,
+                worker_claim=None,
+                bytes_in=0, bytes_out=0, cleanup_state="complete",
+                created_at=now, updated_at=now,
+            )
+            session.add(row)
+            self._append_event(session, arena_id, principal, "forward_opened", {
+                "forward_id": row.id, "foothold": foothold, "target": target,
+                "service_id": service_id, "expires_at": _stringify(expiry),
+            })
+            session.commit()
+            return self._forward_dict(row)
+
+    def get_forward_lease(self, forward_id):
+        with self._session() as session:
+            return self._forward_dict(session.get(ForwardLease, forward_id))
+
+    def list_forward_leases(self, arena_id):
+        with self._session() as session:
+            rows = session.scalars(select(ForwardLease).where(
+                ForwardLease.arena_id == arena_id).order_by(ForwardLease.created_at.desc()))
+            return [self._forward_dict(row) for row in rows]
+
+    def claim_forward_stream(self, forward_id, *, principal, binding_generation):
+        with self._session() as session:
+            system = self._lock_gate(session, "system")
+            row = session.get(ForwardLease, forward_id)
+            gate = self._lock_gate(session, row.arena_id) if row else None
+            account = session.get(BudgetAccount, gate.account_scope) if gate else None
+            dep = session.get(Deployment, row.arena_id) if row else None
+            now = datetime.now()
+            if (row is None or row.principal != principal
+                    or row.binding_generation != binding_generation):
+                raise ValueError("forward is not owned by this binding")
+            if (row.state != "open" or row.expires_at <= now
+                    or system is None or system.state != "open"
+                    or gate is None or gate.state != "open" or account is None
+                    or account.deadline <= now or dep is None
+                    or dep.status != LabStatus.ACTIVE):
+                raise ValueError("forward is unavailable or expired")
+            row.stream_id = str(uuid.uuid4())
+            row.state = "connecting"
+            row.cleanup_state = "pending"
+            row.updated_at = now
+            self._append_event(session, row.arena_id, principal, "forward_connected", {
+                "forward_id": row.id, "stream_id": row.stream_id,
+            })
+            session.commit()
+            return self._forward_dict(row)
+
+    @contextmanager
+    def forward_start_guard(self, forward_id):
+        """A helper create/start cannot straddle a committed stop."""
+        with self._session() as session:
+            system = self._lock_gate(session, "system")
+            row = session.get(ForwardLease, forward_id)
+            gate = self._lock_gate(session, row.arena_id) if row else None
+            dep = session.get(Deployment, row.arena_id) if row else None
+            if (system is None or system.state != "open" or gate is None
+                    or gate.state != "open" or row is None
+                    or row.state != "connecting" or row.expires_at <= datetime.now()
+                    or dep is None or dep.status != LabStatus.ACTIVE):
+                raise ValueError("forward helper start was cancelled or stopped")
+            yield
+            session.commit()
+
+    def claim_forward_worker(self, forward_id, claim):
+        with self._session() as session:
+            row = session.get(ForwardLease, forward_id)
+            if row is None:
+                return False
+            session.execute(update(ForwardLease).where(ForwardLease.id == forward_id)
+                            .values(updated_at=ForwardLease.updated_at))
+            session.refresh(row)
+            if row.state != "connecting" or row.worker_claim is not None:
+                return False
+            row.worker_claim = claim
+            row.updated_at = datetime.now()
+            session.commit()
+            return True
+
+    def forward_stream_valid(self, forward_id):
+        with self._session() as session:
+            row = session.get(ForwardLease, forward_id)
+            if row is None or row.state != "connecting" or row.expires_at <= datetime.now():
+                return False
+            system = session.get(BudgetGate, "system")
+            gate = session.get(BudgetGate, row.arena_id)
+            dep = session.get(Deployment, row.arena_id)
+            return bool(system and system.state == "open" and gate
+                        and gate.state == "open" and dep and dep.status == LabStatus.ACTIVE)
+
+    def heartbeat_forward_stream(self, forward_id):
+        with self._session() as session:
+            row = session.get(ForwardLease, forward_id)
+            if row is None or row.state != "connecting":
+                return False
+            row.updated_at = datetime.now()
+            session.commit()
+            return True
+
+    def finish_forward_stream(self, forward_id, *, bytes_in=0, bytes_out=0,
+                              cleanup_complete=True, error=None):
+        with self._session() as session:
+            row = session.get(ForwardLease, forward_id)
+            if row is None:
+                return
+            if row.state == "connecting":
+                row.state = "closed"
+            row.bytes_in = max(row.bytes_in, bytes_in)
+            row.bytes_out = max(row.bytes_out, bytes_out)
+            row.cleanup_state = "complete" if cleanup_complete else "incomplete"
+            row.cleanup_error = error[:500] if error else None
+            row.updated_at = datetime.now()
+            self._append_event(session, row.arena_id, row.principal, "forward_closed", {
+                "forward_id": forward_id, "bytes_in": row.bytes_in,
+                "bytes_out": row.bytes_out, "cleanup_state": row.cleanup_state,
+            })
+            session.commit()
+
+    def revoke_forward_lease(self, forward_id, *, actor, reason="operator"):
+        with self._session() as session:
+            row = session.get(ForwardLease, forward_id)
+            if row is None:
+                return None
+            self._lock_gate(session, "system")
+            self._lock_gate(session, row.arena_id)
+            if row.state in {"open", "connecting"}:
+                row.state = "revoked"
+                row.updated_at = datetime.now()
+                self._append_event(session, row.arena_id, actor, "forward_revoked", {
+                    "forward_id": row.id, "reason": reason,
+                })
+                session.commit()
+            return self._forward_dict(row)
+
+    def revoke_arena_forwards(self, arena_id, *, actor, reason):
+        for row in self.list_forward_leases(arena_id):
+            if row["state"] in {"open", "connecting"}:
+                self.revoke_forward_lease(row["id"], actor=actor, reason=reason)
+
+    def stale_forward_leases(self, now, stale_before):
+        with self._session() as session:
+            rows = session.scalars(select(ForwardLease).where(
+                (ForwardLease.state.in_(("open", "connecting")) |
+                 (ForwardLease.cleanup_state != "complete"))))
+            return [self._forward_dict(row) for row in rows
+                    if (row.expires_at <= now or
+                        (row.state == "connecting" and row.updated_at <= stale_before)
+                        or row.cleanup_state == "incomplete"
+                        or (row.state in {"revoked", "closed"}
+                            and row.cleanup_state == "pending"))]
 
     def stopping_budget_scopes(self):
         with self._session() as session:
@@ -427,7 +642,10 @@ class Database:
                 PocJob.arena_id.in_(scopes),
                 (PocJob.state.in_(("queued", "running")) |
                  PocJob.cleanup_state.in_(("pending", "incomplete", "reconcile_pending")))).limit(1))
-            if active_actions or active_jobs:
+            active_forwards = session.scalar(select(ForwardLease.id).where(
+                ForwardLease.arena_id.in_(scopes), ForwardLease.stream_id.is_not(None),
+                ForwardLease.cleanup_state != "complete").limit(1))
+            if active_actions or active_jobs or active_forwards:
                 return False
             gate.state = "stopped"
             gate.updated_at = datetime.now()

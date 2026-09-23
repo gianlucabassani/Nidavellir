@@ -1,6 +1,6 @@
 # Nidavellir — ordered delivery checklist
 
-Updated 2026-09-23 after completing the NV-04 durable-budget/stop gate.
+Updated 2026-09-23 after completing the NV-05 scoped-access gate.
 This is the canonical work queue. [ROADMAP.md](ROADMAP.md) retains product scope,
 design detail and legacy milestone mapping. Unchecked means unfinished.
 Verification history is in [docs/JOURNAL.md](docs/JOURNAL.md).
@@ -42,7 +42,7 @@ demonstrated target need. Bughunt owns live bounty campaigns and their agent wor
   rejecting new work and cancelling/draining helpers with final traces.
   **Depends:** NV-03. **Accept:** reconnect cannot reset budgets; racing requests cannot
   exceed reservations; stop terminates helpers and does not lose evidence or final state.
-- [ ] **NV-05 — Scoped research access and runtime capabilities.** Add foothold-scoped
+- [x] **NV-05 — Scoped research access and runtime capabilities.** Add foothold-scoped
   forwards only for the selected research workflow: explicit destination, expiry, cleanup,
   binding and audit. Publish a bounded REST/GUI/MCP manifest for supported operations,
   recording, readiness, limits and unsupported providers/accounting.

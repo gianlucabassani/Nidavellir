@@ -164,6 +164,38 @@ class BudgetControl(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
+class ForwardLease(Base):
+    """One fixed-destination, single-stream research access lease."""
+
+    __tablename__ = "forward_leases"
+    __table_args__ = (
+        UniqueConstraint("arena_id", "idempotency_key", name="uq_forward_arena_key"),
+    )
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    arena_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    principal: Mapped[str] = mapped_column(Text, nullable=False)
+    principal_role: Mapped[str] = mapped_column(Text, nullable=False)
+    binding_generation: Mapped[str | None] = mapped_column(Text)
+    idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
+    request_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    foothold: Mapped[str] = mapped_column(Text, nullable=False)
+    target: Mapped[str] = mapped_column(Text, nullable=False)
+    service_id: Mapped[str] = mapped_column(Text, nullable=False)
+    segment: Mapped[str] = mapped_column(Text, nullable=False)
+    port: Mapped[int] = mapped_column(Integer, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    state: Mapped[str] = mapped_column(Text, nullable=False)
+    stream_id: Mapped[str | None] = mapped_column(Text, unique=True)
+    worker_claim: Mapped[str | None] = mapped_column(Text)
+    bytes_in: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    bytes_out: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cleanup_state: Mapped[str] = mapped_column(Text, nullable=False)
+    cleanup_error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
 class ApiKey(Base):
     __tablename__ = "api_keys"
 

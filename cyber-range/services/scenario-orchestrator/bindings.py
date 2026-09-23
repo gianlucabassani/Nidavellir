@@ -47,13 +47,14 @@ CAP_SETUP = "setup"      # configurator setup steps (configurator)
 CAP_OBSERVE = "observe"  # in-path traffic capture on a shared segment (mitm)
 CAP_LIFECYCLE = "lifecycle"  # status-independent teardown of a bound arena
 CAP_WORKSPACE = "workspace"  # bounded source status/diff for research evidence
+CAP_FORWARD = "forward"  # declared internal TCP service from an attacker foothold
 
 # stance -> permitted capabilities. `None` (own-sandbox) permits everything;
 # a stance-scoped binding permits only its stance's class. Reads (status/events)
 # are intentionally NOT capability-gated — D1 is about *driving* an arena.
 _STANCE_CAPS: dict[str | None, set[str]] = {
     None: {CAP_EXEC, CAP_SETUP, CAP_OBSERVE, CAP_LIFECYCLE, CAP_WORKSPACE},
-    "attacker": {CAP_EXEC, CAP_LIFECYCLE, CAP_WORKSPACE},
+    "attacker": {CAP_EXEC, CAP_LIFECYCLE, CAP_WORKSPACE, CAP_FORWARD},
     "configurator": {CAP_SETUP, CAP_LIFECYCLE, CAP_WORKSPACE},
     "defender": {CAP_LIFECYCLE},
     "mitm": {CAP_OBSERVE, CAP_LIFECYCLE},

@@ -1,10 +1,10 @@
 {
   "arenas": [
-    "949aad95-7b8f-419c-bedc-4edaaf855f24",
-    "0af45d81-f96b-4bb4-9969-eff68ad3f777",
-    "844c117c-75f8-4799-8e60-dd2ec166edec"
+    "37e4bd09-6ca3-402b-9f86-60a579449732",
+    "88b6ec84-1c31-4522-835a-70f8e9482635",
+    "8eb06da3-9878-484d-a098-370dbeb7d642"
   ],
-  "deadline": "2026-09-23 09:40:19.742472",
+  "deadline": "2026-09-23 13:51:26.167557",
   "denied_paths": [
     "control_plane",
     "decoy",
@@ -17,27 +17,27 @@
   ],
   "docker_server": "29.7.2",
   "final_resources": {
-    "0af45d81-f96b-4bb4-9969-eff68ad3f777": {
+    "37e4bd09-6ca3-402b-9f86-60a579449732": {
       "containers": 0,
       "networks": 0,
       "volumes": 0
     },
-    "844c117c-75f8-4799-8e60-dd2ec166edec": {
+    "88b6ec84-1c31-4522-835a-70f8e9482635": {
       "containers": 0,
       "networks": 0,
       "volumes": 0
     },
-    "949aad95-7b8f-419c-bedc-4edaaf855f24": {
+    "8eb06da3-9878-484d-a098-370dbeb7d642": {
       "containers": 0,
       "networks": 0,
       "volumes": 0
     }
   },
   "fixture_image": "sha256:a647c2dc50479ed9da2581d6f977a078492b9f29ba95aff3ff0bbc8a73b9e162",
-  "input_digest": "sha256:1d1d5bd81f655ec860a675f8c782f4446775d39924382fe5ae5355f6bc0c0c15",
+  "input_digest": "sha256:843c480ede167915de7186e228350cfaebaf0431acff098924c9bd3ec5bf31f3",
   "interrupted_job": {
     "cleanup": "complete",
-    "id": "f5e47677-5d58-474e-9373-0652956c7121",
+    "id": "55766e14-ee72-49fc-850f-5cc668633c0b",
     "state": "failed"
   },
   "limits": {
@@ -53,7 +53,7 @@
   },
   "mcp": {
     "cross_arena_denied": true,
-    "job_id": "6d58520a-102b-4997-95c1-309b58cebe5e",
+    "job_id": "efcc763a-3068-4fa8-ad63-d157de68e37d",
     "status_result_cancel": true
   },
   "network_errors": {
@@ -78,8 +78,8 @@
     "authority": true,
     "connect": true
   },
-  "reset_operation": "62756516-4f6d-4e71-8bcd-33f9ebdb449e",
-  "runner_image": "sha256:1d3b6b1424ba3bdac1da921c2b3df9483985a3bba12f70448ebce9ab564b261b",
+  "reset_operation": "f27af13c-9d25-4bac-92c6-d0fa1d9374ad",
+  "runner_image": "sha256:b341f14f00049fb2bece1a04e62f7728b32736b9d42e42a01f2d40cf5778f476",
   "runner_interfaces": [
     "lo"
   ],
@@ -111,7 +111,7 @@
       "state": "timed_out"
     }
   },
-  "useful_job": "f5381397-6b89-470c-96e0-900fe5f92b74",
-  "verified_at": "2026-09-23T09:41:37Z",
+  "useful_job": "ee958083-402a-4baa-8936-780e2b6facad",
+  "verified_at": "2026-09-23T13:52:45Z",
   "worker_python": "Python 3.11.16"
 }

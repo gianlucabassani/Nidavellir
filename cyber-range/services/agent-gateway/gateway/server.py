@@ -90,6 +90,11 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
         return tools.budget_status(ctx(), arena_id=arena_id)
 
     @mcp.tool()
+    def runtime_capabilities(arena_id: str) -> dict:
+        """Discover this principal's live operations, limits and unsupported features."""
+        return tools.runtime_capabilities(ctx(), arena_id=arena_id)
+
+    @mcp.tool()
     def session_preflight(arena_id: str) -> dict:
         """Verify the immutable target identity, authorization, infrastructure,
         workspace and reset contract before research begins."""
@@ -119,6 +124,24 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
     stance = parse_stance(cfg.stance)
 
     if stance is Stance.attacker:
+        @mcp.tool()
+        def open_forward(arena_id: str, foothold: str, target: str,
+                         service_id: str, lifetime_seconds: int = 120,
+                         idempotency_key: str | None = None) -> dict:
+            """Lease one declared internal TCP service from a selected foothold segment."""
+            return tools.open_forward(ctx(), arena_id, foothold, target,
+                                      service_id, lifetime_seconds, idempotency_key)
+
+        @mcp.tool()
+        def forward_status(arena_id: str, forward_id: str) -> dict:
+            """Read this lease's expiry, byte counts and cleanup state."""
+            return tools.forward_status(ctx(), arena_id, forward_id)
+
+        @mcp.tool()
+        def revoke_forward(arena_id: str, forward_id: str) -> dict:
+            """Revoke a lease and close its active stream."""
+            return tools.revoke_forward(ctx(), arena_id, forward_id)
+
         @mcp.tool()
         def get_topology(arena_id: str) -> dict:
             """The arena's nodes (IPs, URLs, which is the foothold) and networks."""

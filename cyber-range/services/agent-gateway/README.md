@@ -107,3 +107,14 @@ gateway/
 
 The package is namespaced (`gateway.*`) so it does not collide with the
 orchestrator's flat modules; it talks to the orchestrator only over REST.
+
+## Runtime capabilities and internal forwards
+
+Call `runtime_capabilities(arena_id)` to discover the orchestrator's filtered
+v1 operation states, limits, recording, budget and stop status. Attacker
+sessions may use `open_forward(arena_id, foothold, target, service_id, ...)`,
+`forward_status` and `revoke_forward` for declared internal TCP services.
+The orchestrator independently checks the attacker binding and selected
+foothold segment; the MCP allow-list is a secondary guard. MCP tools manage
+leases only. Binary bytes use the authenticated WebSocket and loopback client
+documented in [the API reference](../../../docs/API.md#runtime-capabilities-and-scoped-tcp-forwards).

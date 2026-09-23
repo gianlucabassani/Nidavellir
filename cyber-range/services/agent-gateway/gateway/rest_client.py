@@ -71,6 +71,25 @@ class RestClient:
     def budget_status(self, api_key: str, arena_id: str) -> dict:
         return self._request("GET", f"/arenas/{arena_id}/budget", api_key)
 
+    def runtime_capabilities(self, api_key: str, arena_id: str) -> dict:
+        return self._request("GET", f"/arenas/{arena_id}/capabilities", api_key)
+
+    def open_forward(self, api_key: str, arena_id: str, foothold: str,
+                     target: str, service_id: str, lifetime_seconds: int,
+                     idempotency_key: str) -> dict:
+        return self._request("POST", f"/arenas/{arena_id}/forwards", api_key,
+                             json={"foothold": foothold, "target": target,
+                                   "service_id": service_id,
+                                   "lifetime_seconds": lifetime_seconds,
+                                   "idempotency_key": idempotency_key})
+
+    def forward_status(self, api_key: str, arena_id: str, forward_id: str) -> dict:
+        return self._request("GET", f"/arenas/{arena_id}/forwards/{forward_id}", api_key)
+
+    def revoke_forward(self, api_key: str, arena_id: str, forward_id: str) -> dict:
+        return self._request("POST", f"/arenas/{arena_id}/forwards/{forward_id}/revoke",
+                             api_key)
+
     def stop_arena(self, api_key: str, arena_id: str, reason: str) -> dict:
         return self._request("POST", f"/arenas/{arena_id}/stop", api_key,
                              json={"reason": reason, "idempotency_key": uuid.uuid4().hex})

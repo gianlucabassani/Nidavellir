@@ -189,10 +189,11 @@ Shipped:
   console controls and finding attachment by digest (R1 code implemented August 24).
 - worker-owned confined PoC execution (NV-03) and orchestrator-enforced durable
   action/deadline budgets with per-arena and system stop controls (NV-04).
+- declared-service, fixed-destination TCP forwards with durable lease/stream
+  accounting and a principal-filtered REST/console/MCP capability manifest (NV-05).
 
 Still required:
 
-- foothold-scoped SSH tunnel lifecycle;
 - trusted token/cost preflight and usage accounting for future supported model drivers;
 - before/after manifests for non-Git/binary targets.
 
@@ -217,6 +218,18 @@ cross-process allowance persistence, a one-slot 200/429 race, stop/drain/reaper
 recovery, sticky system stop across restarts, deadline expiry and zero final
 resources. NV-02 and NV-03 Docker-local live regressions passed on the same
 source. See `docs/verification/nv04-live-2026-09-23.json` and the dated journal.
+
+NV-05's 2026-09-23 pinned gate passed Ruff 0.6.9, Bandit 1.9.4 with zero
+medium/high findings, 891 SQLite tests (four PostgreSQL-only tests skipped)
+and 895 PostgreSQL tests, each with six declared integration deselections.
+PostgreSQL covered competing lease creation, stream claims, revoke/connect and
+stop/helper-start serialization. The isolated Docker live gate proved a
+two-segment internal-only TCP fixture, principal-filtered REST/MCP discovery,
+console controls, fixed destination denial, revoke/expiry/stop stream closure,
+killed-worker cleanup, reset and zero labeled resources. NV-02/03/04 live
+regressions passed afterward. See `docs/verification/nv05-live-2026-09-23.json`
+and the dated journal. This is a fixed TCP relay, not an SSH tunnel; token/cost
+hard caps for external agents remain explicitly unsupported.
 
 Review on 2026-09-07: no main stack services running under this Compose project; a stopped
 agent-gateway and cached images exist. Ruff passed. Source-only Bandit (excluding both
@@ -498,22 +511,23 @@ cannot reach the internet or cloud metadata.
 
 ### R3 — Pivoting and durable guardrails
 
-- Foothold-scoped SSH forwards with explicit destinations, expiry, cleanup, and trace.
-- Cross-process step/time/token/cost budgets with fail-closed accounting.
+- Foothold-segment TCP forwards to declared services with expiry, cleanup, and trace.
+- Cross-process action/time budgets with fail-closed accounting; external model
+  token/cost hard caps refuse admission until a trusted driver supplies usage.
 - Per-arena stop plus system-wide emergency stop; reject new work, cancel where
   safe, terminate disposable helpers, and flush final traces.
 
 **Research-runtime acceptance.** A BYO agent confirms XSS in the browser, develops
 a PoC in the sandbox, transfers payload/evidence, inspects and replays HTTP, and
-tunnels to an internal service. Every action is scoped and traced; a breached
+connects to a declared internal service. Every action is scoped and traced; a breached
 budget freezes further work; containment tests remain green.
 
 ### R1 implementation slices — historical plan, reconciled 2026-09-07
 
 The six slices below now exist in code, including the console and finding attachment.
 Retain them as the acceptance/design reference; fresh full/live verification is NV-01–02.
-NV-03 confined execution and NV-04 durable guardrails are complete; NV-05 scoped
-access is next. These six slices are not six open implementation tasks:
+NV-03 confined execution, NV-04 durable guardrails and NV-05 scoped access are
+complete on Docker-local. These six slices are not six open implementation tasks:
 
 1. **Provider primitive** — `http_request` across `base` (refuse), `docker-local`
    (disposable arena-bound runner, mirroring the headless-browser pattern), and

@@ -30,7 +30,8 @@ class Stance(str, Enum):
 # the operator console); it's lifecycle-grade — available to any stance.
 LIFECYCLE_TOOLS = frozenset(
     {"list_scenarios", "deploy_arena", "arena_status", "get_briefing",
-     "destroy_arena", "announce_agent", "session_preflight", "budget_status"}
+     "destroy_arena", "announce_agent", "session_preflight", "budget_status",
+     "runtime_capabilities"}
 )
 
 # Per-stance execution/recon toolsets, gated by stance.
@@ -52,7 +53,7 @@ STANCE_TOOLS: dict[Stance, frozenset[str]] = {
          "upload_file", "download_file", "browser_visit",
          "http_request", "list_http_transactions", "get_http_transaction",
          "replay_http_transaction", "submit_poc", "poc_status", "poc_result",
-         "cancel_poc"}
+         "cancel_poc", "open_forward", "forward_status", "revoke_forward"}
     ),
     Stance.defender: frozenset({"get_topology", "query_events"}),
     Stance.mitm: frozenset({"get_topology", "observe_traffic"}),

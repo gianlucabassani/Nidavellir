@@ -78,6 +78,49 @@
 
 {# ── Overview: where the engagement stands right now ── #}
 <section class="ws-panel" id="wspanel-overview" role="tabpanel" aria-labelledby="wstab-overview" data-tab="overview">
+  {% if capabilities.operations %}
+  <div class="card card-pad" id="runtime-capabilities" style="margin-bottom:18px">
+    <h3>Runtime capabilities</h3>
+    <p class="muted">{{ capabilities.provider }} · {{ capabilities.arena_state }} ·
+      {{ capabilities.budget.remaining if capabilities.budget else '—' }} actions remaining ·
+      {{ capabilities.stop.arena.state if capabilities.stop.arena else 'no arena gate' }}</p>
+    <div class="flexrow" style="flex-wrap:wrap;gap:8px">
+      {% for name, op in capabilities.operations.items() %}
+      <span class="badge {{ 'badge--ok' if op.state == 'ready' else 'badge--idle' }}"
+            title="{{ op.reason }}">{{ name }}: {{ op.state }}</span>
+      {% endfor %}
+    </div>
+    {% if capabilities.operations.forward.state == 'ready' %}
+    <form method="post" action="{{ url_for('arena_forward_form', instance_id=instance_id) }}" class="flexrow" style="margin-top:12px;gap:8px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Foothold <select name="foothold" required>
+        {% for foothold in capabilities.footholds %}<option value="{{ foothold }}">{{ foothold }}</option>{% endfor %}
+      </select></label>
+      <label>Service <select name="service" required>
+        {% for target in capabilities.targets %}{% for service in target.forward_services %}
+        <option value="{{ target.node }}:{{ service }}">{{ target.node }} / {{ service }}</option>
+        {% endfor %}{% endfor %}
+      </select></label>
+      <button class="btn btn-secondary">Open 120-second forward</button>
+    </form>
+    {% endif %}
+    {% for forward in forwards %}
+    <div class="flexrow" style="margin-top:8px;gap:8px">
+      <span class="mono">{{ forward.id }}</span>
+      <span>{{ forward.target }} / {{ forward.service_id }} · {{ forward.state }} · expires {{ forward.expires_at }}</span>
+      {% if forward.state in ('open', 'connecting') %}
+      <form method="post" action="{{ url_for('arena_forward_revoke_form', instance_id=instance_id, forward_id=forward.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-danger btn-sm">Revoke</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
+    {% if forwards %}<p class="muted" style="margin-top:8px">Connect locally with
+      <code>python3 scripts/nv-forward-client.py --arena {{ instance_id }} --forward FORWARD_ID --listen-port 18080</code>.
+      Set <code>NIDAVELLIR_API_KEY</code> in the client environment.</p>{% endif %}
+  </div>
+  {% endif %}
   {% if unhealthy %}
   <div class="notice flash--warning" style="margin-bottom:16px">
     <i class="fa-solid fa-triangle-exclamation ico" style="color:var(--warn)"></i>

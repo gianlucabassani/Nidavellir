@@ -145,15 +145,17 @@ validated repeated experiments, followed by research breadth driven by selected 
 NV-01 restored the pinned Python 3.11 SQLite/PostgreSQL release gate on 2026-09-16.
 NV-02 completed the live target lifecycle/reset gate on 2026-09-21. NV-03 confined
 PoC execution completed its release and live gates on 2026-09-22. NV-04 durable
-budgets and stop controls completed their release and live gates on 2026-09-23;
-NV-05 scoped access and capability discovery are next.
+budgets and stop controls completed their release and live gates on 2026-09-23.
+NV-05 fixed-destination TCP forwards and principal-filtered capability discovery
+completed the PostgreSQL, release and live gates on 2026-09-23. NV-06 independent
+validation is next.
 
 | Stage | Focus | Status |
 |---|---|---|
 | **Shipped engine** | Dynamic arenas, target intake, repo→service, monitoring, validators, scoring, eval export and replay | ✅ shipped |
-| **Research session** | Change evidence, file transfer, browser, HTTP capture/replay, finding attachment, confined PoC and durable action/time stop controls; scoped forwards remain | 🟢 partially shipped |
+| **Research session** | Change evidence, file transfer, browser, HTTP capture/replay, finding attachment, confined PoC, durable action/time stop controls and declared-service TCP forwards | 🟢 partially shipped |
 | **Console architecture** | Engagements, Evaluations, Library, Activity, unified creation, contextual workspace and SSE | ✅ shipped |
-| **Research-ready runtime** | NV-01–04 complete; NV-05 scoped access and capability discovery next | 🟡 **in progress** |
+| **Research-ready runtime** | NV-01–05 complete on Docker-local; unsupported model token/cost hard caps are explicit | ✅ complete |
 | **Discovery lane** | Patch-diff & variant hunting, fuzzing + crash triage, binary/appliance/VM intake, campaigns & disclosure output | ◻ planned |
 | **Evaluation workbench** | NV-06–10: independent validation, durable paired trials, small challenge library, Bughunt proof and recovery | ◻ planned |
 | **Held-out proof** | A real vulnerability found and proven on-platform; then a comparison over challenges drawn from that work | ◻ planned |

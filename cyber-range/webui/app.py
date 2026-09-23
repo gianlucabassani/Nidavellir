@@ -936,6 +936,8 @@ def arena_detail(instance_id):
     http_total = (_api_get(f"/arenas/{instance_id}/http/transactions?limit=1")[0] or {}).get("total", 0)
     poc_jobs = (_api_get(f"/arenas/{instance_id}/poc-jobs")[0] or {}).get("jobs", [])
     budget = _api_get(f"/arenas/{instance_id}/budget")[0] or {}
+    capabilities = _api_get(f"/arenas/{instance_id}/capabilities")[0] or {}
+    forwards = (_api_get(f"/arenas/{instance_id}/forwards")[0] or {}).get("forwards", [])
     web_capable = any(
         (n.get("ports") or n.get("url")) and not n.get("foothold")
         for n in _parse_nodes(outputs)
@@ -989,7 +991,36 @@ def arena_detail(instance_id):
         lifecycle=lifecycle if lifecycle_ok else None,
         poc_jobs=poc_jobs,
         budget=budget,
+        capabilities=capabilities,
+        forwards=forwards,
     )
+
+
+@app.route("/arena/<instance_id>/forwards", methods=["POST"])
+def arena_forward_form(instance_id):
+    selection = request.form.get("service") or ""
+    if ":" not in selection:
+        flash("Choose a declared service", "danger")
+        return redirect(url_for("arena_detail", instance_id=instance_id))
+    target, service_id = selection.split(":", 1)
+    data, code = _api_post(f"/arenas/{instance_id}/forwards", {
+        "foothold": request.form.get("foothold") or "",
+        "target": target,
+        "service_id": service_id,
+        "lifetime_seconds": 120,
+        "idempotency_key": uuid.uuid4().hex,
+    })
+    flash("Forward lease opened" if code == 200 else data.get("error", "Forward failed"),
+          "success" if code == 200 else "danger")
+    return redirect(url_for("arena_detail", instance_id=instance_id))
+
+
+@app.route("/arena/<instance_id>/forwards/<forward_id>/revoke", methods=["POST"])
+def arena_forward_revoke_form(instance_id, forward_id):
+    data, code = _api_post(f"/arenas/{instance_id}/forwards/{forward_id}/revoke")
+    flash("Forward lease revoked" if code == 200 else data.get("error", "Revoke failed"),
+          "success" if code == 200 else "danger")
+    return redirect(url_for("arena_detail", instance_id=instance_id))
 
 
 @app.route("/arena/<instance_id>/stop", methods=["POST"])

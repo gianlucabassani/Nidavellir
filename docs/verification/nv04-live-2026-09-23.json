@@ -1,21 +1,21 @@
 {
   "arenas": [
-    "013d493f-52d9-4dc5-b5c3-61489b47b84d",
-    "57bd2a90-1209-40f7-97fb-0cd63491a307"
+    "3fe7cf81-bce1-4456-855b-9a3d9aa780e3",
+    "f34fc539-2ec1-4b98-ace1-ab3b71924ba9"
   ],
   "cost_capped_job_refused": true,
   "docker_server": "29.7.2",
   "expired_job": {
-    "id": "483715a9-cb70-4dab-ad0d-b9494add943e",
+    "id": "5d4f6778-2bf3-4b6b-8f13-b7309d74643d",
     "state": "cancelled"
   },
   "final_resources": {
-    "013d493f-52d9-4dc5-b5c3-61489b47b84d": {
+    "3fe7cf81-bce1-4456-855b-9a3d9aa780e3": {
       "containers": 0,
       "networks": 0,
       "volumes": 0
     },
-    "57bd2a90-1209-40f7-97fb-0cd63491a307": {
+    "f34fc539-2ec1-4b98-ace1-ab3b71924ba9": {
       "containers": 0,
       "networks": 0,
       "volumes": 0
@@ -23,18 +23,18 @@
   },
   "fixture_image": "sha256:a647c2dc50479ed9da2581d6f977a078492b9f29ba95aff3ff0bbc8a73b9e162",
   "http_browser_drained": [
-    "a117eb18-0644-4d18-8a4c-44b1fd102fc8",
-    "0fe3235e-fc71-4e33-8bf6-edc06cd9c0fc"
+    "3f79c7b4-03bb-4e73-a1f4-3901e96b928d",
+    "923a0a20-2e7a-4bd9-98ae-9de985a140ea"
   ],
   "interrupted_stop": {
     "cleanup": "complete",
-    "id": "1f26ef4a-853a-4b89-9829-4300717d8aff",
+    "id": "fde8e168-075f-40b8-9115-0ac5328c4ef9",
     "state": "failed"
   },
   "mcp_after": 999,
   "mcp_before": 1000,
   "queued_cancel": {
-    "id": "3a3cd81c-2fc9-4f81-b24f-76342a23b629",
+    "id": "7fa76377-504f-4623-8be3-642716498255",
     "refunded": true,
     "state": "cancelled"
   },
@@ -46,10 +46,10 @@
   "stop_admission_race": 202,
   "stopped_job": {
     "cleanup": "complete",
-    "id": "c82decf3-7d70-496a-a483-1425f06bb640",
+    "id": "279f2a6d-3903-426e-a7ce-f152fb126af9",
     "state": "cancelled"
   },
   "system_epoch": 2,
   "token_cap_refused": true,
-  "verified_at": "2026-09-23T08:55:13.479567+00:00"
+  "verified_at": "2026-09-23T13:56:07.576462+00:00"
 }
