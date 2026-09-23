@@ -3,6 +3,29 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-09-23 — P1 vertical-result handoff after NV-05 checkpoint
+
+**Outcome:** Committed the completed NV-05 implementation and passing evidence
+locally as `7df304a`, without pushing. Replaced the completed NV-05 handoff in
+`tmp-implementationPlan.md` with a planning-only P1 sequence. NV-06 starts
+with one independently verified authorization result and positive, negative,
+healthy and failure controls; NV-07–10 generalize that evidence into paired
+trials, a small challenge, synthetic Bughunt usefulness proof and recovery.
+NV-06–10 remain unchecked. Prior journal history and `docs/UI_REBUILD_PLAN.md`
+are unchanged.
+
+**Files / verification:** This planning checkpoint changes only the handoff
+and this journal entry. The NV-05 commit contains the implementation and saved
+gate evidence listed below. No product code or full test gate ran for this
+plan; reviewed the existing validator, score, finding and event seams and ran
+`git diff --check` on the planning changes.
+
+**Risks / next step:** The current marker validator can use a caller-supplied
+marker, crash confirmation can lack action linkage, and benchmark `found`
+points can reflect a claim before effect confirmation. The next builder should
+freeze the NV-06 acceptance matrix and construct its fixture before changing
+the API or scorer. No P1 completion is claimed.
+
 ## 2026-09-23 — Complete NV-05 scoped research access and runtime capabilities
 
 **Outcome:** NV-05 is complete on Docker-local. Scenario nodes now declare named
