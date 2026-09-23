@@ -13,6 +13,27 @@
 </div>
 
 <div class="grid" style="grid-template-columns:1fr; gap:16px">
+  <div class="card pad-0">
+    <div class="card-head"><span class="label">System emergency stop</span>
+      <span class="badge badge--idle" style="margin-left:auto">{{ system_stop.state or 'unavailable' }}</span></div>
+    <div class="set-row">
+      <div class="info"><div class="t">Research admission</div>
+        <div class="d">Stops new work across arenas and drains disposable helpers. Clearing requires verified cleanup.</div></div>
+      {% if system_stop.state == 'open' %}
+      <form method="post" action="{{ url_for('system_stop_form') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="reason" value="Operator emergency stop from console">
+        <button class="btn btn-danger">Emergency stop</button>
+      </form>
+      {% elif system_stop.state == 'stopped' %}
+      <form method="post" action="{{ url_for('system_stop_clear_form') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="reason" value="Operator cleared emergency stop from console">
+        <button class="btn btn-secondary">Clear stop</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
   <!-- model connection -->
   <div class="card pad-0">
     <div class="card-head"><span class="label">Model connection</span>

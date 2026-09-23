@@ -3,6 +3,84 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-09-23 — NV-04 durable budgets and stop controls complete
+
+**Outcome:** Completed NV-04. The orchestrator now owns versioned action caps,
+absolute deadlines, an atomic reservation ledger and sticky per-arena/system stop
+gates. The account survives gateway reconnects and NV-02 replacement resets.
+REST, attacker/operator MCP and the current Flask console use the same authority;
+worker jobs and disposable helper starts recheck durable gates. Stop drains work,
+reaper recovery settles interrupted PoC jobs, and final traces remain readable.
+Unsupported token/cost hard caps refuse admission because current BYO-agent
+drivers cannot supply trusted pre-execution usage bounds. ADR-0015 is accepted.
+
+**Files:** Added migration `0007_add_budget_stop.py`, budget/stop models and
+database operations, API and gateway routes/tools, worker/provider guards,
+console controls, `docker-compose.nv04.yml`, `scripts/verify-nv04-live.py`,
+tests and `docs/API.md`. Updated TODO, ROADMAP and README against passing gates.
+The preexisting UI rebuild proposal and earlier journal entries remain intact.
+
+**Verification:** Final `make release-check` on pinned Python 3.11.14 passed
+Ruff 0.6.9, Bandit 1.9.4 (zero medium/high findings), 889 SQLite tests (two
+PostgreSQL-only skips) and 891 PostgreSQL tests; each backend had six declared
+integration deselections. Clean Alembic migration and API/console/MCP readiness
+smoke passed. The PostgreSQL suite includes competing admission, setup-step and
+stop/helper-start transactions. `make verify-nv04-live` passed with a 200/429
+one-slot race, cross-process MCP budget persistence, queued-job refund,
+running-job stop and cleanup, admission/stop race, killed-worker recovery,
+HTTP/browser drain, system-stop restart persistence, deadline expiry and zero
+final labeled resources. `make verify-nv02-live` and `make verify-nv03-live`
+passed afterward. Saved evidence:
+`docs/verification/nv04-live-2026-09-23.json`,
+`docs/verification/nv02-regression-2026-09-23.json` and the refreshed
+`docs/verification/nv03-live-2026-09-22.json` (`verified_at` is 2026-09-23).
+
+**Risks / next step:** Current external-agent token/cost caps remain explicitly
+unsupported until a driver exposes a trusted bound and usage feed. Synchronous
+foothold/setup calls drain within their bounded timeout; stop does not preempt
+an already running command. Docker-local is the live-verified provider. Next:
+NV-05 scoped research access and runtime capability discovery.
+
+## 2026-09-23 — NV-04 fresh-session implementation handoff
+
+**Outcome:** Replaced the completed NV-03 `tmp-implementationPlan.md` handoff
+with a concrete NV-04 plan for durable action/time budgets, explicit token/cost
+accounting limits, per-arena/system stop, shared REST/MCP/console enforcement,
+recovery and isolated live acceptance. NV-04 remains unchecked. The completed
+NV-03 plan is preserved in commit `e778e30`; the separate UI rebuild proposal
+is unchanged.
+
+**Basis:** Read README, ROADMAP, TODO, relevant ADRs, latest journal and
+`.lab.yaml`; inspected gateway process-local budgets, binding pause, setup
+step accounting, NV-03 durable jobs, model usage seams, migrations, reaper and
+release/live test entry points. No product code changed and no tests run for
+this planning-only handoff.
+
+**Risks / next step:** Direct REST and concurrent setup actions currently bypass
+or race process-local/event-derived counters. External BYO agents lack trusted
+pre-execution token/cost accounting. The next session starts with the proposed
+ADR/charge matrix and PostgreSQL admission/stop races, then implements the
+remaining plan and proves the live stop gate before closing NV-04.
+
+## 2026-09-23 — Proposed full console rebuild plan
+
+**Outcome:** Added `docs/UI_REBUILD_PLAN.md`, a proposed frontend remake with
+researcher workflows, complete surface inventory, architecture and security
+boundary, phased parity migration, cutover and acceptance gates. It proposes a
+React/TypeScript frontend served through the existing Flask same-origin BFF.
+This changes no product code or canonical NV status. A new ADR must explicitly
+supersede ADR-0012's Flask/Jinja rendering choice before implementation.
+
+**Basis:** Inspected the current WebUI routes, templates, JavaScript, CSS,
+tests, ADR-0012, ROADMAP and TODO. Checked official React, Vite, React Router,
+Playwright and W3C documentation for the proposed implementation and testing
+approach. No usability study or runtime test was performed for this plan.
+
+**Risks / next step:** The cost and visual direction remain provisional until a
+route/action parity matrix, researcher walkthrough and two design concepts are
+reviewed. Start with that phase-0 ticket; keep NV-04/NV-05 backend acceptance
+separate and coordinate their new UI contracts.
+
 ## 2026-09-23 — NV-03 confined PoC execution complete
 
 **Outcome:** Completed NV-03: durable confined Python jobs, REST/console/attacker

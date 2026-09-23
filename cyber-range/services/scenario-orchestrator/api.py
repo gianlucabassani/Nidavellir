@@ -53,7 +53,7 @@ import source_bundle
 import validators
 import vulhub_import
 from auth import Principal, ensure_bootstrap_key, require_principal
-from database import Database
+from database import Database, StopDenied
 from orchestrator import Orchestrator
 from providers import (
     available_providers,
@@ -94,6 +94,106 @@ limiter = Limiter(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+
+@app.exception_handler(StopDenied)
+async def system_stop_denied_handler(_request: Request, exc: StopDenied):
+    return Response(content=json.dumps({"detail": str(exc)}), status_code=423,
+                    media_type="application/json")
+
+
+def _budgeted_path(path: str, method: str) -> str | None:
+    """Only target-affecting writes consume an action; control and reads do not."""
+    if method != "POST":
+        return None
+    parts = path.strip("/").split("/")
+    if len(parts) < 3 or parts[0] != "arenas":
+        return None
+    suffix = "/".join(parts[2:])
+    if (suffix in {"reset", "destroy", "stop", "resume"}
+            or suffix.startswith("bindings/") or suffix == "bindings"
+            or suffix.endswith("/cancel")):
+        return None
+    charged = ("exec", "mitm/observe", "browser/visit", "http/request",
+               "files/upload", "files/download", "findings",
+               "findings/manual", "setup/step", "setup/upload", "setup/run",
+               "setup/propose", "setup/generate-proposals")
+    if (suffix in charged
+            or (suffix.startswith("http/transactions/") and suffix.endswith("/replay"))
+            or (suffix.startswith("setup/proposals/") and suffix.endswith("/approve"))
+            or (suffix.startswith("workspaces/") and suffix.endswith("/patch-artifacts"))
+            or (suffix.startswith("findings/") and suffix.endswith("/verify"))):
+        return parts[1]
+    return None
+
+
+@app.middleware("http")
+async def durable_budget_boundary(request: Request, call_next):
+    arena_id = _budgeted_path(request.url.path, request.method)
+    if arena_id is None:
+        if (request.method == "POST" and request.url.path.endswith("/poc-jobs")
+                and (request.headers.get("X-Token-Budget")
+                     or request.headers.get("X-Cost-Budget"))):
+            return Response(content=json.dumps({
+                "detail": "token/cost caps cannot be enforced for this driver"
+            }), status_code=422, media_type="application/json")
+        return await call_next(request)
+    from auth import hash_api_key
+
+    key = request.headers.get("X-API-Key")
+    principal = db.get_api_key(hash_api_key(key)) if key else None
+    if principal is None:  # leave authentication error to the normal dependency
+        return await call_next(request)
+    arena = db.get_deployment(arena_id)
+    if arena is None or arena.get("status") != "active":
+        # Preserve the existing route's 404/409 response. The reservation gate
+        # repeats this check transactionally for an arena that changes state.
+        return await call_next(request)
+    if principal["role"] == "agent":
+        suffix = request.url.path.partition(f"/arenas/{arena_id}/")[2]
+        if suffix == "findings/manual" or suffix.endswith("/verify"):
+            return await call_next(request)
+        capability = (bindings.CAP_OBSERVE if suffix == "mitm/observe" else
+                      bindings.CAP_SETUP if suffix.startswith("setup/") else
+                      bindings.CAP_WORKSPACE if suffix.startswith("workspaces/") else
+                      bindings.CAP_EXEC)
+        try:
+            _require_binding(Principal(principal["name"], "agent"), arena_id, capability)
+        except HTTPException:
+            return await call_next(request)
+    if request.headers.get("X-Token-Budget") or request.headers.get("X-Cost-Budget"):
+        return Response(
+            content=json.dumps({"detail": "token/cost caps cannot be enforced for this driver"}),
+            status_code=422, media_type="application/json",
+        )
+    body = await request.body()
+    digest = hashlib.sha256(request.method.encode() + request.url.path.encode() + body).hexdigest()
+    action_key = request.headers.get("X-Action-Key") or str(uuid.uuid4())
+    if not re.fullmatch(r"[A-Za-z0-9._:-]{8,128}", action_key):
+        return Response(content='{"detail":"invalid X-Action-Key"}', status_code=422,
+                        media_type="application/json")
+    try:
+        action_id, deadline = db.reserve_budget_action(
+            arena_id, key=action_key, digest=digest,
+            kind=request.url.path.partition(f"/arenas/{arena_id}/")[2],
+            actor=principal["name"],
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        code = 429 if "budget exhausted" in detail else 423
+        return Response(content=json.dumps({"detail": detail}), status_code=code,
+                        media_type="application/json")
+    request.state.budget_deadline = deadline
+    try:
+        response = await call_next(request)
+    except Exception:
+        db.settle_budget_action(action_id, outcome="unknown")
+        raise
+    outcome = ("spent" if response.status_code < 400 else
+               "released" if response.status_code < 500 else "unknown")
+    db.settle_budget_action(action_id, outcome=outcome)
+    response.headers["X-Action-ID"] = action_id
+    return response
+
 RATE_LIMIT_DEPLOY = os.getenv("RATE_LIMIT_DEPLOY", "10/minute")
 RATE_LIMIT_DESTROY = os.getenv("RATE_LIMIT_DESTROY", "30/minute")
 # Exec runs in an agent loop → more frequent than deploy/destroy.
@@ -133,6 +233,14 @@ class EngagementIntentRequest(BaseModel):
         ge=300,
         le=86400,
     )
+    token_budget: int | None = Field(default=None, ge=1)
+    cost_budget_usd: float | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def reject_unenforceable_model_budgets(self):
+        if self.token_budget is not None or self.cost_budget_usd is not None:
+            raise ValueError("token/cost caps cannot be enforced for an external agent driver")
+        return self
 
     @field_validator("engagement_purpose")
     @classmethod
@@ -1824,6 +1932,8 @@ def reset(
     principal: Principal = Depends(require_principal),
 ):
     _require_operator(principal)
+    if db.budget_status("")["system"]["state"] != "open":
+        raise HTTPException(status_code=423, detail="system emergency stop is active")
     source = db.get_deployment(instance_id)
     if source is None:
         raise HTTPException(status_code=404, detail="Instance not found")
@@ -1885,6 +1995,7 @@ def reset(
             expires_at=expires_at,
             effective_provider=recipe["effective_provider"],
         )
+        db.inherit_budget_scope(instance_id, replacement_id)
         db.save_lifecycle_recipe(replacement_id, recipe)
         link = {
             "operation_id": operation_id,
@@ -2103,6 +2214,14 @@ class PocJobRequest(BaseModel):
     pids: int = Field(default=32, ge=8, le=128)
     workspace_bytes: int = Field(default=8 * 1024 * 1024, ge=1024 * 1024, le=16 * 1024 * 1024)
     idempotency_key: str | None = Field(default=None, min_length=8, max_length=128)
+    token_budget: int | None = Field(default=None, ge=1)
+    cost_budget_usd: float | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def reject_unenforceable_model_budgets(self):
+        if self.token_budget is not None or self.cost_budget_usd is not None:
+            raise ValueError("token/cost caps cannot be enforced for a confined PoC job")
+        return self
 
     @field_validator("transfer_files")
     @classmethod
@@ -2775,7 +2894,14 @@ def exec_in_arena(
         provider_name=record.get("effective_provider") or record.get("provider")
     )
     try:
-        result = orch.exec_in_node(instance_id, req.node, req.command, req.timeout)
+        deadline = getattr(request.state, "budget_deadline", None)
+        timeout = req.timeout
+        if deadline is not None:
+            remaining = (deadline - datetime.now()).total_seconds()
+            if remaining <= 0:
+                raise HTTPException(status_code=423, detail="wall-clock budget expired")
+            timeout = min(timeout, max(1, int(remaining)))
+        result = orch.exec_in_node(instance_id, req.node, req.command, timeout)
     except NotImplementedError as e:
         raise HTTPException(status_code=501, detail=str(e)) from e
 
@@ -2833,8 +2959,15 @@ def mitm_observe(
         provider_name=record.get("effective_provider") or record.get("provider")
     )
     try:
+        deadline = getattr(request.state, "budget_deadline", None)
+        seconds = req.seconds
+        if deadline is not None:
+            remaining = (deadline - datetime.now()).total_seconds()
+            if remaining <= 0:
+                raise HTTPException(status_code=423, detail="wall-clock budget expired")
+            seconds = min(seconds, max(1, int(remaining)))
         result = orch.capture_traffic(
-            instance_id, seconds=req.seconds, max_packets=req.max_packets
+            instance_id, seconds=seconds, max_packets=req.max_packets
         )
     except NotImplementedError as e:
         raise HTTPException(status_code=501, detail=str(e)) from e
@@ -3002,6 +3135,110 @@ def _require_binding(principal: Principal, instance_id: str, capability: str) ->
             ),
         )
     return binding
+
+
+class StopRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
+    idempotency_key: str = Field(min_length=8, max_length=128,
+                                 pattern=r"^[A-Za-z0-9._:-]+$")
+
+
+class BudgetPolicyRequest(BaseModel):
+    action_cap: int = Field(ge=1, le=100000)
+    deadline: datetime
+    reason: str = Field(min_length=1, max_length=500)
+    token_cap: int | None = None
+    cost_cap: float | None = None
+
+
+@app.post("/arenas/{instance_id}/budget/policy")
+def update_budget_policy(instance_id: str, req: BudgetPolicyRequest,
+                         principal: Principal = Depends(require_principal)):
+    _require_operator(principal)
+    if req.token_cap is not None or req.cost_cap is not None:
+        raise HTTPException(
+            status_code=422, detail="token/cost caps cannot be enforced for external agents"
+        )
+    try:
+        version = db.revise_budget_policy(
+            instance_id, action_cap=req.action_cap,
+            deadline=req.deadline.astimezone().replace(tzinfo=None),
+            actor=principal.name, reason=req.reason,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"version": version, "status": db.budget_status(instance_id)}
+
+
+@app.get("/arenas/{instance_id}/budget")
+def get_arena_budget(instance_id: str, principal: Principal = Depends(require_principal)):
+    if db.get_deployment(instance_id) is None:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    if principal.role == "agent":
+        binding = bindings.binding_for(_arena_binding_events(instance_id), principal.name)
+        if binding is None:
+            raise HTTPException(status_code=403, detail="agent is not bound to this arena")
+    return db.budget_status(instance_id)
+
+
+@app.post("/arenas/{instance_id}/stop")
+def stop_arena(instance_id: str, req: StopRequest,
+               principal: Principal = Depends(require_principal)):
+    _require_operator(principal)
+    if db.get_deployment(instance_id) is None:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    epoch = db.stop_budget_gate(instance_id, actor=principal.name,
+                                reason=req.reason, key=req.idempotency_key)
+    cancelled = db.request_cancel_arena_poc_jobs(instance_id)
+    db.reconcile_budget_stop(instance_id)
+    return {"epoch": epoch, "cancel_requested": cancelled,
+            "status": db.budget_status(instance_id)}
+
+
+@app.post("/arenas/{instance_id}/resume")
+def resume_arena(instance_id: str, req: StopRequest,
+                 principal: Principal = Depends(require_principal)):
+    _require_operator(principal)
+    try:
+        epoch = db.resume_budget_gate(instance_id, actor=principal.name,
+                                      reason=req.reason, key=req.idempotency_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"epoch": epoch, "status": db.budget_status(instance_id)}
+
+
+@app.get("/system/emergency-stop")
+def system_stop_status(principal: Principal = Depends(require_principal)):
+    if principal.role != "admin":
+        raise HTTPException(status_code=403, detail="admin role required")
+    return db.budget_status("")['system']
+
+
+@app.post("/system/emergency-stop")
+def system_emergency_stop(req: StopRequest,
+                          principal: Principal = Depends(require_principal)):
+    if principal.role != "admin":
+        raise HTTPException(status_code=403, detail="admin role required")
+    epoch = db.stop_budget_gate("system", actor=principal.name,
+                                reason=req.reason, key=req.idempotency_key)
+    cancelled = sum(db.request_cancel_arena_poc_jobs(dep["id"])
+                    for dep in db.list_deployments())
+    db.reconcile_budget_stop("system")
+    return {"epoch": epoch, "cancel_requested": cancelled,
+            "status": db.budget_status("")["system"]}
+
+
+@app.post("/system/emergency-stop/clear")
+def clear_system_emergency_stop(req: StopRequest,
+                                principal: Principal = Depends(require_principal)):
+    if principal.role != "admin":
+        raise HTTPException(status_code=403, detail="admin role required")
+    try:
+        epoch = db.resume_budget_gate("system", actor=principal.name,
+                                      reason=req.reason, key=req.idempotency_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"epoch": epoch, "status": db.budget_status("")["system"]}
 
 
 def _autobind_deployer(principal: Principal, instance_id: str) -> None:
@@ -4021,6 +4258,12 @@ def _exec_setup_command(instance_id, record, sess, node, command, timeout, actor
     orch = Orchestrator(
         provider_name=record.get("effective_provider") or record.get("provider")
     )
+    policy = db.budget_status(instance_id).get("policy") or {}
+    if policy.get("deadline"):
+        remaining = (datetime.fromisoformat(policy["deadline"]) - datetime.now()).total_seconds()
+        if remaining <= 0:
+            raise HTTPException(status_code=423, detail="wall-clock budget expired")
+        timeout = min(timeout, max(1, int(remaining)))
     try:
         result = orch.exec_in_node(instance_id, node, command, timeout)
     except NotImplementedError as e:

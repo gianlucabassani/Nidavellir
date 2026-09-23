@@ -2,6 +2,41 @@
 
 Base URL: `http://localhost:8000`
 
+## Durable research budgets and stop controls (NV-04 implementation in progress)
+
+New arenas receive a versioned aggregate action cap (default 1000, configured
+with `ARENA_ACTION_BUDGET`) and an absolute deadline no later than deployment
+expiry. `GET /arenas/{id}/budget` returns cap, spent, reserved, remaining,
+deadline and arena/system stop state. A bound agent can read its arena's
+allowance; operator keys can read any arena. Archived records remain readable.
+
+Research writes reserve one action in the orchestrator before execution. An
+optional `X-Action-Key` (8–128 safe characters) binds a caller retry to the
+same request digest and actor. The response includes `X-Action-ID`; key reuse
+with other input is rejected. Rejected requests release reservations; ambiguous
+server errors retain a charge. Status, results, audit reads, cancellation and
+stop controls remain available after exhaustion. The gateway's local step
+counter is only a secondary warning; reconnect never replenishes the server
+account. PoC jobs hold the reservation until completion; a queued cancellation
+releases it, and an interrupted execution retains a charge. A reset replacement
+inherits the source allowance.
+
+Operators can `POST /arenas/{id}/budget/policy` with `action_cap`, ISO
+`deadline` and `reason`, `POST /arenas/{id}/stop` or `/resume` with `reason`
+and an `idempotency_key`.
+Admins can `GET` or `POST /system/emergency-stop`, and `POST
+/system/emergency-stop/clear`; those writes require the same key. Stop reports
+`stopping` until in-flight actions
+and helpers drain, then `stopped`; re-arm requires explicit cleanup verification.
+The current console exposes arena stop in the workspace and system stop under
+Settings. Operator MCP tools expose the same stop controls; all stances can
+read their bound arena budget.
+
+Token and cost caps are unavailable for external BYO agents because the
+orchestrator cannot reserve trusted pre-execution model usage. Requests with
+`token_budget` or `cost_budget_usd` at engagement creation, token/cost headers
+on research actions, or token/cost fields in a policy revision are refused.
+
 ## Confined PoC execution
 
 Docker-local arenas support `POST /arenas/{id}/poc-jobs` (202),

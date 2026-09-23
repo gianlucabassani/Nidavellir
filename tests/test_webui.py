@@ -53,6 +53,12 @@ def test_login_rejects_missing_csrf_token(client):
     assert resp.status_code == 400
 
 
+def test_stop_forms_require_csrf(client):
+    _login(client)
+    assert client.post("/arena/any-id/stop", data={"reason": "test"}).status_code == 400
+    assert client.post("/settings/emergency-stop", data={"reason": "test"}).status_code == 400
+
+
 def test_login_with_token_and_valid_credentials(client):
     resp = _login(client)
     assert resp.status_code == 302

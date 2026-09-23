@@ -85,6 +85,11 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
         return tools.arena_status(ctx(), arena_id=arena_id)
 
     @mcp.tool()
+    def budget_status(arena_id: str) -> dict:
+        """Read the durable action allowance, deadline and stop state."""
+        return tools.budget_status(ctx(), arena_id=arena_id)
+
+    @mcp.tool()
     def session_preflight(arena_id: str) -> dict:
         """Verify the immutable target identity, authorization, infrastructure,
         workspace and reset contract before research begins."""
@@ -409,6 +414,26 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
             return tools.finish_setup(ctx(), arena_id=arena_id)
 
     elif stance is Stance.operator:
+        @mcp.tool()
+        def stop_arena(arena_id: str, reason: str) -> dict:
+            """Freeze an arena and drain its active research work."""
+            return tools.stop_arena(ctx(), arena_id, reason)
+
+        @mcp.tool()
+        def resume_arena(arena_id: str, reason: str) -> dict:
+            """Re-arm a fully drained arena after operator review."""
+            return tools.resume_arena(ctx(), arena_id, reason)
+
+        @mcp.tool()
+        def emergency_stop(reason: str) -> dict:
+            """Admin-only: freeze research work across the system."""
+            return tools.emergency_stop(ctx(), reason)
+
+        @mcp.tool()
+        def clear_emergency_stop(reason: str) -> dict:
+            """Admin-only: clear a reconciled system emergency stop."""
+            return tools.clear_emergency_stop(ctx(), reason)
+
         @mcp.tool()
         def scaffold_scenario(prompt: str, provider_class: str | None = None) -> dict:
             """Generate a candidate v3 scenario from a natural-language prompt using

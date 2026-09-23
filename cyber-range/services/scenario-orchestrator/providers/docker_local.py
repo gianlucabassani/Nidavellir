@@ -32,6 +32,7 @@ import tempfile
 import time
 import urllib.parse
 import uuid
+from contextlib import nullcontext
 from pathlib import PurePosixPath
 
 import config
@@ -46,6 +47,12 @@ from scenario_spec import normalized_nodes
 logger = logging.getLogger(__name__)
 
 LABEL_LAB_ID = "nidavellir.lab_id"
+
+
+def _guarded(start_guard, operation, *args, **kwargs):
+    """Serialize one helper create/start with the durable stop gate."""
+    with start_guard() if start_guard else nullcontext():
+        return operation(*args, **kwargs)
 LABEL_ROLE = "nidavellir.role"
 LABEL_NODE = "nidavellir.node"
 LABEL_POC_JOB = "nidavellir.poc_job"
@@ -281,7 +288,7 @@ class DockerLocalProvider(RangeProvider):
     def browser_visit(
         self, instance_id, node, target_ip, port, scheme, path, params=None,
         *, wait_ms=1500, execution_marker=None,
-        job_id=None,
+        job_id=None, cancel_check=None, start_guard=None,
     ):
         """Render a target page in a disposable, arena-network-only Chrome.
 
@@ -333,13 +340,15 @@ class DockerLocalProvider(RangeProvider):
         runner = proxy = helper_network = None
         job_labels = {LABEL_POC_JOB: job_id} if job_id else {}
         try:
-            helper_network = self.client.networks.create(
+            helper_network = _guarded(start_guard, self.client.networks.create,
                 helper_network_name,
                 driver="bridge",
                 internal=True,
                 labels={LABEL_LAB_ID: instance_id, LABEL_ROLE: "browser-network", **job_labels},
             )
-            proxy = self.client.containers.create(
+            if cancel_check and cancel_check():
+                return {"success": False, "state": "cancelled"}
+            proxy = _guarded(start_guard, self.client.containers.create,
                 image=config.POC_RUNNER_IMAGE,
                 entrypoint="python3",
                 command=[
@@ -357,8 +366,10 @@ class DockerLocalProvider(RangeProvider):
                 environment={}, mem_limit="32m", nano_cpus=250_000_000,
                 pids_limit=16,
             )
-            self.client.networks.get(network).connect(proxy)
-            proxy.start()
+            _guarded(start_guard, self.client.networks.get(network).connect, proxy)
+            if cancel_check and cancel_check():
+                return {"success": False, "state": "cancelled"}
+            _guarded(start_guard, proxy.start)
             proxy.reload()
             proxy_networks = (proxy.attrs.get("NetworkSettings") or {}).get("Networks") or {}
             proxy_ip = (proxy_networks.get(helper_network_name) or {}).get("IPAddress")
@@ -388,7 +399,9 @@ class DockerLocalProvider(RangeProvider):
             else:
                 raise RuntimeError("browser proxy did not become ready")
             command.insert(-2, f"--proxy-server=http://{proxy_ip}:8080")
-            runner = self.client.containers.run(
+            if cancel_check and cancel_check():
+                return {"success": False, "state": "cancelled"}
+            runner = _guarded(start_guard, self.client.containers.run,
                 image=config.HEADLESS_BROWSER_IMAGE,
                 entrypoint="chromium-browser",
                 command=command,
@@ -493,7 +506,8 @@ class DockerLocalProvider(RangeProvider):
 
     def http_request(
         self, instance_id, node, target_ip, port, scheme, path, params=None,
-        *, method="GET", headers=None, body=None, job_id=None,
+        *, method="GET", headers=None, body=None, job_id=None, cancel_check=None,
+        start_guard=None,
     ):
         """Perform one arena-bound HTTP request in a disposable curl runner.
 
@@ -564,7 +578,9 @@ class DockerLocalProvider(RangeProvider):
         runner = None
         started = time.monotonic()
         try:
-            runner = self.client.containers.run(
+            if cancel_check and cancel_check():
+                return {"success": False, "state": "cancelled"}
+            runner = _guarded(start_guard, self.client.containers.run,
                 image=config.HTTP_RUNNER_IMAGE,
                 entrypoint="curl",
                 command=command,
@@ -837,6 +853,7 @@ class DockerLocalProvider(RangeProvider):
 
     def run_poc(
         self, instance_id, job_id, payload, target_policy, limits, cancel_check=None,
+        start_guard=None,
     ):
         """Run untrusted Python without an IP network and with a fixed HTTP relay."""
         labels = {
@@ -863,7 +880,11 @@ class DockerLocalProvider(RangeProvider):
                 }
 
             relay_volume_name = f"nv-poc-{job_id[:12]}"
-            self.client.volumes.create(name=relay_volume_name, labels=labels)
+            _guarded(start_guard, self.client.volumes.create,
+                     name=relay_volume_name, labels=labels)
+            if cancel_check and cancel_check():
+                return {"success": False, "state": "cancelled",
+                        "cleanup": self._cleanup_poc_resources(job_id)}
             volumes = {relay_volume_name: {"bind": "/run/nidavellir", "mode": "ro"}}
             if target_policy:
                 target = self._find_node_container(instance_id, target_policy["node"])
@@ -877,7 +898,7 @@ class DockerLocalProvider(RangeProvider):
                     f"nidavellir-{self._short(instance_id)}"
                 ):
                     raise ValueError("selected target address is not owned by this arena")
-                relay = self.client.containers.create(
+                relay = _guarded(start_guard, self.client.containers.create,
                     image=image_id,
                     entrypoint="python3",
                     command=[
@@ -901,9 +922,12 @@ class DockerLocalProvider(RangeProvider):
                         config={"max-size": "64k", "max-file": "1"},
                     ),
                 )
-                relay.start()
+                if cancel_check and cancel_check():
+                    return {"success": False, "state": "cancelled",
+                            "cleanup": self._cleanup_poc_resources(job_id)}
+                _guarded(start_guard, relay.start)
 
-            runner = self.client.containers.create(
+            runner = _guarded(start_guard, self.client.containers.create,
                 image=image_id,
                 name=f"nv-poc-runner-{job_id[:12]}", detach=True,
                 network_mode="none", network_disabled=True,
@@ -925,7 +949,10 @@ class DockerLocalProvider(RangeProvider):
                     config={"max-size": "128k", "max-file": "1"},
                 ),
             )
-            runner.start()
+            if cancel_check and cancel_check():
+                return {"success": False, "state": "cancelled",
+                        "cleanup": self._cleanup_poc_resources(job_id)}
+            _guarded(start_guard, runner.start)
             self._copy_poc_input(runner, payload)
 
             deadline = time.monotonic() + int(limits["timeout_seconds"])

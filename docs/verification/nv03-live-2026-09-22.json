@@ -1,10 +1,10 @@
 {
   "arenas": [
-    "8ab8b038-d08f-46c4-b968-e0610c49f32e",
-    "d0d5620a-dca3-4c2b-aaa5-46c88a86eafd",
-    "9183ab81-8979-4f0d-a2f8-b0c4a02edcb4"
+    "949aad95-7b8f-419c-bedc-4edaaf855f24",
+    "0af45d81-f96b-4bb4-9969-eff68ad3f777",
+    "844c117c-75f8-4799-8e60-dd2ec166edec"
   ],
-  "deadline": "2026-09-22 17:37:42.340175",
+  "deadline": "2026-09-23 09:40:19.742472",
   "denied_paths": [
     "control_plane",
     "decoy",
@@ -17,27 +17,27 @@
   ],
   "docker_server": "29.7.2",
   "final_resources": {
-    "8ab8b038-d08f-46c4-b968-e0610c49f32e": {
+    "0af45d81-f96b-4bb4-9969-eff68ad3f777": {
       "containers": 0,
       "networks": 0,
       "volumes": 0
     },
-    "9183ab81-8979-4f0d-a2f8-b0c4a02edcb4": {
+    "844c117c-75f8-4799-8e60-dd2ec166edec": {
       "containers": 0,
       "networks": 0,
       "volumes": 0
     },
-    "d0d5620a-dca3-4c2b-aaa5-46c88a86eafd": {
+    "949aad95-7b8f-419c-bedc-4edaaf855f24": {
       "containers": 0,
       "networks": 0,
       "volumes": 0
     }
   },
   "fixture_image": "sha256:a647c2dc50479ed9da2581d6f977a078492b9f29ba95aff3ff0bbc8a73b9e162",
-  "input_digest": "sha256:8ef2751873d94857deab8b75c5edbc151bacf47a721ad993a518436a5c8315cf",
+  "input_digest": "sha256:1d1d5bd81f655ec860a675f8c782f4446775d39924382fe5ae5355f6bc0c0c15",
   "interrupted_job": {
     "cleanup": "complete",
-    "id": "02ee6314-5557-47a1-8d5f-4d54322cfa8a",
+    "id": "f5e47677-5d58-474e-9373-0652956c7121",
     "state": "failed"
   },
   "limits": {
@@ -53,7 +53,7 @@
   },
   "mcp": {
     "cross_arena_denied": true,
-    "job_id": "8a05c883-ce45-4ef3-a11a-bbb9f4b40b70",
+    "job_id": "6d58520a-102b-4997-95c1-309b58cebe5e",
     "status_result_cancel": true
   },
   "network_errors": {
@@ -78,7 +78,7 @@
     "authority": true,
     "connect": true
   },
-  "reset_operation": "09769d59-c8c4-40ef-908c-7b0af71461bc",
+  "reset_operation": "62756516-4f6d-4e71-8bcd-33f9ebdb449e",
   "runner_image": "sha256:1d3b6b1424ba3bdac1da921c2b3df9483985a3bba12f70448ebce9ab564b261b",
   "runner_interfaces": [
     "lo"
@@ -111,7 +111,7 @@
       "state": "timed_out"
     }
   },
-  "useful_job": "00d85229-2985-437c-9cc6-d6e5b653e4b6",
-  "verified_at": "2026-09-22T17:39:26Z",
+  "useful_job": "f5381397-6b89-470c-96e0-900fe5f92b74",
+  "verified_at": "2026-09-23T09:41:37Z",
   "worker_python": "Python 3.11.16"
 }

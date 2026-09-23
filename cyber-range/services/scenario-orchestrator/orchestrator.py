@@ -128,9 +128,11 @@ class Orchestrator:
             method=method, headers=headers, body=body,
         )
 
-    def run_poc(self, instance_id, job_id, payload, target_policy, limits, cancel_check=None):
+    def run_poc(self, instance_id, job_id, payload, target_policy, limits,
+                cancel_check=None, start_guard=None):
         return self.provider.run_poc(
-            instance_id, job_id, payload, target_policy, limits, cancel_check
+            instance_id, job_id, payload, target_policy, limits, cancel_check,
+            start_guard=start_guard,
         )
 
     def cleanup_poc_job(self, job_id):

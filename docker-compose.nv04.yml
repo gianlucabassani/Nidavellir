@@ -1,0 +1,131 @@
+name: nidavellir-nv04
+
+services:
+  poc-runner-image:
+    build:
+      context: ./cyber-range/services/scenario-orchestrator/infra/poc-runner
+    image: nidavellir/poc-runner:py311
+    entrypoint: ["/bin/true"]
+    restart: "no"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nidavellir_nv04
+      POSTGRES_USER: nidavellir
+      POSTGRES_PASSWORD: nv04-local-only
+    tmpfs: [/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nidavellir -d nidavellir_nv04"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    tmpfs: [/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  orchestrator:
+    build:
+      context: ./cyber-range/services/scenario-orchestrator
+    environment: &orchestrator-env
+      MOCK_MODE: "false"
+      RANGE_PROVIDER: docker-local
+      BOOTSTRAP_API_KEY: nv04-acceptance-key
+      BOOTSTRAP_API_KEY_ROLE: admin
+      DATABASE_URL: postgresql+psycopg://nidavellir:nv04-local-only@postgres:5432/nidavellir_nv04
+      DATA_DIR: /app/data
+      RUNS_DIR: /app/runs
+      KEYS_DIR: /app/keys
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      RATE_LIMIT_ENABLED: "false"
+      REAPER_INTERVAL_SECONDS: "2"
+      LAB_STUCK_MINUTES: "30"
+      NIDAVELLIR_POC_STALE_SECONDS: "12"
+      NIDAVELLIR_POC_MAX_TIMEOUT_SECONDS: "10"
+      NIDAVELLIR_POC_RUNNER_IMAGE: nidavellir/poc-runner:py311
+      SECRETS_ENCRYPTION_KEY: 7Qv0B9F_WjC1jL45o7oYw9xgA-rn7s4Usi0p-DuStxk=
+      HTTP_TIMEOUT_SECONDS: "5"
+      PYTHONPATH: /app
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    ports: ["18004:8000"]
+    volumes:
+      - nv04-data:/app/data
+      - nv04-runs:/app/runs
+      - nv04-keys:/app/keys
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  worker:
+    build:
+      context: ./cyber-range/services/scenario-orchestrator
+    command: celery -A tasks worker --loglevel=info --concurrency=2
+    environment: *orchestrator-env
+    depends_on:
+      poc-runner-image: {condition: service_completed_successfully}
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      orchestrator: {condition: service_healthy}
+    volumes:
+      - nv04-data:/app/data
+      - nv04-runs:/app/runs
+      - nv04-keys:/app/keys
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  beat:
+    build:
+      context: ./cyber-range/services/scenario-orchestrator
+    command: celery -A tasks beat --loglevel=info --schedule /tmp/nv04-beat
+    environment: *orchestrator-env
+    depends_on:
+      redis: {condition: service_healthy}
+      postgres: {condition: service_healthy}
+
+  webui:
+    build:
+      context: ./cyber-range/webui
+    environment:
+      ORCHESTRATOR_URL: http://orchestrator:8000
+      ORCHESTRATOR_API_KEY: nv04-acceptance-key
+      SECRET_KEY: nv04-local-only
+      WEBUI_USERNAME: admin
+      WEBUI_PASSWORD: nv04-local-only
+      MOCK_MODE: "false"
+    depends_on:
+      orchestrator: {condition: service_healthy}
+    ports: ["15004:5000"]
+
+  agent-gateway:
+    build:
+      context: ./cyber-range/services/agent-gateway
+    environment:
+      NIDAVELLIR_API_URL: http://orchestrator:8000
+      NIDAVELLIR_AGENT_KEY: nv04-agent-key
+      NIDAVELLIR_STANCE: attacker
+      NIDAVELLIR_GATEWAY_TRANSPORT: streamable-http
+      NIDAVELLIR_GATEWAY_HOST: 0.0.0.0
+      NIDAVELLIR_GATEWAY_PORT: "9000"
+      NIDAVELLIR_TRACE_DIR: /app/traces
+    depends_on:
+      orchestrator: {condition: service_healthy}
+    ports: ["19004:9000"]
+    volumes:
+      - nv04-traces:/app/traces
+
+volumes:
+  nv04-data:
+  nv04-runs:
+  nv04-keys:
+  nv04-traces:

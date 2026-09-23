@@ -187,14 +187,13 @@ Shipped:
 - target-scoped disposable headless browser shared with the XSS validator;
 - arena-target HTTP requests, content-addressed transactions, replay/modify, MCP tools,
   console controls and finding attachment by digest (R1 code implemented August 24).
+- worker-owned confined PoC execution (NV-03) and orchestrator-enforced durable
+  action/deadline budgets with per-arena and system stop controls (NV-04).
 
 Still required:
 
-- fresh supported-runtime and live verification of the implemented HTTP path (NV-01–02);
-- confined Python/PoC sandbox through a worker-owned isolation boundary (NV-03 complete);
 - foothold-scoped SSH tunnel lifecycle;
-- durable fail-closed step/time/token/cost budgets;
-- arena and system kill switches that drain or stop work predictably;
+- trusted token/cost preflight and usage accounting for future supported model drivers;
 - before/after manifests for non-Git/binary targets.
 
 ### Verified health boundary
@@ -209,6 +208,15 @@ and 864 on PostgreSQL, with six declared integration deselections on each backen
 Alembic clean migration plus API, console and MCP-gateway readiness smokes passed.
 The isolated live Docker gate then proved two resets across three deployments,
 retained evidence, deployment/teardown recovery and a zero-resource final inventory.
+
+NV-04's final 2026-09-23 pinned gate passed Ruff 0.6.9, Bandit 1.9.4 with zero
+medium/high findings, 889 SQLite tests (two PostgreSQL-only tests skipped) and
+891 PostgreSQL tests, each with six declared integration deselections. Alembic,
+API, console and MCP readiness smoke passed. The isolated NV-04 live gate proved
+cross-process allowance persistence, a one-slot 200/429 race, stop/drain/reaper
+recovery, sticky system stop across restarts, deadline expiry and zero final
+resources. NV-02 and NV-03 Docker-local live regressions passed on the same
+source. See `docs/verification/nv04-live-2026-09-23.json` and the dated journal.
 
 Review on 2026-09-07: no main stack services running under this Compose project; a stopped
 agent-gateway and cached images exist. Ruff passed. Source-only Bandit (excluding both
@@ -504,8 +512,8 @@ budget freezes further work; containment tests remain green.
 
 The six slices below now exist in code, including the console and finding attachment.
 Retain them as the acceptance/design reference; fresh full/live verification is NV-01–02.
-NV-03 confined execution is complete; NV-04–05 durable guardrails and scoped access
-are next. These six slices are not six open implementation tasks:
+NV-03 confined execution and NV-04 durable guardrails are complete; NV-05 scoped
+access is next. These six slices are not six open implementation tasks:
 
 1. **Provider primitive** — `http_request` across `base` (refuse), `docker-local`
    (disposable arena-bound runner, mirroring the headless-browser pattern), and

@@ -935,6 +935,7 @@ def arena_detail(instance_id):
     # records stay reviewable. Driving is refused server-side when read-only.
     http_total = (_api_get(f"/arenas/{instance_id}/http/transactions?limit=1")[0] or {}).get("total", 0)
     poc_jobs = (_api_get(f"/arenas/{instance_id}/poc-jobs")[0] or {}).get("jobs", [])
+    budget = _api_get(f"/arenas/{instance_id}/budget")[0] or {}
     web_capable = any(
         (n.get("ports") or n.get("url")) and not n.get("foothold")
         for n in _parse_nodes(outputs)
@@ -987,7 +988,30 @@ def arena_detail(instance_id):
         expires_at=data.get("expires_at"),
         lifecycle=lifecycle if lifecycle_ok else None,
         poc_jobs=poc_jobs,
+        budget=budget,
     )
+
+
+@app.route("/arena/<instance_id>/stop", methods=["POST"])
+def arena_stop_form(instance_id):
+    data, code = _api_post(f"/arenas/{instance_id}/stop", {
+        "reason": (request.form.get("reason") or "Operator stopped research")[:500],
+        "idempotency_key": uuid.uuid4().hex,
+    })
+    flash("Arena research stopped" if code == 200 else data.get("error", "Stop failed"),
+          "success" if code == 200 else "danger")
+    return redirect(url_for("arena_detail", instance_id=instance_id))
+
+
+@app.route("/arena/<instance_id>/resume", methods=["POST"])
+def arena_resume_form(instance_id):
+    data, code = _api_post(f"/arenas/{instance_id}/resume", {
+        "reason": (request.form.get("reason") or "Operator resumed research")[:500],
+        "idempotency_key": uuid.uuid4().hex,
+    })
+    flash("Arena research resumed" if code == 200 else data.get("error", "Resume failed"),
+          "success" if code == 200 else "danger")
+    return redirect(url_for("arena_detail", instance_id=instance_id))
 
 
 @app.route("/agents")
@@ -1015,7 +1039,30 @@ def audit_trail():
 
 @app.route("/settings")
 def settings():
-    return render_template("settings.html", active="settings")
+    system_stop = _api_get("/system/emergency-stop")[0] or {}
+    return render_template("settings.html", active="settings", system_stop=system_stop)
+
+
+@app.route("/settings/emergency-stop", methods=["POST"])
+def system_stop_form():
+    reason = (request.form.get("reason") or "Operator emergency stop")[:500]
+    data, code = _api_post("/system/emergency-stop", {
+        "reason": reason, "idempotency_key": uuid.uuid4().hex,
+    })
+    flash("System research stopped" if code == 200 else data.get("error", "Stop failed"),
+          "success" if code == 200 else "danger")
+    return redirect(url_for("settings"))
+
+
+@app.route("/settings/emergency-stop/clear", methods=["POST"])
+def system_stop_clear_form():
+    reason = (request.form.get("reason") or "Operator cleared emergency stop")[:500]
+    data, code = _api_post("/system/emergency-stop/clear", {
+        "reason": reason, "idempotency_key": uuid.uuid4().hex,
+    })
+    flash("System research resumed" if code == 200 else data.get("error", "Clear failed"),
+          "success" if code == 200 else "danger")
+    return redirect(url_for("settings"))
 
 
 @app.route("/administration/settings")

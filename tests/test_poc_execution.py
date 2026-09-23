@@ -238,8 +238,9 @@ def test_worker_records_digests_and_verified_cleanup(monkeypatch):
     arena = _active_docker_arena(db, "poc-worker-success")
     job, _ = _create_job(db, arena, key="poc-key-worker")
 
-    def fake_run(_self, _arena, _job, _payload, _target, _limits, cancel_check=None):
+    def fake_run(_self, _arena, _job, _payload, _target, _limits, cancel_check=None, start_guard=None):
         assert cancel_check() is False
+        assert callable(start_guard)
         return {
             "success": True, "state": "succeeded", "exit_code": 0,
             "stdout": "proof", "stderr": "", "stdout_sha256": "sha256:" + "a" * 64,

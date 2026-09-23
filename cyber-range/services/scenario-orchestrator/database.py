@@ -13,7 +13,9 @@ deletion appends to the `events` audit table with the acting principal.
 """
 import json
 import os
-from datetime import datetime
+import uuid
+from contextlib import contextmanager
+from datetime import datetime, timedelta
 from pathlib import Path
 from threading import Lock
 
@@ -22,8 +24,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from crypto import decrypt_secret, encrypt_secret
+import setup_phase
 from models import (
-    ApiKey, Base, Deployment, Event, LifecycleRecipe, ModelConnection, PocJob,
+    ApiKey, Base, BudgetAccount, BudgetAction, BudgetControl, BudgetGate, Deployment, Event,
+    LifecycleRecipe, ModelConnection, PocJob,
     ResetOperation,
 )
 from states import LabStatus, validate_transition
@@ -50,6 +54,10 @@ DB_PATH = os.getenv(
     "DATABASE_PATH",
     str(Path(__file__).parent.parent.parent / "data" / "deployments.db"),
 )
+
+
+class StopDenied(ValueError):
+    """A system-wide stop rejected new infrastructure admission."""
 
 
 def database_url() -> str:
@@ -107,6 +115,11 @@ class Database:
         # tables. Deployed databases evolve via `alembic upgrade head` — the
         # baseline migration matches this exact schema.
         Base.metadata.create_all(self._engine)
+        with self._session() as session:
+            if session.get(BudgetGate, "system") is None:
+                session.add(BudgetGate(scope="system", account_scope=None, epoch=0,
+                                       state="open", updated_at=datetime.now()))
+                session.commit()
 
     @staticmethod
     def _row_to_dict(dep: Deployment) -> dict:
@@ -143,6 +156,9 @@ class Database:
         expires_at=None, effective_provider=None,
     ):
         with self._session() as session:
+            system = self._lock_gate(session, "system")
+            if system.state != "open":
+                raise StopDenied("system emergency stop is active")
             session.add(
                 Deployment(
                     id=deployment_id,
@@ -167,8 +183,307 @@ class Database:
                     "effective_provider": effective_provider, "name": user_id,
                 },
             )
+            deadline = expires_at or datetime.now() + timedelta(days=365)
+            cap = max(1, min(int(os.getenv("ARENA_ACTION_BUDGET", "1000")), 100000))
+            session.add(BudgetAccount(
+                arena_id=deployment_id, scope_id=deployment_id, version=1,
+                action_cap=cap, spent=0, reserved=0, deadline=deadline,
+                created_at=datetime.now(),
+            ))
+            session.add(BudgetGate(scope=deployment_id, account_scope=deployment_id,
+                                   epoch=0, state="open", updated_at=datetime.now()))
             session.commit()
         return deployment_id
+
+    @staticmethod
+    def _lock_gate(session, scope):
+        # UPDATE obtains a PostgreSQL row lock and a SQLite writer reservation.
+        session.execute(update(BudgetGate).where(BudgetGate.scope == scope)
+                        .values(updated_at=BudgetGate.updated_at))
+        return session.get(BudgetGate, scope)
+
+    @staticmethod
+    def _lock_account(session, scope):
+        session.execute(update(BudgetAccount).where(BudgetAccount.arena_id == scope)
+                        .values(spent=BudgetAccount.spent))
+        return session.get(BudgetAccount, scope)
+
+    def budget_status(self, arena_id):
+        with self._session() as session:
+            system = session.get(BudgetGate, "system")
+            gate = session.get(BudgetGate, arena_id)
+            account = session.get(BudgetAccount, gate.account_scope) if gate and gate.account_scope else None
+            return {
+                "system": {"state": system.state, "epoch": system.epoch} if system else None,
+                "arena": {"state": gate.state, "epoch": gate.epoch,
+                          "reason": gate.reason} if gate else None,
+                "policy": {"version": account.version, "action_cap": account.action_cap,
+                           "spent": account.spent, "reserved": account.reserved,
+                           "remaining": account.action_cap - account.spent - account.reserved,
+                           "deadline": _stringify(account.deadline),
+                           "token_cost": "unsupported_for_external_agents"} if account else None,
+            }
+
+    def stopping_budget_scopes(self):
+        with self._session() as session:
+            return list(session.scalars(select(BudgetGate.scope).where(
+                BudgetGate.state == "stopping")))
+
+    def expired_budget_arenas(self, now):
+        with self._session() as session:
+            rows = session.execute(select(BudgetGate.scope).join(
+                BudgetAccount, BudgetGate.account_scope == BudgetAccount.arena_id
+            ).where(BudgetGate.state == "open", BudgetAccount.deadline <= now))
+            return [row[0] for row in rows]
+
+    def inherit_budget_scope(self, source_id, replacement_id):
+        """A replacement UUID retains its source's aggregate account and stop state."""
+        with self._session() as session:
+            self._lock_gate(session, "system")
+            source = self._lock_gate(session, source_id)
+            replacement = self._lock_gate(session, replacement_id)
+            if source is None or replacement is None:
+                raise ValueError("reset budget gate is missing")
+            replacement.account_scope = source.account_scope
+            replacement.state = source.state
+            replacement.reason = source.reason
+            replacement.epoch = source.epoch
+            session.delete(session.get(BudgetAccount, replacement_id))
+            session.commit()
+
+    def revise_budget_policy(self, arena_id, *, action_cap, deadline, actor, reason):
+        if not reason or len(reason) > 500:
+            raise ValueError("a bounded policy-change reason is required")
+        if action_cap < 1 or action_cap > 100000:
+            raise ValueError("action cap must be between 1 and 100000")
+        with self._session() as session:
+            self._lock_gate(session, "system")
+            gate = self._lock_gate(session, arena_id)
+            if gate is None:
+                raise ValueError("legacy arena has no durable budget policy")
+            account = self._lock_account(session, gate.account_scope)
+            dep = session.get(Deployment, arena_id)
+            if dep is None or dep.status != LabStatus.ACTIVE:
+                raise ValueError("arena must be active for a policy change")
+            if action_cap < account.spent + account.reserved:
+                raise ValueError("new cap is below committed and reserved actions")
+            if deadline <= datetime.now() or (dep.expires_at and deadline > dep.expires_at):
+                raise ValueError("deadline must be future and within deployment expiry")
+            account.action_cap = action_cap
+            account.deadline = deadline
+            account.version += 1
+            self._append_event(session, arena_id, actor, "budget_policy_revised", {
+                "version": account.version, "action_cap": action_cap,
+                "deadline": deadline.isoformat(), "reason": reason,
+            })
+            session.commit()
+            return account.version
+
+    def reserve_budget_action(self, arena_id, *, key, digest, kind, actor):
+        """Serialize stop, deadline and aggregate cap with one action reservation."""
+        now = datetime.now()
+        with self._session() as session:
+            system = self._lock_gate(session, "system")
+            gate = self._lock_gate(session, arena_id)
+            if gate is None:
+                raise ValueError("arena has no durable budget policy (legacy arena)")
+            account = self._lock_account(session, gate.account_scope)
+            existing = session.scalar(select(BudgetAction).where(
+                BudgetAction.arena_id == arena_id, BudgetAction.action_key == key))
+            if existing:
+                if existing.input_digest != digest or existing.actor != actor or existing.kind != kind:
+                    raise ValueError("action idempotency key was reused with different input")
+                raise ValueError(f"action {existing.id} is already {existing.state}")
+            if system.state != "open" or gate.state != "open":
+                self._append_event(session, arena_id, actor, "budget_denied",
+                                   {"kind": kind, "reason": "stopped"})
+                session.commit()
+                raise ValueError("research work is stopped")
+            dep = session.get(Deployment, arena_id)
+            if dep is None or dep.status != LabStatus.ACTIVE:
+                raise ValueError("arena is no longer active")
+            if account.deadline <= now:
+                gate.state = "stopping"
+                gate.reason = "wall-clock budget expired"
+                gate.epoch += 1
+                gate.updated_at = now
+                self._append_event(session, arena_id, "budget", "arena_stop",
+                                   {"epoch": gate.epoch, "reason": gate.reason})
+                session.commit()
+                raise ValueError("wall-clock budget expired")
+            if account.spent + account.reserved >= account.action_cap:
+                self._append_event(session, arena_id, actor, "budget_denied",
+                                   {"kind": kind, "reason": "action_cap"})
+                session.commit()
+                raise ValueError("action budget exhausted")
+            setup_step = kind in {"setup/step", "setup/run", "setup/upload"} or (
+                kind.startswith("setup/proposals/") and kind.endswith("/approve"))
+            if setup_step:
+                rows = list(session.scalars(select(Event).where(
+                    Event.lab_id == arena_id,
+                    Event.type.in_(setup_phase.SETUP_EVENT_TYPES),
+                ).order_by(Event.id.desc()).limit(setup_phase.SETUP_EVENT_WINDOW)))
+                events = [{"id": row.id, "type": row.type,
+                           "payload": json.loads(row.payload) if row.payload else {}}
+                          for row in rows]
+                setup = setup_phase.current_session(events)
+                if setup:
+                    setup_kind = f"setup-step:{setup['session_id']}"
+                    # Count every ledger row, not just the first, while older
+                    # event-only setup steps remain visible via steps_run.
+                    ledger_actions = list(session.scalars(select(BudgetAction).where(
+                        BudgetAction.arena_id == arena_id,
+                        BudgetAction.kind == setup_kind,
+                        BudgetAction.state.in_(("reserved", "spent", "unknown")),
+                    )))
+                    first_action = min((action.created_at for action in ledger_actions),
+                                       default=None)
+                    legacy_steps = sum(
+                        row.type == setup_phase.SETUP_STEP
+                        and row.id > setup["open_event_id"]
+                        and (first_action is None or row.ts < first_action)
+                        for row in rows
+                    )
+                    used = max(setup["steps_run"], legacy_steps + len(ledger_actions))
+                    if used >= setup["command_budget"]:
+                        raise ValueError("setup command budget exhausted")
+                    kind = setup_kind
+            account.reserved += 1
+            action = BudgetAction(id=str(uuid.uuid4()), arena_id=arena_id,
+                                  scope_id=account.scope_id, action_key=key,
+                                  input_digest=digest, kind=kind, actor=actor,
+                                  state="reserved", epoch=gate.epoch,
+                                  created_at=now, updated_at=now)
+            session.add(action)
+            self._append_event(session, arena_id, actor, "budget_reserved",
+                               {"action_id": action.id, "kind": kind})
+            session.commit()
+            return action.id, account.deadline
+
+    def settle_budget_action(self, action_id, *, outcome):
+        if outcome not in {"spent", "released", "unknown"}:
+            raise ValueError("invalid budget outcome")
+        with self._session() as session:
+            action = session.get(BudgetAction, action_id)
+            if action is None or action.state != "reserved":
+                return False
+            self._lock_gate(session, "system")
+            self._lock_gate(session, action.arena_id)
+            account = self._lock_account(session, action.scope_id)
+            account.reserved -= 1
+            if outcome != "released":
+                account.spent += 1  # ambiguous execution is charged, never replayed
+            action.state = outcome
+            action.updated_at = datetime.now()
+            self._append_event(session, action.arena_id, action.actor, "budget_settled",
+                               {"action_id": action_id, "outcome": outcome})
+            session.commit()
+            return True
+
+    @staticmethod
+    def _control_replay(session, scope, key, command, actor, reason):
+        row = session.get(BudgetControl, (scope, key))
+        if row is None:
+            return None
+        if (row.command, row.actor, row.reason) != (command, actor, reason):
+            raise ValueError("stop idempotency key was reused with different input")
+        return row.epoch
+
+    def stop_budget_gate(self, scope, *, actor, reason, key=None):
+        if not reason or len(reason) > 500:
+            raise ValueError("a bounded stop reason is required")
+        key = key or str(uuid.uuid4())
+        with self._session() as session:
+            self._lock_gate(session, "system")
+            gate = self._lock_gate(session, scope) if scope != "system" else session.get(BudgetGate, "system")
+            if gate is None:
+                raise ValueError("unknown stop scope")
+            replay = self._control_replay(session, scope, key, "stop", actor, reason)
+            if replay is not None:
+                return replay
+            if gate.state == "open":
+                gate.state = "stopping"
+                gate.epoch += 1
+                gate.reason = reason
+                gate.updated_at = datetime.now()
+                self._append_event(session, scope, actor, "arena_stop" if scope != "system" else "system_stop",
+                                   {"epoch": gate.epoch, "reason": reason})
+            session.add(BudgetControl(scope=scope, idempotency_key=key,
+                                      command="stop", actor=actor, reason=reason,
+                                      epoch=gate.epoch, created_at=datetime.now()))
+            session.commit()
+            return gate.epoch
+
+    def reconcile_budget_stop(self, scope):
+        with self._session() as session:
+            self._lock_gate(session, "system")
+            gate = self._lock_gate(session, scope) if scope != "system" else session.get(BudgetGate, "system")
+            if not gate or gate.state != "stopping":
+                return False
+            scopes = [g.scope for g in session.scalars(select(BudgetGate).where(BudgetGate.scope != "system"))] if scope == "system" else [scope]
+            active_actions = session.scalar(select(BudgetAction.id).where(
+                BudgetAction.arena_id.in_(scopes), BudgetAction.state == "reserved").limit(1))
+            active_jobs = session.scalar(select(PocJob.id).where(
+                PocJob.arena_id.in_(scopes),
+                (PocJob.state.in_(("queued", "running")) |
+                 PocJob.cleanup_state.in_(("pending", "incomplete", "reconcile_pending")))).limit(1))
+            if active_actions or active_jobs:
+                return False
+            gate.state = "stopped"
+            gate.updated_at = datetime.now()
+            self._append_event(session, scope, "reaper", "stop_verified", {"epoch": gate.epoch})
+            session.commit()
+            return True
+
+    def resume_budget_gate(self, scope, *, actor, reason, key=None):
+        if not reason or len(reason) > 500:
+            raise ValueError("a bounded resume reason is required")
+        key = key or str(uuid.uuid4())
+        self.reconcile_budget_stop(scope)
+        with self._session() as session:
+            self._lock_gate(session, "system")
+            gate = self._lock_gate(session, scope) if scope != "system" else session.get(BudgetGate, "system")
+            replay = self._control_replay(session, scope, key, "resume", actor, reason)
+            if replay is not None:
+                return replay
+            if gate is None or gate.state != "stopped":
+                raise ValueError("stop has not drained and been verified")
+            account = session.get(BudgetAccount, gate.account_scope) if gate.account_scope else None
+            if account and account.deadline <= datetime.now():
+                raise ValueError("wall-clock budget has expired")
+            gate.state = "open"
+            gate.epoch += 1
+            gate.reason = reason
+            gate.updated_at = datetime.now()
+            self._append_event(session, scope, actor, "stop_cleared",
+                               {"epoch": gate.epoch, "reason": reason})
+            session.add(BudgetControl(scope=scope, idempotency_key=key,
+                                      command="resume", actor=actor, reason=reason,
+                                      epoch=gate.epoch, created_at=datetime.now()))
+            session.commit()
+            return gate.epoch
+
+    @contextmanager
+    def helper_start_guard(self, arena_id, job_id):
+        """Hold both stop gates while a worker creates or starts one helper.
+
+        Stop cannot commit midway through a Docker create/start call. Once it
+        commits, every later guard fails before touching Docker.
+        """
+        with self._session() as session:
+            system = self._lock_gate(session, "system")
+            gate = self._lock_gate(session, arena_id)
+            job = session.get(PocJob, job_id)
+            account = session.get(BudgetAccount, gate.account_scope) if gate else None
+            dep = session.get(Deployment, arena_id)
+            now = datetime.now()
+            if (system.state != "open" or gate is None or gate.state != "open"
+                    or job is None or job.state != "running" or job.cancel_requested
+                    or account.deadline <= now or job.deadline <= now
+                    or dep is None or dep.status != LabStatus.ACTIVE):
+                raise ValueError("helper start was cancelled or stopped")
+            yield
+            session.commit()
 
     def update_deployment(
         self, deployment_id, status=None, outputs=None, error=None, actor="system"
@@ -478,6 +793,24 @@ class Database:
         for arena_slot in range(max_arena_jobs):
             for global_slot in range(max_global_jobs):
                 with self._session() as session:
+                    system = self._lock_gate(session, "system")
+                    gate = self._lock_gate(session, arena_id)
+                    if system.state != "open" or gate is None or gate.state != "open":
+                        raise ValueError("research work is stopped or has no durable gate")
+                    account = self._lock_account(session, gate.account_scope)
+                    existing = session.scalar(select(PocJob).where(
+                        PocJob.arena_id == arena_id,
+                        PocJob.idempotency_key == idempotency_key,
+                    ))
+                    if existing is not None:
+                        assert_same_request(existing)
+                        return self._poc_to_dict(existing), False
+                    if account.deadline <= now:
+                        raise ValueError("wall-clock budget expired")
+                    deadline = min(deadline, account.deadline)
+                    budgeted = payload.get("primitive") not in {"http", "browser"}
+                    if budgeted and account.spent + account.reserved >= account.action_cap:
+                        raise ValueError("action budget exhausted")
                     # Serialize admission with the arena's destroy/reset state
                     # transition on both SQLite and PostgreSQL. An API entry
                     # check alone can race teardown while queueing new work.
@@ -501,6 +834,16 @@ class Database:
                         created_at=now, updated_at=now,
                     )
                     session.add(row)
+                    if budgeted:
+                        account.reserved += 1
+                        session.add(BudgetAction(
+                            id=job_id, arena_id=arena_id, scope_id=account.scope_id,
+                            action_key=f"poc:{idempotency_key}", input_digest=input_digest,
+                            kind="poc", actor=principal, state="reserved", epoch=gate.epoch,
+                            created_at=now, updated_at=now,
+                        ))
+                        self._append_event(session, arena_id, principal, "budget_reserved",
+                                           {"action_id": job_id, "kind": "poc"})
                     try:
                         session.commit()
                         return self._poc_to_dict(row), True
@@ -538,6 +881,15 @@ class Database:
     def claim_poc_job(self, job_id, worker_claim):
         now = datetime.now()
         with self._session() as session:
+            job = session.get(PocJob, job_id)
+            if job is None:
+                return False
+            system = self._lock_gate(session, "system")
+            gate = self._lock_gate(session, job.arena_id)
+            account = session.get(BudgetAccount, gate.account_scope) if gate else None
+            if (system.state != "open" or gate is None or gate.state != "open"
+                    or account.deadline <= now):
+                return False
             result = session.execute(
                 update(PocJob).where(
                     PocJob.id == job_id, PocJob.state == "queued",
@@ -564,9 +916,13 @@ class Database:
             ))
             session.execute(update(PocJob).where(
                 PocJob.id == job_id, PocJob.state == "running",
+                PocJob.cancel_requested == 0,
             ).values(cancel_requested=1, updated_at=now))
             session.commit()
-            return self._poc_to_dict(session.get(PocJob, job_id))
+            result = self._poc_to_dict(session.get(PocJob, job_id))
+        if result and result["state"] == "cancelled" and result["started_at"] is None:
+            self.settle_budget_action(job_id, outcome="released")
+        return result
 
     def request_cancel_arena_poc_jobs(self, arena_id):
         with self._session() as session:
@@ -605,7 +961,13 @@ class Database:
             row.updated_at = now
             row.completed_at = now
             session.commit()
-            return True
+            final_cleanup = row.cleanup_state
+            started = row.started_at
+        if final_cleanup == "not_started" or started is None:
+            self.settle_budget_action(job_id, outcome="released")
+        else:
+            self.settle_budget_action(job_id, outcome="spent")
+        return True
 
     def recover_stale_poc_jobs(self, stale_before):
         """Never replay possibly side-effecting work after worker loss."""
@@ -625,7 +987,24 @@ class Database:
                 if changed.rowcount == 1:
                     recovered.append(job_id)
             session.commit()
+        for job_id in recovered:
+            self.settle_budget_action(job_id, outcome="unknown")
         return recovered
+
+    def reconcile_poc_budget_actions(self):
+        """Close a lost settlement after a terminal job without replaying work."""
+        with self._session() as session:
+            actions = list(session.scalars(select(BudgetAction).where(
+                BudgetAction.kind == "poc", BudgetAction.state == "reserved")))
+            obligations = []
+            for action in actions:
+                job = session.get(PocJob, action.id)
+                if job and job.state not in {"queued", "running"}:
+                    outcome = "released" if job.cleanup_state == "not_started" or job.started_at is None else "unknown"
+                    obligations.append((action.id, outcome))
+        for action_id, outcome in obligations:
+            self.settle_budget_action(action_id, outcome=outcome)
+        return len(obligations)
 
     def record_poc_cleanup(self, job_id, *, success, error=None):
         """Persist reconciliation separately from the already-terminal outcome."""

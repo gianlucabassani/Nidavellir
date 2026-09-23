@@ -107,6 +107,63 @@ class PocJob(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
+class BudgetGate(Base):
+    """A durable lock row for system and arena admissions and stop state."""
+
+    __tablename__ = "budget_gates"
+
+    scope: Mapped[str] = mapped_column(Text, primary_key=True)
+    account_scope: Mapped[str | None] = mapped_column(Text)
+    epoch: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    state: Mapped[str] = mapped_column(Text, nullable=False, default="open")
+    reason: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class BudgetAccount(Base):
+    """The scope survives replacement reset by retaining the source scope ID."""
+
+    __tablename__ = "budget_accounts"
+
+    arena_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    scope_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    action_cap: Mapped[int] = mapped_column(Integer, nullable=False)
+    spent: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    reserved: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    deadline: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class BudgetAction(Base):
+    __tablename__ = "budget_actions"
+    __table_args__ = (UniqueConstraint("arena_id", "action_key", name="uq_budget_action_key"),)
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    arena_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    scope_id: Mapped[str] = mapped_column(Text, nullable=False)
+    action_key: Mapped[str] = mapped_column(Text, nullable=False)
+    input_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    actor: Mapped[str] = mapped_column(Text, nullable=False)
+    state: Mapped[str] = mapped_column(Text, nullable=False)
+    epoch: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class BudgetControl(Base):
+    __tablename__ = "budget_controls"
+
+    scope: Mapped[str] = mapped_column(Text, primary_key=True)
+    idempotency_key: Mapped[str] = mapped_column(Text, primary_key=True)
+    command: Mapped[str] = mapped_column(Text, nullable=False)
+    actor: Mapped[str] = mapped_column(Text, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    epoch: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
 class ApiKey(Base):
     __tablename__ = "api_keys"
 

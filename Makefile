@@ -18,7 +18,7 @@ BANDIT := $(if $(wildcard $(VENV_BIN)/bandit),$(VENV_BIN)/bandit,bandit)
 
 .PHONY: help venv install-dev check-python test test-unit test-integration \
 	cov lint fmt security smoke check verify-sqlite verify-postgres release-check \
-	verify-nv02-live verify-nv03-live build-poc-runner up down dev dev-down dev-logs logs clean
+	verify-nv02-live verify-nv03-live verify-nv04-live build-poc-runner up down dev dev-down dev-logs logs clean
 
 
 help: ## Show this help
@@ -78,6 +78,9 @@ build-poc-runner: ## Build the trusted, networkless NV-03 Python runner image
 
 verify-nv03-live: ## Isolated real Docker confined-PoC acceptance
 	python3 scripts/verify-nv03-live.py
+
+verify-nv04-live: ## Isolated real Docker durable-budget and stop acceptance
+	python3 scripts/verify-nv04-live.py
 
 up: ## Start the full stack via docker-compose (mock mode by default)
 	$(COMPOSE) up -d --build

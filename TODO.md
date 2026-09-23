@@ -1,6 +1,6 @@
 # Nidavellir — ordered delivery checklist
 
-Updated 2026-09-23 after completing the NV-03 confined-PoC gate.
+Updated 2026-09-23 after completing the NV-04 durable-budget/stop gate.
 This is the canonical work queue. [ROADMAP.md](ROADMAP.md) retains product scope,
 design detail and legacy milestone mapping. Unchecked means unfinished.
 Verification history is in [docs/JOURNAL.md](docs/JOURNAL.md).
@@ -34,7 +34,7 @@ demonstrated target need. Bughunt owns live bounty campaigns and their agent wor
   with the same capability and audit model. Do not expand control-plane Docker authority.
   **Depends:** NV-02. **Accept:** develop/run a local PoC; prove helpers cannot reach the
   host, other arenas, internet or metadata endpoints; stop/error paths reclaim helpers.
-- [ ] **NV-04 — Durable budgets and stop controls.** Persist and atomically account action
+- [x] **NV-04 — Durable budgets and stop controls.** Persist and atomically account action
   and time budgets across gateway reconnects, concurrent calls and worker restart. Token/cost
   accounting uses observable driver data; unsupported enforcement is explicit and budget-
   constrained jobs refuse to start when required accounting is unavailable. Reserve before

@@ -25,6 +25,24 @@
   </div>
   <div class="actions">
     <a href="{{ url_for('engagements') }}" class="btn btn-ghost"><i class="fa-solid fa-arrow-left"></i> Back</a>
+    {% if budget.policy %}
+    <span class="badge badge--idle" title="Durable arena-wide action allowance">
+      Actions {{ budget.policy.remaining }}/{{ budget.policy.action_cap }} · {{ budget.arena.state }}
+    </span>
+    {% if state == 'active' and budget.arena.state == 'open' %}
+    <form method="post" action="{{ url_for('arena_stop_form', instance_id=instance_id) }}" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="reason" value="Operator stopped research from the workspace">
+      <button class="btn btn-danger">Stop research</button>
+    </form>
+    {% elif state == 'active' and budget.arena.state == 'stopped' %}
+    <form method="post" action="{{ url_for('arena_resume_form', instance_id=instance_id) }}" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="reason" value="Operator resumed research from the workspace">
+      <button class="btn btn-secondary">Resume research</button>
+    </form>
+    {% endif %}
+    {% endif %}
     {% if lifecycle and lifecycle.classification.runtime_reset.status == 'eligible' and state in ('active', 'destroyed') %}
     <form method="post" action="{{ url_for('reset_lab_form', instance_id=instance_id) }}" style="display:inline"
           onsubmit="return confirm('Replace this arena from its immutable baseline? The current record and evidence will remain readable.')">

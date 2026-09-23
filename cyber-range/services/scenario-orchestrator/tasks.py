@@ -72,7 +72,11 @@ def run_poc_job(self, job_id):
     def cancelled():
         current = db.get_poc_job(job_id) or {}
         arena = db.get_deployment(job["arena_id"]) or {}
-        return bool(current.get("cancel_requested")) or arena.get("status") != LabStatus.ACTIVE
+        budget = db.budget_status(job["arena_id"])
+        return (bool(current.get("cancel_requested"))
+                or arena.get("status") != LabStatus.ACTIVE
+                or budget["system"]["state"] != "open"
+                or not budget["arena"] or budget["arena"]["state"] != "open")
 
     policy_error = None
     if record.get("status") != LabStatus.ACTIVE:
@@ -121,6 +125,8 @@ def run_poc_job(self, job_id):
                         job["arena_id"], target["node"], target["ip"],
                         target["port"], target["scheme"],
                         **job["payload"]["arguments"], job_id=job_id,
+                        cancel_check=cancelled,
+                        start_guard=lambda: db.helper_start_guard(job["arena_id"], job_id),
                     )
             finally:
                 cleanup_result = orch.cleanup_poc_job(job_id)
@@ -129,6 +135,7 @@ def run_poc_job(self, job_id):
             outcome = orch.run_poc(
                 job["arena_id"], job_id, job["payload"], job["target_policy"],
                 effective_limits, cancel_check=cancelled,
+                start_guard=lambda: db.helper_start_guard(job["arena_id"], job_id),
             )
     except NotImplementedError as exc:
         outcome = {"success": False, "state": "failed", "error": str(exc),
@@ -625,6 +632,14 @@ def reap_labs():
     """
     db = Database()
     now = datetime.now()
+    for arena_id in db.expired_budget_arenas(now):
+        db.stop_budget_gate(arena_id, actor="reaper", reason="wall-clock budget expired")
+    for scope in db.stopping_budget_scopes():
+        if scope == "system":
+            for dep in db.list_deployments():
+                db.request_cancel_arena_poc_jobs(dep["id"])
+        else:
+            db.request_cancel_arena_poc_jobs(scope)
     stuck_before = now - timedelta(minutes=config.LAB_STUCK_MINUTES)
 
     candidates = db.find_reapable(now, stuck_before)
@@ -707,6 +722,11 @@ def reap_labs():
                 run_poc_job.delay(job["id"])
                 poc_requeued += 1
 
+    poc_budget_reconciled = db.reconcile_poc_budget_actions()
+
+    for scope in db.stopping_budget_scopes():
+        db.reconcile_budget_stop(scope)
+
     if reaped or skipped or revoked:
         logger.info(
             f"Reaper run: {reaped} reaped, {skipped} skipped, "
@@ -721,6 +741,7 @@ def reap_labs():
         "poc_recovered": len(recovered_poc_ids),
         "poc_cleanup_failed": poc_cleanup_failed,
         "poc_requeued": poc_requeued,
+        "poc_budget_reconciled": poc_budget_reconciled,
     }
 
 

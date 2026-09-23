@@ -53,14 +53,46 @@ def _trace(ctx: GatewayContext, tool: str, args: dict, ok: bool, arena_id: str |
 
 
 def _check_budget(ctx: GatewayContext) -> None:
-    """Raise if the step budget is exhausted. The budget is *consumed* only after
-    a successful action (the tool bodies increment ``steps_used`` post-exec), so a
-    transient failure — orchestrator down, foothold-resolution error — does not
-    permanently burn the agent's budget on a command that never ran."""
+    """Legacy process-local warning; the orchestrator owns durable admission."""
     if ctx.step_budget and ctx.steps_used >= ctx.step_budget:
         raise BudgetExceeded(
             f"command/step budget ({ctx.step_budget}) exhausted for this session"
         )
+
+
+def budget_status(ctx: GatewayContext, arena_id: str) -> dict:
+    _guard(ctx, "budget_status")
+    result = ctx.client.budget_status(ctx.session.api_key, arena_id)
+    _trace(ctx, "budget_status", {}, ok=True, arena_id=arena_id)
+    return result
+
+
+def stop_arena(ctx: GatewayContext, arena_id: str, reason: str) -> dict:
+    _guard(ctx, "stop_arena")
+    result = ctx.client.stop_arena(ctx.session.api_key, arena_id, reason)
+    _trace(ctx, "stop_arena", {"reason": reason}, ok=True, arena_id=arena_id)
+    return result
+
+
+def resume_arena(ctx: GatewayContext, arena_id: str, reason: str) -> dict:
+    _guard(ctx, "resume_arena")
+    result = ctx.client.resume_arena(ctx.session.api_key, arena_id, reason)
+    _trace(ctx, "resume_arena", {"reason": reason}, ok=True, arena_id=arena_id)
+    return result
+
+
+def emergency_stop(ctx: GatewayContext, reason: str) -> dict:
+    _guard(ctx, "emergency_stop")
+    result = ctx.client.emergency_stop(ctx.session.api_key, reason)
+    _trace(ctx, "emergency_stop", {"reason": reason}, ok=True)
+    return result
+
+
+def clear_emergency_stop(ctx: GatewayContext, reason: str) -> dict:
+    _guard(ctx, "clear_emergency_stop")
+    result = ctx.client.clear_emergency_stop(ctx.session.api_key, reason)
+    _trace(ctx, "clear_emergency_stop", {"reason": reason}, ok=True)
+    return result
 
 
 def _node_names(outputs: dict) -> set[str]:

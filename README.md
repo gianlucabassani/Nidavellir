@@ -144,15 +144,16 @@ existing crash oracle, binary/appliance/VM intake, campaigns and disclosure outp
 validated repeated experiments, followed by research breadth driven by selected targets.
 NV-01 restored the pinned Python 3.11 SQLite/PostgreSQL release gate on 2026-09-16.
 NV-02 completed the live target lifecycle/reset gate on 2026-09-21. NV-03 confined
-PoC execution completed its release and live gates on 2026-09-22; NV-04 durable
-budgets and stop controls are next.
+PoC execution completed its release and live gates on 2026-09-22. NV-04 durable
+budgets and stop controls completed their release and live gates on 2026-09-23;
+NV-05 scoped access and capability discovery are next.
 
 | Stage | Focus | Status |
 |---|---|---|
 | **Shipped engine** | Dynamic arenas, target intake, repo→service, monitoring, validators, scoring, eval export and replay | ✅ shipped |
-| **Research session** | Change evidence, file transfer, browser, HTTP capture/replay, finding attachment and confined PoC; tunnel/durable guardrails remain | 🟢 partially shipped |
+| **Research session** | Change evidence, file transfer, browser, HTTP capture/replay, finding attachment, confined PoC and durable action/time stop controls; scoped forwards remain | 🟢 partially shipped |
 | **Console architecture** | Engagements, Evaluations, Library, Activity, unified creation, contextual workspace and SSE | ✅ shipped |
-| **Research-ready runtime** | NV-01–03 complete; NV-04–05 durable budgets, stop controls and scoped access next | 🟡 **in progress** |
+| **Research-ready runtime** | NV-01–04 complete; NV-05 scoped access and capability discovery next | 🟡 **in progress** |
 | **Discovery lane** | Patch-diff & variant hunting, fuzzing + crash triage, binary/appliance/VM intake, campaigns & disclosure output | ◻ planned |
 | **Evaluation workbench** | NV-06–10: independent validation, durable paired trials, small challenge library, Bughunt proof and recovery | ◻ planned |
 | **Held-out proof** | A real vulnerability found and proven on-platform; then a comparison over challenges drawn from that work | ◻ planned |

@@ -8,6 +8,7 @@ unit-tested with a fake transport — no live server required.
 """
 import logging
 import urllib.parse
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,25 @@ class RestClient:
 
     def status(self, api_key: str, instance_id: str) -> dict:
         return self._request("GET", f"/status/{instance_id}", api_key)
+
+    def budget_status(self, api_key: str, arena_id: str) -> dict:
+        return self._request("GET", f"/arenas/{arena_id}/budget", api_key)
+
+    def stop_arena(self, api_key: str, arena_id: str, reason: str) -> dict:
+        return self._request("POST", f"/arenas/{arena_id}/stop", api_key,
+                             json={"reason": reason, "idempotency_key": uuid.uuid4().hex})
+
+    def resume_arena(self, api_key: str, arena_id: str, reason: str) -> dict:
+        return self._request("POST", f"/arenas/{arena_id}/resume", api_key,
+                             json={"reason": reason, "idempotency_key": uuid.uuid4().hex})
+
+    def emergency_stop(self, api_key: str, reason: str) -> dict:
+        return self._request("POST", "/system/emergency-stop", api_key,
+                             json={"reason": reason, "idempotency_key": uuid.uuid4().hex})
+
+    def clear_emergency_stop(self, api_key: str, reason: str) -> dict:
+        return self._request("POST", "/system/emergency-stop/clear", api_key,
+                             json={"reason": reason, "idempotency_key": uuid.uuid4().hex})
 
     def destroy(self, api_key: str, instance_id: str) -> dict:
         return self._request("DELETE", f"/destroy/{instance_id}", api_key)
