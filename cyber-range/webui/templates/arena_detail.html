@@ -437,6 +437,16 @@ print(response["body"].decode("utf-8", "replace")[:1000])</textarea>
               <span class="faint"> · {{ t.digest[-12:] }}{% if t.replay_of %} · replay{% endif %}</span>
             </div>
             {% endfor %}
+            {% if f.validation and f.validation.schema == 'nidavellir/validation-verdict/v1' %}
+            <details style="margin-top:8px;font-size:11.5px">
+              <summary>Independent validation · {{ f.validation.reason_code }}</summary>
+              <div class="mono">Validator {{ f.validation.validator_id }} v{{ f.validation.validator_version }} · recipe {{ (f.validation.recipe_digest or '')[-12:] }}</div>
+              {% if f.validation.action_digest %}<div>Action <a href="/arena/{{ instance_id }}#http" class="mono">{{ f.validation.action_digest[-12:] }}</a></div>{% endif %}
+              {% for label, digest in [('Effect', f.validation.observation_digest), ('Control', f.validation.control_digest)] %}
+              {% if digest %}<div>{{ label }} <a class="mono" href="/api/arenas/{{ instance_id }}/validation-evidence/{{ digest }}">{{ digest[-12:] }}</a></div>{% endif %}
+              {% endfor %}
+            </details>
+            {% endif %}
           </td>
           <td class="mono">{{ f.cwe or '—' }}</td>
           <td class="mono">{{ f.node or '—' }}</td>
@@ -445,7 +455,9 @@ print(response["body"].decode("utf-8", "replace")[:1000])</textarea>
             {% set c = (f.validation or {}).confirmed %}
             {% if c == true %}<span class="badge badge--ok"><i class="fa-solid fa-check"></i> confirmed</span>
             {% elif c == false %}<span class="badge badge--warn">refuted</span>
-            {% else %}<span class="badge badge--idle">unverified</span>{% endif %}
+            {% elif f.validation and f.validation.verdict == 'infrastructure_failure' %}<span class="badge badge--warn">probe failure</span>
+            {% else %}<span class="badge badge--idle">inconclusive</span>{% endif %}
+            {% if f.manual_validation %}<span class="badge badge--info">manual {{ f.manual_validation.verdict }}</span>{% endif %}
             <span style="margin-left:8px">
               <button class="btn btn-sm" title="Confirm — this vuln is really there" onclick="verifyFinding('{{ f.finding_id }}','confirmed')"><i class="fa-solid fa-check"></i></button>
               <button class="btn btn-sm" title="Refute — not a real finding" onclick="verifyFinding('{{ f.finding_id }}','refuted')"><i class="fa-solid fa-xmark"></i></button>
@@ -460,7 +472,7 @@ print(response["body"].decode("utf-8", "replace")[:1000])</textarea>
     <div class="card-pad muted" style="padding:18px">No findings yet — the connected agent's reports appear here, or add one manually with <b>Add finding</b>.</div>
     {% endif %}
     <div class="cfg-note" style="padding:11px 18px;border-top:1px solid var(--line-soft)">
-      <i class="fa-solid fa-eye-slash"></i> Match + verdict are operator-only — the agent gets a neutral ack. Your <b>confirm/refute</b> is authoritative and feeds the score.
+      <i class="fa-solid fa-eye-slash"></i> Match + verdict are operator-only — the agent gets a neutral ack. Manual confirmation requires an immutable evidence digest and is shown separately from automatic proof.
     </div>
   </div>
 
@@ -684,8 +696,9 @@ print(response["body"].decode("utf-8", "replace")[:1000])</textarea>
       {% if has_activity %}
       <div class="usage-summary" style="margin-top:15px">
         {% if is_bench %}
-        <div class="usage-stat"><div class="usage-stat__n">{{ score.found|length }}/{{ score.total_vulnerabilities }}</div><div class="usage-stat__l">found</div></div>
-        <div class="usage-stat"><div class="usage-stat__n">{{ score.points_earned }}/{{ score.points_total }}</div><div class="usage-stat__l">points</div></div>
+        <div class="usage-stat"><div class="usage-stat__n">{{ score.found|length }}/{{ score.total_vulnerabilities }}</div><div class="usage-stat__l">claims</div></div>
+        <div class="usage-stat"><div class="usage-stat__n">{{ score.confirmed_points }}/{{ score.points_total }}</div><div class="usage-stat__l">verified points</div></div>
+        <div class="usage-stat"><div class="usage-stat__n">{{ score.points_earned }}/{{ score.points_total }}</div><div class="usage-stat__l">claim coverage</div></div>
         {% else %}
         <div class="usage-stat"><div class="usage-stat__n">{{ score.signals.distinct_fault_sites }}</div><div class="usage-stat__l">fault sites</div></div>
         {% endif %}

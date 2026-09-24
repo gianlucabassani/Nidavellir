@@ -267,8 +267,7 @@ def _score(instance_id):
 
 def _findings(instance_id):
     """The arena's reported findings (operator view — includes the manifest match
-    and the verification verdict). Merges the newest operator verify verdict onto
-    each finding (a human confirm/refute overrides any auto-verdict). Newest
+    and independent verdict). Adds the latest manual verdict separately. Newest
     first. Fetches untyped so `finding` + `finding_verification` come together."""
     events = _events(instance_id, limit=200)
     verdicts = {}
@@ -286,9 +285,10 @@ def _findings(instance_id):
         v = verdicts.get(p.get("finding_id"))
         if v:
             p["operator_verdict"] = v.get("verdict")
-            p["validation"] = {
+            p["manual_validation"] = {
                 "confirmed": v.get("verdict") == "confirmed",
                 "method": "operator", "by": v.get("actor"), "note": v.get("note"),
+                "verdict": v.get("verdict"), "evidence_digest": v.get("evidence_digest"),
             }
         out.append(p)
     return out
@@ -313,12 +313,20 @@ def _arena_names():
 
 
 def _finding_verdict(finding):
-    confirmed = (finding.get("validation") or {}).get("confirmed")
+    validation = finding.get("validation") or {}
+    manual = finding.get("manual_validation") or {}
+    confirmed = validation.get("confirmed")
+    if manual.get("verdict") == "refuted":
+        return "refuted"
+    if manual.get("verdict") == "confirmed" and confirmed is not True:
+        return "manual_confirmed"
+    if validation.get("verdict") == "infrastructure_failure":
+        return "infrastructure_failure"
     if confirmed is True:
         return "confirmed"
     if confirmed is False:
         return "refuted"
-    return "unverified"
+    return "inconclusive"
 
 
 def _all_findings(limit=200, names=None):
@@ -345,11 +353,13 @@ def _all_findings(limit=200, names=None):
         # rather than offering a link or a download that cannot resolve.
         finding["arena_known"] = arena_id in names
         verdict = verdicts.get(finding.get("finding_id"))
-        if verdict:  # a human verdict overrides any automatic one
-            finding["validation"] = {
+        if verdict:
+            finding["manual_validation"] = {
                 "confirmed": verdict.get("verdict") == "confirmed",
                 "method": "operator",
                 "by": verdict.get("actor"),
+                "verdict": verdict.get("verdict"),
+                "evidence_digest": verdict.get("evidence_digest"),
             }
         finding["verdict"] = _finding_verdict(finding)
         out.append(finding)
@@ -580,7 +590,7 @@ def overview():
         (k, v) for k, v in deployments.items()
         if v.get("status") not in ("destroyed", "failed", "error_destroying")
     ]
-    review_queue = [f for f in findings if f["verdict"] == "unverified"]
+    review_queue = [f for f in findings if f["verdict"] in ("inconclusive", "infrastructure_failure")]
 
     # Attention: a run that broke, and a live arena that can reach the internet.
     # Both are operator decisions, so Home states them instead of burying them.
@@ -1177,8 +1187,12 @@ def findings_index():
     findings = _all_findings()
     counts = {
         "all": len(findings),
-        "unverified": sum(1 for f in findings if f["verdict"] == "unverified"),
+        "unverified": sum(1 for f in findings if f["verdict"] in
+                          ("inconclusive", "infrastructure_failure")),
+        "inconclusive": sum(1 for f in findings if f["verdict"] == "inconclusive"),
+        "infrastructure_failure": sum(1 for f in findings if f["verdict"] == "infrastructure_failure"),
         "confirmed": sum(1 for f in findings if f["verdict"] == "confirmed"),
+        "manual_confirmed": sum(1 for f in findings if f["verdict"] == "manual_confirmed"),
         "refuted": sum(1 for f in findings if f["verdict"] == "refuted"),
     }
     return render_template(
@@ -1831,6 +1845,15 @@ def http_transaction_proxy(instance_id, digest):
     return jsonify(data or {"error": "not found"}), (200 if ok else 404)
 
 
+@app.route("/api/arenas/<instance_id>/validation-evidence/<digest>", methods=["GET"])
+def validation_evidence_proxy(instance_id, digest):
+    """Operator-only digest review through the orchestrator service."""
+    data, ok = _api_get(
+        f"/arenas/{instance_id}/validation-evidence/{quote(digest, safe='')}"
+    )
+    return jsonify(data or {"error": "not found"}), (200 if ok else 404)
+
+
 @app.route("/api/arenas/<instance_id>/http/request", methods=["POST"])
 def http_request_proxy(instance_id):
     """Drive one arena-target HTTP transaction from the workspace."""
@@ -2024,6 +2047,7 @@ def verify_finding_proxy(instance_id, finding_id):
     payload = {
         "verdict": (body.get("verdict") or "").strip(),
         "note": (body.get("note") or "").strip() or None,
+        "evidence_digest": (body.get("evidence_digest") or "").strip() or None,
     }
     data, code = _api_post(f"/arenas/{instance_id}/findings/{finding_id}/verify", payload)
     return jsonify(data), code

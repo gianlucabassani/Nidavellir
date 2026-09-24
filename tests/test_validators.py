@@ -75,6 +75,7 @@ def test_probe_error_is_unknown_not_refuted():
         {"cwe": "CWE-79", "path": "/x", "param": "q"}, http_fn=boom, nonce="nvABCDEF"
     )
     assert r.confirmed is None
+    assert r.to_dict()["verdict"] == "infrastructure_failure"
 
 
 def test_headless_browser_confirms_execution():
@@ -162,8 +163,9 @@ def test_oast_unverifiable_without_token():
 # --- passive crash correlation ----------------------------------------------
 
 def test_correlate_crash_confirms_on_matching_node():
-    signals = [{"kind": "crash", "node": "victim", "summary": "victim exited 139"}]
-    r = validators.correlate_crash("victim", signals)
+    signals = [{"kind": "crash", "node": "victim", "summary": "victim exited 139",
+                "ts": "2026-09-23T10:00:01"}]
+    r = validators.correlate_crash("victim", signals, action_ts="2026-09-23T10:00:00")
     assert r.confirmed is True
     assert r.method == validators.CRASH_SIGNAL
 
@@ -175,8 +177,44 @@ def test_correlate_crash_ignores_other_nodes_and_benign_kinds():
     ).confirmed is None  # 5xx alone isn't a fault-site crash
 
 
+def test_crash_requires_linked_recent_action():
+    signal = [{"kind": "crash", "node": "victim", "ts": "2026-09-23T10:05:00"}]
+    assert validators.correlate_crash("victim", signal).confirmed is None
+    assert validators.correlate_crash(
+        "victim", signal, action_ts="2026-09-23T10:00:00"
+    ).confirmed is None
+
+
 def test_validation_result_to_dict_is_bounded():
     r = validators.ValidationResult(True, "marker", "ok", "x" * 5000)
     d = r.to_dict()
-    assert set(d) == {"confirmed", "method", "explanation", "evidence"}
+    assert set(d) == {"confirmed", "method", "explanation", "evidence", "verdict", "reason_code"}
     assert len(d["evidence"]) <= validators._MAX_EVIDENCE
+
+
+def test_caller_marker_cannot_confirm():
+    r = validators.validate_finding(
+        {"cwe": "CWE-89", "path": "/item", "marker": "FAKE"},
+        http_fn=lambda *_: {"status": 200, "body": "FAKE"},
+    )
+    assert r.confirmed is None
+
+
+def test_authorization_effect_uses_observer_not_response_text():
+    action = {"request_id": "request1", "response_body": "private-B"}
+    control = {"actor": "B", "owner": "B", "status": 200, "control_ok": True}
+    positive = {"request_id": "request1", "actor": "A", "owner": "B",
+                "status": 200, "unauthorized_disclosure": True}
+    denied = {**positive, "status": 403, "unauthorized_disclosure": False}
+    assert validators.validate_authorization_effect(
+        action, positive, control, actor="A", owner="B"
+    ).to_dict()["verdict"] == "confirmed"
+    assert validators.validate_authorization_effect(
+        action, denied, control, actor="A", owner="B"
+    ).to_dict()["verdict"] == "refuted"
+    assert validators.validate_authorization_effect(
+        None, None, None, actor="A", owner="B"
+    ).to_dict()["verdict"] == "inconclusive"
+    assert validators.validate_authorization_effect(
+        action, None, control, actor="A", owner="B"
+    ).to_dict()["verdict"] == "infrastructure_failure"

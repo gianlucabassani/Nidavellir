@@ -271,6 +271,12 @@ class Vulnerability(BaseModel):
     severity: str | None = None     # low | medium | high | critical (advisory)
     points: int = 1
     description: str | None = None
+    # Operator-only deterministic validation configuration. The authorization
+    # adapter uses a target-local observer; never include these fields in the
+    # public topology or participant brief.
+    validator: str | None = None
+    validation_config: dict[str, str] = Field(default_factory=dict)
+    marker: str | None = None
 
     @field_validator("id")
     @classmethod

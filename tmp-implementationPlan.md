@@ -1,5 +1,11 @@
 # P1 handoff — independently verified, repeatable results
 
+Execution update 2026-09-24: NV-06 passed its acceptance matrix, pinned release,
+isolated Docker live and NV-02–05 regression gates. Its implementation and exact
+evidence are recorded in `docs/JOURNAL.md` and
+`docs/verification/nv06-gates-2026-09-24.json`. The plan below is the
+pre-implementation handoff; NV-07 is now the next canonical task.
+
 Prepared 2026-09-23. **Planning only: NV-06–10 remain unchecked.** NV-05 is
 committed locally as `7df304a`; its passing release, PostgreSQL, Docker live
 and NV-02/03/04 regression evidence is in `docs/verification/`. The previous

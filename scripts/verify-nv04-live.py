@@ -300,17 +300,20 @@ def main():
     api("POST", "/system/emergency-stop/clear", {"reason": "verified live clear"})
     assert "http_status" not in http_action(other_id)
 
+    # Stop the worker before starting the short expiry window. Service shutdown
+    # can take longer than the old three-second deadline on a busy Docker host.
+    run(*COMPOSE, "stop", "worker")
+    expiry_at = datetime.now(timezone.utc) + timedelta(seconds=15)
     api("POST", f"/arenas/{other_id}/budget/policy", {
         "action_cap": 1000,
-        "deadline": (datetime.now(timezone.utc) + timedelta(seconds=3)).isoformat(),
+        "deadline": expiry_at.isoformat(),
         "reason": "wall-clock expiry fixture",
     })
-    run(*COMPOSE, "stop", "worker")
     expiring = api("POST", f"/arenas/{other_id}/poc-jobs", {
         "source": "print('deadline prevented execution')\n", "timeout_seconds": 10,
         "idempotency_key": f"nv04-expiry-{uuid.uuid4().hex}",
     }, expected=(202,))["job"]
-    time.sleep(4)
+    time.sleep(max(0.0, (expiry_at - datetime.now(timezone.utc)).total_seconds()) + 1)
     run(*COMPOSE, "up", "-d", "worker")
     expired_job = wait(f"/arenas/{other_id}/poc-jobs/{expiring['id']}",
                        lambda value: value["job"]["state"] not in {"queued", "running"}, 40)["job"]

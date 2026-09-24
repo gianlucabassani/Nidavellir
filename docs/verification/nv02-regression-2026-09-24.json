@@ -1,0 +1,29 @@
+{
+  "schema": "nidavellir/nv02-regression/v1",
+  "command": "make verify-nv02-live",
+  "result": "passed",
+  "arenas": [
+    "183f14c2-66f4-4f84-ab17-f2d8f971a8e1",
+    "eada9323-d494-4808-ae9c-13b36cc49f4c",
+    "55e21ccd-7528-4bd7-8672-b1e9ed89f0bf",
+    "a557c110-c581-4dc8-991e-2ea200ceffe5",
+    "9c934a83-4598-4ff3-b758-6c6a54c9e69a"
+  ],
+  "fixture_image": "sha256:a647c2dc50479ed9da2581d6f977a078492b9f29ba95aff3ff0bbc8a73b9e162",
+  "recipe_digest": "sha256:ca85e8ac263bb59ea1b045be52cfc4b3d99caea26e0f35af30d82452b2bd0498",
+  "observed_state_digest": "sha256:62a7ac248486fda85f69749d9b3530057010fbde5f22e58bbf06598d55b531fb",
+  "reset_operations": [
+    "af40770e-4355-4a41-9500-5457f0d3bec0",
+    "360cb92b-9713-4097-8538-3d08b257db4a"
+  ],
+  "transaction_digest": "sha256:1245f127a9cb5a6991f45e1df261bf1d91d7416791b03835d134047432399e57",
+  "finding_id": "1b7ec93b26c8",
+  "interrupted_deploy_terminal_state": "destroyed",
+  "interrupted_teardown_terminal_state": "destroyed",
+  "final_labeled_resources": {
+    "containers": 0,
+    "images": 0,
+    "networks": 0,
+    "volumes": 0
+  }
+}

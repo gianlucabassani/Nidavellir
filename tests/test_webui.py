@@ -270,8 +270,8 @@ def test_findings_index_spans_engagements_and_links_back(client, monkeypatch):
     assert "/arena/arena-1#findings" in html and "/arena/arena-2#findings" in html
     assert "web-review" in html and "past-run" in html
     # the operator verdict wins over the absent automatic one
-    assert 'data-src="confirmed"' in html
-    assert 'data-src="unverified"' in html
+    assert 'data-src="manual_confirmed"' in html
+    assert 'data-src="inconclusive"' in html
     assert "1 awaiting review" in html
 
 

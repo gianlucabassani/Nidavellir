@@ -1870,8 +1870,11 @@
   window.verifyFinding = function (fid, verdict) {
     const card = document.getElementById("findings-card");
     if (!card) return;
+    const evidence = verdict === "confirmed"
+      ? prompt("Immutable evidence digest (sha256:…):") : null;
+    if (verdict === "confirmed" && !evidence) return;
     postJson("/api/arenas/" + card.dataset.arena + "/findings/" + encodeURIComponent(fid) + "/verify",
-      { verdict: verdict })
+      { verdict: verdict, evidence_digest: evidence })
       .then(({ status, data }) => {
         if (status === 200) location.reload();
         else alert(data.error || data.detail || "HTTP " + status);

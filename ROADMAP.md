@@ -20,13 +20,13 @@
 > that discovery work produces the verified, held-out material that makes
 > evaluation credible.
 
-## Current delivery order — updated 2026-09-07
+## Current delivery order — updated 2026-09-24
 
 [TODO.md](TODO.md) is the canonical ordered checklist with stable NV task IDs,
 dependencies and acceptance criteria. This roadmap retains product/design detail;
 S/C/R/D/E/P labels below are subject areas, not a competing execution order.
 The operator requested this reorganization after reviewing both Nidavellir and Bughunt.
-No planned runtime, evaluation or integration feature is implemented by this update.
+NV-01–06 have completed their accepted gates; NV-07 is next.
 
 1. **P0 / NV-01–05:** restore a repeatable Python 3.11 release gate; prove pinned target
    lifecycle/reset; complete confined PoC execution, durable budgets/stop and scoped access.
@@ -175,6 +175,12 @@ Compose/devcontainer/buildpack tiers; binary/installer and VM-image intake.
 
 The engine can score and export a run today. It does not yet have durable
 evaluation/suite/trial records or paired agent-version comparisons.
+NV-06 adds a resettable authorization fixture with action-linked, target-local
+effect and healthy-control observations, versioned four-way verdicts and
+post-teardown operator review. The headline benchmark score now uses automatic
+confirmed points; claim coverage and manual judgments remain separate.
+The 2026-09-24 pinned release and Docker-local live gate passed with NV-02–05
+regressions. See `docs/verification/nv06-gates-2026-09-24.json`.
 
 ### S4 — Research session and attacker tooling · partially shipped (legacy M4)
 

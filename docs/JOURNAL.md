@@ -3,6 +3,68 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-09-24 — Complete NV-06 independent authorization validation
+
+**Outcome:** NV-06 is complete on Docker-local. Froze the five-case acceptance
+matrix before changing validation/scoring and built a resettable, image-pinned
+synthetic A/B authorization target first. The platform now links a participant's
+recorded HTTP action to target-local effect read-back and a B-to-B healthy
+control. An append-only `nidavellir/validation-verdict/v1` finding event cites
+the pinned recipe/target, action, effect/control digests, validator version,
+timestamp, four-way verdict and reason code. Observation files are arena-scoped,
+content-addressed and integrity-checked; operators can review them after
+teardown. REST/MCP agent acknowledgements remain neutral and agent events hide
+private match/verdict and manual review. No migration was needed.
+
+The marker validator now requires manifest-owned truth; passive crash credit
+requires a linked same-node action within 120 seconds. Benchmark headline
+success uses automatically confirmed points, while claim coverage and
+digest-citing manual judgment remain separate. Discovery displays unlinked
+faults without granting headline success. The console shows verdict/reason and
+action/effect/control links. Code review caught and fixed a projection in which
+manual confirmation displaced automatic proof; the final tests and gates ran
+after that fix. ADR-0009 records the amended scoring contract.
+
+**Files:** Authorization fixture and `docker-compose.nv06.yml`; scenario
+schema, validator, evidence store, finding API and scorer; console findings,
+score and evidence views; `scripts/verify-nv06-live.py`, focused tests,
+`docs/API.md`, ADR-0009, acceptance/gate JSON, README, ROADMAP, TODO and this
+journal. `docs/UI_REBUILD_PLAN.md` and prior journal entries are preserved.
+
+**Verification:** Final `make release-check` passed on Python 3.11.14:
+Ruff 0.6.9 clean, Bandit 1.9.4 with zero medium/high findings, 901 SQLite
+tests passed (four PostgreSQL-only skips), 905 PostgreSQL tests passed, six
+declared integration deselections on each backend, and clean Alembic plus
+API/console/MCP readiness smoke. Final `make verify-nv06-live` passed:
+positive A-to-B access `confirmed/unauthorized_read`; denied path
+`refuted/access_denied`; B-to-B control `control_ok`; unsupported claim
+`inconclusive/missing_action`; stopped target
+`infrastructure_failure/probe_failed`. It also proved MCP neutral ack,
+agent truth denial/redaction, reset observed-state equivalence, operator
+console and transaction/effect/score review after teardown, and zero labeled
+containers, images, networks and volumes across three arenas. The fixture image
+was `sha256:cb5ba133686e30b5bab036d4431a5f6d04b27c1341a90f8f42be5b02f31f9b34`;
+the final positive recipe was
+`sha256:521be6a30198bb99adb95fe801e8e66b18ca8176c7134491550b844abf27f378`.
+
+After the final product change, NV-02 reset/retained-evidence (five arenas),
+NV-03 confined PoC (three), NV-04 durable budget/stop (two), and NV-05 scoped
+forward (four) live regressions passed with zero final labeled resources.
+The first NV-04 rerun hit its three-second expiry deadline during worker
+shutdown, returning the expected 409 before the fixture could enqueue its
+job; its failure cleanup left zero labeled resources. The verifier now stops
+the worker before starting a 15-second deadline, and the next run passed.
+Exact results and IDs are in `docs/verification/nv06-gates-2026-09-24.json`,
+`nv06-live-2026-09-24.json`, `nv02-regression-2026-09-24.json`, and the
+refreshed NV-03/04/05 live JSON. Final documentation/JSON validation and
+`git diff --check` passed. Nothing was pushed.
+
+**Unresolved risks / next step:** This is one calibration fixture and one
+class-specific validator, not a held-out challenge library or a live cloud/VM
+claim. Legacy validator evidence remains at its existing contract. Durable
+paired Agent build/Challenge/Evaluation/Run/Trial records, repeated
+comparisons and infrastructure-failure accounting are NV-07.
+
 ## 2026-09-23 — P1 vertical-result handoff after NV-05 checkpoint
 
 **Outcome:** Committed the completed NV-05 implementation and passing evidence

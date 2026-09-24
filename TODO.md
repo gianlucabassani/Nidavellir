@@ -55,7 +55,7 @@ for both human and agent callers; API/GUI/MCP share the same service boundary.
 
 ## P1 — independently verified, repeatable results
 
-- [ ] **NV-06 — Strengthen independent validation.** Extend existing validators with
+- [x] **NV-06 — Strengthen independent validation.** Extend existing validators with
   class-specific effects and control experiments. Link request/action → observed effect →
   verdict with immutable evidence; distinguish confirmed, refuted, inconclusive and
   infrastructure failure. Keep hidden truth and operator-only exports outside agent access.

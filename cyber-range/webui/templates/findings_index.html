@@ -8,7 +8,7 @@
   <div>
     <div class="eyebrow">Activity</div>
     <h1>Findings</h1>
-    <div class="sub">Every reported weakness across engagements. Your confirm/refute is authoritative and feeds each score.</div>
+    <div class="sub">Every reported weakness across engagements, with independent and manual verdicts shown separately.</div>
   </div>
   <div class="head-actions">
     <span class="badge {{ 'badge--warn' if counts.unverified else 'badge--idle' }}">{{ counts.unverified }} awaiting review</span>
@@ -18,8 +18,10 @@
 <div class="toolbar">
   <div class="seg" id="findings-seg" style="padding:3px">
     <button class="on" data-f="all">All <span class="ws-tab-count">{{ counts.all }}</span></button>
-    <button data-f="unverified">Awaiting review <span class="ws-tab-count">{{ counts.unverified }}</span></button>
+    <button data-f="inconclusive">Inconclusive <span class="ws-tab-count">{{ counts.inconclusive }}</span></button>
+    <button data-f="infrastructure_failure">Probe failure <span class="ws-tab-count">{{ counts.infrastructure_failure }}</span></button>
     <button data-f="confirmed">Confirmed <span class="ws-tab-count">{{ counts.confirmed }}</span></button>
+    <button data-f="manual_confirmed">Manual <span class="ws-tab-count">{{ counts.manual_confirmed }}</span></button>
     <button data-f="refuted">Refuted <span class="ws-tab-count">{{ counts.refuted }}</span></button>
   </div>
   <div style="position:relative; min-width:200px; flex:1; max-width:320px">
@@ -59,8 +61,10 @@
         <td>{% if f.manual %}<span class="badge">operator</span>{% else %}<span class="badge badge--info">agent</span>{% endif %}</td>
         <td>
           {% if f.verdict == 'confirmed' %}<span class="badge badge--ok"><i class="fa-solid fa-check"></i> confirmed</span>
+          {% elif f.verdict == 'manual_confirmed' %}<span class="badge badge--info">manual confirmation</span>
           {% elif f.verdict == 'refuted' %}<span class="badge badge--warn">refuted</span>
-          {% else %}<span class="badge badge--idle">awaiting review</span>{% endif %}
+          {% elif f.verdict == 'infrastructure_failure' %}<span class="badge badge--warn">probe failure</span>
+          {% else %}<span class="badge badge--idle">inconclusive</span>{% endif %}
         </td>
         <td class="mono faint">{{ (f.ts or '')[:19] }}</td>
       </tr>

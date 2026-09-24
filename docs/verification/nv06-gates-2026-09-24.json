@@ -1,0 +1,75 @@
+{
+  "schema": "nidavellir/nv06-gates/v1",
+  "date": "2026-09-24",
+  "release_check": {
+    "command": "make release-check",
+    "result": "passed",
+    "python": "3.11.14",
+    "ruff": "0.6.9",
+    "bandit": "1.9.4",
+    "bandit_medium": 0,
+    "bandit_high": 0,
+    "sqlite": {"passed": 901, "postgresql_only_skipped": 4, "integration_deselected": 6},
+    "postgresql": {"passed": 905, "integration_deselected": 6},
+    "clean_alembic_api_console_mcp_smoke": "passed"
+  },
+  "nv06_live": {
+    "command": "make verify-nv06-live",
+    "result": "passed",
+    "evidence": "nv06-live-2026-09-24.json",
+    "fixture_image": "sha256:cb5ba133686e30b5bab036d4431a5f6d04b27c1341a90f8f42be5b02f31f9b34",
+    "recipe_digest": "sha256:521be6a30198bb99adb95fe801e8e66b18ca8176c7134491550b844abf27f378",
+    "positive": "confirmed/unauthorized_read",
+    "negative": "refuted/access_denied",
+    "healthy_control": "control_ok",
+    "unsupported": "inconclusive/missing_action",
+    "probe_failure": "infrastructure_failure/probe_failed",
+    "post_teardown_score_transaction_observation_console_review": "passed",
+    "agent_rest_mcp_redaction": "passed",
+    "reset_observed_state_equivalent": true,
+    "final_labeled_resources": 0
+  },
+  "regressions_after_final_product_change": {
+    "nv02": {
+      "command": "make verify-nv02-live",
+      "result": "passed",
+      "evidence": "nv02-regression-2026-09-24.json",
+      "arenas": 5,
+      "final_labeled_resources": 0
+    },
+    "nv03": {
+      "command": "make verify-nv03-live",
+      "result": "passed",
+      "evidence": "nv03-live-2026-09-22.json",
+      "verified_at": "2026-09-24T09:59:56Z",
+      "arenas": 3,
+      "final_labeled_resources": 0
+    },
+    "nv04": {
+      "command": "make verify-nv04-live",
+      "result": "passed_on_rerun",
+      "evidence": "nv04-live-2026-09-24.json",
+      "verified_at": "2026-09-24T12:59:32.755622+00:00",
+      "arenas": 2,
+      "final_labeled_resources": 0,
+      "first_attempt": {
+        "result": "failed",
+        "cause": "three-second wall-clock fixture deadline elapsed during worker shutdown before job enqueue; API returned 409 wall-clock budget expired",
+        "failed_arenas": [
+          "b0bbdb73-8e42-4ba9-a177-bbf61161b2ab",
+          "267ae87c-725d-48be-9b8c-e4fdd9b29b49"
+        ],
+        "post_failure_labeled_containers_networks_volumes": 0,
+        "fix": "stop worker before setting a 15-second expiry deadline and wait until it passes"
+      }
+    },
+    "nv05": {
+      "command": "make verify-nv05-live",
+      "result": "passed",
+      "evidence": "nv05-live-2026-09-24.json",
+      "verified_at": "2026-09-24T13:34:46.648169+00:00",
+      "arenas": 4,
+      "final_labeled_resources": 0
+    }
+  }
+}

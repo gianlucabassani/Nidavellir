@@ -140,7 +140,7 @@ that both objectives need, a **discovery lane** (patch-diff and variant hunting,
 existing crash oracle, binary/appliance/VM intake, campaigns and disclosure output), and an
 **evaluation lane** (durable experiment records and paired build comparison). Full detail is in
 [`ROADMAP.md`](ROADMAP.md). The canonical ordered checklist is
-[`TODO.md`](TODO.md), updated 2026-09-23: reliable local runtime first, then independently
+[`TODO.md`](TODO.md), updated 2026-09-24: reliable local runtime first, then independently
 validated repeated experiments, followed by research breadth driven by selected targets.
 NV-01 restored the pinned Python 3.11 SQLite/PostgreSQL release gate on 2026-09-16.
 NV-02 completed the live target lifecycle/reset gate on 2026-09-21. NV-03 confined
@@ -148,7 +148,8 @@ PoC execution completed its release and live gates on 2026-09-22. NV-04 durable
 budgets and stop controls completed their release and live gates on 2026-09-23.
 NV-05 fixed-destination TCP forwards and principal-filtered capability discovery
 completed the PostgreSQL, release and live gates on 2026-09-23. NV-06 independent
-validation is next.
+authorization validation completed its pinned release, isolated Docker live and
+NV-02–05 regression gates on 2026-09-24. NV-07 durable paired experiments are next.
 
 | Stage | Focus | Status |
 |---|---|---|
@@ -157,7 +158,7 @@ validation is next.
 | **Console architecture** | Engagements, Evaluations, Library, Activity, unified creation, contextual workspace and SSE | ✅ shipped |
 | **Research-ready runtime** | NV-01–05 complete on Docker-local; unsupported model token/cost hard caps are explicit | ✅ complete |
 | **Discovery lane** | Patch-diff & variant hunting, fuzzing + crash triage, binary/appliance/VM intake, campaigns & disclosure output | ◻ planned |
-| **Evaluation workbench** | NV-06–10: independent validation, durable paired trials, small challenge library, Bughunt proof and recovery | ◻ planned |
+| **Evaluation workbench** | NV-06 independent authorization effect validation shipped; NV-07–10 paired trials, challenge library, Bughunt proof and recovery remain | 🟢 partially shipped |
 | **Held-out proof** | A real vulnerability found and proven on-platform; then a comparison over challenges drawn from that work | ◻ planned |
 | **Deferred** | OAuth/multi-tenancy, live cloud/VM providers, purple-team, VNC and hosted-product concerns | ◻ deferred |
 

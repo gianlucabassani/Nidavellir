@@ -1,10 +1,10 @@
 {
   "arenas": [
-    "37e4bd09-6ca3-402b-9f86-60a579449732",
-    "88b6ec84-1c31-4522-835a-70f8e9482635",
-    "8eb06da3-9878-484d-a098-370dbeb7d642"
+    "d22a488f-b01f-473b-a3e6-8d104c17df2d",
+    "ed91af38-9540-46d9-86c1-e08059a2f750",
+    "e95766bf-5bcc-4f25-bee8-8bdfe8cd97c6"
   ],
-  "deadline": "2026-09-23 13:51:26.167557",
+  "deadline": "2026-09-24 09:58:32.633263",
   "denied_paths": [
     "control_plane",
     "decoy",
@@ -17,27 +17,27 @@
   ],
   "docker_server": "29.7.2",
   "final_resources": {
-    "37e4bd09-6ca3-402b-9f86-60a579449732": {
+    "d22a488f-b01f-473b-a3e6-8d104c17df2d": {
       "containers": 0,
       "networks": 0,
       "volumes": 0
     },
-    "88b6ec84-1c31-4522-835a-70f8e9482635": {
+    "e95766bf-5bcc-4f25-bee8-8bdfe8cd97c6": {
       "containers": 0,
       "networks": 0,
       "volumes": 0
     },
-    "8eb06da3-9878-484d-a098-370dbeb7d642": {
+    "ed91af38-9540-46d9-86c1-e08059a2f750": {
       "containers": 0,
       "networks": 0,
       "volumes": 0
     }
   },
   "fixture_image": "sha256:a647c2dc50479ed9da2581d6f977a078492b9f29ba95aff3ff0bbc8a73b9e162",
-  "input_digest": "sha256:843c480ede167915de7186e228350cfaebaf0431acff098924c9bd3ec5bf31f3",
+  "input_digest": "sha256:0618e8a846ab53259c2b338270fb7eb6229993fc9417ab0e06a23253c2be960f",
   "interrupted_job": {
     "cleanup": "complete",
-    "id": "55766e14-ee72-49fc-850f-5cc668633c0b",
+    "id": "07dd0378-5047-4cbe-ae1b-645155764ac9",
     "state": "failed"
   },
   "limits": {
@@ -53,7 +53,7 @@
   },
   "mcp": {
     "cross_arena_denied": true,
-    "job_id": "efcc763a-3068-4fa8-ad63-d157de68e37d",
+    "job_id": "ffc9f954-6d4c-41c5-b36b-c2d6596e346b",
     "status_result_cancel": true
   },
   "network_errors": {
@@ -78,7 +78,7 @@
     "authority": true,
     "connect": true
   },
-  "reset_operation": "f27af13c-9d25-4bac-92c6-d0fa1d9374ad",
+  "reset_operation": "341b92ea-3ca5-429a-b587-c0b1035de737",
   "runner_image": "sha256:b341f14f00049fb2bece1a04e62f7728b32736b9d42e42a01f2d40cf5778f476",
   "runner_interfaces": [
     "lo"
@@ -111,7 +111,7 @@
       "state": "timed_out"
     }
   },
-  "useful_job": "ee958083-402a-4baa-8936-780e2b6facad",
-  "verified_at": "2026-09-23T13:52:45Z",
+  "useful_job": "31748209-1094-4748-a0ad-81484d0304d6",
+  "verified_at": "2026-09-24T09:59:56Z",
   "worker_python": "Python 3.11.16"
 }
