@@ -27,7 +27,8 @@ from sqlalchemy.orm import sessionmaker
 from crypto import decrypt_secret, encrypt_secret
 import setup_phase
 from models import (
-    ApiKey, Base, BudgetAccount, BudgetAction, BudgetControl, BudgetGate, Deployment, Event,
+    AgentBuild, ApiKey, Base, BudgetAccount, BudgetAction, BudgetControl, BudgetGate, Deployment,
+    EvalChallenge, EvalRun, EvalSuite, EvalTrial, Evaluation, Event,
     ForwardLease, LifecycleRecipe, ModelConnection, PocJob,
     ResetOperation,
 )
@@ -149,6 +150,201 @@ class Database:
                 payload=json.dumps(payload) if payload is not None else None,
             )
         )
+
+    # --- durable evaluations -------------------------------------------------
+
+    @staticmethod
+    def _eval_dict(row):
+        if row is None:
+            return None
+        data = {c.name: _stringify(getattr(row, c.name)) for c in row.__table__.columns}
+        for key in ("config", "challenge_ids", "seeds", "result"):
+            if key in data and data[key] is not None:
+                data[key] = json.loads(data[key])
+        return data
+
+    def create_agent_build(self, *, name, version, digest, driver, config):
+        with self._session() as session:
+            row = AgentBuild(id=str(uuid.uuid4()), name=name, version=version,
+                             digest=digest, driver=driver,
+                             config=json.dumps(config, sort_keys=True), created_at=datetime.now())
+            session.add(row)
+            session.commit()
+            return self._eval_dict(row)
+
+    def list_agent_builds(self):
+        with self._session() as session:
+            return [self._eval_dict(r) for r in session.scalars(
+                select(AgentBuild).order_by(AgentBuild.created_at.desc())).all()]
+
+    def get_agent_build(self, build_id):
+        with self._session() as session:
+            return self._eval_dict(session.get(AgentBuild, build_id))
+
+    def create_eval_challenge(self, *, name, version, scenario, source_arena_id, recipe_digest,
+                              validator_version, label):
+        with self._session() as session:
+            row = EvalChallenge(id=str(uuid.uuid4()), name=name, version=version,
+                scenario=scenario, source_arena_id=source_arena_id, recipe_digest=recipe_digest,
+                validator_version=validator_version, label=label,
+                created_at=datetime.now())
+            session.add(row)
+            session.commit()
+            return self._eval_dict(row)
+
+    def list_eval_challenges(self):
+        with self._session() as session:
+            return [self._eval_dict(r) for r in session.scalars(
+                select(EvalChallenge).order_by(EvalChallenge.created_at.desc())).all()]
+
+    def get_eval_challenge(self, challenge_id):
+        with self._session() as session:
+            return self._eval_dict(session.get(EvalChallenge, challenge_id))
+
+    def create_eval_suite(self, *, name, version, challenge_ids, seeds,
+                          action_cap, deadline_seconds):
+        with self._session() as session:
+            row = EvalSuite(id=str(uuid.uuid4()), name=name, version=version,
+                challenge_ids=json.dumps(challenge_ids), seeds=json.dumps(seeds),
+                action_cap=action_cap, deadline_seconds=deadline_seconds,
+                created_at=datetime.now())
+            session.add(row)
+            session.commit()
+            return self._eval_dict(row)
+
+    def list_eval_suites(self):
+        with self._session() as session:
+            return [self._eval_dict(r) for r in session.scalars(
+                select(EvalSuite).order_by(EvalSuite.created_at.desc())).all()]
+
+    def get_eval_suite(self, suite_id):
+        with self._session() as session:
+            return self._eval_dict(session.get(EvalSuite, suite_id))
+
+    def create_evaluation(self, *, suite_id, baseline_id, candidate_id):
+        now = datetime.now()
+        with self._session() as session:
+            suite = session.get(EvalSuite, suite_id)
+            if suite is None or session.get(AgentBuild, baseline_id) is None or session.get(
+                    AgentBuild, candidate_id) is None:
+                raise ValueError("suite or agent build not found")
+            eid = str(uuid.uuid4())
+            evaluation = Evaluation(id=eid, suite_id=suite_id, baseline_id=baseline_id,
+                                    candidate_id=candidate_id, state="queued",
+                                    created_at=now, updated_at=now)
+            session.add(evaluation)
+            for challenge_id in json.loads(suite.challenge_ids):
+                if session.get(EvalChallenge, challenge_id) is None:
+                    raise ValueError("challenge not found")
+                for side, build_id in (("baseline", baseline_id), ("candidate", candidate_id)):
+                    run_id = str(uuid.uuid4())
+                    session.add(EvalRun(id=run_id, evaluation_id=eid, build_id=build_id,
+                                        challenge_id=challenge_id, side=side))
+                    for seed in json.loads(suite.seeds):
+                        session.add(EvalTrial(id=str(uuid.uuid4()), run_id=run_id,
+                                              evaluation_id=eid, seed=seed, state="queued",
+                                              updated_at=now))
+            session.commit()
+            return self._eval_dict(evaluation)
+
+    def list_evaluations(self):
+        with self._session() as session:
+            return [self._eval_dict(r) for r in session.scalars(
+                select(Evaluation).order_by(Evaluation.created_at.desc())).all()]
+
+    def get_evaluation(self, evaluation_id):
+        with self._session() as session:
+            evaluation = session.get(Evaluation, evaluation_id)
+            if evaluation is None:
+                return None
+            runs = session.scalars(select(EvalRun).where(EvalRun.evaluation_id == evaluation_id)).all()
+            trials = session.scalars(select(EvalTrial).where(
+                EvalTrial.evaluation_id == evaluation_id)).all()
+            data = self._eval_dict(evaluation)
+            data["runs"] = [self._eval_dict(r) for r in runs]
+            data["trials"] = [self._eval_dict(t) for t in trials]
+            return data
+
+    def claim_eval_trial(self, trial_id, claim):
+        with self._session() as session:
+            result = session.execute(update(EvalTrial).where(
+                EvalTrial.id == trial_id, EvalTrial.state == "queued")
+                .values(state="running", worker_claim=claim, updated_at=datetime.now()))
+            session.commit()
+            return result.rowcount == 1
+
+    def assign_eval_trial_arena(self, trial_id, claim, arena_id):
+        with self._session() as session:
+            changed = session.execute(update(EvalTrial).where(
+                EvalTrial.id == trial_id, EvalTrial.worker_claim == claim,
+                EvalTrial.state == "running", EvalTrial.arena_id.is_(None))
+                .values(arena_id=arena_id, updated_at=datetime.now())).rowcount
+            session.commit()
+            return changed == 1
+
+    def set_evaluation_state(self, evaluation_id, state, *, expected=None):
+        with self._session() as session:
+            stmt = update(Evaluation).where(Evaluation.id == evaluation_id)
+            if expected is not None:
+                stmt = stmt.where(Evaluation.state == expected)
+            changed = session.execute(stmt.values(state=state, updated_at=datetime.now())).rowcount
+            session.commit()
+            return changed == 1
+
+    def configure_eval_budget(self, arena_id, *, action_cap, deadline):
+        with self._session() as session:
+            account = session.get(BudgetAccount, arena_id)
+            if account is None or account.spent or account.reserved:
+                raise ValueError("evaluation budget must be set before trial activity")
+            account.action_cap = action_cap
+            account.deadline = deadline
+            session.commit()
+
+    def terminalize_stale_eval_trials(self, evaluation_id):
+        """A lost worker cannot silently turn a half-run trial into agent failure."""
+        with self._session() as session:
+            changed = session.execute(update(EvalTrial).where(
+                EvalTrial.evaluation_id == evaluation_id, EvalTrial.state == "running")
+                .values(state="infrastructure_failure", error="worker_interrupted",
+                        updated_at=datetime.now())).rowcount
+            session.commit()
+            return changed
+
+    def recover_stale_evaluations(self, before):
+        """Terminalize worker-lost evaluations after the hard task limit."""
+        with self._session() as session:
+            rows = session.scalars(select(Evaluation).where(
+                Evaluation.state == "running", Evaluation.updated_at < before)).all()
+            ids = [row.id for row in rows]
+            for row in rows:
+                session.execute(update(EvalTrial).where(
+                    EvalTrial.evaluation_id == row.id,
+                    EvalTrial.state.in_(("running", "queued"))).values(
+                        state="infrastructure_failure", error="worker_interrupted",
+                        updated_at=datetime.now()))
+                row.state = "complete"
+                row.updated_at = datetime.now()
+            session.commit()
+            return ids
+
+    def queued_evaluations_before(self, before):
+        with self._session() as session:
+            return [row.id for row in session.scalars(select(Evaluation).where(
+                Evaluation.state == "queued", Evaluation.created_at < before)).all()]
+
+    def finish_eval_trial(self, trial_id, claim, *, state, arena_id=None,
+                          starting_digest=None, result=None, error=None):
+        if state not in ("completed", "infrastructure_failure", "agent_failure"):
+            raise ValueError("invalid terminal trial state")
+        with self._session() as session:
+            changed = session.execute(update(EvalTrial).where(
+                EvalTrial.id == trial_id, EvalTrial.worker_claim == claim,
+                EvalTrial.state == "running").values(
+                    state=state, starting_digest=starting_digest,
+                    result=json.dumps(result) if result is not None else None,
+                    error=error, updated_at=datetime.now())).rowcount
+            session.commit()
+            return changed == 1
 
     # --- deployments ---------------------------------------------------------
 

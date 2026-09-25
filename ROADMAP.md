@@ -26,7 +26,7 @@
 dependencies and acceptance criteria. This roadmap retains product/design detail;
 S/C/R/D/E/P labels below are subject areas, not a competing execution order.
 The operator requested this reorganization after reviewing both Nidavellir and Bughunt.
-NV-01–06 have completed their accepted gates; NV-07 is next.
+NV-01–07 have completed their accepted gates; NV-08 is next.
 
 1. **P0 / NV-01–05:** restore a repeatable Python 3.11 release gate; prove pinned target
    lifecycle/reset; complete confined PoC execution, durable budgets/stop and scoped access.
@@ -173,14 +173,19 @@ Compose/devcontainer/buildpack tiers; binary/installer and VM-image intake.
 - Reference MCP harness, concurrency-capped suites, and deterministic transcript
   replay.
 
-The engine can score and export a run today. It does not yet have durable
-evaluation/suite/trial records or paired agent-version comparisons.
+The engine can score and export a run today. NV-07 adds durable agent build,
+challenge, suite, evaluation, run and trial records, atomically claimed trials
+and paired baseline/candidate comparison over matched starting state.
 NV-06 adds a resettable authorization fixture with action-linked, target-local
 effect and healthy-control observations, versioned four-way verdicts and
 post-teardown operator review. The headline benchmark score now uses automatic
 confirmed points; claim coverage and manual judgments remain separate.
 The 2026-09-24 pinned release and Docker-local live gate passed with NV-02–05
 regressions. See `docs/verification/nv06-gates-2026-09-24.json`.
+NV-07's six-trial Docker-local comparison passed on 2026-09-25: three matched
+pairs, a candidate-minus-baseline verified difference of exactly 1 per pair, no
+infrastructure-failed pair, score/eval export retained after teardown and zero
+labelled resources. See `docs/verification/nv07-live-2026-09-25.json`.
 
 ### S4 — Research session and attacker tooling · partially shipped (legacy M4)
 

@@ -137,6 +137,52 @@ worker using durable jobs. The console's PoC workspace and attacker MCP tools
 `submit_poc`, `poc_status`, `poc_result`, `cancel_poc` use these same contracts.
 
 
+## Durable paired evaluations
+
+All five evaluation endpoints are **operator-only**; agent keys receive 403 and
+no evaluation record is exposed through MCP. Participant calls still enter
+through the stance-scoped gateway, so a trial never grants the agent Docker or
+orchestrator access.
+
+- `POST /agent-builds` (201) — register a pinned `scripted-mcp/v1` build from
+  `name`, `version` and a 1–20 step `plan`. Each step is `{"tool", "args"}`
+  limited to `announce_agent`, `get_briefing`, `get_topology`, `http_request`
+  and `report_finding`; `arena_id` is assigned per trial and is refused in
+  `args`. The response carries the content-addressed build digest over name,
+  version and config, so a changed plan is a different build. A repeated
+  name/version returns 409.
+- `POST /eval-challenges` (201) — pin a challenge to an **active**,
+  reset-eligible, Docker-local source arena that already has a lifecycle
+  observation. The record stores the scenario, source arena, recipe digest and
+  validator version. A missing, inactive, non-eligible or non-Docker-local
+  source returns 409.
+- `POST /eval-suites` (201) — a suite of unique `challenge_ids` (1–8) and at
+  least three unique `seeds`, with `action_cap` (1–10000, default 100) and
+  `deadline_seconds` (60–1800, default 600). Unknown challenges return 422.
+- `POST /evaluations` (202) — queue a baseline/candidate comparison over a
+  suite. The two builds must differ. The worker task `run_evaluation` claims
+  each trial atomically, so a restart never double-runs one.
+- `GET /evaluations/{id}` — the durable record with its runs, trials and a
+  computed `comparison`.
+
+Each trial deploys its own arena from the pinned recipe, re-checks that the
+observed starting state matches the pinned source, applies the suite budget and
+deadline, plays the build's scripted MCP plan and destroys the arena. The
+trial's score and eval export remain readable after teardown.
+
+`comparison` pairs trials by challenge and seed. A pair is `matched` only when
+both sides completed **and** started from the same observed-state digest. The
+per-metric `differences` (verified, false claims, requests, latency, cost)
+report candidate-minus-baseline over matched pairs with a seeded bootstrap 95%
+interval, and `infrastructure_failed_pairs` counts pairs where either side
+ended in `infrastructure_failure`. Broken infrastructure is therefore excluded
+from the comparison rather than scored as agent failure. Token and cost figures
+stay `null` unless the build announced them.
+
+The console exposes the same records read-only under Evaluations and the agent
+build registry under Library → Agents.
+
+
 
 ## Overview
 

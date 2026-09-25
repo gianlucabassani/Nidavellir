@@ -55,6 +55,15 @@ app.conf.beat_schedule = {
 MONITOR_EVENT = "monitor_signal"
 
 
+@app.task(name="run_evaluation", acks_late=True, reject_on_worker_lost=True,
+          soft_time_limit=3600, time_limit=3660)
+def run_evaluation(evaluation_id):
+    """Execute pinned paired trials without granting the participant Docker access."""
+    import experiments  # noqa: PLC0415
+
+    return experiments.execute(evaluation_id, uuid.uuid4().hex)
+
+
 @app.task(name="run_forward_stream", bind=True, acks_late=True,
           reject_on_worker_lost=False, soft_time_limit=110, time_limit=120)
 def run_forward_stream(self, forward_id):
@@ -862,6 +871,11 @@ def reap_labs():
     for scope in db.stopping_budget_scopes():
         db.reconcile_budget_stop(scope)
 
+    eval_recovered = db.recover_stale_evaluations(now - timedelta(minutes=70))
+    eval_requeued = db.queued_evaluations_before(now - timedelta(minutes=2))
+    for evaluation_id in eval_requeued:
+        run_evaluation.delay(evaluation_id)
+
     if reaped or skipped or revoked:
         logger.info(
             f"Reaper run: {reaped} reaped, {skipped} skipped, "
@@ -878,6 +892,8 @@ def reap_labs():
         "poc_requeued": poc_requeued,
         "poc_budget_reconciled": poc_budget_reconciled,
         "forward_cleanup_failed": forward_cleanup_failed,
+        "evaluations_recovered": len(eval_recovered),
+        "evaluations_requeued": len(eval_requeued),
     }
 
 

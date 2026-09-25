@@ -193,9 +193,7 @@ def test_target_builder_error_preserves_engagement_purpose(client):
 @pytest.mark.parametrize(
     ("path", "heading"),
     [
-        ("/evaluations", "Evaluation workbench"),
         ("/library/targets", "Targets"),
-        ("/library/agents", "Agents"),
         ("/administration/providers", "Providers &amp; capacity"),
         ("/administration/security", "Security"),
     ],
@@ -207,6 +205,17 @@ def test_foundation_destinations_are_clickable_and_honest(client, path, heading)
     assert "Current product boundary" in html
     assert "foundation" in html
     assert html.count('aria-current="page"') == 1
+
+
+def test_evaluation_and_agent_registry_are_live_console_destinations(client):
+    _login(client)
+    evaluations = client.get("/evaluations").data.decode()
+    agents = client.get("/library/agents").data.decode()
+    assert "Run paired evaluation" in evaluations
+    assert "Register an agent build" in evaluations
+    assert "Agent builds" in agents
+    assert evaluations.count('aria-current="page"') == 1
+    assert agents.count('aria-current="page"') == 1
 
 
 def _cross_arena_client(client, monkeypatch, findings=(), verdicts=(), signals=(),

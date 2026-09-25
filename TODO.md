@@ -1,6 +1,6 @@
 # Nidavellir — ordered delivery checklist
 
-Updated 2026-09-23 after completing the NV-05 scoped-access gate.
+Updated 2026-09-25 after completing the NV-07 durable paired-evaluation gate.
 This is the canonical work queue. [ROADMAP.md](ROADMAP.md) retains product scope,
 design detail and legacy milestone mapping. Unchecked means unfinished.
 Verification history is in [docs/JOURNAL.md](docs/JOURNAL.md).
@@ -61,7 +61,7 @@ for both human and agent callers; API/GUI/MCP share the same service boundary.
   infrastructure failure. Keep hidden truth and operator-only exports outside agent access.
   **Depends:** P0 runtime. **Accept:** positive/negative/control fixtures reject persuasive
   unsupported claims; findings remain reviewable/reproducible after arena teardown.
-- [ ] **NV-07 — Durable experiments and paired comparisons.** Extend ADR-0010's event-derived
+- [x] **NV-07 — Durable experiments and paired comparisons.** Extend ADR-0010's event-derived
   export with versioned Agent build, Challenge/Suite, Evaluation, Run and Trial records.
   Pin model/scaffold/tools/config, target/version, initial state/seed, budgets and validators;
   resume or terminalize interrupted trials. Repeated paired trials report outcomes, false

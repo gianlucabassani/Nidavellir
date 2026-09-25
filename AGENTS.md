@@ -10,10 +10,12 @@ Before making material changes, read these sources in order:
 6. `git log` — when the sources above are silent or disagree with current code.
 
 Dynamic N-node Docker arenas, stance-scoped MCP gateways and HTTP transaction replay
-are implemented. Current work is NV-01–05: reproducible verification, target reset,
-confined PoC execution, durable budgets/stop and scoped access. Durable paired experiments
-and Bughunt integration remain planned. Docker-local is the implementation focus;
-OpenStack/AWS/libvirt drivers do not establish live provider support.
+are implemented. NV-01–07 are complete: reproducible verification, target reset,
+confined PoC execution, durable budgets/stop, scoped access, independent authorization
+validation and durable paired evaluations. A dependable challenge library (NV-08),
+Bughunt integration and record recovery remain planned. Docker-local is the
+implementation focus; OpenStack/AWS/libvirt drivers do not establish live provider
+support.
 
 ## Stack / gotchas
 

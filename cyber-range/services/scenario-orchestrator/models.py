@@ -255,3 +255,75 @@ class Event(Base):
     actor: Mapped[str] = mapped_column(Text, nullable=False)  # api key name / "worker"
     type: Mapped[str] = mapped_column(Text, nullable=False)  # created|status|record_deleted
     payload: Mapped[str | None] = mapped_column(Text)  # JSON text
+
+
+class AgentBuild(Base):
+    __tablename__ = "agent_builds"
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    version: Mapped[str] = mapped_column(Text, nullable=False)
+    digest: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    driver: Mapped[str] = mapped_column(Text, nullable=False)
+    config: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class EvalChallenge(Base):
+    __tablename__ = "eval_challenges"
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    version: Mapped[str] = mapped_column(Text, nullable=False)
+    scenario: Mapped[str] = mapped_column(Text, nullable=False)
+    source_arena_id: Mapped[str] = mapped_column(Text, nullable=False)
+    recipe_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    validator_version: Mapped[str] = mapped_column(Text, nullable=False)
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class EvalSuite(Base):
+    __tablename__ = "eval_suites"
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    version: Mapped[str] = mapped_column(Text, nullable=False)
+    challenge_ids: Mapped[str] = mapped_column(Text, nullable=False)
+    seeds: Mapped[str] = mapped_column(Text, nullable=False)
+    action_cap: Mapped[int] = mapped_column(Integer, nullable=False)
+    deadline_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class Evaluation(Base):
+    __tablename__ = "evaluations"
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    suite_id: Mapped[str] = mapped_column(Text, nullable=False)
+    baseline_id: Mapped[str] = mapped_column(Text, nullable=False)
+    candidate_id: Mapped[str] = mapped_column(Text, nullable=False)
+    state: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class EvalRun(Base):
+    __tablename__ = "eval_runs"
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    evaluation_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    build_id: Mapped[str] = mapped_column(Text, nullable=False)
+    challenge_id: Mapped[str] = mapped_column(Text, nullable=False)
+    side: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class EvalTrial(Base):
+    __tablename__ = "eval_trials"
+    __table_args__ = (UniqueConstraint("run_id", "seed", name="uq_eval_run_seed"),)
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    run_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    evaluation_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    seed: Mapped[int] = mapped_column(Integer, nullable=False)
+    state: Mapped[str] = mapped_column(Text, nullable=False)
+    arena_id: Mapped[str | None] = mapped_column(Text, unique=True)
+    starting_digest: Mapped[str | None] = mapped_column(Text)
+    result: Mapped[str | None] = mapped_column(Text)
+    error: Mapped[str | None] = mapped_column(Text)
+    worker_claim: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

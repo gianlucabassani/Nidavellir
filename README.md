@@ -46,7 +46,7 @@ persistence, validation, and scoring stay behind the API.
 ```text
 Home            live engagements · findings awaiting review · attention · capacity
 Engagements     active + archived runs · New engagement (purpose · source · participants · time box)
-Evaluations     reserved for repeated trials and paired comparisons (E1–E5)
+Evaluations     durable agent builds, suites and paired baseline/candidate comparisons
 Library         Challenges · Targets · Agents
 Activity        Findings · Evidence · Audit trail
 Administration  Providers & capacity · Security · Settings
@@ -149,7 +149,9 @@ budgets and stop controls completed their release and live gates on 2026-09-23.
 NV-05 fixed-destination TCP forwards and principal-filtered capability discovery
 completed the PostgreSQL, release and live gates on 2026-09-23. NV-06 independent
 authorization validation completed its pinned release, isolated Docker live and
-NV-02–05 regression gates on 2026-09-24. NV-07 durable paired experiments are next.
+NV-02–05 regression gates on 2026-09-24. NV-07 durable paired experiments completed
+their pinned release and isolated Docker live gates on 2026-09-25. NV-08's dependable
+challenge library is next.
 
 | Stage | Focus | Status |
 |---|---|---|
@@ -158,7 +160,7 @@ NV-02–05 regression gates on 2026-09-24. NV-07 durable paired experiments are 
 | **Console architecture** | Engagements, Evaluations, Library, Activity, unified creation, contextual workspace and SSE | ✅ shipped |
 | **Research-ready runtime** | NV-01–05 complete on Docker-local; unsupported model token/cost hard caps are explicit | ✅ complete |
 | **Discovery lane** | Patch-diff & variant hunting, fuzzing + crash triage, binary/appliance/VM intake, campaigns & disclosure output | ◻ planned |
-| **Evaluation workbench** | NV-06 independent authorization effect validation shipped; NV-07–10 paired trials, challenge library, Bughunt proof and recovery remain | 🟢 partially shipped |
+| **Evaluation workbench** | NV-06 independent authorization effect validation and NV-07 durable paired trials shipped; NV-08–10 challenge library, Bughunt proof and recovery remain | 🟢 partially shipped |
 | **Held-out proof** | A real vulnerability found and proven on-platform; then a comparison over challenges drawn from that work | ◻ planned |
 | **Deferred** | OAuth/multi-tenancy, live cloud/VM providers, purple-team, VNC and hosted-product concerns | ◻ deferred |
 

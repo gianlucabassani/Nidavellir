@@ -23,6 +23,7 @@ import urllib.parse
 import yaml
 from datetime import datetime, timedelta, timezone
 from pathlib import PurePosixPath
+from sqlalchemy.exc import IntegrityError
 
 import requests
 
@@ -66,7 +67,7 @@ from providers import (
 )
 from scenario_spec import ScenarioSpec, normalize_cwe, normalized_nodes, topology_view
 from states import IllegalTransition, LabStatus
-from tasks import deploy_lab, destroy_lab, reset_arena, run_forward_stream, run_poc_job
+from tasks import deploy_lab, destroy_lab, reset_arena, run_forward_stream, run_poc_job, run_evaluation
 from config import validate_config
 
 
@@ -5720,6 +5721,139 @@ def arena_eval_export(
         score_report=report,
         events=db.list_events(lab_id=instance_id, limit=None),
     )
+
+
+class AgentBuildCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    version: str = Field(min_length=1, max_length=100)
+    plan: list[dict] = Field(min_length=1, max_length=20)
+
+
+@app.post("/agent-builds", status_code=201)
+def create_agent_build(req: AgentBuildCreate,
+                       principal: Principal = Depends(require_principal)):
+    _require_operator(principal)
+    allowed = {"announce_agent", "get_briefing", "get_topology", "http_request",
+               "report_finding"}
+    for step in req.plan:
+        if set(step) != {"tool", "args"} or step["tool"] not in allowed or not isinstance(
+                step["args"], dict):
+            raise HTTPException(status_code=422, detail="invalid scripted MCP step")
+        if "arena_id" in step["args"]:
+            raise HTTPException(status_code=422, detail="arena_id is assigned per trial")
+    config = {"plan": req.plan, "model": "scripted", "scaffold": "reference-harness/v1"}
+    digest = "sha256:" + hashlib.sha256(json.dumps({"name": req.name,
+        "version": req.version, "config": config}, sort_keys=True,
+        separators=(",", ":")).encode()).hexdigest()
+    try:
+        return db.create_agent_build(name=req.name, version=req.version, digest=digest,
+                                     driver="scripted-mcp/v1", config=config)
+    except IntegrityError as exc:
+        raise HTTPException(status_code=409, detail="build already registered") from exc
+
+
+@app.get("/agent-builds")
+def list_agent_builds(principal: Principal = Depends(require_principal)):
+    _require_operator(principal)
+    return {"builds": db.list_agent_builds()}
+
+
+class EvalChallengeCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    version: str = Field(min_length=1, max_length=100)
+    source_arena_id: str
+
+
+@app.post("/eval-challenges", status_code=201)
+def create_eval_challenge(req: EvalChallengeCreate,
+                          principal: Principal = Depends(require_principal)):
+    _require_operator(principal)
+    arena = db.get_deployment(req.source_arena_id)
+    recipe = db.get_lifecycle_recipe(req.source_arena_id)
+    events = db.list_events(req.source_arena_id, limit=1, types=("lifecycle_observation",))
+    if not arena or not recipe or not events or arena["status"] != LabStatus.ACTIVE:
+        raise HTTPException(status_code=409, detail="active, observed source arena required")
+    if (recipe.get("runtime_reset") or {}).get("status") != "eligible":
+        raise HTTPException(status_code=409, detail="source is not reset-eligible")
+    if recipe.get("effective_provider") != "docker-local":
+        raise HTTPException(status_code=409, detail="Docker-local required")
+    return db.create_eval_challenge(name=req.name, version=req.version,
+        scenario=recipe["scenario_name"], source_arena_id=req.source_arena_id,
+        recipe_digest=recipe["recipe_digest"],
+        validator_version="nidavellir/validation-verdict/v1", label="calibration")
+
+
+@app.get("/eval-challenges")
+def list_eval_challenges(principal: Principal = Depends(require_principal)):
+    _require_operator(principal)
+    return {"challenges": db.list_eval_challenges()}
+
+
+class EvalSuiteCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    version: str = Field(min_length=1, max_length=100)
+    challenge_ids: list[str] = Field(min_length=1, max_length=8)
+    seeds: list[int] = Field(min_length=3, max_length=20)
+    action_cap: int = Field(default=100, ge=1, le=10000)
+    deadline_seconds: int = Field(default=600, ge=60, le=1800)
+
+
+@app.post("/eval-suites", status_code=201)
+def create_eval_suite(req: EvalSuiteCreate,
+                      principal: Principal = Depends(require_principal)):
+    _require_operator(principal)
+    if len(set(req.challenge_ids)) != len(req.challenge_ids) or len(set(req.seeds)) != len(req.seeds):
+        raise HTTPException(status_code=422, detail="challenges and seeds must be unique")
+    if any(db.get_eval_challenge(cid) is None for cid in req.challenge_ids):
+        raise HTTPException(status_code=422, detail="challenge not found")
+    return db.create_eval_suite(name=req.name, version=req.version,
+        challenge_ids=req.challenge_ids, seeds=req.seeds,
+        action_cap=req.action_cap, deadline_seconds=req.deadline_seconds)
+
+
+@app.get("/eval-suites")
+def list_eval_suites(principal: Principal = Depends(require_principal)):
+    _require_operator(principal)
+    return {"suites": db.list_eval_suites()}
+
+
+class EvaluationCreate(BaseModel):
+    suite_id: str
+    baseline_id: str
+    candidate_id: str
+
+
+@app.post("/evaluations", status_code=202)
+def create_evaluation(req: EvaluationCreate,
+                      principal: Principal = Depends(require_principal)):
+    _require_operator(principal)
+    if req.baseline_id == req.candidate_id:
+        raise HTTPException(status_code=422, detail="choose two distinct builds")
+    try:
+        evaluation = db.create_evaluation(suite_id=req.suite_id,
+            baseline_id=req.baseline_id, candidate_id=req.candidate_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    run_evaluation.delay(evaluation["id"])
+    return evaluation
+
+
+@app.get("/evaluations")
+def list_evaluations(principal: Principal = Depends(require_principal)):
+    _require_operator(principal)
+    return {"evaluations": db.list_evaluations()}
+
+
+@app.get("/evaluations/{evaluation_id}")
+def get_evaluation(evaluation_id: str,
+                   principal: Principal = Depends(require_principal)):
+    _require_operator(principal)
+    record = db.get_evaluation(evaluation_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="evaluation not found")
+    import experiments  # noqa: PLC0415
+    record["comparison"] = experiments.compare(record)
+    return record
 
 
 if __name__ == "__main__":

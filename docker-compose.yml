@@ -134,6 +134,8 @@ services:
       # Worker Configuration
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-3}
       WORKER_LOG_LEVEL: ${WORKER_LOG_LEVEL:-INFO}
+      EVAL_GATEWAY_URL: http://agent-gateway:9000/mcp
+      EVAL_GATEWAY_PRINCIPAL: ${EVAL_GATEWAY_PRINCIPAL:-bootstrap}
       
       # Python path
       PYTHONPATH: /app
@@ -307,7 +309,7 @@ services:
     depends_on:
       - orchestrator
     ports:
-      - "9000:9000"
+      - "${AGENT_GATEWAY_PORT:-9001}:9000"
     environment:
       NIDAVELLIR_API_URL: http://orchestrator:8000
       # The agent principal's key (role=agent). Defaults to the dev key for the

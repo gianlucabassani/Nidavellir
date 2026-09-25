@@ -1,0 +1,6 @@
+name: nidavellir-nv07
+services:
+  worker:
+    environment:
+      EVAL_GATEWAY_URL: http://agent-gateway:9000/mcp
+      EVAL_GATEWAY_PRINCIPAL: nv06-agent

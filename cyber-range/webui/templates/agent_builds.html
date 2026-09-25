@@ -1,0 +1,4 @@
+{% extends "base.html" %}
+{% block title %}Agent builds{% endblock %}
+{% block crumb %}Library <span class="sep">/</span> Agents{% endblock %}
+{% block content %}<div class="page-head"><div><div class="eyebrow">Library</div><h1>Agent builds</h1><div class="sub">Pinned builds used by repeated evaluations.</div></div><a class="btn" href="{{ url_for('evaluations') }}">Register build</a></div><div class="card card-pad">{% for build in builds %}<p><strong>{{ build.name }}</strong> · {{ build.version }} · {{ build.driver }}<br><small>{{ build.digest }}</small></p>{% else %}<p class="muted">No builds registered.</p>{% endfor %}</div>{% endblock %}

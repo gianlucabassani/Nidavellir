@@ -3,6 +3,71 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-09-25 — Complete NV-07 durable paired evaluations
+
+**Outcome:** NV-07 is complete on Docker-local. The platform now holds durable,
+versioned Agent build, Challenge, Suite, Evaluation, Run and Trial records and
+compares a baseline against a candidate build over repeated matched trials.
+A build pins its scripted MCP plan behind a content-addressed digest over name,
+version and config; a challenge pins an active, reset-eligible Docker-local
+source arena's recipe digest and validator version; a suite pins seeds, action
+cap and deadline. Each trial deploys its own arena from the pinned recipe,
+re-checks that the observed starting state matches the pinned source, applies
+the suite budget/deadline, plays the plan through the stance-scoped gateway and
+destroys the arena. Trials are claimed atomically, so a worker restart cannot
+double-run one; the reaper recovers stale claims and requeues stranded
+evaluations. All five endpoints and both console pages are operator-only;
+participants reach the arena only through the gateway and never see an
+evaluation record. Scoring, validation and NV-06 verdict behaviour are
+unchanged — no product logic was modified to reach acceptance.
+
+The comparison pairs trials by challenge and seed and counts a pair only when
+both sides completed from the same observed-state digest. Candidate-minus-
+baseline differences for verified outcome, false claims, requests, latency and
+available cost carry a seeded bootstrap 95% interval, and pairs where either
+side ended in `infrastructure_failure` are counted separately rather than
+charged to the agent.
+
+The first live run failed acceptance with both sides at verified 0. The cause
+was in the verifier, not the product: its scripted plan sent a hyphenated
+`X-Request-ID`, which the fixture (`isalnum`) and the authorization validator
+(`[A-Za-z0-9]{1,64}`) both reject, so no action linked and every finding
+resolved to `inconclusive/missing_action`. The verifier now sends an
+alphanumeric ID, matching the NV-06 contract, and also tears its isolated
+Compose project down before starting.
+
+**Files:** `experiments.py`, durable models and Alembic `0009_evaluations`,
+database CRUD/claim/recovery, operator-only `/agent-builds`, `/eval-challenges`,
+`/eval-suites`, `/evaluations` and `/evaluations/{id}`, the `run_evaluation`
+worker task and reaper recovery, Flask evaluation and agent-build pages,
+`tests/test_nv07_experiments.py`, `tests/test_webui.py`,
+`scripts/verify-nv07-live.py`, `docker-compose.nv07.yml`, the `verify-nv07-live`
+Makefile target, `docs/API.md`, README, ROADMAP, TODO, the verification JSON and
+this journal entry.
+
+**Verification:** `make release-check` passed on Python 3.11.14: Ruff 0.6.9
+clean, Bandit 1.9.4 with zero medium/high findings, 903 SQLite tests passed
+(four PostgreSQL-only skips), 907 PostgreSQL tests passed, six declared
+integration deselections on each backend, and clean Alembic plus
+API/console/MCP readiness smoke. `make verify-nv07-live` passed after the fix:
+six trials completed, three matched pairs, candidate-minus-baseline verified
+difference of exactly 1 on every pair (mean 1.0, range [1, 1], bootstrap 95%
+[1.0, 1.0]), false-claim difference -1.0, zero infrastructure-failed pairs,
+score and eval export still readable for all six arenas after teardown, and
+zero labelled containers, images, networks and volumes across all seven
+arenas. The fixture image was
+`sha256:cb5ba133686e30b5bab036d4431a5f6d04b27c1341a90f8f42be5b02f31f9b34`.
+Results and IDs are in `docs/verification/nv07-live-2026-09-25.json` and
+`nv07-gates-2026-09-25.json`. `git diff --check` passed. Nothing was pushed.
+
+**Unresolved risks / next step:** The paired comparison is proven with one
+deterministic scripted-MCP driver against one calibration challenge; a real
+BYO model-driven build and a second challenge class are untested here, and the
+bootstrap interval over three seeds is a reporting device, not a strong
+statistical claim. NV-02–06 live regressions were not rerun after this change,
+which touches only new NV-07 code paths and the NV-07 verifier. Next is NV-08's
+dependable challenge library.
+
 ## 2026-09-24 — Complete NV-06 independent authorization validation
 
 **Outcome:** NV-06 is complete on Docker-local. Froze the five-case acceptance

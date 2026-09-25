@@ -1,0 +1,49 @@
+{
+  "date": "2026-09-25",
+  "fix_under_test": "The NV-07 live plan sent a hyphenated X-Request-ID, which both the fixture (isalnum) and the authorization validator ([A-Za-z0-9]{1,64}) reject, so no action linked and both sides scored inconclusive/missing_action. The verifier now sends an alphanumeric ID, matching the NV-06 contract. No product validation or scoring behaviour changed.",
+  "nv07_live": {
+    "arenas": 7,
+    "challenge_id": "dbcc3acd-91de-417a-b5f8-e6d4a1644ecc",
+    "command": "make verify-nv07-live",
+    "evaluation_id": "42db4087-86fe-45e5-8599-3194bb17e4f5",
+    "evidence": "nv07-live-2026-09-25.json",
+    "false_claims_difference_mean": -1.0,
+    "final_labeled_resources": 0,
+    "fixture_image": "sha256:cb5ba133686e30b5bab036d4431a5f6d04b27c1341a90f8f42be5b02f31f9b34",
+    "infrastructure_failed_pairs": 0,
+    "matched_pairs": 3,
+    "result": "passed",
+    "retained_score_and_eval_export_after_teardown": "passed",
+    "trials": 6,
+    "trials_completed": 6,
+    "verified_bootstrap_95": [
+      1.0,
+      1.0
+    ],
+    "verified_difference_mean": 1.0,
+    "verified_difference_range": [
+      1,
+      1
+    ]
+  },
+  "release_check": {
+    "bandit": "1.9.4",
+    "bandit_high": 0,
+    "bandit_medium": 0,
+    "clean_alembic_api_console_mcp_smoke": "passed",
+    "command": "make release-check",
+    "postgresql": {
+      "integration_deselected": 6,
+      "passed": 907
+    },
+    "python": "3.11.14",
+    "result": "passed",
+    "ruff": "0.6.9",
+    "sqlite": {
+      "integration_deselected": 6,
+      "passed": 903,
+      "postgresql_only_skipped": 4
+    }
+  },
+  "schema": "nidavellir/nv07-gates/v1"
+}

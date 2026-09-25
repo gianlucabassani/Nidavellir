@@ -85,7 +85,7 @@ def _api_post(path, payload=None, timeout=15):
         data = resp.json()
     except ValueError:
         data = {}
-    if resp.status_code not in (200, 202):
+    if resp.status_code not in (200, 201, 202):
         data = {"error": _api_error(resp)}
     return data, resp.status_code
 
@@ -1168,7 +1168,79 @@ def _foundation_page(page_key):
 
 @app.route("/evaluations")
 def evaluations():
-    return _foundation_page("evaluations")
+    builds, _ = _api_get("/agent-builds")
+    challenges, _ = _api_get("/eval-challenges")
+    suites, _ = _api_get("/eval-suites")
+    records, _ = _api_get("/evaluations")
+    return render_template("evaluations.html", active="evaluations",
+        builds=(builds or {}).get("builds", []),
+        challenges=(challenges or {}).get("challenges", []),
+        suites=(suites or {}).get("suites", []),
+        evaluations=(records or {}).get("evaluations", []))
+
+
+@app.route("/evaluations/builds", methods=["POST"])
+def evaluation_build_create():
+    try:
+        plan = json.loads(request.form.get("plan", "[]"))
+    except ValueError:
+        flash("Script must be valid JSON", "danger")
+        return redirect(url_for("evaluations"))
+    result, status = _api_post("/agent-builds", {
+        "name": request.form.get("name", ""), "version": request.form.get("version", ""),
+        "plan": plan})
+    flash("Agent build registered" if status == 201 else result.get("error", "Registration failed"),
+          "success" if status == 201 else "danger")
+    return redirect(url_for("evaluations"))
+
+
+@app.route("/evaluations/challenges", methods=["POST"])
+def evaluation_challenge_create():
+    result, status = _api_post("/eval-challenges", {
+        "name": request.form.get("name", ""), "version": request.form.get("version", ""),
+        "source_arena_id": request.form.get("source_arena_id", "")})
+    flash("Calibration challenge pinned" if status == 201 else result.get("error", "Registration failed"),
+          "success" if status == 201 else "danger")
+    return redirect(url_for("evaluations"))
+
+
+@app.route("/evaluations/suites", methods=["POST"])
+def evaluation_suite_create():
+    try:
+        seeds = [int(value.strip()) for value in request.form.get("seeds", "").split(",")]
+        action_cap = int(request.form.get("action_cap", "100"))
+        deadline = int(request.form.get("deadline_seconds", "600"))
+    except ValueError:
+        flash("Seeds and limits must be numbers", "danger")
+        return redirect(url_for("evaluations"))
+    result, status = _api_post("/eval-suites", {
+        "name": request.form.get("name", ""), "version": request.form.get("version", ""),
+        "challenge_ids": request.form.getlist("challenge_ids"), "seeds": seeds,
+        "action_cap": action_cap, "deadline_seconds": deadline})
+    flash("Suite registered" if status == 201 else result.get("error", "Registration failed"),
+          "success" if status == 201 else "danger")
+    return redirect(url_for("evaluations"))
+
+
+@app.route("/evaluations/new", methods=["POST"])
+def evaluation_create():
+    result, status = _api_post("/evaluations", {
+        "suite_id": request.form.get("suite_id", ""),
+        "baseline_id": request.form.get("baseline_id", ""),
+        "candidate_id": request.form.get("candidate_id", "")})
+    if status == 202:
+        return redirect(url_for("evaluation_detail", evaluation_id=result["id"]))
+    flash(result.get("error", "Evaluation could not start"), "danger")
+    return redirect(url_for("evaluations"))
+
+
+@app.route("/evaluations/<evaluation_id>")
+def evaluation_detail(evaluation_id):
+    record, ok = _api_get(f"/evaluations/{evaluation_id}", timeout=15)
+    if not ok:
+        flash("Evaluation unavailable", "danger")
+        return redirect(url_for("evaluations"))
+    return render_template("evaluation_detail.html", active="evaluations", record=record)
 
 
 @app.route("/library/targets")
@@ -1178,7 +1250,9 @@ def target_library():
 
 @app.route("/library/agents")
 def agent_library():
-    return _foundation_page("agent_library")
+    builds, _ = _api_get("/agent-builds")
+    return render_template("agent_builds.html", active="agent_library",
+                           builds=(builds or {}).get("builds", []))
 
 
 @app.route("/activity/findings")

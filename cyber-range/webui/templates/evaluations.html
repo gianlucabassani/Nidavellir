@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Evaluations{% endblock %}
+{% block crumb %}Evaluations{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="eyebrow">Calibration workbench</div><h1>Evaluations</h1><div class="sub">Compare pinned scripted MCP builds on observed-equivalent Docker-local trials.</div></div></div>
+<div class="stack">
+  <div class="card card-pad"><h2>Register an agent build</h2>
+    <form action="{{ url_for('evaluation_build_create') }}" method="post" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Name <input name="name" required maxlength="100"></label>
+      <label>Version <input name="version" required maxlength="100"></label>
+      <label>Scripted MCP steps (JSON array) <textarea name="plan" rows="7" required placeholder='[{"tool":"http_request","args":{"node":"target","path":"/objects/B"}}]'></textarea></label>
+      <p class="muted">Use $last_transaction_digest in a later finding's transaction_digests. Arena IDs are assigned per trial.</p>
+      <button class="btn" type="submit">Register build</button>
+    </form>
+  </div>
+  <div class="card card-pad"><h2>Pin a calibration challenge</h2>
+    <form action="{{ url_for('evaluation_challenge_create') }}" method="post" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Name <input name="name" required maxlength="100"></label>
+      <label>Version <input name="version" required maxlength="100"></label>
+      <label>Active reset-eligible source arena ID <input name="source_arena_id" required></label>
+      <button class="btn" type="submit">Pin challenge</button>
+    </form>
+  </div>
+  <div class="card card-pad"><h2>Create a suite</h2>
+    <form action="{{ url_for('evaluation_suite_create') }}" method="post" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Name <input name="name" required maxlength="100"></label>
+      <label>Version <input name="version" required maxlength="100"></label>
+      <label>Challenges <select name="challenge_ids" multiple required>{% for challenge in challenges %}<option value="{{ challenge.id }}">{{ challenge.name }} · {{ challenge.version }} ({{ challenge.label }})</option>{% endfor %}</select></label>
+      <label>Seeds, comma separated <input name="seeds" value="1,2,3" required></label>
+      <label>Actions per trial <input name="action_cap" type="number" min="1" max="10000" value="100" required></label>
+      <label>Seconds per trial <input name="deadline_seconds" type="number" min="60" max="1800" value="600" required></label>
+      <button class="btn" type="submit">Create suite</button>
+    </form>
+  </div>
+  <div class="card card-pad"><h2>Run paired evaluation</h2>
+    <form action="{{ url_for('evaluation_create') }}" method="post" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Suite <select name="suite_id" required>{% for suite in suites %}<option value="{{ suite.id }}">{{ suite.name }} · {{ suite.version }}</option>{% endfor %}</select></label>
+      <label>Baseline build <select name="baseline_id" required>{% for build in builds %}<option value="{{ build.id }}">{{ build.name }} · {{ build.version }}</option>{% endfor %}</select></label>
+      <label>Candidate build <select name="candidate_id" required>{% for build in builds %}<option value="{{ build.id }}">{{ build.name }} · {{ build.version }}</option>{% endfor %}</select></label>
+      <button class="btn" type="submit">Launch evaluation</button>
+    </form>
+  </div>
+  <div class="card card-pad"><h2>Recent evaluations</h2>
+    {% for item in evaluations %}<p><a href="{{ url_for('evaluation_detail', evaluation_id=item.id) }}">{{ item.id }}</a> · {{ item.state }}</p>{% else %}<p class="muted">No evaluations yet.</p>{% endfor %}
+  </div>
+</div>
+{% endblock %}

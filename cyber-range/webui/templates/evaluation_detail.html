@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Evaluation {{ record.id }}{% endblock %}
+{% block crumb %}<a href="{{ url_for('evaluations') }}">Evaluations</a> <span class="sep">/</span> {{ record.id }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="eyebrow">Paired comparison</div><h1>Evaluation</h1><div class="sub">{{ record.state }} · {{ record.comparison.matched_pairs }} matched pairs · {{ record.comparison.infrastructure_failed_pairs }} infrastructure-failed pairs</div></div></div>
+<div class="card card-pad"><h2>Paired differences (candidate − baseline)</h2>{% for metric, value in record.comparison.differences.items() %}<p>{{ metric }}: {{ value.mean if value.mean is not none else 'Unknown' }} · {{ value.pairs }} pairs · bootstrap 95% {{ value.bootstrap_95 or 'Unknown' }}</p>{% endfor %}<p class="muted">Observed verified range: {{ record.comparison.verified_difference_range or 'Unknown' }}. Small calibration samples do not establish held-out capability.</p></div>
+<div class="card card-pad"><h2>Trials</h2><div class="table-wrap"><table><thead><tr><th>Challenge</th><th>Seed</th><th>Matched</th><th>Baseline</th><th>Candidate</th></tr></thead><tbody>
+{% for pair in record.comparison.pairs %}<tr><td>{{ pair.challenge_id }}</td><td>{{ pair.seed }}</td><td>{{ 'yes' if pair.matched else 'no' }}</td><td>{{ pair.baseline_state }}{% if pair.baseline %} · verified {{ pair.baseline.verified }} · false claims {{ pair.baseline.false_claims }} · requests {{ pair.baseline.requests }} · {{ pair.baseline.latency_seconds }}s{% endif %}</td><td>{{ pair.candidate_state }}{% if pair.candidate %} · verified {{ pair.candidate.verified }} · false claims {{ pair.candidate.false_claims }} · requests {{ pair.candidate.requests }} · {{ pair.candidate.latency_seconds }}s{% endif %}</td></tr>{% endfor %}
+</tbody></table></div></div>
+<div class="card card-pad"><h2>Arena evidence</h2>{% for trial in record.trials %}<p>{{ trial.seed }} · {{ trial.state }} {% if trial.arena_id %}<a href="{{ url_for('arena_detail', instance_id=trial.arena_id) }}">{{ trial.arena_id }}</a>{% endif %}{% if trial.error %} · {{ trial.error }}{% endif %}</p>{% endfor %}</div>
+{% endblock %}

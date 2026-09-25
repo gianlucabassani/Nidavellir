@@ -21,6 +21,8 @@ bootstrap-flask
 
 celery>=5.3.0
 redis>=5.0.0
+# Worker-side scripted trial driver talks to the existing scoped MCP gateway.
+mcp>=1.2,<2.0
 
 
 # API rate limiting (Phase 1 hardening)
