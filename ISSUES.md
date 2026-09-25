@@ -62,6 +62,25 @@ line; the JSON export does not.
 supported one (e.g. a variance/distinct-value flag), or interval reporting is
 withheld below a declared minimum of distinct observations.
 
+### NV07-R5 · Evaluation recovery paths are implemented but never exercised · medium
+
+`Database.recover_stale_evaluations` terminalizes worker-lost evaluations past
+the hard task limit and `queued_evaluations_before` requeues stranded ones; the
+reaper calls both. Neither has a test, and neither ran during the live gate —
+no trial was interrupted, so every trial reached a terminal state through the
+normal path. `interrupt_evaluation_trials` and atomic claim loss are covered by
+`tests/test_nv07_experiments.py`; scheduled recovery is not.
+
+**Why it matters:** NV-07's acceptance includes resuming or terminalizing
+interrupted trials. That property currently rests on code review alone, and a
+silent failure here would leave an evaluation `running` forever or requeue one
+that is already finished.
+
+**Closes when:** a test drives both methods over stale `running` and `queued`
+rows, and a live run kills the worker mid-trial and shows the reaper
+terminalizing the trial as `infrastructure_failure` without corrupting the
+comparison.
+
 ### NV07-R4 · NV-02–06 live regressions not rerun after commit `03fdfc9` · low
 
 The NV-07 change touches new code paths plus its own verifier, and the full
