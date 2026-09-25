@@ -1,6 +1,6 @@
 # Nidavellir — open risk register
 
-Updated 2026-09-25 after the NV-07 durable paired-evaluation gate.
+Updated 2026-09-25 after the NV-07 follow-ups (R3 closed, R5 narrowed).
 
 Known, currently-open risks and verification gaps. Each entry states what is
 actually true today, why it matters, and the concrete evidence that would close
@@ -47,39 +47,30 @@ first (single-request actions, a target-local oracle, one point of truth).
 **Closes when:** a second challenge class with an independent validator runs
 paired trials in the same suite. Tracked by NV-08.
 
-### NV07-R3 · The bootstrap interval is degenerate at current sample sizes · high
-
-`experiments.compare` reports a seeded bootstrap 95% interval per metric. With
-a deterministic driver, all three pairs produce identical values, so the
-interval collapses to the point estimate — the 2026-09-25 gate recorded
-`[1.0, 1.0]`. It is a reporting device, not evidence of stability.
-
-**Why it matters:** an interval that looks tight for statistical reasons is the
-most readily misread number the platform emits. The console carries a caveat
-line; the JSON export does not.
-
-**Closes when:** the export distinguishes a degenerate interval from a
-supported one (e.g. a variance/distinct-value flag), or interval reporting is
-withheld below a declared minimum of distinct observations.
-
-### NV07-R5 · Evaluation recovery paths are implemented but never exercised · medium
+### NV07-R5 · Evaluation recovery not yet exercised against a real worker loss · low
 
 `Database.recover_stale_evaluations` terminalizes worker-lost evaluations past
 the hard task limit and `queued_evaluations_before` requeues stranded ones; the
-reaper calls both. Neither has a test, and neither ran during the live gate —
-no trial was interrupted, so every trial reached a terminal state through the
-normal path. `interrupt_evaluation_trials` and atomic claim loss are covered by
-`tests/test_nv07_experiments.py`; scheduled recovery is not.
+reaper calls both. Since 2026-09-25 `tests/test_nv07_experiments.py` drives
+both over stale `running`/`queued` rows and through `reap_labs`: unfinished
+trials become `infrastructure_failure/worker_interrupted`, completed trials and
+their results are preserved, the lost worker's late finish/claim is rejected,
+recovery is idempotent, fresh/queued/complete evaluations are untouched, and a
+duplicate delivery of a running evaluation is skipped. No live run has yet
+killed the worker mid-trial.
 
-**Why it matters:** NV-07's acceptance includes resuming or terminalizing
-interrupted trials. That property currently rests on code review alone, and a
-silent failure here would leave an evaluation `running` forever or requeue one
-that is already finished.
+Also note: recovery keys on `Evaluation.updated_at`, which only changes on
+evaluation state transitions. That is safe only because `run_evaluation`'s hard
+time limit (61 min) is below the 70-minute recovery threshold — an evaluation
+must finish inside one task limit. Longer NV-08 suites need either a per-trial
+heartbeat or a split task before they exceed it.
 
-**Closes when:** a test drives both methods over stale `running` and `queued`
-rows, and a live run kills the worker mid-trial and shows the reaper
+**Why it matters:** the unit tests prove the database contract; they do not
+prove the reaper and a real Celery worker loss compose as intended.
+
+**Closes when:** a live run kills the worker mid-trial and shows the reaper
 terminalizing the trial as `infrastructure_failure` without corrupting the
-comparison.
+comparison, recorded in `docs/verification/`.
 
 ### NV07-R4 · NV-02–06 live regressions not rerun after commit `03fdfc9` · low
 
@@ -138,6 +129,19 @@ would not support.
 **Closes when:** the full suite completes on a current host Python, or the
 stall is diagnosed and recorded as a wontfix with the pinned gate as the stated
 contract.
+
+---
+
+## Closed
+
+### NV07-R3 · Degenerate bootstrap interval unlabeled in JSON · closed 2026-09-25
+
+`experiments.compare` now emits `distinct_values` and `interval_status`
+(`degenerate` / `insufficient_pairs` below five pairs / `supported` /
+`no_pairs`) per metric in the `/evaluations/{id}` comparison, and the console
+prints the status. The identical-pair `[1.0, 1.0]` case is labelled
+`degenerate`. Evidence: `tests/test_nv07_experiments.py` in the pinned gate
+recorded in `docs/verification/nv07-followups-gates-2026-09-25.json`.
 
 ---
 

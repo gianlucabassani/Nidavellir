@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import importlib.util
+import os
 import uuid
 from pathlib import Path
 
@@ -95,6 +96,9 @@ def main():
     assert record["comparison"]["matched_pairs"] == 3, record
     assert record["comparison"]["verified_difference_mean"] == 1, record
     assert record["comparison"]["infrastructure_failed_pairs"] == 0, record
+    # Three identical deterministic pairs must never read as a supported interval.
+    verified = record["comparison"]["differences"]["verified"]
+    assert verified["interval_status"] == "degenerate", verified
     for trial in record["trials"]:
         assert fixture.api("GET", f"/arenas/{trial['arena_id']}/score")
         assert fixture.api("GET", f"/arenas/{trial['arena_id']}/eval-export")
@@ -107,7 +111,8 @@ def main():
         "fixture_image": image_id, "source_arena": source,
         "challenge_id": challenge["id"], "evaluation_id": evaluation_id,
         "comparison": record["comparison"], "final_resources": resources}
-    path = ROOT / "docs/verification/nv07-live-2026-09-25.json"
+    path = ROOT / "docs/verification" / os.getenv(
+        "NV07_EVIDENCE", "nv07-live-2026-09-25.json")
     path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
     print(json.dumps(evidence, indent=2, sort_keys=True))
 

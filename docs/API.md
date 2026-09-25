@@ -176,7 +176,12 @@ per-metric `differences` (verified, false claims, requests, latency, cost)
 report candidate-minus-baseline over matched pairs with a seeded bootstrap 95%
 interval, and `infrastructure_failed_pairs` counts pairs where either side
 ended in `infrastructure_failure`. Broken infrastructure is therefore excluded
-from the comparison rather than scored as agent failure. Token and cost figures
+from the comparison rather than scored as agent failure. Each metric also
+carries `distinct_values` and `interval_status`: `degenerate` when every matched
+difference is identical (the interval collapses to the point estimate and says
+nothing about stability), `insufficient_pairs` below five matched pairs,
+`supported` otherwise, and `no_pairs` when nothing matched. Only `supported`
+intervals should be read as uncertainty estimates. Token and cost figures
 stay `null` unless the build announced them.
 
 The console exposes the same records read-only under Evaluations and the agent

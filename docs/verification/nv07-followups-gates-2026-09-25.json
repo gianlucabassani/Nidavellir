@@ -1,0 +1,32 @@
+{
+  "date": "2026-09-25",
+  "change_under_test": "NV07-R5 unit coverage of Database.recover_stale_evaluations, queued_evaluations_before and the reap_labs evaluation path; NV07-R3 per-metric distinct_values and interval_status (degenerate / insufficient_pairs / supported / no_pairs) in experiments.compare, surfaced in /evaluations/{id} and the console. No scoring, validation or trial execution behaviour changed.",
+  "first_release_check_attempt": "failed: 3 reaper tests (test_reaper x2, test_poc_execution x1) hit Redis because new NV07-R5 tests left backdated queued evaluations in the shared test database; fixed with a fixture that closes created evaluations. Only the rerun below is acceptance.",
+  "release_check": {
+    "command": "make release-check",
+    "result": "passed",
+    "python": "3.11.14",
+    "ruff": "0.6.9",
+    "bandit": "1.9.4",
+    "bandit_medium": 0,
+    "bandit_high": 0,
+    "sqlite": {"passed": 910, "postgresql_only_skipped": 4, "integration_deselected": 6},
+    "postgresql": {"passed": 914, "integration_deselected": 6},
+    "clean_alembic_api_console_mcp_smoke": "passed"
+  },
+  "nv07_live": {
+    "command": "NV07_EVIDENCE=nv07-followups-live-2026-09-25.json make verify-nv07-live",
+    "result": "passed",
+    "evidence": "nv07-followups-live-2026-09-25.json",
+    "evaluation_id": "c757ebc8-1031-42a1-aaef-bdf937f7f62b",
+    "fixture_image": "sha256:cb5ba133686e30b5bab036d4431a5f6d04b27c1341a90f8f42be5b02f31f9b34",
+    "matched_pairs": 3,
+    "infrastructure_failed_pairs": 0,
+    "verified_difference_mean": 1.0,
+    "interval_status": {"verified": "degenerate", "false_claims": "degenerate", "requests": "degenerate", "latency_seconds": "insufficient_pairs", "cost_usd": "no_pairs"},
+    "arenas": 7,
+    "final_labeled_resources": 0
+  },
+  "not_exercised": "No live worker kill mid-trial (NV07-R5 remains open); NV-02-06 live regressions not rerun (NV07-R4 remains open).",
+  "schema": "nidavellir/nv07-gates/v1"
+}

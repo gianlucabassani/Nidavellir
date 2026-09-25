@@ -18,6 +18,10 @@ import lifecycle_manifest
 from database import Database
 from states import LabStatus
 
+# Below this many matched pairs a bootstrap interval is reported but labelled
+# ``insufficient_pairs``; it is never ``supported``.
+MIN_INTERVAL_PAIRS = 5
+
 
 def _observation(db, arena_id):
     events = db.list_events(arena_id, limit=1, types=("lifecycle_observation",))
@@ -190,12 +194,20 @@ def compare(record):
 
     def summary(values):
         if not values:
-            return {"pairs": 0, "mean": None, "bootstrap_95": None}
+            return {"pairs": 0, "mean": None, "bootstrap_95": None,
+                    "distinct_values": 0, "interval_status": "no_pairs"}
         rng = random.Random(7)
         means = sorted(sum(rng.choice(values) for _ in values) / len(values)
                        for _ in range(2000))
+        distinct = len(set(values))
+        # Resampling identical differences always returns the point estimate, so a
+        # zero-width interval says nothing about stability; label it rather than let
+        # the JSON read like the console-caveated interval without the caveat.
+        status = ("degenerate" if distinct < 2 else "insufficient_pairs"
+                  if len(values) < MIN_INTERVAL_PAIRS else "supported")
         return {"pairs": len(values), "mean": sum(values) / len(values),
-                "bootstrap_95": [means[49], means[1949]]}
+                "bootstrap_95": [means[49], means[1949]],
+                "distinct_values": distinct, "interval_status": status}
 
     differences = delta("verified")
     return {"pairs": rows, "matched_pairs": len(valid),

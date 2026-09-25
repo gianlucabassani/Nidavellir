@@ -3,6 +3,45 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-09-26 — NV-07 follow-ups: recovery coverage (R5) and interval labels (R3)
+
+**Outcome:** Closed NV07-R3 and narrowed NV07-R5. `experiments.compare` now
+adds `distinct_values` and `interval_status` to every per-metric difference:
+`degenerate` when all matched differences are identical (the `[1.0, 1.0]`
+case), `insufficient_pairs` below `MIN_INTERVAL_PAIRS = 5`, `supported`
+otherwise, `no_pairs` when nothing matched. The bootstrap numbers are still
+emitted; the label says whether they carry information. The console prints the
+status next to each interval. New tests drive `recover_stale_evaluations`,
+`queued_evaluations_before` and `reap_labs` over stale `running`/`queued`
+rows: unfinished trials become `infrastructure_failure/worker_interrupted`,
+completed results survive, a lost worker's late finish or claim is rejected,
+recovery is idempotent, fresh/queued/complete rows are left alone and a
+duplicate delivery of a running evaluation is skipped. No scoring, validation
+or trial-execution behaviour changed. NV-08 was not started in this session.
+
+**Files:** `experiments.py`, `evaluation_detail.html`, `tests/test_nv07_experiments.py`,
+`scripts/verify-nv07-live.py` (asserts the degenerate label; `NV07_EVIDENCE`
+selects the output file), `docs/API.md`, `ISSUES.md`, the verification JSON and
+this entry.
+
+**Verification:** First `make release-check` failed: three reaper tests reached
+Redis because the new tests left backdated `queued` evaluations in the shared
+test DB. A fixture now closes them. The rerun passed on Python 3.11.14: Ruff
+0.6.9 clean, Bandit 1.9.4 zero medium/high, 910 SQLite passed (four
+PostgreSQL-only skips), 914 PostgreSQL passed, six integration deselections
+each, clean Alembic and API/console/MCP smoke. `make verify-nv07-live` (run
+with `NV07_EVIDENCE=nv07-followups-live-2026-09-25.json`) passed: evaluation
+`c757ebc8-…`, three matched pairs, verified mean 1.0 labelled `degenerate`,
+latency `insufficient_pairs`, cost `no_pairs`, zero labelled resources across
+seven arenas. Evidence: `docs/verification/nv07-followups-gates-2026-09-25.json`
+and `nv07-followups-live-2026-09-25.json`.
+
+**Unresolved risks / next step:** NV07-R5 stays open until a live worker kill
+mid-trial is shown to be terminalized by the reaper. Recovery keys on
+`Evaluation.updated_at`, which is safe only while one evaluation fits inside
+the 61-minute task limit; longer NV-08 suites need a heartbeat or a split task.
+NV07-R4 (NV-02–06 live regressions) is still not rerun. Next is NV-08.
+
 ## 2026-09-25 — Complete NV-07 durable paired evaluations
 
 **Outcome:** NV-07 is complete on Docker-local. The platform now holds durable,
