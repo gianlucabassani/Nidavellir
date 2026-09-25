@@ -65,8 +65,11 @@ deterministic scripted-MCP driver against one calibration challenge; a real
 BYO model-driven build and a second challenge class are untested here, and the
 bootstrap interval over three seeds is a reporting device, not a strong
 statistical claim. NV-02–06 live regressions were not rerun after this change,
-which touches only new NV-07 code paths and the NV-07 verifier. Next is NV-08's
-dependable challenge library.
+which touches only new NV-07 code paths and the NV-07 verifier. These and the
+carried provider/verification gaps are now tracked as a standing register in
+`ISSUES.md`, linked from the AGENTS.md reading order. Next is NV-08's
+dependable challenge library; ROADMAP's "Next to build" block states its
+three concrete deliverables.
 
 ## 2026-09-24 — Complete NV-06 independent authorization validation
 

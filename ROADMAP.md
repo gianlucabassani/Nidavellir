@@ -20,13 +20,14 @@
 > that discovery work produces the verified, held-out material that makes
 > evaluation credible.
 
-## Current delivery order — updated 2026-09-24
+## Current delivery order — updated 2026-09-25
 
 [TODO.md](TODO.md) is the canonical ordered checklist with stable NV task IDs,
 dependencies and acceptance criteria. This roadmap retains product/design detail;
 S/C/R/D/E/P labels below are subject areas, not a competing execution order.
 The operator requested this reorganization after reviewing both Nidavellir and Bughunt.
-NV-01–07 have completed their accepted gates; NV-08 is next.
+NV-01–07 have completed their accepted gates; NV-08 is next. Open risks and
+verification gaps are tracked in [ISSUES.md](ISSUES.md).
 
 1. **P0 / NV-01–05:** restore a repeatable Python 3.11 release gate; prove pinned target
    lifecycle/reset; complete confined PoC execution, durable budgets/stop and scoped access.
@@ -52,6 +53,33 @@ Correctness, containment, and independent verification remain ahead of feature
 count. The authoritative product boundary is
 [`docs/VISION.md`](docs/VISION.md). Architecture
 decisions live in [`docs/adr/`](docs/adr/).
+
+### Next to build — NV-08, a small dependable challenge library
+
+NV-07 made paired comparison durable, but every trial so far runs the single
+NV-06 synthetic authorization fixture, so the workbench can currently measure a
+difference it cannot generalize (ISSUES.md NV07-R2, NV06-R1). NV-08 supplies
+the material worth measuring on:
+
+1. **Promote the authorization fixture into a versioned library entry** —
+   versioned synthetic accounts and seed data, private truth, validator
+   identity and an explicit `calibration` vs `held-out` leakage label carried
+   into every export row.
+2. **Add a second challenge class with an independent validator**, chosen from
+   sessions/business logic, browser behavior or service faults as real research
+   needs them — not a broad intake effort. A second class is what proves the
+   challenge record and the paired comparison are not shaped around one fixture.
+3. **Prove regression detection:** repeated paired trials must catch a known,
+   deliberately seeded agent regression on matched conditions.
+
+Each fixture stays resettable and observed-state equivalent, so NV-07's matched
+pair rule keeps working. Broad challenge intake is explicitly not a prerequisite
+for the first useful run. Acceptance is in [TODO.md](TODO.md) under NV-08.
+
+Two NV-07 follow-ups are small enough to land alongside it: distinguish a
+degenerate bootstrap interval from a supported one in the export, not only in
+the console caveat (NV07-R3), and rerun the NV-02–06 live regressions at the
+current commit (NV07-R4).
 
 ---
 
@@ -703,14 +731,23 @@ on and any vendor can contest.
 E1–E5 can be built before that corpus exists — the machinery is independent of the
 challenges it runs — but publishing a comparison should not get ahead of it.
 
-### E1 — Durable experiment model
+### E1 — Durable experiment model · shipped for scripted builds (NV-07)
 
 Add first-class records for agent builds, suites, evaluations, runs, and trials.
 Every run records agent version/digest, model/scaffold, target/scenario digest,
 visibility, seed, budgets, tool versions, start/end state, score, cost, trace, and
 reset proof. Existing event-derived eval rows remain the export projection.
 
-### E2 — Generic external-agent drivers
+NV-07 delivered the records, atomic trial claims, reaper recovery for stale or
+stranded evaluations, and paired comparison over matched observed starting
+state. Not yet recorded: explicit visibility labels and per-tool version
+pinning. Cost stays `null` unless a build announces it.
+
+### E2 — Generic external-agent drivers · not started
+
+Only `scripted-mcp/v1` exists today: a fixed tool plan replayed identically per
+trial, sufficient to exercise the record and comparison machinery but not the
+conditions it is meant to describe (ISSUES.md NV07-R1).
 
 Support different agent shapes without embedding any agent's product logic:
 
@@ -723,13 +760,18 @@ enter through Nidavellir's authenticated, independently validated path. A
 continuous pentesting agent is the first serious internal validation case, not
 a hard-coded dependency.
 
-### E3 — Agent registry and suite builder
+### E3 — Agent registry and suite builder · partially shipped (NV-07)
 
 Library → Agents registers pinned builds, connectivity, driver, model/scaffold
 metadata, secret references, and default limits. Evaluations → Suites composes
 held-out challenges, trial counts, seeds, visibility, budgets, and reset policy.
 
-### E4 — Active challenge episodes
+Shipped: a read-only build registry over content-addressed scripted builds, and
+a suite builder composing challenges, seeds, action cap and per-trial deadline.
+Missing: connectivity and secret references, per-build default limits,
+visibility policy, and held-out challenges to compose (NV-08).
+
+### E4 — Active challenge episodes · not started
 
 A challenge may define deterministic phases:
 
@@ -742,7 +784,15 @@ This measures agents that react to changes as well as one-shot exploit agents.
 The episode controller is generic and provider-contained. Hidden truth and
 release schedules are never exposed to the agent.
 
-### E5 — New Evaluation wizard, live execution, and comparison
+### E5 — New Evaluation wizard, live execution, and comparison · partially shipped (NV-07)
+
+Shipped: browser selection of baseline and candidate builds, suite and seeds,
+launch, per-metric paired differences with the degenerate-sample caveat, a
+per-pair trial table with matched state, and drill-down to each trial's arena,
+error and retained score/eval export. Missing: an identity/containment review
+step, live progress and retry inspection, precision/recall where truth exists,
+finding-lifecycle metrics, and a per-evaluation OpenInference export (per-arena
+`eval-export` exists today).
 
 Entirely from the browser, an operator:
 

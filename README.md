@@ -175,6 +175,7 @@ Individual markdown documents:
 - [`docs/SCENARIOS.md`](docs/SCENARIOS.md) — the v3 scenario schema + Vulhub import
 - [`docs/SECURITY.md`](docs/SECURITY.md) — threat model & containment
 - [`docs/adr/`](docs/adr/) — architecture decision records
+- [`ISSUES.md`](ISSUES.md) — open risks and verification gaps
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`ROADMAP.md`](ROADMAP.md)
 
 ## License

@@ -5,9 +5,10 @@ Before making material changes, read these sources in order:
 1. `README.md` — reproducible local vulnerability research and BYO-agent evaluation.
 2. `ROADMAP.md` — product/design detail and dated verification boundaries.
 3. `TODO.md` — canonical delivery order, stable NV task IDs, dependencies and acceptance.
-4. Relevant `docs/adr/` decisions — preserve existing architecture boundaries.
-5. Latest `docs/JOURNAL.md` entry, then `.lab.yaml` for quick commands.
-6. `git log` — when the sources above are silent or disagree with current code.
+4. `ISSUES.md` — open risks and verification gaps; do not re-close them silently.
+5. Relevant `docs/adr/` decisions — preserve existing architecture boundaries.
+6. Latest `docs/JOURNAL.md` entry, then `.lab.yaml` for quick commands.
+7. `git log` — when the sources above are silent or disagree with current code.
 
 Dynamic N-node Docker arenas, stance-scoped MCP gateways and HTTP transaction replay
 are implemented. NV-01–07 are complete: reproducible verification, target reset,
