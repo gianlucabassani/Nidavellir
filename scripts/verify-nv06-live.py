@@ -305,8 +305,11 @@ def main():
                           "verdict": fail_verdict},
         "reset_operation": operation["id"], "final_resources": resources,
     }
-    path = ROOT / "docs/verification" / f"nv06-live-{datetime.now():%Y-%m-%d}.json"
-    path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
+    path = ROOT / "docs/verification" / (
+        f"nv06-live-{datetime.now():%Y-%m-%d}-{uuid.uuid4().hex[:8]}.json")
+    with path.open("x") as handle:
+        handle.write(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
+    print(f"Evidence: {path}")
     print(json.dumps(evidence, indent=2, sort_keys=True))
 
 

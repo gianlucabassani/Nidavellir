@@ -11,6 +11,8 @@ from __future__ import annotations
 import importlib.util
 import json
 import time
+import uuid
+from datetime import datetime
 from pathlib import Path
 
 _spec = importlib.util.spec_from_file_location(
@@ -20,7 +22,8 @@ _spec.loader.exec_module(nv07)
 fixture = nv07.fixture
 
 ROOT = Path(__file__).resolve().parent.parent
-EVIDENCE = ROOT / "docs/verification/nv07-recovery-live-2026-09-26.json"
+EVIDENCE = ROOT / "docs/verification" / (
+    f"nv07-recovery-live-{datetime.now():%Y-%m-%d}-{uuid.uuid4().hex[:8]}.json")
 evaluation_id = None
 
 
@@ -105,7 +108,9 @@ def main():
         "simulated": "evaluation heartbeat backdated 71 minutes after SIGKILL; "
                      "recovery, worker restart and cleanup ran unmodified",
         "comparison": comparison, "final_resources": resources}
-    EVIDENCE.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
+    with EVIDENCE.open("x") as handle:
+        handle.write(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
+    print(f"Evidence: {EVIDENCE}")
     print(json.dumps(evidence, indent=2, sort_keys=True))
 
 

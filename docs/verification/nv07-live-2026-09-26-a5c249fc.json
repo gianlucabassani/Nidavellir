@@ -1,0 +1,239 @@
+{
+  "challenge_id": "8059acf1-36ea-461d-9305-f73f0c63317c",
+  "comparison": {
+    "by_challenge": {
+      "8059acf1-36ea-461d-9305-f73f0c63317c": {
+        "differences": {
+          "cost_usd": {
+            "bootstrap_95": null,
+            "distinct_values": 0,
+            "interval_status": "no_pairs",
+            "mean": null,
+            "pairs": 0
+          },
+          "false_claims": {
+            "bootstrap_95": [
+              -1.0,
+              -1.0
+            ],
+            "distinct_values": 1,
+            "interval_status": "degenerate",
+            "mean": -1.0,
+            "pairs": 3
+          },
+          "latency_seconds": {
+            "bootstrap_95": [
+              -0.6000000000000001,
+              0.0
+            ],
+            "distinct_values": 3,
+            "interval_status": "insufficient_pairs",
+            "mean": -0.2666666666666666,
+            "pairs": 3
+          },
+          "requests": {
+            "bootstrap_95": [
+              0.0,
+              0.0
+            ],
+            "distinct_values": 1,
+            "interval_status": "degenerate",
+            "mean": 0.0,
+            "pairs": 3
+          },
+          "verified": {
+            "bootstrap_95": [
+              1.0,
+              1.0
+            ],
+            "distinct_values": 1,
+            "interval_status": "degenerate",
+            "mean": 1.0,
+            "pairs": 3
+          }
+        },
+        "infrastructure_failed_pairs": 0,
+        "leakage_label": "calibration",
+        "matched_pairs": 3,
+        "name": "Authorization calibration",
+        "version": "v1"
+      }
+    },
+    "differences": {
+      "cost_usd": {
+        "bootstrap_95": null,
+        "distinct_values": 0,
+        "interval_status": "no_pairs",
+        "mean": null,
+        "pairs": 0
+      },
+      "false_claims": {
+        "bootstrap_95": [
+          -1.0,
+          -1.0
+        ],
+        "distinct_values": 1,
+        "interval_status": "degenerate",
+        "mean": -1.0,
+        "pairs": 3
+      },
+      "latency_seconds": {
+        "bootstrap_95": [
+          -0.6000000000000001,
+          0.0
+        ],
+        "distinct_values": 3,
+        "interval_status": "insufficient_pairs",
+        "mean": -0.2666666666666666,
+        "pairs": 3
+      },
+      "requests": {
+        "bootstrap_95": [
+          0.0,
+          0.0
+        ],
+        "distinct_values": 1,
+        "interval_status": "degenerate",
+        "mean": 0.0,
+        "pairs": 3
+      },
+      "verified": {
+        "bootstrap_95": [
+          1.0,
+          1.0
+        ],
+        "distinct_values": 1,
+        "interval_status": "degenerate",
+        "mean": 1.0,
+        "pairs": 3
+      }
+    },
+    "evidence_scope": "calibration_or_unknown",
+    "infrastructure_failed_pairs": 0,
+    "leakage_labels": [
+      "calibration"
+    ],
+    "matched_pairs": 3,
+    "pairs": [
+      {
+        "baseline": {
+          "cost_usd": null,
+          "false_claims": 1,
+          "latency_seconds": 2.6,
+          "requests": 1,
+          "verified": 0
+        },
+        "baseline_state": "completed",
+        "candidate": {
+          "cost_usd": null,
+          "false_claims": 0,
+          "latency_seconds": 2.0,
+          "requests": 1,
+          "verified": 1
+        },
+        "candidate_state": "completed",
+        "challenge_id": "8059acf1-36ea-461d-9305-f73f0c63317c",
+        "leakage_label": "calibration",
+        "matched": true,
+        "seed": 1
+      },
+      {
+        "baseline": {
+          "cost_usd": null,
+          "false_claims": 1,
+          "latency_seconds": 2.1,
+          "requests": 1,
+          "verified": 0
+        },
+        "baseline_state": "completed",
+        "candidate": {
+          "cost_usd": null,
+          "false_claims": 0,
+          "latency_seconds": 2.1,
+          "requests": 1,
+          "verified": 1
+        },
+        "candidate_state": "completed",
+        "challenge_id": "8059acf1-36ea-461d-9305-f73f0c63317c",
+        "leakage_label": "calibration",
+        "matched": true,
+        "seed": 2
+      },
+      {
+        "baseline": {
+          "cost_usd": null,
+          "false_claims": 1,
+          "latency_seconds": 2.3,
+          "requests": 1,
+          "verified": 0
+        },
+        "baseline_state": "completed",
+        "candidate": {
+          "cost_usd": null,
+          "false_claims": 0,
+          "latency_seconds": 2.1,
+          "requests": 1,
+          "verified": 1
+        },
+        "candidate_state": "completed",
+        "challenge_id": "8059acf1-36ea-461d-9305-f73f0c63317c",
+        "leakage_label": "calibration",
+        "matched": true,
+        "seed": 3
+      }
+    ],
+    "verified_difference_mean": 1.0,
+    "verified_difference_range": [
+      1,
+      1
+    ]
+  },
+  "evaluation_id": "c17d8eac-f1d0-4906-bab8-4b3a321b1260",
+  "final_resources": {
+    "021a0450-831f-4163-9d2d-cc6591366945": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "3a47c098-f9fd-4cee-b49f-3b33f2ca660d": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "5b8ba270-4835-4ddb-a92b-155f5c9980cb": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "7e6884e2-6287-41eb-ac13-2d62b9b7cffc": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "aa397e18-7f4c-4f6d-a647-44fc79a7d2c9": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "d02f68b9-8ef3-4ad7-b1c9-bfc2fe34b5a2": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "d97e76de-9976-46b9-967c-132b18757fa0": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    }
+  },
+  "fixture_image": "sha256:05f43f7e96cd4429faa15c237eef8e27e1756dd9c2f5a76ebb20e0a121ffc675",
+  "schema": "nidavellir/nv07-live-evidence/v1",
+  "source_arena": "5b8ba270-4835-4ddb-a92b-155f5c9980cb"
+}

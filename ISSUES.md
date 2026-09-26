@@ -24,6 +24,10 @@ Paired evaluation is proven with `scripted-mcp/v1`, a fixed tool plan replayed
 identically on every trial. No model-driven bring-your-own agent has ever run
 through the evaluation path, so variance, retries, tool misuse, budget
 exhaustion under real reasoning and partial-progress scoring are untested.
+No operator model connection is configured for the durable evaluation path.
+An authenticated local Claude CLI is not such a connection or a completed
+model-driven trial; each subscription-backed live run requires separate
+operator permission and none was used for NV-08.
 
 **Why it matters:** the workbench's purpose is comparing real agent builds. A
 deterministic script exercises the record and comparison machinery, not the

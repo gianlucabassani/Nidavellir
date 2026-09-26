@@ -3,6 +3,34 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-09-26 — Final NV-08 gates and collision-safe live evidence
+
+**Outcome:** Final NV-06, NV-07, NV-07 recovery and NV-08 Docker-local gates
+passed after the last product change. Their verifiers now create unique,
+date-named evidence files exclusively, never overwriting committed records.
+The final NV-08 rerun again completed 20 trials in ten matched pairs with zero
+infrastructure-failed pairs and zero labelled resources. The pooled verified
+difference was -0.5, bootstrap 95% [-0.8, -0.2], `supported`; grant and
+authorization differences were -1 and 0 respectively, each `degenerate`.
+These are calibration results only.
+
+**Files:** `scripts/verify-nv06-live.py`, `scripts/verify-nv07-live.py`,
+`scripts/verify-nv07-recovery-live.py`, `ISSUES.md` and final gate evidence in
+`docs/verification/`.
+
+**Verification:** Pinned `make release-check` passed: Ruff, Bandit, release
+smoke, 921 SQLite passed (four skipped), 925 PostgreSQL passed; six integration
+tests deselected in each suite. `make verify-nv06-live`,
+`make verify-nv07-live`, `make verify-nv07-recovery-live` and
+`make verify-nv08-live` all passed. See
+`docs/verification/nv08-final-gates-2026-09-26.json` for the exact paths.
+
+**Unresolved risks / next step:** NV07-R1 remains open: no Nidavellir model
+connection is configured for durable evaluations, and no Claude subscription
+run was invoked. NV06-R1 still needs a non-synthetic target; INFRA-R1 belongs
+to NV-13. NV-09 is next in the delivery order. A model-driven NV07-R1 run
+requires its own setup and explicit permission for each live invocation.
+
 ## 2026-09-26 — Complete NV-08 two-class calibration regression gate
 
 **Outcome:** A suite now compares authorization and single-use-grant business

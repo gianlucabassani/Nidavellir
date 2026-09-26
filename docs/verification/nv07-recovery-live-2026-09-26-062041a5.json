@@ -1,0 +1,158 @@
+{
+  "comparison": {
+    "by_challenge": {
+      "c8b60593-c221-4243-9f8d-4f66dbd2c199": {
+        "differences": {
+          "cost_usd": {
+            "bootstrap_95": null,
+            "distinct_values": 0,
+            "interval_status": "no_pairs",
+            "mean": null,
+            "pairs": 0
+          },
+          "false_claims": {
+            "bootstrap_95": null,
+            "distinct_values": 0,
+            "interval_status": "no_pairs",
+            "mean": null,
+            "pairs": 0
+          },
+          "latency_seconds": {
+            "bootstrap_95": null,
+            "distinct_values": 0,
+            "interval_status": "no_pairs",
+            "mean": null,
+            "pairs": 0
+          },
+          "requests": {
+            "bootstrap_95": null,
+            "distinct_values": 0,
+            "interval_status": "no_pairs",
+            "mean": null,
+            "pairs": 0
+          },
+          "verified": {
+            "bootstrap_95": null,
+            "distinct_values": 0,
+            "interval_status": "no_pairs",
+            "mean": null,
+            "pairs": 0
+          }
+        },
+        "infrastructure_failed_pairs": 3,
+        "leakage_label": "calibration",
+        "matched_pairs": 0,
+        "name": "Authorization calibration",
+        "version": "v1"
+      }
+    },
+    "differences": {
+      "cost_usd": {
+        "bootstrap_95": null,
+        "distinct_values": 0,
+        "interval_status": "no_pairs",
+        "mean": null,
+        "pairs": 0
+      },
+      "false_claims": {
+        "bootstrap_95": null,
+        "distinct_values": 0,
+        "interval_status": "no_pairs",
+        "mean": null,
+        "pairs": 0
+      },
+      "latency_seconds": {
+        "bootstrap_95": null,
+        "distinct_values": 0,
+        "interval_status": "no_pairs",
+        "mean": null,
+        "pairs": 0
+      },
+      "requests": {
+        "bootstrap_95": null,
+        "distinct_values": 0,
+        "interval_status": "no_pairs",
+        "mean": null,
+        "pairs": 0
+      },
+      "verified": {
+        "bootstrap_95": null,
+        "distinct_values": 0,
+        "interval_status": "no_pairs",
+        "mean": null,
+        "pairs": 0
+      }
+    },
+    "evidence_scope": "calibration_or_unknown",
+    "infrastructure_failed_pairs": 3,
+    "leakage_labels": [
+      "calibration"
+    ],
+    "matched_pairs": 0,
+    "pairs": [
+      {
+        "baseline": null,
+        "baseline_state": "infrastructure_failure",
+        "candidate": null,
+        "candidate_state": "infrastructure_failure",
+        "challenge_id": "c8b60593-c221-4243-9f8d-4f66dbd2c199",
+        "leakage_label": "calibration",
+        "matched": false,
+        "seed": 1
+      },
+      {
+        "baseline": null,
+        "baseline_state": "infrastructure_failure",
+        "candidate": null,
+        "candidate_state": "infrastructure_failure",
+        "challenge_id": "c8b60593-c221-4243-9f8d-4f66dbd2c199",
+        "leakage_label": "calibration",
+        "matched": false,
+        "seed": 2
+      },
+      {
+        "baseline": null,
+        "baseline_state": "infrastructure_failure",
+        "candidate": null,
+        "candidate_state": "infrastructure_failure",
+        "challenge_id": "c8b60593-c221-4243-9f8d-4f66dbd2c199",
+        "leakage_label": "calibration",
+        "matched": false,
+        "seed": 3
+      }
+    ],
+    "verified_difference_mean": null,
+    "verified_difference_range": null
+  },
+  "completed_before_kill": 0,
+  "evaluation_id": "bb4d1d6e-1828-49e0-a715-f1bc26cc55de",
+  "final_resources": {
+    "0e1fbb81-bc82-4cb8-b642-8cb5d440afd4": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "98f74ac8-4030-4fde-ade0-dfd00308f2c4": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    }
+  },
+  "fixture_image": "sha256:05f43f7e96cd4429faa15c237eef8e27e1756dd9c2f5a76ebb20e0a121ffc675",
+  "killed_trials": [
+    {
+      "arena_id": "98f74ac8-4030-4fde-ade0-dfd00308f2c4",
+      "final_error": "worker_interrupted",
+      "final_state": "infrastructure_failure",
+      "id": "50b151f0-9ad6-427f-a9cc-0613a53313fd"
+    }
+  ],
+  "running_when_observed": [
+    "50b151f0-9ad6-427f-a9cc-0613a53313fd"
+  ],
+  "schema": "nidavellir/nv07-recovery-live-evidence/v1",
+  "simulated": "evaluation heartbeat backdated 71 minutes after SIGKILL; recovery, worker restart and cleanup ran unmodified",
+  "source_arena": "0e1fbb81-bc82-4cb8-b642-8cb5d440afd4"
+}

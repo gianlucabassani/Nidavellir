@@ -1,0 +1,35 @@
+{
+  "schema": "nidavellir/nv08-final-gates/v1",
+  "date": "2026-09-26",
+  "environment": "pinned Docker Python 3.11.14 and Docker-local synthetic fixtures",
+  "release_check": {
+    "command": "make release-check",
+    "result": "passed",
+    "sqlite": {"passed": 921, "skipped": 4, "integration_deselected": 6},
+    "postgresql": {"passed": 925, "integration_deselected": 6},
+    "ruff": "passed",
+    "bandit_medium_high": 0,
+    "migration_api_ui_mcp_smoke": "passed"
+  },
+  "live": {
+    "make verify-nv06-live": "nv06-live-2026-09-26-5e7da785.json",
+    "make verify-nv07-live": "nv07-live-2026-09-26-a5c249fc.json",
+    "make verify-nv07-recovery-live": "nv07-recovery-live-2026-09-26-062041a5.json",
+    "make verify-nv08-live": "nv08-live-2026-09-26-8cb9810c.json"
+  },
+  "nv08_rerun": {
+    "trials_completed": 20,
+    "matched_pairs": 10,
+    "infrastructure_failed_pairs": 0,
+    "pooled_verified_difference": -0.5,
+    "pooled_verified_bootstrap_95": [-0.8, -0.2],
+    "pooled_interval_status": "supported",
+    "grant_verified_difference": -1.0,
+    "authorization_verified_difference": 0.0,
+    "per_challenge_interval_status": "degenerate",
+    "leakage_label": "calibration",
+    "arenas_destroyed": 22,
+    "remaining_labelled_resources": 0
+  },
+  "model_subscription_invoked": false
+}

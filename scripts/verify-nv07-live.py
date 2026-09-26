@@ -6,6 +6,7 @@ import json
 import importlib.util
 import os
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 _fixture_spec = importlib.util.spec_from_file_location(
@@ -119,8 +120,11 @@ def main():
         "challenge_id": challenge["id"], "evaluation_id": evaluation_id,
         "comparison": record["comparison"], "final_resources": resources}
     path = ROOT / "docs/verification" / os.getenv(
-        "NV07_EVIDENCE", "nv07-live-2026-09-25.json")
-    path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
+        "NV07_EVIDENCE",
+        f"nv07-live-{datetime.now():%Y-%m-%d}-{uuid.uuid4().hex[:8]}.json")
+    with path.open("x") as handle:
+        handle.write(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
+    print(f"Evidence: {path}")
     print(json.dumps(evidence, indent=2, sort_keys=True))
 
 

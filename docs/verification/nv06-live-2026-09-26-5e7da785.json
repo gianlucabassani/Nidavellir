@@ -1,0 +1,119 @@
+{
+  "final_resources": {
+    "1ed8e948-3631-40a5-bb1f-15af1e2382c4": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "eccaf4d3-99e9-4da1-9ddc-cdb8f28ba6a3": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "fd96d120-4d70-4d91-b07e-53966a575cc2": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    }
+  },
+  "fixture_image": "sha256:05f43f7e96cd4429faa15c237eef8e27e1756dd9c2f5a76ebb20e0a121ffc675",
+  "negative": {
+    "arena": "fd96d120-4d70-4d91-b07e-53966a575cc2",
+    "finding_id": "a81b97a52e55",
+    "verdict": {
+      "action_digest": "sha256:dc3ea3e7798b43e8870f717a4ac569f9395d3b09cec3c34f92a989b312279c9a",
+      "arena_id": "fd96d120-4d70-4d91-b07e-53966a575cc2",
+      "confirmed": false,
+      "control_digest": "sha256:7c7ac86f5fee7a0b2332e6a50923d9ffa6cb324e4a6f52a7438dc4e02fa5d4d1",
+      "evidence": "",
+      "explanation": "target denied unauthorized read",
+      "finding_id": "a81b97a52e55",
+      "method": "authorization_effect",
+      "observation_digest": "sha256:c7ec2187fd76f6ad4d6f3d30e2c44abf766c1c88a388e786364b97b9fb4f181e",
+      "reason_code": "access_denied",
+      "recipe_digest": "sha256:647c0526bb0a4b457c7d2cdf7cfb90f5e30f6ac3f4e502925edd88d41f6123b9",
+      "schema": "nidavellir/validation-verdict/v1",
+      "target_identity_digest": "sha256:93dca3ddb333c858421ab11e0c6d5fe73e3ff0f86e74fd00067f8281dc2c268b",
+      "timestamp": "2026-09-26T21:48:00.317779+00:00",
+      "validator_id": "authorization_effect",
+      "validator_version": 1,
+      "verdict": "refuted"
+    }
+  },
+  "observed_state_digest": "sha256:a31a67a60de60440560727ccc3ab0255d833af15a17277bf74a440877aab389b",
+  "positive": {
+    "arena": "eccaf4d3-99e9-4da1-9ddc-cdb8f28ba6a3",
+    "finding_id": "b150ca7a6dc0",
+    "review_link": "/arena/eccaf4d3-99e9-4da1-9ddc-cdb8f28ba6a3#findings",
+    "verdict": {
+      "action_digest": "sha256:0d0e2c7c6a3ce055f1f75b6f9dc22b7e1631f901ef16733ac832ba27bccdb9a3",
+      "arena_id": "eccaf4d3-99e9-4da1-9ddc-cdb8f28ba6a3",
+      "confirmed": true,
+      "control_digest": "sha256:97aa20940828691f0a8d5361f8c9499f99b264b4f104ca2996382549cc5591eb",
+      "evidence": "",
+      "explanation": "unauthorized object read observed",
+      "finding_id": "b150ca7a6dc0",
+      "method": "authorization_effect",
+      "observation_digest": "sha256:86fe0045d5b4b7c7f2edac5e0bc82a0ea2ac95f32fbd4a9216c62d4b9ea46528",
+      "reason_code": "unauthorized_read",
+      "recipe_digest": "sha256:647c0526bb0a4b457c7d2cdf7cfb90f5e30f6ac3f4e502925edd88d41f6123b9",
+      "schema": "nidavellir/validation-verdict/v1",
+      "target_identity_digest": "sha256:93dca3ddb333c858421ab11e0c6d5fe73e3ff0f86e74fd00067f8281dc2c268b",
+      "timestamp": "2026-09-26T21:47:57.260454+00:00",
+      "validator_id": "authorization_effect",
+      "validator_version": 1,
+      "verdict": "confirmed"
+    }
+  },
+  "probe_failure": {
+    "arena": "1ed8e948-3631-40a5-bb1f-15af1e2382c4",
+    "finding_id": "bf7622b07758",
+    "verdict": {
+      "action_digest": "sha256:557ff43f469ac753f66d14f6b14cb6b3e9beefc898cf47e96e57bd0f638aa297",
+      "arena_id": "1ed8e948-3631-40a5-bb1f-15af1e2382c4",
+      "confirmed": null,
+      "control_digest": null,
+      "evidence": "",
+      "explanation": "effect or control probe failed",
+      "finding_id": "bf7622b07758",
+      "method": "authorization_effect",
+      "observation_digest": null,
+      "reason_code": "probe_failed",
+      "recipe_digest": "sha256:3a221d8c0d9c0a80a16f11a7d9278d2ecd60f2b24b53e0820bf6d34ce9ea913c",
+      "schema": "nidavellir/validation-verdict/v1",
+      "target_identity_digest": "sha256:93dca3ddb333c858421ab11e0c6d5fe73e3ff0f86e74fd00067f8281dc2c268b",
+      "timestamp": "2026-09-26T21:48:11.979588+00:00",
+      "validator_id": "authorization_effect",
+      "validator_version": 1,
+      "verdict": "infrastructure_failure"
+    }
+  },
+  "recipe_digest": "sha256:647c0526bb0a4b457c7d2cdf7cfb90f5e30f6ac3f4e502925edd88d41f6123b9",
+  "reset_operation": "281a7298-c3b9-4b11-9b0a-14791b07b235",
+  "schema": "nidavellir/nv06-live-evidence/v1",
+  "unsupported": {
+    "finding_id": "1a5048da67c0",
+    "verdict": {
+      "action_digest": null,
+      "arena_id": "fd96d120-4d70-4d91-b07e-53966a575cc2",
+      "confirmed": null,
+      "control_digest": null,
+      "evidence": "",
+      "explanation": "no linked HTTP action",
+      "finding_id": "1a5048da67c0",
+      "method": "authorization_effect",
+      "observation_digest": null,
+      "reason_code": "missing_action",
+      "recipe_digest": "sha256:647c0526bb0a4b457c7d2cdf7cfb90f5e30f6ac3f4e502925edd88d41f6123b9",
+      "schema": "nidavellir/validation-verdict/v1",
+      "target_identity_digest": "sha256:93dca3ddb333c858421ab11e0c6d5fe73e3ff0f86e74fd00067f8281dc2c268b",
+      "timestamp": "2026-09-26T21:48:00.342671+00:00",
+      "validator_id": "authorization_effect",
+      "validator_version": 1,
+      "verdict": "inconclusive"
+    }
+  }
+}
