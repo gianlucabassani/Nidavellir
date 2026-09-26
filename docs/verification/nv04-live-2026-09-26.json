@@ -1,0 +1,55 @@
+{
+  "arenas": [
+    "29bd2a79-73f2-497c-9d12-187a3f13306b",
+    "dfb21389-1a98-4e10-88b6-bcc035dbc3e8"
+  ],
+  "cost_capped_job_refused": true,
+  "docker_server": "29.7.2",
+  "expired_job": {
+    "id": "16be8d01-0579-439a-adfa-99f7cd974caf",
+    "state": "cancelled"
+  },
+  "final_resources": {
+    "29bd2a79-73f2-497c-9d12-187a3f13306b": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "dfb21389-1a98-4e10-88b6-bcc035dbc3e8": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0
+    }
+  },
+  "fixture_image": "sha256:a647c2dc50479ed9da2581d6f977a078492b9f29ba95aff3ff0bbc8a73b9e162",
+  "http_browser_drained": [
+    "f129f8b7-ccec-4a35-b032-9870f9c09c5a",
+    "f9241489-f811-4a9d-88df-085e4201feb1"
+  ],
+  "interrupted_stop": {
+    "cleanup": "complete",
+    "id": "c1791b37-597d-425e-96a0-2e9ae31d9c84",
+    "state": "failed"
+  },
+  "mcp_after": 999,
+  "mcp_before": 1000,
+  "queued_cancel": {
+    "id": "fe323397-9f96-4171-97c1-fc7c00237f9d",
+    "refunded": true,
+    "state": "cancelled"
+  },
+  "race": [
+    200,
+    429
+  ],
+  "schema": "nidavellir/nv04-live/v1",
+  "stop_admission_race": 202,
+  "stopped_job": {
+    "cleanup": "complete",
+    "id": "0dc61bb4-bf9a-4bee-969c-72bffd7e66de",
+    "state": "cancelled"
+  },
+  "system_epoch": 2,
+  "token_cap_refused": true,
+  "verified_at": "2026-09-26T16:56:45.324227+00:00"
+}

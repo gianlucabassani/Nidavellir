@@ -67,7 +67,7 @@ from providers import (
 )
 from scenario_spec import ScenarioSpec, normalize_cwe, normalized_nodes, topology_view
 from states import IllegalTransition, LabStatus
-from tasks import deploy_lab, destroy_lab, reset_arena, run_forward_stream, run_poc_job, run_evaluation
+from tasks import deploy_lab, destroy_lab, enqueue_evaluation, reset_arena, run_forward_stream, run_poc_job
 from config import validate_config
 
 
@@ -5834,7 +5834,7 @@ def create_evaluation(req: EvaluationCreate,
             baseline_id=req.baseline_id, candidate_id=req.candidate_id)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    run_evaluation.delay(evaluation["id"])
+    enqueue_evaluation(evaluation["id"])
     return evaluation
 
 

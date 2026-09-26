@@ -58,10 +58,23 @@ MONITOR_EVENT = "monitor_signal"
 @app.task(name="run_evaluation", acks_late=True, reject_on_worker_lost=True,
           soft_time_limit=3600, time_limit=3660)
 def run_evaluation(evaluation_id):
-    """Execute pinned paired trials without granting the participant Docker access."""
+    """Execute pinned paired trials without granting the participant Docker access.
+
+    Enqueue through ``enqueue_evaluation`` so the limits cover the whole suite; the
+    decorator limits are only a fallback for a bare delivery."""
     import experiments  # noqa: PLC0415
 
     return experiments.execute(evaluation_id, uuid.uuid4().hex)
+
+
+def enqueue_evaluation(evaluation_id, db=None):
+    import experiments  # noqa: PLC0415
+
+    db = db or Database()
+    record = db.get_evaluation(evaluation_id)
+    suite = db.get_eval_suite(record["suite_id"])
+    soft, hard = experiments.time_limits(len(record["trials"]), suite["deadline_seconds"])
+    return run_evaluation.apply_async((evaluation_id,), soft_time_limit=soft, time_limit=hard)
 
 
 @app.task(name="run_forward_stream", bind=True, acks_late=True,
@@ -871,10 +884,13 @@ def reap_labs():
     for scope in db.stopping_budget_scopes():
         db.reconcile_budget_stop(scope)
 
-    eval_recovered = db.recover_stale_evaluations(now - timedelta(minutes=70))
+    import experiments  # noqa: PLC0415
+
+    eval_recovered = db.recover_stale_evaluations(
+        now - timedelta(minutes=experiments.STALL_MINUTES))
     eval_requeued = db.queued_evaluations_before(now - timedelta(minutes=2))
     for evaluation_id in eval_requeued:
-        run_evaluation.delay(evaluation_id)
+        enqueue_evaluation(evaluation_id, db)
 
     if reaped or skipped or revoked:
         logger.info(

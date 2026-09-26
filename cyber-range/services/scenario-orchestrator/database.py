@@ -265,11 +265,23 @@ class Database:
             data["trials"] = [self._eval_dict(t) for t in trials]
             return data
 
+    @staticmethod
+    def _eval_heartbeat(session, trial_id, now):
+        """Trial progress is evaluation progress: stale recovery keys on this, so a
+        long suite that keeps finishing trials is never mistaken for a lost worker."""
+        session.execute(update(Evaluation).where(
+            Evaluation.id == select(EvalTrial.evaluation_id).where(
+                EvalTrial.id == trial_id).scalar_subquery(),
+            Evaluation.state == "running").values(updated_at=now))
+
     def claim_eval_trial(self, trial_id, claim):
+        now = datetime.now()
         with self._session() as session:
             result = session.execute(update(EvalTrial).where(
                 EvalTrial.id == trial_id, EvalTrial.state == "queued")
-                .values(state="running", worker_claim=claim, updated_at=datetime.now()))
+                .values(state="running", worker_claim=claim, updated_at=now))
+            if result.rowcount == 1:
+                self._eval_heartbeat(session, trial_id, now)
             session.commit()
             return result.rowcount == 1
 
@@ -300,18 +312,20 @@ class Database:
             account.deadline = deadline
             session.commit()
 
-    def terminalize_stale_eval_trials(self, evaluation_id):
-        """A lost worker cannot silently turn a half-run trial into agent failure."""
+    def terminalize_unfinished_eval_trials(self, evaluation_id, *, error):
+        """Close every trial the worker can no longer run as infrastructure failure,
+        never as agent failure."""
         with self._session() as session:
             changed = session.execute(update(EvalTrial).where(
-                EvalTrial.evaluation_id == evaluation_id, EvalTrial.state == "running")
-                .values(state="infrastructure_failure", error="worker_interrupted",
+                EvalTrial.evaluation_id == evaluation_id,
+                EvalTrial.state.in_(("running", "queued")))
+                .values(state="infrastructure_failure", error=error,
                         updated_at=datetime.now())).rowcount
             session.commit()
             return changed
 
     def recover_stale_evaluations(self, before):
-        """Terminalize worker-lost evaluations after the hard task limit."""
+        """Terminalize evaluations whose worker made no trial progress since ``before``."""
         with self._session() as session:
             rows = session.scalars(select(Evaluation).where(
                 Evaluation.state == "running", Evaluation.updated_at < before)).all()
@@ -337,12 +351,15 @@ class Database:
         if state not in ("completed", "infrastructure_failure", "agent_failure"):
             raise ValueError("invalid terminal trial state")
         with self._session() as session:
+            now = datetime.now()
             changed = session.execute(update(EvalTrial).where(
                 EvalTrial.id == trial_id, EvalTrial.worker_claim == claim,
                 EvalTrial.state == "running").values(
                     state=state, starting_digest=starting_digest,
                     result=json.dumps(result) if result is not None else None,
-                    error=error, updated_at=datetime.now())).rowcount
+                    error=error, updated_at=now)).rowcount
+            if changed == 1:
+                self._eval_heartbeat(session, trial_id, now)
             session.commit()
             return changed == 1
 

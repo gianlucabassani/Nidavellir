@@ -13,6 +13,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -572,7 +573,7 @@ finally:
         "reset_operation": reset["operation_id"], "mcp": mcp_result,
         "final_resources": inventory,
     }
-    destination = ROOT / "docs" / "verification" / "nv03-live-2026-09-22.json"
+    destination = ROOT / "docs" / "verification" / f"nv03-live-{datetime.now():%Y-%m-%d}.json"
     destination.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
     print(json.dumps(evidence, indent=2, sort_keys=True))
 

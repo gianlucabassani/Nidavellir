@@ -1,0 +1,49 @@
+{
+  "arenas": [
+    "7a3d268a-2292-4259-ad2d-9826249aeb12",
+    "1e6bc37b-d3c1-4b63-9389-de1d712c18f2",
+    "75af1039-6561-4978-9e8d-ab8306ccc8f1",
+    "e330e726-cc3f-4ff6-b4b1-c3d32bbb39f2"
+  ],
+  "binding_revoked_forward_id": "177072ee-41ad-4f9b-a55a-9d8d1256086f",
+  "console_forward_id": "71d30b0b-6aa9-4b76-a2c6-05e71b06c390",
+  "denied_dynamic_destinations": true,
+  "docker_server": "29.7.2",
+  "expired_forward_id": "95077ed9-b415-44be-b725-df54f19d3f8c",
+  "final_resources": {
+    "1e6bc37b-d3c1-4b63-9389-de1d712c18f2": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "75af1039-6561-4978-9e8d-ab8306ccc8f1": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "7a3d268a-2292-4259-ad2d-9826249aeb12": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "e330e726-cc3f-4ff6-b4b1-c3d32bbb39f2": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0
+    }
+  },
+  "fixture_image": "sha256:0d5eadacbb564be529b4a323295ba3980e9db0579dc158d80c406302c2ed9815",
+  "forward_id": "4cac6e00-f7f6-43bb-bad3-ef63dfd6a98c",
+  "interrupted_forward_id": "85d985ef-457f-4682-9d05-31cc6ceaba75",
+  "loopback_forward_id": "c7452e76-6de9-48b6-992c-45b4c2e86fcd",
+  "mcp_forward_id": "3bef02cc-3376-49cc-b1e9-e15d101e2675",
+  "mock_provider_unsupported": true,
+  "racing_forward_id": "79821c49-bba6-4e49-bec6-125b71597533",
+  "reset_lease_id": "01babdea-87d2-4d10-8886-8b01bf3dfcac",
+  "response_bytes": 10,
+  "revoke_seconds": 0.30287878296803683,
+  "schema": "nidavellir/nv05-live/v1",
+  "stopped_forward_id": "509f9137-afb3-4b08-b774-bf4b3ac18d10",
+  "system_stopped_forward_id": "11250205-6f96-46fe-9aaf-d474965d2185",
+  "verified_at": "2026-09-26T16:58:02.677128+00:00"
+}

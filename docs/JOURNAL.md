@@ -3,6 +3,50 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-09-26 — Close NV07-R4, NV07-R5 and VERIF-R1; evaluation heartbeat
+
+**Outcome:** Three open risks are closed and the one-hour evaluation ceiling
+is gone. Trial claim/finish now refresh `Evaluation.updated_at`, so stale
+recovery means "no trial progress for 70 minutes" rather than "started over 70
+minutes ago". `tasks.enqueue_evaluation` sizes the Celery time limit from the
+suite (trials × (deadline + 600 s)), used by both the API and the reaper
+requeue. A soft time limit closes the remaining trials as
+`infrastructure_failure/time_limit` instead of leaving them for recovery.
+The unused `terminalize_stale_eval_trials` became
+`terminalize_unfinished_eval_trials`. A new live gate,
+`make verify-nv07-recovery-live`, SIGKILLs the worker mid-trial and proves the
+reaper terminalizes it. The only simulated element is the 70 minutes of
+silence (heartbeat backdated), and the evidence file says so. NV-02–07 live
+gates were rerun. The NV-03 and NV-06 verifiers now write date-named evidence;
+the NV-03 run had overwritten its committed 2026-09-22 file, which was restored
+from git. No scoring, validation or verdict behaviour changed. NV-08 is still
+not started.
+
+**Files:** `database.py`, `experiments.py`, `tasks.py`, `api.py`,
+`tests/test_nv07_experiments.py`, `scripts/verify-nv07-recovery-live.py`,
+`scripts/verify-nv07-live.py` (`prepare()` extracted),
+`scripts/verify-nv03-live.py`, `scripts/verify-nv06-live.py`, `Makefile`,
+`docs/API.md`, `AGENTS.md`, `ISSUES.md`, verification JSON and this entry.
+
+**Verification:** `make release-check` passed on Python 3.11.14: Ruff clean,
+Bandit zero medium/high, 913 SQLite passed (four PostgreSQL-only skips), 917
+PostgreSQL passed, six integration deselections each, smoke passed.
+`make verify-nv07-recovery-live` passed: trial `dc22c2f3-…` killed while
+holding arena `c11c1282-…`, left alone while fresh, terminalized as
+`infrastructure_failure/worker_interrupted`, arena reclaimed, evaluation
+unchanged after worker restart, 0 matched / 3 infrastructure-failed pairs,
+zero labelled resources. `verify-nv02-live` … `verify-nv07-live` all passed
+with zero labelled resources (NV-07: three matched pairs, mean 1.0,
+`degenerate`). The full host Python 3.14.7 suite ran to completion (913
+passed) with a 60 s faulthandler watchdog. That is signal only. Evidence:
+`docs/verification/nv07-hardening-gates-2026-09-26.json` and the
+`*-2026-09-26.json` files.
+
+**Unresolved risks / next step:** Open risks are NV07-R1 (no model-driven
+build), NV07-R2 and NV06-R1 (one calibration challenge class) and INFRA-R1
+(Docker-local only). The live kill hit the first trial, so preservation of
+completed trials under recovery is shown by the unit test only. Next is NV-08.
+
 ## 2026-09-26 — NV-07 follow-ups: recovery coverage (R5) and interval labels (R3)
 
 **Outcome:** Closed NV07-R3 and narrowed NV07-R5. `experiments.compare` now

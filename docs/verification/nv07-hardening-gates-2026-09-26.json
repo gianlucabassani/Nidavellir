@@ -1,0 +1,70 @@
+{
+  "change_under_test": "Evaluation heartbeat (trial claim/finish refresh Evaluation.updated_at), suite-sized run_evaluation time limits via tasks.enqueue_evaluation, soft-time-limit terminalization of unfinished trials as infrastructure_failure/time_limit; new live worker-kill recovery gate; verifier evidence paths made date-based. Scoring, validation and NV-06 verdict behaviour unchanged.",
+  "date": "2026-09-26",
+  "evidence_hygiene": "verify-nv03-live overwrote its committed 2026-09-22 file; the original was restored from git and the NV-03/NV-06 verifiers now write date-named files.",
+  "host_python_suite": {
+    "command": "MOCK_MODE=true pytest -m 'not integration' -o faulthandler_timeout=60",
+    "deselected": 6,
+    "note": "Completed twice without a stall. Host packages are unpinned and differ from requirements-lock.txt (e.g. starlette 1.3.1 vs 0.52.1, fastapi 0.138.0 vs 0.141.1); the 2026-09-07 stall's root cause was not identified. Not authoritative.",
+    "passed": 913,
+    "python": "3.14.7",
+    "result": "passed",
+    "seconds": 13.09,
+    "skipped": 4
+  },
+  "live_regressions": {
+    "files": {
+      "nv02": "nv02-regression-2026-09-26.json (stdout captured)",
+      "nv03": "nv03-live-2026-09-26.json",
+      "nv04": "nv04-live-2026-09-26.json",
+      "nv05": "nv05-live-2026-09-26.json",
+      "nv06": "nv06-live-2026-09-26.json",
+      "nv07": "nv07-live-2026-09-26.json"
+    },
+    "final_labeled_resources": 0,
+    "nv07_matched_pairs": 3,
+    "nv07_verified_difference_mean": 1.0,
+    "nv07_verified_interval_status": "degenerate",
+    "result": "passed"
+  },
+  "not_exercised": "No model-driven BYO build (NV07-R1); no second challenge class (NV07-R2, NV06-R1); no second live provider (INFRA-R1).",
+  "nv07_recovery_live": {
+    "command": "make verify-nv07-recovery-live",
+    "completed_before_kill": 0,
+    "evaluation_id": "54f4aaea-b8a7-4c2b-a9e6-00c7ec7c62bf",
+    "evidence": "nv07-recovery-live-2026-09-26.json",
+    "final_labeled_resources": 0,
+    "infrastructure_failed_pairs": 3,
+    "killed_trials": [
+      {
+        "arena_id": "c11c1282-8588-4d14-83f4-e3aec9e9d636",
+        "final_error": "worker_interrupted",
+        "final_state": "infrastructure_failure",
+        "id": "dc22c2f3-345b-4d96-b97b-8f49f2496802"
+      }
+    ],
+    "matched_pairs": 0,
+    "result": "passed",
+    "simulated": "evaluation heartbeat backdated 71 minutes after SIGKILL; recovery, worker restart and cleanup ran unmodified"
+  },
+  "release_check": {
+    "bandit": "1.9.4",
+    "bandit_high": 0,
+    "bandit_medium": 0,
+    "clean_alembic_api_console_mcp_smoke": "passed",
+    "command": "make release-check",
+    "postgresql": {
+      "integration_deselected": 6,
+      "passed": 917
+    },
+    "python": "3.11.14",
+    "result": "passed",
+    "ruff": "0.6.9",
+    "sqlite": {
+      "integration_deselected": 6,
+      "passed": 913,
+      "postgresql_only_skipped": 4
+    }
+  },
+  "schema": "nidavellir/nv07-gates/v1"
+}

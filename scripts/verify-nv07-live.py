@@ -19,8 +19,8 @@ fixture.COMPOSE = ("docker", "compose", "-f", "docker-compose.nv06.yml",
 evaluation_id = None
 
 
-def main():
-    global evaluation_id
+def prepare():
+    """Start the isolated stack and register the source arena, challenge and builds."""
     fixture.run("docker", "build", "-t", "nidavellir/nv06-authz:acceptance",
                 "cyber-range/fixtures/nv06-authz")
     image_id = fixture.run("docker", "image", "inspect",
@@ -82,6 +82,12 @@ def main():
         "version": "v1", "plan": plan("/protected/B")}, expected=(201,))
     candidate = fixture.api("POST", "/agent-builds", {"name": "effect-path",
         "version": "v1", "plan": plan("/objects/B")}, expected=(201,))
+    return image_id, source, challenge, baseline, candidate
+
+
+def main():
+    global evaluation_id
+    image_id, source, challenge, baseline, candidate = prepare()
     suite = fixture.api("POST", "/eval-suites", {"name": "authz-three-pairs",
         "version": "v1", "challenge_ids": [challenge["id"]], "seeds": [1, 2, 3],
         "action_cap": 20, "deadline_seconds": 600}, expected=(201,))

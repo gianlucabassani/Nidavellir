@@ -1,0 +1,52 @@
+{
+  "arenas": [
+    "e1bc1f62-02ad-4fcf-a948-811589f0b7e1",
+    "e2918dc3-29fc-408c-b183-628fbeddd530",
+    "c4730fe8-8d16-4b39-ae21-5453af788728",
+    "7f457471-2f84-46c7-a200-e525ea382a8c",
+    "6bbd0efc-1278-4e33-89a2-db8257cfdc94"
+  ],
+  "final_resources": {
+    "6bbd0efc-1278-4e33-89a2-db8257cfdc94": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "7f457471-2f84-46c7-a200-e525ea382a8c": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "c4730fe8-8d16-4b39-ae21-5453af788728": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "e1bc1f62-02ad-4fcf-a948-811589f0b7e1": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "e2918dc3-29fc-408c-b183-628fbeddd530": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    }
+  },
+  "finding_id": "354cc3f365a1",
+  "fixture_image": "sha256:a647c2dc50479ed9da2581d6f977a078492b9f29ba95aff3ff0bbc8a73b9e162",
+  "interrupted_deploy_terminal_state": "destroyed",
+  "interrupted_teardown_terminal_state": "destroyed",
+  "observed_state_digest": "sha256:62a7ac248486fda85f69749d9b3530057010fbde5f22e58bbf06598d55b531fb",
+  "recipe_digest": "sha256:7336804e7729df8699fc0f1078ac8bd87827ae889528c13a35367d000939e24e",
+  "reset_operations": [
+    "b61fb053-7961-422b-b613-92063d524237",
+    "71b77e0b-fd78-45e7-8c32-a21815ff2b62"
+  ],
+  "transaction_digest": "sha256:9809632af67b7f0b9f6d64fed31e37fa19e24d704cf7b4799bb829213f90da67"
+}

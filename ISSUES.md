@@ -1,6 +1,6 @@
 # Nidavellir — open risk register
 
-Updated 2026-09-25 after the NV-07 follow-ups (R3 closed, R5 narrowed).
+Updated 2026-09-26 after closing NV07-R4, NV07-R5 and VERIF-R1.
 
 Known, currently-open risks and verification gaps. Each entry states what is
 actually true today, why it matters, and the concrete evidence that would close
@@ -47,44 +47,6 @@ first (single-request actions, a target-local oracle, one point of truth).
 **Closes when:** a second challenge class with an independent validator runs
 paired trials in the same suite. Tracked by NV-08.
 
-### NV07-R5 · Evaluation recovery not yet exercised against a real worker loss · low
-
-`Database.recover_stale_evaluations` terminalizes worker-lost evaluations past
-the hard task limit and `queued_evaluations_before` requeues stranded ones; the
-reaper calls both. Since 2026-09-25 `tests/test_nv07_experiments.py` drives
-both over stale `running`/`queued` rows and through `reap_labs`: unfinished
-trials become `infrastructure_failure/worker_interrupted`, completed trials and
-their results are preserved, the lost worker's late finish/claim is rejected,
-recovery is idempotent, fresh/queued/complete evaluations are untouched, and a
-duplicate delivery of a running evaluation is skipped. No live run has yet
-killed the worker mid-trial.
-
-Also note: recovery keys on `Evaluation.updated_at`, which only changes on
-evaluation state transitions. That is safe only because `run_evaluation`'s hard
-time limit (61 min) is below the 70-minute recovery threshold — an evaluation
-must finish inside one task limit. Longer NV-08 suites need either a per-trial
-heartbeat or a split task before they exceed it.
-
-**Why it matters:** the unit tests prove the database contract; they do not
-prove the reaper and a real Celery worker loss compose as intended.
-
-**Closes when:** a live run kills the worker mid-trial and shows the reaper
-terminalizing the trial as `infrastructure_failure` without corrupting the
-comparison, recorded in `docs/verification/`.
-
-### NV07-R4 · NV-02–06 live regressions not rerun after commit `03fdfc9` · low
-
-The NV-07 change touches new code paths plus its own verifier, and the full
-pinned release gate (Ruff, Bandit, 903 SQLite, 907 PostgreSQL) passed after it.
-The earlier live acceptance gates were not rerun, unlike the NV-06 handoff,
-which reran NV-02–05 after its final product change.
-
-**Why it matters:** the shared worker, reaper and budget paths were extended.
-Regression there would surface live, not in the unit gate.
-
-**Closes when:** `make verify-nv02-live` … `verify-nv06-live` pass at this
-commit or later with zero labeled resources, recorded in `docs/verification/`.
-
 ---
 
 ## Open — carried from earlier gates
@@ -115,24 +77,46 @@ repository should never imply otherwise.
 **Closes when:** a live lifecycle gate passes on a second provider. Tracked by
 NV-13 for local hypervisors; cloud providers remain deferred.
 
-### VERIF-R1 · Only the pinned Python 3.11 Docker gate is authoritative · low
-
-The 2026-09-07 review recorded the full suite stalling in `TestClient` on host
-Python 3.14. Focused runs on the host venv work — `tests/test_nv07_experiments.py`
-and `tests/test_webui.py` passed on 3.14 on 2026-09-25 — but a full host run is
-still not trusted. `make release-check` runs the pinned 3.11 SQLite and
-PostgreSQL suites in Docker and is the only gate a claim may cite.
-
-**Why it matters:** a green focused run invites a "tests pass" claim the gate
-would not support.
-
-**Closes when:** the full suite completes on a current host Python, or the
-stall is diagnosed and recorded as a wontfix with the pinned gate as the stated
-contract.
-
 ---
 
 ## Closed
+
+### NV07-R5 · Evaluation recovery unexercised · closed 2026-09-26
+
+Unit coverage (`tests/test_nv07_experiments.py`) drives
+`recover_stale_evaluations`, `queued_evaluations_before` and `reap_labs` over
+stale rows: unfinished trials become `infrastructure_failure/worker_interrupted`,
+completed trials keep their results, a lost worker's late finish/claim is
+rejected, recovery is idempotent and duplicate delivery is skipped.
+`make verify-nv07-recovery-live` SIGKILLed the worker while a trial held an
+arena, brought up a replacement worker and beat, confirmed the reaper left the
+evaluation alone while its heartbeat was fresh, then — with 70 minutes of
+silence simulated by backdating the heartbeat — the real reaper terminalized
+the trial, the orphaned arena was reclaimed, a restarted worker did not reopen
+the evaluation, and zero labelled resources remained. The kill landed on the
+first trial, so the live run shows 0 matched / 3 infrastructure-failed pairs;
+preservation of already-completed trials is proven by the unit test, not live.
+
+The same change removed the "evaluation must fit one 61-minute task" limit:
+trial claim/finish refresh the evaluation heartbeat, `enqueue_evaluation`
+sizes the task limit from the suite, and a soft time limit terminalizes the
+remaining trials as `infrastructure_failure/time_limit`.
+Evidence: `nv07-recovery-live-2026-09-26.json`,
+`nv07-hardening-gates-2026-09-26.json`.
+
+### NV07-R4 · NV-02–06 live regressions not rerun · closed 2026-09-26
+
+`make verify-nv02-live` through `verify-nv07-live` all passed at the heartbeat
+change with zero labelled resources. Evidence: `nv02-regression-`, `nv03-live-`,
+`nv04-live-`, `nv05-live-`, `nv06-live-` and `nv07-live-2026-09-26.json`.
+
+### VERIF-R1 · Full host-Python suite stalled · closed 2026-09-26
+
+The full non-integration suite completed on host Python 3.14.7 (913 passed,
+4 skipped, 6 deselected, 13 s) twice with a 60 s faulthandler watchdog and no
+stall. The 2026-09-07 root cause was not identified; host packages are
+unpinned and differ from the lock. The pinned gate remains the contract (see
+standing constraints).
 
 ### NV07-R3 · Degenerate bootstrap interval unlabeled in JSON · closed 2026-09-25
 
@@ -158,5 +142,8 @@ These are deliberate limits, recorded so they are not rediscovered as bugs.
   every evaluation endpoint and no evaluation record is exposed through MCP.
   Participant acknowledgements stay neutral — an agent is never told whether a
   finding was confirmed.
+- **Only `make release-check` is authoritative.** Host-Python runs are useful
+  signal but use unpinned packages; claims cite the pinned 3.11 SQLite and
+  PostgreSQL gate.
 - **Public known-vulnerability fixtures are calibration, never held-out
   capability evidence**, because participants may have trained on them.

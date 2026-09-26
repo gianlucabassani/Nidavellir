@@ -1,0 +1,105 @@
+{
+  "comparison": {
+    "differences": {
+      "cost_usd": {
+        "bootstrap_95": null,
+        "distinct_values": 0,
+        "interval_status": "no_pairs",
+        "mean": null,
+        "pairs": 0
+      },
+      "false_claims": {
+        "bootstrap_95": null,
+        "distinct_values": 0,
+        "interval_status": "no_pairs",
+        "mean": null,
+        "pairs": 0
+      },
+      "latency_seconds": {
+        "bootstrap_95": null,
+        "distinct_values": 0,
+        "interval_status": "no_pairs",
+        "mean": null,
+        "pairs": 0
+      },
+      "requests": {
+        "bootstrap_95": null,
+        "distinct_values": 0,
+        "interval_status": "no_pairs",
+        "mean": null,
+        "pairs": 0
+      },
+      "verified": {
+        "bootstrap_95": null,
+        "distinct_values": 0,
+        "interval_status": "no_pairs",
+        "mean": null,
+        "pairs": 0
+      }
+    },
+    "infrastructure_failed_pairs": 3,
+    "matched_pairs": 0,
+    "pairs": [
+      {
+        "baseline": null,
+        "baseline_state": "infrastructure_failure",
+        "candidate": null,
+        "candidate_state": "infrastructure_failure",
+        "challenge_id": "888e0075-f7fe-4ed9-ae61-99025642bdf1",
+        "matched": false,
+        "seed": 1
+      },
+      {
+        "baseline": null,
+        "baseline_state": "infrastructure_failure",
+        "candidate": null,
+        "candidate_state": "infrastructure_failure",
+        "challenge_id": "888e0075-f7fe-4ed9-ae61-99025642bdf1",
+        "matched": false,
+        "seed": 2
+      },
+      {
+        "baseline": null,
+        "baseline_state": "infrastructure_failure",
+        "candidate": null,
+        "candidate_state": "infrastructure_failure",
+        "challenge_id": "888e0075-f7fe-4ed9-ae61-99025642bdf1",
+        "matched": false,
+        "seed": 3
+      }
+    ],
+    "verified_difference_mean": null,
+    "verified_difference_range": null
+  },
+  "completed_before_kill": 0,
+  "evaluation_id": "54f4aaea-b8a7-4c2b-a9e6-00c7ec7c62bf",
+  "final_resources": {
+    "c11c1282-8588-4d14-83f4-e3aec9e9d636": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "fa6d856e-399c-4ae3-9713-e1c6f9e2d231": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    }
+  },
+  "fixture_image": "sha256:cb5ba133686e30b5bab036d4431a5f6d04b27c1341a90f8f42be5b02f31f9b34",
+  "killed_trials": [
+    {
+      "arena_id": "c11c1282-8588-4d14-83f4-e3aec9e9d636",
+      "final_error": "worker_interrupted",
+      "final_state": "infrastructure_failure",
+      "id": "dc22c2f3-345b-4d96-b97b-8f49f2496802"
+    }
+  ],
+  "running_when_observed": [
+    "dc22c2f3-345b-4d96-b97b-8f49f2496802"
+  ],
+  "schema": "nidavellir/nv07-recovery-live-evidence/v1",
+  "simulated": "evaluation heartbeat backdated 71 minutes after SIGKILL; recovery, worker restart and cleanup ran unmodified",
+  "source_arena": "fa6d856e-399c-4ae3-9713-e1c6f9e2d231"
+}

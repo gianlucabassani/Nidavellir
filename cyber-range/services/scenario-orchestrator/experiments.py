@@ -12,11 +12,25 @@ import random
 import uuid
 from datetime import datetime, timedelta
 
+from celery.exceptions import SoftTimeLimitExceeded
+
 import bindings
 import eval_export
 import lifecycle_manifest
 from database import Database
 from states import LabStatus
+
+# Worst case for one trial: its budget deadline plus deploy, readiness, validation and
+# teardown. The task limit scales with the suite; stale recovery waits longer than one
+# trial can legitimately take, because progress refreshes the evaluation heartbeat.
+TRIAL_OVERHEAD_SECONDS = 600
+STALL_MINUTES = 70
+
+
+def time_limits(trial_count, deadline_seconds):
+    soft = trial_count * (deadline_seconds + TRIAL_OVERHEAD_SECONDS) + 60
+    return soft, soft + 60
+
 
 # Below this many matched pairs a bootstrap interval is reported but labelled
 # ``insufficient_pairs``; it is never ``supported``.
@@ -152,6 +166,11 @@ def execute(evaluation_id, claim):
             arena_id, digest, result = _run_trial(db, trial, run, challenge, build, suite, claim)
             db.finish_eval_trial(trial["id"], claim, state="completed",
                 arena_id=arena_id, starting_digest=digest, result=result)
+        except SoftTimeLimitExceeded:
+            db.finish_eval_trial(trial["id"], claim, state="infrastructure_failure",
+                arena_id=arena_id, starting_digest=digest, error="time_limit")
+            db.terminalize_unfinished_eval_trials(evaluation_id, error="time_limit")
+            break
         except Exception as exc:  # noqa: BLE001 - infrastructure and agent failures are separate
             kind = "infrastructure_failure"
             db.finish_eval_trial(trial["id"], claim, state=kind,

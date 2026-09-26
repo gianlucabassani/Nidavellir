@@ -72,7 +72,7 @@ def test_comparison_excludes_infrastructure_and_unmatched_starts():
 
 
 def test_agent_cannot_read_or_create_evaluation_records(monkeypatch):
-    monkeypatch.setattr(api.run_evaluation, "delay", lambda *_: None)
+    monkeypatch.setattr(api, "enqueue_evaluation", lambda *_: None)
     db = Database()
     key = auth.generate_api_key()
     name = f"nv07-agent-{uuid.uuid4().hex}"
@@ -219,7 +219,8 @@ def test_reaper_recovers_stale_and_requeues_stranded_evaluations(monkeypatch, ev
     import tasks  # noqa: PLC0415
 
     delivered = []
-    monkeypatch.setattr(tasks.run_evaluation, "delay", delivered.append)
+    monkeypatch.setattr(tasks.run_evaluation, "apply_async",
+                        lambda args, **limits: delivered.append((args[0], limits)))
     monkeypatch.setattr(tasks, "destroy_lab", type("D", (), {"delay": lambda *a, **k: None})())
     db = Database()
     now = datetime.now()
@@ -235,7 +236,10 @@ def test_reaper_recovers_stale_and_requeues_stranded_evaluations(monkeypatch, ev
     assert db.get_evaluation(stale)["state"] == "complete"
     assert all(t["state"] == "infrastructure_failure"
                for t in db.get_evaluation(stale)["trials"])
-    assert stranded in delivered and stale not in delivered
+    by_id = dict(delivered)
+    assert stranded in by_id and stale not in by_id
+    # Requeued work gets limits sized to its suite: 6 trials x (600 s + overhead).
+    assert by_id[stranded]["soft_time_limit"] == experiments.time_limits(6, 600)[0]
 
 
 # --- interval labelling (NV07-R3) -------------------------------------------
@@ -267,3 +271,48 @@ def test_interval_support_requires_variation_and_minimum_pairs():
     assert enough["interval_status"] == "supported"
     empty = experiments.compare({"runs": [], "trials": []})["differences"]["verified"]
     assert empty["interval_status"] == "no_pairs"
+
+
+# --- heartbeat and suite-sized limits ---------------------------------------
+
+def test_trial_progress_refreshes_the_evaluation_heartbeat(evaluations):
+    """A long suite that keeps finishing trials must never look worker-lost."""
+    db = Database()
+    now = datetime.now()
+    evaluation_id = evaluations()
+    assert db.set_evaluation_state(evaluation_id, "running", expected="queued")
+    _backdate(db, evaluation_id, now - timedelta(minutes=71))
+    trial = db.get_evaluation(evaluation_id)["trials"][0]
+    assert db.claim_eval_trial(trial["id"], "live")
+    assert evaluation_id not in db.recover_stale_evaluations(now - timedelta(minutes=70))
+    _backdate(db, evaluation_id, now - timedelta(minutes=71))
+    assert db.finish_eval_trial(trial["id"], "live", state="completed")
+    assert evaluation_id not in db.recover_stale_evaluations(now - timedelta(minutes=70))
+    assert db.get_evaluation(evaluation_id)["state"] == "running"
+
+
+def test_limits_cover_the_suite_and_stall_exceeds_one_trial():
+    soft, hard = experiments.time_limits(320, 1800)
+    assert soft >= 320 * 1800 and hard > soft
+    # The longest legitimate gap between heartbeats is one maximal trial.
+    assert experiments.STALL_MINUTES * 60 > 1800 + experiments.TRIAL_OVERHEAD_SECONDS
+
+
+def test_soft_time_limit_terminalizes_remaining_trials(monkeypatch, evaluations):
+    from celery.exceptions import SoftTimeLimitExceeded  # noqa: PLC0415
+
+    db = Database()
+    evaluation_id = evaluations()
+    calls = []
+
+    def expire(*_args, **_kwargs):
+        calls.append(1)
+        raise SoftTimeLimitExceeded()
+
+    monkeypatch.setattr(experiments, "_run_trial", expire)
+    assert experiments.execute(evaluation_id, "claim")["state"] == "complete"
+    assert len(calls) == 1
+    record = db.get_evaluation(evaluation_id)
+    assert record["state"] == "complete"
+    assert {t["state"] for t in record["trials"]} == {"infrastructure_failure"}
+    assert {t["error"] for t in record["trials"]} == {"time_limit"}

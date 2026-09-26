@@ -170,6 +170,14 @@ observed starting state matches the pinned source, applies the suite budget and
 deadline, plays the build's scripted MCP plan and destroys the arena. The
 trial's score and eval export remain readable after teardown.
 
+Each trial claim and finish refreshes the evaluation heartbeat. The reaper
+terminalizes an evaluation only after 70 minutes without trial progress
+(longer than one maximal trial), turning its unfinished trials into
+`infrastructure_failure/worker_interrupted`, and requeues evaluations left
+`queued` for over two minutes. The worker task limit is sized from the suite
+(trials × (deadline + 600 s)); hitting it closes the remaining trials as
+`infrastructure_failure/time_limit`. None of these is charged to the agent.
+
 `comparison` pairs trials by challenge and seed. A pair is `matched` only when
 both sides completed **and** started from the same observed-state digest. The
 per-metric `differences` (verified, false claims, requests, latency, cost)

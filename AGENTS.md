@@ -36,6 +36,8 @@ support.
   Full host Python 3.14 tests stalled in TestClient. No main Compose stack was running;
   no live arena or PostgreSQL suite was verified. NV-01 restores the Python 3.11 gate
   and fixes Bandit's nested `venv` exclusion; the old 808-test gate is historical.
+  On 2026-09-26 the full host 3.14 suite completed without a stall (cause unknown,
+  unpinned host packages); `make release-check` remains the only authoritative gate.
 
 ## Shared knowledge base
 

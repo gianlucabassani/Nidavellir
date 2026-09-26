@@ -11,6 +11,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -304,7 +305,7 @@ def main():
                           "verdict": fail_verdict},
         "reset_operation": operation["id"], "final_resources": resources,
     }
-    path = ROOT / "docs/verification/nv06-live-2026-09-24.json"
+    path = ROOT / "docs/verification" / f"nv06-live-{datetime.now():%Y-%m-%d}.json"
     path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
     print(json.dumps(evidence, indent=2, sort_keys=True))
 
