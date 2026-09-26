@@ -155,7 +155,7 @@ orchestrator access.
   reset-eligible, Docker-local source arena that already has a lifecycle
   observation. The record stores the scenario, source arena, recipe digest and
   validator identity/version. The required `label` is `calibration` or
-  `held-out`; public NV-06 authorization fixtures can only be calibration.
+  `held-out`; the public NV-06 and NV-08 synthetic fixtures can only be calibration.
   A missing, inactive, non-eligible or non-Docker-local source returns 409.
 - `POST /eval-suites` (201) — a suite of unique `challenge_ids` (1–8) and at
   least three unique `seeds`, with `action_cap` (1–10000, default 100) and
@@ -174,6 +174,14 @@ Each trial export carries `metadata.nv.challenge_id`,
 `metadata.nv.leakage_label`, `metadata.nv.validator_version` and a
 `leakage:<label>` tag. The comparison carries each pair's label and an
 `evidence_scope`; `calibration_or_unknown` is never held-out capability evidence.
+
+The NV-08 `single_use_grant_effect/v1` business-logic validator requires a
+participant POST transaction for `grant-A`, links its request ID to the target's
+private redemption ledger, and runs a fresh one-time redemption through the
+same target logic as a healthy control. Only a second credited redemption can
+confirm; a response body or reported CWE alone cannot. The operator-only
+finding event stores the action, observation and control digests under the
+existing `nidavellir/validation-verdict/v1` contract.
 
 Each trial claim and finish refreshes the evaluation heartbeat. The reaper
 terminalizes an evaluation only after 70 minutes without trial progress

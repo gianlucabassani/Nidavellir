@@ -45,6 +45,7 @@ OAST_CALLBACK = "oast_callback"
 MARKER = "marker"
 CRASH_SIGNAL = "crash_signal"
 AUTHORIZATION_EFFECT = "authorization_effect"
+SINGLE_USE_GRANT_EFFECT = "single_use_grant_effect"
 NONE = "none"
 
 # Monitor signal kinds that corroborate a finding on the same node (passive).
@@ -140,6 +141,8 @@ def validate_finding(
         return _unverifiable("crash correlation is scored from the signal stream", CRASH_SIGNAL)
     if method == AUTHORIZATION_EFFECT:
         return _unverifiable("authorization effect requires a linked action and observer", AUTHORIZATION_EFFECT)
+    if method == SINGLE_USE_GRANT_EFFECT:
+        return _unverifiable("grant effect requires a linked action and observer", SINGLE_USE_GRANT_EFFECT)
     return _unverifiable("no deterministic validator applies to this finding")
 
 
@@ -331,6 +334,44 @@ def validate_authorization_effect(action: dict | None, observation: dict | None,
         return ValidationResult(False, AUTHORIZATION_EFFECT, "target denied unauthorized read",
                                 verdict="refuted", reason_code="access_denied")
     return ValidationResult(None, AUTHORIZATION_EFFECT, "target effect was ambiguous",
+                            verdict="infrastructure_failure", reason_code="ambiguous_effect")
+
+
+def validate_single_use_grant_effect(action: dict | None, observation: dict | None,
+                                     control: dict | None, *, actor: str,
+                                     grant: str) -> ValidationResult:
+    """Judge duplicate redemption from target ledger, never response text."""
+    method = SINGLE_USE_GRANT_EFFECT
+    if action is None:
+        return ValidationResult(None, method, "no linked HTTP action",
+                                verdict="inconclusive", reason_code="missing_action")
+    if observation is None or control is None:
+        return ValidationResult(None, method, "effect or control probe failed",
+                                verdict="infrastructure_failure", reason_code="probe_failed")
+    if (control.get("actor") != actor or control.get("status") != 200
+            or control.get("prior_redemptions") != 0
+            or control.get("after_redemptions") != 1
+            or control.get("control_ok") is not True):
+        return ValidationResult(None, method, "healthy control failed",
+                                verdict="infrastructure_failure", reason_code="control_failed")
+    if (observation.get("request_id") != action.get("request_id")
+            or observation.get("actor") != actor or observation.get("grant") != grant):
+        return ValidationResult(False, method, "action does not match target effect",
+                                verdict="refuted", reason_code="action_mismatch")
+    before = observation.get("prior_redemptions")
+    after = observation.get("after_redemptions")
+    if (before == 1 and after == 2 and observation.get("status") == 200
+            and observation.get("duplicate_credited") is True):
+        return ValidationResult(True, method, "second redemption credited in target ledger",
+                                verdict="confirmed", reason_code="duplicate_credit")
+    if (before in (0, 1) and after == before and observation.get("status") == 409
+            and observation.get("duplicate_credited") is False):
+        return ValidationResult(False, method, "target denied duplicate redemption",
+                                verdict="refuted", reason_code="duplicate_denied")
+    if before == 0 and after == 1 and observation.get("status") == 200:
+        return ValidationResult(False, method, "only the first redemption was observed",
+                                verdict="refuted", reason_code="no_duplicate_effect")
+    return ValidationResult(None, method, "target effect was ambiguous",
                             verdict="infrastructure_failure", reason_code="ambiguous_effect")
 
 

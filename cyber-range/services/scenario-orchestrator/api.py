@@ -5340,6 +5340,75 @@ def _validate_authorization_finding(record: dict, req: "FindingRequest", vuln: d
     }
 
 
+def _grant_readback(record: dict, node: str, request_id: str) -> dict:
+    if not re.fullmatch(r"[A-Za-z0-9]{1,64}", request_id):
+        raise ValueError("invalid target request ID")
+    url = "http://127.0.0.1:8081/oracle/" + request_id
+    source = (
+        "import urllib.request; "
+        f"print(urllib.request.urlopen({url!r},timeout=3).read().decode())"
+    )
+    return _target_local_json(record, node, source)
+
+
+def _grant_control(record: dict, node: str) -> dict:
+    request_id = "nvctl" + uuid.uuid4().hex
+    url = "http://127.0.0.1:8081/control"
+    source = (
+        "import urllib.request; "
+        f"r=urllib.request.Request({url!r},headers={{'X-Request-ID':{request_id!r}}},"
+        "method='POST'); "
+        "print(urllib.request.urlopen(r,timeout=3).read().decode())"
+    )
+    return _target_local_json(record, node, source)
+
+
+def _validate_grant_finding(record: dict, req: "FindingRequest", vuln: dict,
+                            *, finding_id: str, actor: str, manual: bool) -> dict:
+    """Verify a recorded duplicate-redemption action against the private ledger."""
+    config_values = vuln.get("validation_config") or {}
+    expected_actor = config_values.get("actor", "A")
+    grant = config_values.get("grant", "grant-A")
+    action_digest = req.transaction_digests[0] if req.transaction_digests else None
+    action = None
+    observation = control = None
+    observation_digest = control_digest = None
+    if action_digest:
+        tx_manifest, envelope = http_transactions.get(record["id"], action_digest)
+        tx_req = envelope.get("request") or {}
+        request_id = (tx_req.get("headers") or {}).get("X-Request-ID")
+        valid_paths = {f"/grants/{grant}/redeem", f"/grants/{grant}/redeem-unsafe"}
+        if (tx_req.get("node") == req.node and tx_req.get("method") == "POST"
+                and tx_req.get("path") in valid_paths
+                and re.fullmatch(r"[A-Za-z0-9]{1,64}", request_id or "")
+                and (manual or tx_manifest.get("actor") == actor)):
+            action = {"request_id": request_id}
+    if action is not None:
+        try:
+            observation = _grant_readback(record, req.node, action["request_id"])
+            observation_digest = validation_evidence.record(
+                record["id"], {"schema": "nidavellir/validation-observation/v1",
+                               "kind": "single_use_grant_effect", "data": observation})
+            control = _grant_control(record, req.node)
+            control_digest = validation_evidence.record(
+                record["id"], {"schema": "nidavellir/validation-observation/v1",
+                               "kind": "healthy_control", "data": control})
+        except (RuntimeError, ValueError, OSError, json.JSONDecodeError) as exc:
+            logger.warning("[%s] grant validation probe failed: %s", record["id"],
+                           type(exc).__name__)
+    result = validators.validate_single_use_grant_effect(
+        action, observation, control, actor=expected_actor, grant=grant)
+    recipe = db.get_lifecycle_recipe(record["id"]) or {}
+    return {**result.to_dict(), "schema": "nidavellir/validation-verdict/v1",
+            "finding_id": finding_id, "arena_id": record["id"],
+            "recipe_digest": recipe.get("recipe_digest"),
+            "target_identity_digest": lifecycle_manifest.digest(recipe.get("nodes") or {}),
+            "validator_id": validators.SINGLE_USE_GRANT_EFFECT,
+            "validator_version": 1, "action_digest": action_digest,
+            "observation_digest": observation_digest, "control_digest": control_digest,
+            "timestamp": datetime.now(timezone.utc).isoformat()}
+
+
 @app.get("/scenarios/{scenario_id}/vulnerabilities")
 def reveal_vulnerabilities(
     scenario_id: str, principal: Principal = Depends(require_principal)
@@ -5460,6 +5529,13 @@ def _record_finding(instance_id, record, req: "FindingRequest", *, actor: str,
         {"cwe": req.cwe}, matched_vuln
     ) == validators.AUTHORIZATION_EFFECT:
         validation = _validate_authorization_finding(
+            record, req, matched_vuln, finding_id=finding_id,
+            actor=actor, manual=manual,
+        )
+    elif matched_vuln and validators.method_for(
+        {"cwe": req.cwe}, matched_vuln
+    ) == validators.SINGLE_USE_GRANT_EFFECT:
+        validation = _validate_grant_finding(
             record, req, matched_vuln, finding_id=finding_id,
             actor=actor, manual=manual,
         )
@@ -5787,8 +5863,9 @@ def create_eval_challenge(req: EvalChallengeCreate,
     if recipe.get("effective_provider") != "docker-local":
         raise HTTPException(status_code=409, detail="Docker-local required")
     seed_schema = ((recipe.get("seed") or {}).get("schema") or "")
-    if req.label == "held-out" and seed_schema.startswith("nidavellir/nv06-authz/"):
-        raise HTTPException(status_code=422, detail="public authorization fixture is calibration")
+    if req.label == "held-out" and seed_schema.startswith((
+            "nidavellir/nv06-authz/", "nidavellir/nv08-grants/")):
+        raise HTTPException(status_code=422, detail="public synthetic fixture is calibration")
     validator_ids = sorted({v.get("validator") for v in
         (recipe.get("scenario") or {}).get("vulnerabilities", []) if v.get("validator")})
     validator_version = ",".join(f"{item}/v1" for item in validator_ids)

@@ -1,0 +1,14 @@
+{
+  "schema": "nidavellir/nv08-gate-evidence/v1",
+  "step": "single_use_grant_business_logic_validator",
+  "source_head": "90ae77b",
+  "command": "make release-check",
+  "environment": "pinned Docker Python 3.11.14",
+  "result": "passed",
+  "sqlite": {"passed": 920, "skipped": 4, "integration_deselected": 6},
+  "postgresql": {"passed": 924, "integration_deselected": 6},
+  "ruff": "passed",
+  "bandit_medium_high": 0,
+  "migration_api_ui_mcp_smoke": "passed",
+  "live_fixture_gate": "pending NV-08 combined suite"
+}

@@ -3,6 +3,35 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-09-26 — NV-08 steps 1–2: versioned authorization and grant challenge
+
+**Outcome:** The NV-06 authorization fixture is a versioned calibration library
+entry with pinned accounts, seed, private truth, validator identity and reset
+strategy. Challenge creation requires an explicit leakage label; trial exports
+and comparisons carry it. A second, synthetic single-use-grant challenge now
+has an independent target-ledger validator with a healthy redemption control
+and the NV-06 four-way verdict. I chose business logic because the target's
+ledger gives a direct, resettable state effect distinct from an object read;
+the `dvsn` portfolio remains a later integration candidate, not non-synthetic
+proof. No model subscription evaluation has run.
+
+**Files:** `cyber-range/fixtures/nv06-authz/`, `cyber-range/fixtures/nv08-grants/`,
+`api.py`, `validators.py`, `experiments.py`, `database.py`, evaluation console,
+`docs/API.md`, `tests/test_nv07_experiments.py`,
+`tests/test_nv08_grant_validation.py`, and step gate JSON.
+
+**Verification:** `make release-check` passed after each step on pinned Python
+3.11.14. Step 1: 916 SQLite passed, four skipped, 920 PostgreSQL passed.
+Step 2: 920 SQLite passed, four skipped, 924 PostgreSQL passed. Each gate
+excluded six integration tests, with Ruff, source-only Bandit and release
+smoke passing. Evidence: `docs/verification/nv08-step1-gates-2026-09-26.json`
+and `nv08-step2-gates-2026-09-26.json`. A live two-class run remains pending.
+
+**Unresolved risks / next step:** NV07-R2 and NV06-R1 remain open until live
+two-class evidence exists; NV06-R1 additionally requires a non-synthetic target.
+NV07-R1 remains open; subscription-backed live evaluation requires explicit
+permission for each invocation. Next is the combined regression gate.
+
 ## 2026-09-26 — Close NV07-R4, NV07-R5 and VERIF-R1; evaluation heartbeat
 
 **Outcome:** Three open risks are closed and the one-hour evaluation ceiling
