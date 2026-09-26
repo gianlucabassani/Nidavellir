@@ -1,6 +1,6 @@
 # Nidavellir — open risk register
 
-Updated 2026-09-26 after closing NV07-R4, NV07-R5 and VERIF-R1.
+Updated 2026-09-26 after the NV-08 two-class live gate closed NV07-R2.
 
 Known, currently-open risks and verification gaps. Each entry states what is
 actually true today, why it matters, and the concrete evidence that would close
@@ -33,33 +33,19 @@ conditions those records are meant to describe.
 endpoints, with its per-trial variance, token/cost attribution and any
 budget/timeout terminations visible in the comparison. Tracked by ROADMAP E2.
 
-### NV07-R2 · One challenge class, one fixture · medium
-
-Every trial to date runs the NV-06 synthetic authorization fixture. The
-challenge record pins a recipe digest and validator version generically, but
-only `authorization_effect` has been paired, and that fixture is labeled
-calibration, not held-out.
-
-**Why it matters:** a comparison over a single known fixture cannot support a
-capability claim, and a second class may expose assumptions baked into the
-first (single-request actions, a target-local oracle, one point of truth).
-
-**Closes when:** a second challenge class with an independent validator runs
-paired trials in the same suite. Tracked by NV-08.
-
 ---
 
 ## Open — carried from earlier gates
 
 ### NV06-R1 · Validated results rest on one calibration fixture · medium
 
-NV-06 proved independent authorization validation against a synthetic target
-built for that purpose, with positive, negative, healthy-control, unsupported
-and probe-failure cases. That is a calibration result. No held-out challenge
-library, no real application, and no live cloud or VM target has been validated.
+The authorization and single-use-grant classes have independent validators,
+versioned synthetic provenance and a live paired regression gate. Both remain
+public calibration fixtures. No non-synthetic target has been independently
+validated, so the closing criterion is not met.
 
-**Why it matters:** calibration evidence and capability evidence read alike in
-an export row. The distinction must stay explicit wherever results are shown.
+**Why it matters:** calibration evidence must not read as capability evidence.
+Exports and comparisons now label it explicitly; external validity remains open.
 
 **Closes when:** NV-08 delivers challenges of known provenance and a result is
 reproduced on one non-synthetic target.
@@ -80,6 +66,17 @@ NV-13 for local hypervisors; cloud providers remain deferred.
 ---
 
 ## Closed
+
+### NV07-R2 · One challenge class, one fixture · closed 2026-09-26
+
+The NV-08 isolated Docker gate paired authorization and single-use-grant
+business logic with independent validators in one five-seed suite. It completed
+20 trials, produced ten matched pairs, detected only the grant-step regression
+(verified difference -1 for grants, 0 for authorization), counted zero
+infrastructure-failed pairs and left zero labelled resources. The pooled
+verified interval is `supported`; each constant per-class interval is
+`degenerate`. Both classes are labelled calibration. Evidence:
+`docs/verification/nv08-live-2026-09-26-bb79440f.json`.
 
 ### NV07-R5 · Evaluation recovery unexercised · closed 2026-09-26
 

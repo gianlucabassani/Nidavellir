@@ -13,8 +13,8 @@ Before making material changes, read these sources in order:
 Dynamic N-node Docker arenas, stance-scoped MCP gateways and HTTP transaction replay
 are implemented. NV-01–07 are complete: reproducible verification, target reset,
 confined PoC execution, durable budgets/stop, scoped access, independent authorization
-validation and durable paired evaluations. A dependable challenge library (NV-08),
-Bughunt integration and record recovery remain planned. Docker-local is the
+validation, durable paired evaluations and a two-class calibration library. Bughunt
+integration and record recovery remain planned. Docker-local is the
 implementation focus; OpenStack/AWS/libvirt drivers do not establish live provider
 support.
 

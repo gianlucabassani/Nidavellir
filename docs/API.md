@@ -195,7 +195,9 @@ terminalizes an evaluation only after 70 minutes without trial progress
 both sides completed **and** started from the same observed-state digest. The
 per-metric `differences` (verified, false claims, requests, latency, cost)
 report candidate-minus-baseline over matched pairs with a seeded bootstrap 95%
-interval, and `infrastructure_failed_pairs` counts pairs where either side
+interval. `by_challenge` repeats the metric summaries and infrastructure counts
+for each pinned class, so a class-specific regression is not hidden by a pooled
+mean. `infrastructure_failed_pairs` counts pairs where either side
 ended in `infrastructure_failure`. Broken infrastructure is therefore excluded
 from the comparison rather than scored as agent failure. Each metric also
 carries `distinct_values` and `interval_status`: `degenerate` when every matched

@@ -213,8 +213,9 @@ def compare(record):
                      "baseline_state": baseline and baseline["state"],
                      "candidate_state": candidate and candidate["state"]})
     valid = [row for row in rows if row["matched"]]
-    def delta(metric):
-        return [row["candidate"][metric] - row["baseline"][metric] for row in valid
+    def delta(metric, selected=None):
+        selected = valid if selected is None else selected
+        return [row["candidate"][metric] - row["baseline"][metric] for row in selected
                 if row["candidate"].get(metric) is not None
                 and row["baseline"].get(metric) is not None]
 
@@ -236,15 +237,28 @@ def compare(record):
                 "distinct_values": distinct, "interval_status": status}
 
     differences = delta("verified")
+    metrics = ("verified", "false_claims", "requests", "latency_seconds", "cost_usd")
+    by_challenge = {}
+    for challenge_id in sorted({row["challenge_id"] for row in rows}):
+        challenge_rows = [row for row in rows if row["challenge_id"] == challenge_id]
+        matched_rows = [row for row in challenge_rows if row["matched"]]
+        challenge = challenges.get(challenge_id) or {}
+        by_challenge[challenge_id] = {
+            "name": challenge.get("name"), "version": challenge.get("version"),
+            "leakage_label": challenge_rows[0]["leakage_label"],
+            "matched_pairs": len(matched_rows),
+            "infrastructure_failed_pairs": sum(1 for row in challenge_rows if
+                "infrastructure_failure" in (row["baseline_state"], row["candidate_state"])),
+            "differences": {metric: summary(delta(metric, matched_rows)) for metric in metrics},
+        }
     labels = sorted({row["leakage_label"] for row in rows})
     evidence_scope = "held-out" if labels == ["held-out"] else "calibration_or_unknown"
     return {"pairs": rows, "leakage_labels": labels,
-            "evidence_scope": evidence_scope, "matched_pairs": len(valid),
+            "evidence_scope": evidence_scope, "by_challenge": by_challenge,
+            "matched_pairs": len(valid),
             "infrastructure_failed_pairs": sum(1 for row in rows if
                 "infrastructure_failure" in (row["baseline_state"], row["candidate_state"])),
-            "differences": {metric: summary(delta(metric)) for metric in
-                            ("verified", "false_claims", "requests", "latency_seconds",
-                             "cost_usd")},
+            "differences": {metric: summary(delta(metric)) for metric in metrics},
             "verified_difference_mean": sum(differences) / len(differences)
             if differences else None, "verified_difference_range":
             [min(differences), max(differences)] if differences else None}

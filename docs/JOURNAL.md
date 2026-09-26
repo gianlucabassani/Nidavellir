@@ -3,6 +3,39 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-09-26 — Complete NV-08 two-class calibration regression gate
+
+**Outcome:** A suite now compares authorization and single-use-grant business
+logic by challenge as well as in aggregate. A good scripted build and a build
+with only the grant redemption step regressed ran on five seeds each. All 20
+trials completed, forming ten observed-state-matched pairs. The regression
+affected grants only: candidate-minus-baseline verified difference -1 on
+grants and 0 on authorization. The pooled mean was -0.5 with bootstrap 95%
+[-0.8, -0.2] and `interval_status=supported`; the constant per-class verified
+intervals are `degenerate`. Both classes remain calibration, not capability
+evidence. All archived scores, exports, and business observation/control
+digests remained readable after teardown; zero labelled resources remained.
+NV-08 acceptance and NV07-R2 are closed. NV06-R1 remains open for a
+non-synthetic target.
+
+**Files:** `experiments.py`, evaluation detail template,
+`scripts/verify-nv08-live.py`, `Makefile`, `tests/test_nv07_experiments.py`,
+`docs/API.md`, `TODO.md`, `ISSUES.md`, `ROADMAP.md`, `README.md`, `AGENTS.md`
+and live evidence.
+
+**Verification:** `make release-check` passed on pinned Python 3.11.14:
+Ruff clean, Bandit zero medium/high, 921 SQLite passed (four skipped), 925
+PostgreSQL passed, six integration deselections each, smoke passed.
+`make verify-nv08-live` passed with 20 completed trials, ten matched pairs,
+zero infrastructure failures, 20 retained business observation/control digests
+and zero labelled resources across 22 arenas. Evidence:
+`docs/verification/nv08-live-2026-09-26-bb79440f.json`.
+
+**Unresolved risks / next step:** NV07-R1 still lacks a model-driven durable
+suite; every live subscription invocation needs separate operator permission.
+NV06-R1 needs non-synthetic validation and INFRA-R1 remains Docker-local only.
+Next is the opt-in model driver, followed by NV-09.
+
 ## 2026-09-26 — NV-08 steps 1–2: versioned authorization and grant challenge
 
 **Outcome:** The NV-06 authorization fixture is a versioned calibration library

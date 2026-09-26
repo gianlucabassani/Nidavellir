@@ -1,6 +1,6 @@
 # Nidavellir — ordered delivery checklist
 
-Updated 2026-09-25 after completing the NV-07 durable paired-evaluation gate.
+Updated 2026-09-26 after completing the NV-08 two-class calibration gate.
 This is the canonical work queue. [ROADMAP.md](ROADMAP.md) retains product scope,
 design detail and legacy milestone mapping. Unchecked means unfinished.
 Verification history is in [docs/JOURNAL.md](docs/JOURNAL.md).
@@ -68,7 +68,7 @@ for both human and agent callers; API/GUI/MCP share the same service boundary.
   claims, requests, latency, available cost, uncertainty and infrastructure failures.
   **Depends:** NV-02, NV-04, NV-06. **Accept:** compare builds A/B on matched conditions from
   the GUI/API and explain a change without conflating broken infrastructure with agent failure.
-- [ ] **NV-08 — Small dependable challenge library.** Begin with one resettable authorization
+- [x] **NV-08 — Small dependable challenge library.** Begin with one resettable authorization
   fixture, then cover sessions/business logic, browser behavior and service faults as used.
   Version synthetic accounts/seed data, private truth, validators and leakage labels.
   **Depends:** NV-02, NV-06; grow alongside NV-07. **Accept:** repeated trials catch a known

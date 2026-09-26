@@ -20,13 +20,13 @@
 > that discovery work produces the verified, held-out material that makes
 > evaluation credible.
 
-## Current delivery order — updated 2026-09-25
+## Current delivery order — updated 2026-09-26
 
 [TODO.md](TODO.md) is the canonical ordered checklist with stable NV task IDs,
 dependencies and acceptance criteria. This roadmap retains product/design detail;
 S/C/R/D/E/P labels below are subject areas, not a competing execution order.
 The operator requested this reorganization after reviewing both Nidavellir and Bughunt.
-NV-01–07 have completed their accepted gates; NV-08 is next. Open risks and
+NV-01–08 have completed their accepted gates; NV-09 is next. Open risks and
 verification gaps are tracked in [ISSUES.md](ISSUES.md).
 
 1. **P0 / NV-01–05:** restore a repeatable Python 3.11 release gate; prove pinned target
@@ -54,32 +54,20 @@ count. The authoritative product boundary is
 [`docs/VISION.md`](docs/VISION.md). Architecture
 decisions live in [`docs/adr/`](docs/adr/).
 
-### Next to build — NV-08, a small dependable challenge library
+### Next to build — NV-09, Bughunt integration and usefulness proof
 
-NV-07 made paired comparison durable, but every trial so far runs the single
-NV-06 synthetic authorization fixture, so the workbench can currently measure a
-difference it cannot generalize (ISSUES.md NV07-R2, NV06-R1). NV-08 supplies
-the material worth measuring on:
+NV-08 now has versioned authorization and single-use-grant calibration
+challenges with independent effect/control validators. A five-seed paired suite
+detected a deliberately broken grant step with zero infrastructure-failed
+pairs; per-challenge and pooled intervals are explicitly labelled. These
+synthetic results validate the workbench, not held-out capability.
 
-1. **Promote the authorization fixture into a versioned library entry** —
-   versioned synthetic accounts and seed data, private truth, validator
-   identity and an explicit `calibration` vs `held-out` leakage label carried
-   into every export row.
-2. **Add a second challenge class with an independent validator**, chosen from
-   sessions/business logic, browser behavior or service faults as real research
-   needs them — not a broad intake effort. A second class is what proves the
-   challenge record and the paired comparison are not shaped around one fixture.
-3. **Prove regression detection:** repeated paired trials must catch a known,
-   deliberately seeded agent regression on matched conditions.
-
-Each fixture stays resettable and observed-state equivalent, so NV-07's matched
-pair rule keeps working. Broad challenge intake is explicitly not a prerequisite
-for the first useful run. Acceptance is in [TODO.md](TODO.md) under NV-08.
-
-Two NV-07 follow-ups are small enough to land alongside it: distinguish a
-degenerate bootstrap interval from a supported one in the export, not only in
-the console caveat (NV07-R3), and rerun the NV-02–06 live regressions at the
-current commit (NV07-R4).
+NV-09 joins a selected Bughunt workflow to Nidavellir's pinned target,
+agent build, budgets, controls, observation digests and reset/repeat record.
+The joint manifest must use synthetic identities and show whether the workflow
+is useful to an operator, as specified in [TODO.md](TODO.md). NV07-R1 still
+needs a permitted model-driven suite; NV06-R1 still needs a non-synthetic
+target. Neither is implied by NV-08's scripted calibration gate.
 
 ---
 

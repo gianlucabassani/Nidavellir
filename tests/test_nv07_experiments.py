@@ -330,6 +330,31 @@ def test_interval_support_requires_variation_and_minimum_pairs():
     assert empty["interval_status"] == "no_pairs"
 
 
+def test_two_class_regression_is_attributed_and_pooled_interval_supported():
+    runs = []
+    trials = []
+    for challenge_id, good, bad in (("authz", 1, 1), ("grants", 1, 0)):
+        for side, value in (("baseline", good), ("candidate", bad)):
+            run_id = f"{challenge_id}-{side}"
+            runs.append({"id": run_id, "side": side, "challenge_id": challenge_id})
+            for seed in range(1, 6):
+                trials.append({"run_id": run_id, "seed": seed, "state": "completed",
+                    "starting_digest": f"start-{challenge_id}",
+                    "result": {"export": {"metadata": {"pass@1": value}},
+                               "false_claims": 0, "requests": 3}})
+    record = {"runs": runs, "trials": trials,
+              "challenges": [{"id": "authz", "label": "calibration"},
+                             {"id": "grants", "label": "calibration"}]}
+    comparison = experiments.compare(record)
+    assert comparison["matched_pairs"] == 10
+    assert comparison["infrastructure_failed_pairs"] == 0
+    assert comparison["differences"]["verified"]["interval_status"] == "supported"
+    assert comparison["by_challenge"]["authz"]["differences"]["verified"]["mean"] == 0
+    assert comparison["by_challenge"]["grants"]["differences"]["verified"]["mean"] == -1
+    assert comparison["by_challenge"]["grants"]["differences"]["verified"][
+        "interval_status"] == "degenerate"
+
+
 # --- heartbeat and suite-sized limits ---------------------------------------
 
 def test_trial_progress_refreshes_the_evaluation_heartbeat(evaluations):

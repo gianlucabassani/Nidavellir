@@ -1,0 +1,14 @@
+{
+  "schema": "nidavellir/nv08-gate-evidence/v1",
+  "step": "two_class_scripted_regression",
+  "source_head": "ab6747d",
+  "command": "make release-check",
+  "environment": "pinned Docker Python 3.11.14",
+  "result": "passed",
+  "sqlite": {"passed": 921, "skipped": 4, "integration_deselected": 6},
+  "postgresql": {"passed": 925, "integration_deselected": 6},
+  "ruff": "passed",
+  "bandit_medium_high": 0,
+  "migration_api_ui_mcp_smoke": "passed",
+  "live_evidence": "nv08-live-2026-09-26-bb79440f.json"
+}
