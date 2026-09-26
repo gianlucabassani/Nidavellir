@@ -1198,8 +1198,9 @@ def evaluation_build_create():
 def evaluation_challenge_create():
     result, status = _api_post("/eval-challenges", {
         "name": request.form.get("name", ""), "version": request.form.get("version", ""),
-        "source_arena_id": request.form.get("source_arena_id", "")})
-    flash("Calibration challenge pinned" if status == 201 else result.get("error", "Registration failed"),
+        "source_arena_id": request.form.get("source_arena_id", ""),
+        "label": request.form.get("label", "calibration")})
+    flash("Challenge pinned" if status == 201 else result.get("error", "Registration failed"),
           "success" if status == 201 else "danger")
     return redirect(url_for("evaluations"))
 

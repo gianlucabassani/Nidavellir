@@ -263,7 +263,18 @@ class Database:
             data = self._eval_dict(evaluation)
             data["runs"] = [self._eval_dict(r) for r in runs]
             data["trials"] = [self._eval_dict(t) for t in trials]
+            challenge_ids = {run.challenge_id for run in runs}
+            data["challenges"] = [self._eval_dict(row) for row in session.scalars(
+                select(EvalChallenge).where(EvalChallenge.id.in_(challenge_ids))).all()]
             return data
+
+    def get_eval_challenge_for_arena(self, arena_id):
+        with self._session() as session:
+            trial = session.scalar(select(EvalTrial).where(EvalTrial.arena_id == arena_id))
+            if trial is None:
+                return None
+            run = session.get(EvalRun, trial.run_id)
+            return self._eval_dict(session.get(EvalChallenge, run.challenge_id)) if run else None
 
     @staticmethod
     def _eval_heartbeat(session, trial_id, now):

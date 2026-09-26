@@ -85,6 +85,63 @@ def test_agent_cannot_read_or_create_evaluation_records(monkeypatch):
         "plan": [{"tool": "get_topology", "args": {}}]}).status_code == 403
 
 
+def test_challenge_label_is_explicit_and_public_fixture_cannot_be_held_out(monkeypatch):
+    db = Database()
+    key = auth.generate_api_key()
+    db.create_api_key(auth.hash_api_key(key), name=f"nv08-operator-{uuid.uuid4().hex}",
+                      role="operator")
+    client = TestClient(api.app)
+    client.headers["X-API-Key"] = key
+    monkeypatch.setattr(api.db, "get_deployment", lambda _: {
+        "status": "active", "effective_provider": "docker-local"})
+    monkeypatch.setattr(api.db, "get_lifecycle_recipe", lambda _: {
+        "scenario_name": "authz", "recipe_digest": "sha256:recipe",
+        "effective_provider": "docker-local", "runtime_reset": {"status": "eligible"},
+        "seed": {"schema": "nidavellir/nv06-authz/v1"},
+        "scenario": {"vulnerabilities": [{"validator": "authorization_effect"}]}})
+    monkeypatch.setattr(api.db, "list_events", lambda *_, **__: [{"payload": {}}])
+    payload = {"name": "authz", "version": "v1", "source_arena_id": "source"}
+    assert client.post("/eval-challenges", json=payload).status_code == 422
+    assert client.post("/eval-challenges", json={**payload, "label": "held-out"}).status_code == 422
+    response = client.post("/eval-challenges", json={**payload, "label": "calibration"})
+    assert response.status_code == 201
+    assert response.json()["validator_version"] == "authorization_effect/v1"
+    assert response.json()["label"] == "calibration"
+
+
+def test_comparison_keeps_calibration_scope_visible():
+    record = _paired([1, 0, 1, 1, 0])
+    record["challenges"] = [{"id": "c", "label": "calibration"}]
+    result = experiments.compare(record)
+    assert result["evidence_scope"] == "calibration_or_unknown"
+    assert result["leakage_labels"] == ["calibration"]
+    assert all(pair["leakage_label"] == "calibration" for pair in result["pairs"])
+
+
+def test_trial_export_carries_challenge_label_and_validator(monkeypatch):
+    import eval_export  # noqa: PLC0415
+
+    class TrialDB:
+        def get_deployment(self, _arena_id):
+            return {"scenario": "authz"}
+
+        def list_events(self, *_args, **_kwargs):
+            return []
+
+    monkeypatch.setattr(api, "_score_report", lambda *_: {})
+    monkeypatch.setattr(api, "_scenario_meta", lambda *_: None)
+    monkeypatch.setattr(eval_export, "build_eval_record", lambda **_: {
+        "metadata": {}, "tags": []})
+    result = experiments._trial_result(TrialDB(), "arena", [], {
+        "id": "challenge", "label": "calibration",
+        "validator_version": "authorization_effect/v1"})
+    row = result["export"]
+    assert row["metadata"]["nv.challenge_id"] == "challenge"
+    assert row["metadata"]["nv.leakage_label"] == "calibration"
+    assert row["metadata"]["nv.validator_version"] == "authorization_effect/v1"
+    assert "leakage:calibration" in row["tags"]
+
+
 # --- scheduled recovery (NV07-R5) -------------------------------------------
 
 def _evaluation(db):

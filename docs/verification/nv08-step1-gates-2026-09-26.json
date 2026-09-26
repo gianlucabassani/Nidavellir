@@ -1,0 +1,14 @@
+{
+  "schema": "nidavellir/nv08-gate-evidence/v1",
+  "step": "versioned_authorization_library",
+  "source_head": "6cd317b",
+  "command": "make release-check",
+  "environment": "pinned Docker Python 3.11.14",
+  "result": "passed",
+  "sqlite": {"passed": 916, "skipped": 4, "integration_deselected": 6},
+  "postgresql": {"passed": 920, "integration_deselected": 6},
+  "ruff": "passed",
+  "bandit_medium_high": 0,
+  "migration_api_ui_mcp_smoke": "passed",
+  "notes": "The host Python 3.14 TestClient run stalled and was stopped; it is not a verification gate."
+}

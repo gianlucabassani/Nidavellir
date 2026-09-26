@@ -23,6 +23,7 @@ import urllib.parse
 import yaml
 from datetime import datetime, timedelta, timezone
 from pathlib import PurePosixPath
+from typing import Literal
 from sqlalchemy.exc import IntegrityError
 
 import requests
@@ -5714,13 +5715,20 @@ def arena_eval_export(
     if not record:
         raise HTTPException(status_code=404, detail="Arena not found")
     report = _score_report(instance_id, record, mode)
-    return eval_export.build_eval_record(
+    row = eval_export.build_eval_record(
         arena_id=instance_id,
         record=record,
         scenario_meta=_scenario_meta(record.get("scenario")),
         score_report=report,
         events=db.list_events(lab_id=instance_id, limit=None),
     )
+    challenge = db.get_eval_challenge_for_arena(instance_id)
+    if challenge:
+        row["metadata"]["nv.challenge_id"] = challenge["id"]
+        row["metadata"]["nv.leakage_label"] = challenge["label"]
+        row["metadata"]["nv.validator_version"] = challenge["validator_version"]
+        row["tags"] = sorted(set(row["tags"] + [f"leakage:{challenge['label']}"]))
+    return row
 
 
 class AgentBuildCreate(BaseModel):
@@ -5762,6 +5770,7 @@ class EvalChallengeCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     version: str = Field(min_length=1, max_length=100)
     source_arena_id: str
+    label: Literal["calibration", "held-out"]
 
 
 @app.post("/eval-challenges", status_code=201)
@@ -5777,10 +5786,18 @@ def create_eval_challenge(req: EvalChallengeCreate,
         raise HTTPException(status_code=409, detail="source is not reset-eligible")
     if recipe.get("effective_provider") != "docker-local":
         raise HTTPException(status_code=409, detail="Docker-local required")
+    seed_schema = ((recipe.get("seed") or {}).get("schema") or "")
+    if req.label == "held-out" and seed_schema.startswith("nidavellir/nv06-authz/"):
+        raise HTTPException(status_code=422, detail="public authorization fixture is calibration")
+    validator_ids = sorted({v.get("validator") for v in
+        (recipe.get("scenario") or {}).get("vulnerabilities", []) if v.get("validator")})
+    validator_version = ",".join(f"{item}/v1" for item in validator_ids)
+    if not validator_version:
+        validator_version = "nidavellir/validation-verdict/v1"
     return db.create_eval_challenge(name=req.name, version=req.version,
         scenario=recipe["scenario_name"], source_arena_id=req.source_arena_id,
         recipe_digest=recipe["recipe_digest"],
-        validator_version="nidavellir/validation-verdict/v1", label="calibration")
+        validator_version=validator_version, label=req.label)
 
 
 @app.get("/eval-challenges")

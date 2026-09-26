@@ -14,12 +14,13 @@
       <button class="btn" type="submit">Register build</button>
     </form>
   </div>
-  <div class="card card-pad"><h2>Pin a calibration challenge</h2>
+  <div class="card card-pad"><h2>Pin a challenge</h2>
     <form action="{{ url_for('evaluation_challenge_create') }}" method="post" class="stack">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label>Name <input name="name" required maxlength="100"></label>
       <label>Version <input name="version" required maxlength="100"></label>
       <label>Active reset-eligible source arena ID <input name="source_arena_id" required></label>
+      <label>Leakage label <select name="label" required><option value="calibration">Calibration</option><option value="held-out">Held-out</option></select></label>
       <button class="btn" type="submit">Pin challenge</button>
     </form>
   </div>

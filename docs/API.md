@@ -154,8 +154,9 @@ orchestrator access.
 - `POST /eval-challenges` (201) — pin a challenge to an **active**,
   reset-eligible, Docker-local source arena that already has a lifecycle
   observation. The record stores the scenario, source arena, recipe digest and
-  validator version. A missing, inactive, non-eligible or non-Docker-local
-  source returns 409.
+  validator identity/version. The required `label` is `calibration` or
+  `held-out`; public NV-06 authorization fixtures can only be calibration.
+  A missing, inactive, non-eligible or non-Docker-local source returns 409.
 - `POST /eval-suites` (201) — a suite of unique `challenge_ids` (1–8) and at
   least three unique `seeds`, with `action_cap` (1–10000, default 100) and
   `deadline_seconds` (60–1800, default 600). Unknown challenges return 422.
@@ -169,6 +170,10 @@ Each trial deploys its own arena from the pinned recipe, re-checks that the
 observed starting state matches the pinned source, applies the suite budget and
 deadline, plays the build's scripted MCP plan and destroys the arena. The
 trial's score and eval export remain readable after teardown.
+Each trial export carries `metadata.nv.challenge_id`,
+`metadata.nv.leakage_label`, `metadata.nv.validator_version` and a
+`leakage:<label>` tag. The comparison carries each pair's label and an
+`evidence_scope`; `calibration_or_unknown` is never held-out capability evidence.
 
 Each trial claim and finish refreshes the evaluation heartbeat. The reaper
 terminalizes an evaluation only after 70 minutes without trial progress

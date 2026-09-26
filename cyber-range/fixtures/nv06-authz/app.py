@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import json
 import threading
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
-TOKENS = {"token-a-public": "A", "token-b-operator": "B"}
-OBJECTS = {"A": "private-A", "B": "private-B"}
+LIBRARY = json.loads(Path(__file__).with_name("library-v1.json").read_text())
+TOKENS = {token: account for account, token in LIBRARY["seed"]["accounts"].items()}
+OBJECTS = LIBRARY["seed"]["objects"]
 EFFECTS: dict[str, dict] = {}
 LOCK = threading.Lock()
 

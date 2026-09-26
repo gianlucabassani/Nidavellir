@@ -14,6 +14,7 @@ fixture = importlib.util.module_from_spec(_fixture_spec)
 _fixture_spec.loader.exec_module(fixture)
 
 ROOT = Path(__file__).resolve().parent.parent
+AUTHZ_LIBRARY = json.loads((ROOT / "cyber-range/fixtures/nv06-authz/library-v1.json").read_text())
 fixture.COMPOSE = ("docker", "compose", "-f", "docker-compose.nv06.yml",
                    "-f", "docker-compose.nv07.yml")
 evaluation_id = None
@@ -48,10 +49,10 @@ def prepare():
         "vulnerabilities": [{"id": "authz-object", "title": "Cross-account object read",
              "cwe": "CWE-639", "node": "target", "points": 1,
              "validator": "authorization_effect", "validation_config": {
-                 "actor": "A", "owner": "B", "control_token": "token-b-operator"}}],
-        "lifecycle": {"seed": {"schema": "nidavellir/nv06-authz/v1",
-                                "accounts": ["A", "B"], "objects_per_account": 1,
-                                "effect_log": "empty"},
+                 "actor": AUTHZ_LIBRARY["private_truth"]["actor"],
+                 "owner": AUTHZ_LIBRARY["private_truth"]["owner"],
+                 "control_token": AUTHZ_LIBRARY["seed"]["accounts"]["B"]}}],
+        "lifecycle": {"seed": AUTHZ_LIBRARY["seed"],
             "readiness": {"type": "http", "node": "target", "port": 8080,
                           "path": "/health", "expected_status": 200,
                           "expected_state": {"seed": "nv06-v1", "ready": True},
@@ -65,7 +66,7 @@ def prepare():
     fixture.wait(f"/status/{source}", lambda data: data.get("status") == "active")
     challenge = fixture.api("POST", "/eval-challenges", {
         "name": "Authorization calibration", "version": "v1",
-        "source_arena_id": source}, expected=(201,))
+        "source_arena_id": source, "label": "calibration"}, expected=(201,))
 
     def plan(path):
         return [

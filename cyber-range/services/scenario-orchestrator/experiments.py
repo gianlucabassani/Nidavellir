@@ -85,7 +85,7 @@ async def _play_mcp(arena_id, build):
     return transcript
 
 
-def _trial_result(db, arena_id, transcript):
+def _trial_result(db, arena_id, transcript, challenge):
     import api  # noqa: PLC0415 - reuse the established operator scorer/export projection
 
     arena = db.get_deployment(arena_id)
@@ -93,6 +93,10 @@ def _trial_result(db, arena_id, transcript):
     row = eval_export.build_eval_record(arena_id=arena_id, record=arena,
         scenario_meta=api._scenario_meta(arena.get("scenario")),
         score_report=report, events=db.list_events(arena_id, limit=None))
+    row["metadata"]["nv.challenge_id"] = challenge["id"]
+    row["metadata"]["nv.leakage_label"] = challenge["label"]
+    row["metadata"]["nv.validator_version"] = challenge["validator_version"]
+    row["tags"] = sorted(set(row["tags"] + [f"leakage:{challenge['label']}"]))
     findings = [e.get("payload") or {} for e in db.list_events(
         arena_id, limit=None, types=("finding",))]
     false_claims = sum(1 for f in findings if (f.get("validation") or {}).get(
@@ -140,7 +144,7 @@ def _run_trial(db, trial, run, challenge, build, suite, claim):
              "granted_by": "evaluation-worker"}, actor="evaluation-worker")
         transcript = asyncio.run(_play_mcp(arena_id, build))
         return arena_id, after["observed_state_digest"], _trial_result(
-            db, arena_id, transcript)
+            db, arena_id, transcript, challenge)
     finally:
         if (db.get_deployment(arena_id) or {}).get("status") == LabStatus.ACTIVE:
             db.transition_deployment(arena_id, (LabStatus.ACTIVE,), LabStatus.DESTROYING,
@@ -182,6 +186,7 @@ def execute(evaluation_id, claim):
 
 def compare(record):
     runs = {run["id"]: run for run in record["runs"]}
+    challenges = {challenge["id"]: challenge for challenge in record.get("challenges", [])}
     pairs = {}
     for trial in record["trials"]:
         run = runs[trial["run_id"]]
@@ -201,7 +206,9 @@ def compare(record):
             return {"verified": meta.get("pass@1"), "false_claims": result["false_claims"],
                     "requests": result["requests"], "latency_seconds": meta.get(
                         "wall_clock_seconds"), "cost_usd": meta.get("cost_usd")}
-        rows.append({"challenge_id": challenge_id, "seed": seed, "matched": matched,
+        label = (challenges.get(challenge_id) or {}).get("label", "unknown")
+        rows.append({"challenge_id": challenge_id, "leakage_label": label,
+                     "seed": seed, "matched": matched,
                      "baseline": metrics(baseline), "candidate": metrics(candidate),
                      "baseline_state": baseline and baseline["state"],
                      "candidate_state": candidate and candidate["state"]})
@@ -229,7 +236,10 @@ def compare(record):
                 "distinct_values": distinct, "interval_status": status}
 
     differences = delta("verified")
-    return {"pairs": rows, "matched_pairs": len(valid),
+    labels = sorted({row["leakage_label"] for row in rows})
+    evidence_scope = "held-out" if labels == ["held-out"] else "calibration_or_unknown"
+    return {"pairs": rows, "leakage_labels": labels,
+            "evidence_scope": evidence_scope, "matched_pairs": len(valid),
             "infrastructure_failed_pairs": sum(1 for row in rows if
                 "infrastructure_failure" in (row["baseline_state"], row["candidate_state"])),
             "differences": {metric: summary(delta(metric)) for metric in
