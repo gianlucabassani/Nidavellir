@@ -98,6 +98,23 @@ def test_schema_mismatch_refuses_restore_before_state_copy(tmp_path, monkeypatch
         assert not conn.execute(select(Deployment)).first()
 
 
+def test_restore_with_sqlite_database_inside_data_volume(tmp_path, monkeypatch):
+    root, source_db, key = _source(tmp_path, monkeypatch)
+    bundle = tmp_path / "result.nvr"
+    passphrase = "a-long-fixture-passphrase"
+    recovery.backup(root, bundle, passphrase, url=str(source_db.url))
+    target = tmp_path / "clean"
+    (target / "data").mkdir(parents=True)
+    target_db = _database(target / "data" / "deployments.db")
+    recovery.restore(bundle, target, passphrase, url=str(target_db.url))
+    with target_db.connect() as conn:
+        encrypted = conn.execute(select(Deployment.outputs).where(
+            Deployment.id == "old-result")).scalar_one()
+        assert SecretCipher(key).decrypt(encrypted) == '{"proof":"historical"}'
+    assert (target / "data" / "deployments.db").is_file()
+    assert (target / "traces" / "old-result.jsonl").is_file()
+
+
 def test_database_install_error_rolls_back_copied_files(tmp_path, monkeypatch):
     root, source_db, _ = _source(tmp_path, monkeypatch)
     bundle = tmp_path / "original.nvr"

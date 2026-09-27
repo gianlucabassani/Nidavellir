@@ -168,7 +168,8 @@ all application writers stopped, then run `python recovery.py restore
 /secure/backup.nvr --root /app` with the new installation's database URL and
 empty state volumes. Restore validates authentication, schema, digests, content
 addresses, event references and evaluation links before installation. It refuses
-a populated database or state volume. The protected encryption key is recovered
+a populated database or state volume; a newly initialized SQLite database file
+inside `data/` is allowed. The protected encryption key is recovered
 to `/app/keys/recovery.env` (mode 0600); load its `SECRETS_ENCRYPTION_KEY` into
 the API and worker environment before starting them. Keep the bundle passphrase
 separate from the bundle. Restore does not load external OCI images: a pinned

@@ -1,0 +1,476 @@
+{
+  "bundle_bytes": 106766,
+  "bundle_sha256": "ac1119d4c2ce7d2e804785f3e1cbf9ba578d419de46033cbcef2ede41f161f21",
+  "created_at": "2026-09-27T15:33:53.758390+00:00",
+  "final_resources": {
+    "0e1fe62f-26ec-4d4c-9ab6-bc389c9863f2": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "1082ee6e-2345-4136-b16d-3ef394320ff1": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "1d16a661-3ade-41fc-a021-e3b87004d981": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "42447889-0718-4fd5-8deb-747f464fc420": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "9e5b4beb-f8ed-469e-a0c5-2f0e7101846c": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "a10a2594-6f45-4bf3-aab1-23d73b2bb868": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "a144c843-749b-4e61-a04b-245400e9b8e4": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "a2bfac01-b9d6-470f-9003-4ebf06351519": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "ac1ec952-5b7d-4062-aa1b-7c562dbd0184": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "ba5dcaba-f0aa-45a0-9dd7-c66d0a97844f": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "c6e9a85e-0936-4677-b06a-ffe3690bff71": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "d83efbc4-7f59-4391-bddb-0686e7028752": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "e68e155c-0284-482b-a418-33c82e56240b": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    }
+  },
+  "historical_arena_id": "9e5b4beb-f8ed-469e-a0c5-2f0e7101846c",
+  "historical_comparison": {
+    "by_challenge": {
+      "b6d759c2-19fe-4a1e-b191-d141e34ec49d": {
+        "differences": {
+          "cost_usd": {
+            "bootstrap_95": null,
+            "distinct_values": 0,
+            "interval_status": "no_pairs",
+            "mean": null,
+            "pairs": 0
+          },
+          "false_claims": {
+            "bootstrap_95": [
+              1.0,
+              1.0
+            ],
+            "distinct_values": 1,
+            "interval_status": "degenerate",
+            "mean": 1.0,
+            "pairs": 3
+          },
+          "latency_seconds": {
+            "bootstrap_95": [
+              -1.4000000000000004,
+              1.0999999999999996
+            ],
+            "distinct_values": 3,
+            "interval_status": "insufficient_pairs",
+            "mean": -0.2333333333333331,
+            "pairs": 3
+          },
+          "requests": {
+            "bootstrap_95": [
+              0.0,
+              0.0
+            ],
+            "distinct_values": 1,
+            "interval_status": "degenerate",
+            "mean": 0.0,
+            "pairs": 3
+          },
+          "verified": {
+            "bootstrap_95": [
+              -1.0,
+              -1.0
+            ],
+            "distinct_values": 1,
+            "interval_status": "degenerate",
+            "mean": -1.0,
+            "pairs": 3
+          }
+        },
+        "infrastructure_failed_pairs": 0,
+        "leakage_label": "calibration",
+        "matched_pairs": 3,
+        "name": "BH-13 synthetic SPA cross-account comparison",
+        "version": "v1"
+      }
+    },
+    "differences": {
+      "cost_usd": {
+        "bootstrap_95": null,
+        "distinct_values": 0,
+        "interval_status": "no_pairs",
+        "mean": null,
+        "pairs": 0
+      },
+      "false_claims": {
+        "bootstrap_95": [
+          1.0,
+          1.0
+        ],
+        "distinct_values": 1,
+        "interval_status": "degenerate",
+        "mean": 1.0,
+        "pairs": 3
+      },
+      "latency_seconds": {
+        "bootstrap_95": [
+          -1.4000000000000004,
+          1.0999999999999996
+        ],
+        "distinct_values": 3,
+        "interval_status": "insufficient_pairs",
+        "mean": -0.2333333333333331,
+        "pairs": 3
+      },
+      "requests": {
+        "bootstrap_95": [
+          0.0,
+          0.0
+        ],
+        "distinct_values": 1,
+        "interval_status": "degenerate",
+        "mean": 0.0,
+        "pairs": 3
+      },
+      "verified": {
+        "bootstrap_95": [
+          -1.0,
+          -1.0
+        ],
+        "distinct_values": 1,
+        "interval_status": "degenerate",
+        "mean": -1.0,
+        "pairs": 3
+      }
+    },
+    "evidence_scope": "calibration_or_unknown",
+    "infrastructure_failed_pairs": 0,
+    "leakage_labels": [
+      "calibration"
+    ],
+    "matched_pairs": 3,
+    "pairs": [
+      {
+        "baseline": {
+          "cost_usd": null,
+          "false_claims": 0,
+          "latency_seconds": 11.1,
+          "requests": 1,
+          "verified": 1
+        },
+        "baseline_state": "completed",
+        "candidate": {
+          "cost_usd": null,
+          "false_claims": 1,
+          "latency_seconds": 12.2,
+          "requests": 1,
+          "verified": 0
+        },
+        "candidate_state": "completed",
+        "challenge_id": "b6d759c2-19fe-4a1e-b191-d141e34ec49d",
+        "leakage_label": "calibration",
+        "matched": true,
+        "seed": 1
+      },
+      {
+        "baseline": {
+          "cost_usd": null,
+          "false_claims": 0,
+          "latency_seconds": 13.4,
+          "requests": 1,
+          "verified": 1
+        },
+        "baseline_state": "completed",
+        "candidate": {
+          "cost_usd": null,
+          "false_claims": 1,
+          "latency_seconds": 12.0,
+          "requests": 1,
+          "verified": 0
+        },
+        "candidate_state": "completed",
+        "challenge_id": "b6d759c2-19fe-4a1e-b191-d141e34ec49d",
+        "leakage_label": "calibration",
+        "matched": true,
+        "seed": 2
+      },
+      {
+        "baseline": {
+          "cost_usd": null,
+          "false_claims": 0,
+          "latency_seconds": 14.2,
+          "requests": 1,
+          "verified": 1
+        },
+        "baseline_state": "completed",
+        "candidate": {
+          "cost_usd": null,
+          "false_claims": 1,
+          "latency_seconds": 13.8,
+          "requests": 1,
+          "verified": 0
+        },
+        "candidate_state": "completed",
+        "challenge_id": "b6d759c2-19fe-4a1e-b191-d141e34ec49d",
+        "leakage_label": "calibration",
+        "matched": true,
+        "seed": 3
+      }
+    ],
+    "verified_difference_mean": -1.0,
+    "verified_difference_range": [
+      -1,
+      -1
+    ]
+  },
+  "historical_evaluation_id": "af1d9094-91fd-491a-8769-bcd4ae4090aa",
+  "rerun_comparison": {
+    "by_challenge": {
+      "b6d759c2-19fe-4a1e-b191-d141e34ec49d": {
+        "differences": {
+          "cost_usd": {
+            "bootstrap_95": null,
+            "distinct_values": 0,
+            "interval_status": "no_pairs",
+            "mean": null,
+            "pairs": 0
+          },
+          "false_claims": {
+            "bootstrap_95": [
+              1.0,
+              1.0
+            ],
+            "distinct_values": 1,
+            "interval_status": "degenerate",
+            "mean": 1.0,
+            "pairs": 3
+          },
+          "latency_seconds": {
+            "bootstrap_95": [
+              -0.9000000000000004,
+              0.1999999999999993
+            ],
+            "distinct_values": 3,
+            "interval_status": "insufficient_pairs",
+            "mean": -0.3333333333333333,
+            "pairs": 3
+          },
+          "requests": {
+            "bootstrap_95": [
+              0.0,
+              0.0
+            ],
+            "distinct_values": 1,
+            "interval_status": "degenerate",
+            "mean": 0.0,
+            "pairs": 3
+          },
+          "verified": {
+            "bootstrap_95": [
+              -1.0,
+              -1.0
+            ],
+            "distinct_values": 1,
+            "interval_status": "degenerate",
+            "mean": -1.0,
+            "pairs": 3
+          }
+        },
+        "infrastructure_failed_pairs": 0,
+        "leakage_label": "calibration",
+        "matched_pairs": 3,
+        "name": "BH-13 synthetic SPA cross-account comparison",
+        "version": "v1"
+      }
+    },
+    "differences": {
+      "cost_usd": {
+        "bootstrap_95": null,
+        "distinct_values": 0,
+        "interval_status": "no_pairs",
+        "mean": null,
+        "pairs": 0
+      },
+      "false_claims": {
+        "bootstrap_95": [
+          1.0,
+          1.0
+        ],
+        "distinct_values": 1,
+        "interval_status": "degenerate",
+        "mean": 1.0,
+        "pairs": 3
+      },
+      "latency_seconds": {
+        "bootstrap_95": [
+          -0.9000000000000004,
+          0.1999999999999993
+        ],
+        "distinct_values": 3,
+        "interval_status": "insufficient_pairs",
+        "mean": -0.3333333333333333,
+        "pairs": 3
+      },
+      "requests": {
+        "bootstrap_95": [
+          0.0,
+          0.0
+        ],
+        "distinct_values": 1,
+        "interval_status": "degenerate",
+        "mean": 0.0,
+        "pairs": 3
+      },
+      "verified": {
+        "bootstrap_95": [
+          -1.0,
+          -1.0
+        ],
+        "distinct_values": 1,
+        "interval_status": "degenerate",
+        "mean": -1.0,
+        "pairs": 3
+      }
+    },
+    "evidence_scope": "calibration_or_unknown",
+    "infrastructure_failed_pairs": 0,
+    "leakage_labels": [
+      "calibration"
+    ],
+    "matched_pairs": 3,
+    "pairs": [
+      {
+        "baseline": {
+          "cost_usd": null,
+          "false_claims": 0,
+          "latency_seconds": 13.9,
+          "requests": 1,
+          "verified": 1
+        },
+        "baseline_state": "completed",
+        "candidate": {
+          "cost_usd": null,
+          "false_claims": 1,
+          "latency_seconds": 14.1,
+          "requests": 1,
+          "verified": 0
+        },
+        "candidate_state": "completed",
+        "challenge_id": "b6d759c2-19fe-4a1e-b191-d141e34ec49d",
+        "leakage_label": "calibration",
+        "matched": true,
+        "seed": 1
+      },
+      {
+        "baseline": {
+          "cost_usd": null,
+          "false_claims": 0,
+          "latency_seconds": 12.1,
+          "requests": 1,
+          "verified": 1
+        },
+        "baseline_state": "completed",
+        "candidate": {
+          "cost_usd": null,
+          "false_claims": 1,
+          "latency_seconds": 11.8,
+          "requests": 1,
+          "verified": 0
+        },
+        "candidate_state": "completed",
+        "challenge_id": "b6d759c2-19fe-4a1e-b191-d141e34ec49d",
+        "leakage_label": "calibration",
+        "matched": true,
+        "seed": 2
+      },
+      {
+        "baseline": {
+          "cost_usd": null,
+          "false_claims": 0,
+          "latency_seconds": 13.9,
+          "requests": 1,
+          "verified": 1
+        },
+        "baseline_state": "completed",
+        "candidate": {
+          "cost_usd": null,
+          "false_claims": 1,
+          "latency_seconds": 13.0,
+          "requests": 1,
+          "verified": 0
+        },
+        "candidate_state": "completed",
+        "challenge_id": "b6d759c2-19fe-4a1e-b191-d141e34ec49d",
+        "leakage_label": "calibration",
+        "matched": true,
+        "seed": 3
+      }
+    ],
+    "verified_difference_mean": -1.0,
+    "verified_difference_range": [
+      -1,
+      -1
+    ]
+  },
+  "rerun_evaluation_id": "4aabff4b-f278-4b6c-a978-e1efd157f02b",
+  "schema": "nidavellir/nv10-live/v1",
+  "share_counts": {
+    "engagements": 7,
+    "evaluations": 1,
+    "finding_verdicts": {
+      "confirmed": 3,
+      "inconclusive": 0,
+      "infrastructure_failure": 0,
+      "refuted": 3
+    },
+    "trials": 6
+  }
+}

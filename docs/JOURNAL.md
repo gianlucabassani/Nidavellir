@@ -31,12 +31,12 @@ then reran the restored fixture. Both runs produced three matched pairs,
 zero infrastructure-failed pairs and a verified difference of -1; all
 arena-labelled resources and NV-10 Compose containers, networks and volumes
 were absent after teardown. Evidence:
-`docs/verification/nv10-live-2026-09-27-7db3353d.json` and
-`docs/verification/nv10-gates-2026-09-27.json`. Six focused recovery tests
+`docs/verification/nv10-live-2026-09-27-fa97b910.json` and
+`docs/verification/nv10-gates-2026-09-27.json`. Seven focused recovery tests
 cover decryptable round trip, redaction, tamper rejection, schema rejection,
 missing evidence, retention and rollback after a database-install error.
-The final pinned `make release-check` passed: 940 SQLite tests (four skips),
-944 PostgreSQL tests, six integration deselections per suite, Ruff clean,
+The final pinned `make release-check` passed: 941 SQLite tests (four skips),
+945 PostgreSQL tests, six integration deselections per suite, Ruff clean,
 Bandit zero medium/high, and release smoke ready.
 
 **Unresolved risks / next step:** Recovery requires an offline maintenance

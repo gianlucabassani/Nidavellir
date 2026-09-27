@@ -373,10 +373,18 @@ def restore(source, root, passphrase, *, url=None):
             config_file = root / "keys" / "recovery.env"
             if config_file.exists():
                 raise RecoveryError("restore configuration already exists")
+            sqlite_file = None
+            if engine.dialect.name == "sqlite" and engine.url.database:
+                sqlite_file = Path(engine.url.database).resolve()
             for dirname in ROOTS:
                 target = root / dirname
-                if target.exists() and any(target.iterdir()):
-                    raise RecoveryError(f"restore destination is not empty: {dirname}")
+                if target.is_symlink():
+                    raise RecoveryError(f"restore destination is a symlink: {dirname}")
+                if target.exists():
+                    allowed = {sqlite_file} if dirname == "data" else set()
+                    if any(entry.is_symlink() or entry.resolve() not in allowed
+                           for entry in target.iterdir()):
+                        raise RecoveryError(f"restore destination is not empty: {dirname}")
             installed = []
             created_dirs = []
             try:
