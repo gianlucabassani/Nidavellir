@@ -34,12 +34,16 @@
           ('engagement_new', 'new_engagement', 'fa-plus', 'New engagement', '')
         ]),
         ('evaluations', 'fa-chart-column', ['evaluations'], [
-          ('evaluations', 'evaluations', 'fa-chart-column', 'Overview', 'foundation')
+          ('evaluations', 'evaluations', 'fa-chart-column', 'Overview', ''),
+          ('evaluation_builds', 'evaluations', 'fa-robot', 'Scripted builds', ''),
+          ('evaluation_challenges', 'evaluations', 'fa-cubes', 'Calibration challenges', ''),
+          ('evaluation_suites', 'evaluations', 'fa-layer-group', 'Suites', ''),
+          ('evaluation_runs', 'evaluations', 'fa-code-compare', 'Comparisons', '')
         ]),
         ('library', 'fa-book-open', ['scenarios', 'targets', 'agent_library'], [
-          ('scenarios', 'challenge_library', 'fa-cubes', 'Challenges', ''),
+          ('scenarios', 'challenge_library', 'fa-cubes', 'Scenario catalog', ''),
           ('targets', 'target_library', 'fa-bullseye', 'Targets', 'foundation'),
-          ('agent_library', 'agent_library', 'fa-robot', 'Agents', 'foundation')
+          ('agent_library', 'agent_library', 'fa-robot', 'Agent builds', '')
         ]),
         ('activity', 'fa-wave-square', ['findings', 'evidence', 'agents', 'audit'], [
           ('findings', 'findings_index', 'fa-bug', 'Findings', ''),
@@ -53,6 +57,12 @@
           ('settings', 'administration_settings', 'fa-gear', 'Settings', '')
         ])
       ] %}
+      {% set nav_fragments = {
+        'evaluation_builds': '#builds',
+        'evaluation_challenges': '#challenges',
+        'evaluation_suites': '#suites',
+        'evaluation_runs': '#comparisons'
+      } %}
       {% for group, icon, active_keys, items in nav_groups %}
       <details class="nav-group" {{ 'open' if active in active_keys }}>
         <summary class="nav-group__summary">
@@ -62,7 +72,7 @@
         </summary>
         <div class="nav-group__items">
           {% for key, ep, item_icon, label, tag in items %}
-          <a class="nav-item nav-item--child {{ 'active' if nav_active == key }}" href="{{ url_for(ep) }}" {{ 'aria-current="page"' | safe if nav_active == key }}>
+          <a class="nav-item nav-item--child {{ 'active' if nav_active == key }}" href="{{ url_for(ep) }}{{ nav_fragments.get(key, '') }}" {{ 'aria-current="page"' | safe if nav_active == key }}>
             <span class="ico"><i class="fa-solid {{ item_icon }}"></i></span>
             <span class="nav-label">{{ label }}</span>
             {% if tag %}<span class="tag">{{ tag }}</span>{% endif %}
@@ -108,7 +118,18 @@
             <span><strong>New engagement</strong><small>Choose purpose, source, configuration, and safety policy</small></span>
           </a>
           <div class="create-menu__divider"></div>
-          <span class="create-menu__planned"><span>Evaluation, challenge, and agent</span><small>Available in later roadmap increments</small></span>
+          <a href="{{ url_for('evaluations') }}#comparisons">
+            <span class="create-menu__icon"><i class="fa-solid fa-chart-column"></i></span>
+            <span><strong>Paired evaluation</strong><small>Compare registered scripted builds on a pinned suite</small></span>
+          </a>
+          <a href="{{ url_for('evaluations') }}#challenges">
+            <span class="create-menu__icon"><i class="fa-solid fa-cubes"></i></span>
+            <span><strong>Calibration challenge</strong><small>Pin an eligible source arena for repeatable trials</small></span>
+          </a>
+          <a href="{{ url_for('evaluations') }}#builds">
+            <span class="create-menu__icon"><i class="fa-solid fa-robot"></i></span>
+            <span><strong>Scripted agent build</strong><small>Register a fixed MCP tool plan, not a connected model</small></span>
+          </a>
         </div>
       </details>
       <button class="iconbtn hide-sm" id="copilot-toggle" type="button"

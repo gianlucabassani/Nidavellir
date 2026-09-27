@@ -10,6 +10,7 @@
     <div class="flexrow">
       <h1 style="margin:0">{{ instance_name }}</h1>
       <span id="lab-status">{{ ui.status_badge(state) }}</span>
+      {% if provider == 'mock' %}<span class="badge badge--warn" title="Simulated provider, no live target"><i class="fa-solid fa-flask"></i> simulated</span>{% endif %}
       {% if engagement_intent %}
       <span class="badge badge--accent" title="Immutable engagement intent">
         <i class="fa-solid fa-crosshairs"></i> {{ engagement_intent.purpose | replace('_', ' ') }}
@@ -55,6 +56,13 @@
     {% endif %}
   </div>
 </div>
+
+{% if provider == 'mock' %}
+<div class="notice flash--warning" style="margin-bottom:18px" id="mock-provider-notice">
+  <i class="fa-solid fa-flask ico" style="color:var(--warn)"></i>
+  <span><b>UI demonstration only.</b> This engagement uses the mock provider: nodes, addresses and command outputs are simulated. No vulnerable target is running, and this record cannot confirm a security finding.</span>
+</div>
+{% endif %}
 
 {% if read_only %}
 <div class="notice" style="margin-bottom:18px" id="readonly-notice">
@@ -201,11 +209,11 @@
             {% else %}<span class="badge badge--danger">{{ n.state }}</span>{% endif %}
           </td>
           <td>
-            {% if n.url and not read_only %}<a href="{{ n.url }}" target="_blank" class="btn btn-sm"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open</a>{% endif %}
-            {% if read_only or (not n.url and not n.ssh) %}<span class="faint">—</span>{% endif %}
+            {% if n.url and not read_only and provider != 'mock' %}<a href="{{ n.url }}" target="_blank" class="btn btn-sm"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open</a>{% endif %}
+            {% if provider == 'mock' %}<span class="faint">simulated</span>{% elif read_only or (not n.url and not n.ssh) %}<span class="faint">—</span>{% endif %}
           </td>
         </tr>
-        {% if n.ssh and not read_only %}
+        {% if n.ssh and not read_only and provider != 'mock' %}
         <tr><td colspan="4" style="padding-top:0">
           <label class="label" style="margin-bottom:4px">Shell command</label>
           <div class="copyfield">

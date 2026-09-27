@@ -73,7 +73,8 @@ def test_application_shell_groups_navigation_and_global_create(client):
 
     for label in (
         "Home", "Engagements", "Evaluations", "Library", "Activity",
-        "Administration", "Challenges", "Agent activity", "Audit trail",
+        "Administration", "Calibration challenges", "Scenario catalog",
+        "Scripted builds", "Suites", "Comparisons", "Agent activity", "Audit trail",
     ):
         assert label in nav
     assert ">Launch<" not in nav
@@ -81,6 +82,9 @@ def test_application_shell_groups_navigation_and_global_create(client):
 
     assert 'id="create-menu"' in html
     assert 'href="/engagements/new"' in html and "New engagement" in html
+    for anchor in ("builds", "challenges", "comparisons"):
+        assert f'href="/evaluations#{anchor}"' in html
+    assert "Available in later roadmap increments" not in html
     assert 'href="/launch"' not in nav and 'href="/wizard"' not in nav
     assert 'id="sidebar-toggle"' in html
     assert 'aria-controls="sidebar"' in html
@@ -212,10 +216,74 @@ def test_evaluation_and_agent_registry_are_live_console_destinations(client):
     evaluations = client.get("/evaluations").data.decode()
     agents = client.get("/library/agents").data.decode()
     assert "Run paired evaluation" in evaluations
-    assert "Register an agent build" in evaluations
+    assert "Register a scripted agent build" in evaluations
     assert "Agent builds" in agents
+    assert "Measure a change, not a claim." in evaluations
+    assert "What this proves" in evaluations
+    assert "Build versus connection" in agents
+    assert 'class="input" id="build-name"' in evaluations
+    assert 'class="select" id="compare-suite"' in evaluations
+    for anchor in ("builds", "challenges", "suites", "comparisons"):
+        assert f'id="{anchor}"' in evaluations
+        assert f'href="/evaluations#{anchor}"' in evaluations
+    assert "Overview</span><span class=\"tag\">foundation" not in evaluations
+    assert "Agent builds</span><span class=\"tag\">foundation" not in agents
     assert evaluations.count('aria-current="page"') == 1
     assert agents.count('aria-current="page"') == 1
+
+
+def test_evaluation_workbench_renders_registered_objects(client, monkeypatch):
+    import app as webui_module
+
+    payloads = {
+        "/agent-builds": {"builds": [{"id": "build-1", "name": "Researcher",
+            "version": "v1", "driver": "scripted-mcp/v1", "digest": "sha256:abc"}]},
+        "/eval-challenges": {"challenges": [{"id": "challenge-1", "name": "Grant",
+            "version": "v1", "label": "calibration"}]},
+        "/eval-suites": {"suites": [{"id": "suite-1", "name": "Web suite",
+            "version": "v1", "challenge_ids": ["challenge-1"], "seeds": [1, 2, 3]}]},
+        "/evaluations": {"evaluations": [{"id": "evaluation-1", "state": "completed"}]},
+    }
+    monkeypatch.setattr(webui_module, "_api_get", lambda path, **_kwargs: (payloads[path], True))
+    _login(client)
+    html = client.get("/evaluations").data.decode()
+    assert "Researcher" in html and "Grant" in html and "Web suite" in html
+    assert "Evaluation evaluati" in html
+    assert 'id="suite-challenges"' in html
+    assert "Needs one saved suite and two registered builds." in html
+    registry = client.get("/library/agents").data.decode()
+    assert "sha256:abc" in registry and "scripted-mcp/v1" in registry
+
+
+def test_evaluation_detail_explains_calibration_and_interval(client, monkeypatch):
+    import app as webui_module
+
+    verified = {"mean": -1.0, "pairs": 5, "bootstrap_95": [-1.0, -1.0],
+                "interval_status": "degenerate"}
+    comparison = {"matched_pairs": 5, "infrastructure_failed_pairs": 0,
+                  "evidence_scope": "calibration_only", "leakage_labels": ["calibration"],
+                  "differences": {"verified": verified},
+                  "verified_difference_range": [-1.0, -1.0],
+                  "by_challenge": {"challenge-1": {"name": "Grant", "leakage_label": "calibration",
+                      "matched_pairs": 5, "infrastructure_failed_pairs": 0,
+                      "differences": {"verified": verified}}},
+                  "pairs": [{"challenge_id": "challenge-1", "seed": 1,
+                      "leakage_label": "calibration", "matched": True,
+                      "baseline_state": "completed", "candidate_state": "completed",
+                      "baseline": {"verified": 1, "false_claims": 0, "requests": 2,
+                                   "latency_seconds": 1.0},
+                      "candidate": {"verified": 0, "false_claims": 1, "requests": 2,
+                                    "latency_seconds": 1.0}}]}
+    record = {"id": "evaluation-1", "state": "completed", "comparison": comparison,
+              "trials": [{"seed": 1, "state": "completed", "arena_id": "arena-1",
+                          "error": None}]}
+    monkeypatch.setattr(webui_module, "_api_get", lambda _path, **_kwargs: (record, True))
+    _login(client)
+    html = client.get("/evaluations/evaluation-1").data.decode()
+    assert "Evidence scope: calibration_only" in html
+    assert "degenerate" in html and "Grant" in html
+    assert 'href="/arena/arena-1"' in html
+    assert html.count('aria-current="page"') == 1
 
 
 def _cross_arena_client(client, monkeypatch, findings=(), verdicts=(), signals=(),
@@ -588,6 +656,37 @@ def test_arena_detail_renders_challenges_panel(client, monkeypatch):
     assert "SQL injection" in html and "CWE-89" in html
     assert "1 / 2 found" in html
     assert "found" in html and "open" in html  # the discovered one + the missed one
+
+
+def test_mock_engagement_is_labelled_and_has_no_live_target_link(client, monkeypatch):
+    import app as webui_module
+
+    class _FakeResp:
+        status_code = 200
+
+        def __init__(self, payload):
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    def fake_get(url, **_kwargs):
+        if "/status/" in url:
+            return _FakeResp({"user_id": "demo-web", "status": "active",
+                "scenario": "container_web_pentest", "provider": "mock",
+                "outputs": {"node_victim_name": "victim",
+                            "node_victim_url": "http://192.168.50.10",
+                            "node_victim_state": "running"}})
+        if "/score" in url:
+            return _FakeResp({})
+        return _FakeResp({"events": []})
+
+    monkeypatch.setattr(webui_module.requests, "get", fake_get)
+    _login(client)
+    html = client.get("/arena/demo-web").data.decode()
+    assert 'id="mock-provider-notice"' in html
+    assert "UI demonstration only" in html
+    assert 'href="http://192.168.50.10"' not in html
 
 
 def test_arena_detail_renders_discovery_score_and_findings(client, monkeypatch):

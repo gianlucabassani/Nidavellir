@@ -38,9 +38,9 @@
     <div class="l"><i class="fa-solid fa-triangle-exclamation"></i> Needs attention</div>
     <div class="delta">failed runs &amp; containment</div></a>
   <a class="card kpi" href="{{ url_for('evaluations') }}"><span class="glyph"><i class="fa-solid fa-chart-column"></i></span>
-    <div class="n">—</div>
+    <div class="n">{{ stats.evaluations if stats.evaluations is not none else '—' }}</div>
     <div class="l"><i class="fa-solid fa-chart-column"></i> Evaluations</div>
-    <div class="delta">repeated runs &amp; comparisons land with E1</div></a>
+    <div class="delta">durable paired comparisons{{ ' · API unavailable' if stats.evaluations is none else '' }}</div></a>
 </div>
 
 <div class="grid" style="grid-template-columns:1.15fr 1fr; margin-bottom:16px; align-items:start">

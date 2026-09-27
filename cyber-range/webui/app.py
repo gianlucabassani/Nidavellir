@@ -579,6 +579,7 @@ def overview():
     live engagements, findings waiting on a verdict, and anything needing attention."""
     deployments, ok = _deployments()
     scenarios = _scenarios()
+    evaluation_records, evaluations_ok = _api_get("/evaluations")
     names = {k: (v.get("user_id") or k) for k, v in deployments.items()}
     findings = _all_findings(limit=120, names=names)
 
@@ -617,6 +618,7 @@ def overview():
         "review": len(review_queue),
         "attention": len(attention),
         "scenarios": len(scenarios),
+        "evaluations": len((evaluation_records or {}).get("evaluations", [])) if evaluations_ok else None,
     }
 
     archived = [(k, v) for k, v in deployments.items() if v.get("status") == "destroyed"]
@@ -1113,15 +1115,6 @@ def administration_settings():
 
 
 _FOUNDATION_PAGES = {
-    "evaluations": {
-        "group": "Evaluations",
-        "title": "Evaluation workbench",
-        "icon": "fa-chart-column",
-        "description": "Suites, repeated runs, and baseline-versus-candidate comparisons will live here.",
-        "current": "The scoring engine works per arena today; durable experiments and paired comparisons are the next benchmark layer.",
-        "link_endpoint": "engagements",
-        "link_label": "View current engagements",
-    },
     "targets": {
         "group": "Library",
         "title": "Targets",
@@ -1130,15 +1123,6 @@ _FOUNDATION_PAGES = {
         "current": "Target intake is available now when creating a target-based engagement.",
         "link_endpoint": "new_engagement",
         "link_label": "Create from a target",
-    },
-    "agent_library": {
-        "group": "Library",
-        "title": "Agents",
-        "icon": "fa-robot",
-        "description": "Versioned agent builds, adapters, capabilities, and execution policy will live here.",
-        "current": "Live connections and attribution remain available in Activity until the build registry is implemented.",
-        "link_endpoint": "agent_activity",
-        "link_label": "Open agent activity",
     },
     "providers": {
         "group": "Administration",

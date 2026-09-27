@@ -1,0 +1,39 @@
+{
+  "schema": "nidavellir/ui-concept-verification/v1",
+  "date": "2026-09-27",
+  "source_head": "dad2f89",
+  "release_check": {
+    "command": "make release-check",
+    "result": "passed",
+    "python": "3.11.14",
+    "ruff": "passed",
+    "bandit_medium_high": 0,
+    "sqlite": {"passed": 924, "skipped": 4, "integration_deselected": 6},
+    "postgresql": {"passed": 928, "integration_deselected": 6},
+    "migration_api_ui_mcp_smoke": "passed"
+  },
+  "live_ui": {
+    "rebuild": "docker compose up -d --no-deps --build webui",
+    "routes_http_200": ["/", "/evaluations", "/library/agents", "/engagements", "/arena/891dcdd3-a77d-4417-a0d3-8da6c9fc0156"],
+    "guided_sections_present": true,
+    "demo_listed": true,
+    "mock_warning_present": true,
+    "fake_target_link_suppressed": true
+  },
+  "demo_engagement": {
+    "id": "891dcdd3-a77d-4417-a0d3-8da6c9fc0156",
+    "name": "demo-web-calibration-20260927",
+    "scenario": "container_web_pentest",
+    "provider": "mock",
+    "purpose": "calibration",
+    "participant": "operator",
+    "status": "active",
+    "created_at": "2026-09-27 08:26:16.329428",
+    "expires_at": "2026-09-27 12:26:16.329376",
+    "arena_containers": 0,
+    "arena_networks": 0,
+    "arena_volumes": 0,
+    "real_target_started": false,
+    "model_subscription_invoked": false
+  }
+}
