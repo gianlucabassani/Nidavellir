@@ -1,0 +1,22 @@
+{
+  "schema": "nidavellir/nv10-gates/v1",
+  "date": "2026-09-27",
+  "release_command": "make release-check",
+  "python": "3.11.14",
+  "ruff": "passed",
+  "bandit_medium": 0,
+  "bandit_high": 0,
+  "release_smoke": "passed",
+  "sqlite": {"passed": 940, "skipped": 4, "deselected_integration": 6},
+  "postgresql": {"passed": 944, "skipped": 0, "deselected_integration": 6},
+  "live_command": "make verify-nv10-live",
+  "live_result": "passed",
+  "live_evidence": "nv10-live-2026-09-27-7db3353d.json",
+  "post_teardown_compose_project": "nidavellir-nv10",
+  "post_teardown_compose_resources": {"containers": 0, "networks": 0, "volumes": 0},
+  "inventory_commands": [
+    "docker ps -a --filter label=com.docker.compose.project=nidavellir-nv10",
+    "docker network ls --filter label=com.docker.compose.project=nidavellir-nv10",
+    "docker volume ls --filter label=com.docker.compose.project=nidavellir-nv10"
+  ]
+}

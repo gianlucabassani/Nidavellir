@@ -151,6 +151,37 @@ Live state, audit events, agent actions, findings, and monitor signals stream ov
 SSE. A destroyed arena stays open as a read-only record: no live actions, but its
 findings, evidence, score, and trace remain reviewable.
 
+## Offline research and evaluation recovery (NV-10)
+
+Stop the API, worker, beat, web UI and MCP gateway before backup. Leave PostgreSQL
+running for the maintenance command; no other process may write the database or
+the `data`, `runs`, `keys` and `traces` volumes. The command rejects live arenas
+and unfinished evaluations. Put the bundle outside those volumes, set a private
+passphrase of at least 16 characters in `NIDAVELLIR_RECOVERY_PASSPHRASE`, and run
+`python recovery.py backup /secure/backup.nvr --root /app` in the orchestrator
+image with the same database URL and all four volumes mounted. The bundle is
+versioned and AES-GCM encrypted; its manifest contains file digests, complete
+database rows and a schema fingerprint. Keep a second copy outside the host.
+
+For recovery, create a clean installation at the same schema revision, leave
+all application writers stopped, then run `python recovery.py restore
+/secure/backup.nvr --root /app` with the new installation's database URL and
+empty state volumes. Restore validates authentication, schema, digests, content
+addresses, event references and evaluation links before installation. It refuses
+a populated database or state volume. The protected encryption key is recovered
+to `/app/keys/recovery.env` (mode 0600); load its `SECRETS_ENCRYPTION_KEY` into
+the API and worker environment before starting them. Keep the bundle passphrase
+separate from the bundle. Restore does not load external OCI images: a pinned
+fixture image must still be available by digest or rebuilt from its immutable
+target inputs before replay.
+
+Use `python recovery.py share /secure/backup.nvr --output /secure/share.json`
+for a separate aggregate-only report. It contains counts, no raw evidence,
+traces, identities, configuration or secrets. Do not distribute the full
+recovery bundle as a share export. Archived deployments containing research
+events or referenced by evaluations are retained by the record deletion API;
+teardown only reclaims live infrastructure.
+
 ## Connect your agent & review the engagement
 
 Open an active engagement, go to the **Agent** tab, and use the **Agent positioning** card to authorize a

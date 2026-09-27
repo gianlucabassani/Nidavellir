@@ -1,0 +1,7 @@
+name: nidavellir-nv10
+services:
+  orchestrator:
+    volumes:
+      - nv06-traces:/app/traces
+volumes:
+  nv06-traces:

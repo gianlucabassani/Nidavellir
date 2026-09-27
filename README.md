@@ -151,8 +151,9 @@ completed the PostgreSQL, release and live gates on 2026-09-23. NV-06 independen
 authorization validation completed its pinned release, isolated Docker live and
 NV-02–05 regression gates on 2026-09-24. NV-07 durable paired experiments completed
 their pinned release and isolated Docker live gates on 2026-09-25. NV-08's
-two-class calibration library and five-seed regression gate passed on 2026-09-26;
-NV-09 Bughunt integration is next.
+two-class calibration library and five-seed regression gate passed on 2026-09-26.
+NV-10 encrypted record recovery passed its release and clean-install Docker-local
+restore gates on 2026-09-27; NV-09 Bughunt integration remains open.
 
 | Stage | Focus | Status |
 |---|---|---|
@@ -161,7 +162,7 @@ NV-09 Bughunt integration is next.
 | **Console architecture** | Engagements, Evaluations, Library, Activity, unified creation, contextual workspace and SSE | ✅ shipped |
 | **Research-ready runtime** | NV-01–05 complete on Docker-local; unsupported model token/cost hard caps are explicit | ✅ complete |
 | **Discovery lane** | Patch-diff & variant hunting, fuzzing + crash triage, binary/appliance/VM intake, campaigns & disclosure output | ◻ planned |
-| **Evaluation workbench** | NV-06–08 independent validation, durable paired trials and a two-class calibration library shipped; NV-09 Bughunt proof and NV-10 recovery remain | 🟢 partially shipped |
+| **Evaluation workbench** | NV-06–08 independent validation, durable paired trials and a two-class calibration library plus NV-10 recovery shipped; NV-09 Bughunt proof remains | 🟢 partially shipped |
 | **Held-out proof** | A real vulnerability found and proven on-platform; then a comparison over challenges drawn from that work | ◻ planned |
 | **Deferred** | OAuth/multi-tenancy, live cloud/VM providers, purple-team, VNC and hosted-product concerns | ◻ deferred |
 

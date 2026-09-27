@@ -146,5 +146,10 @@ These are deliberate limits, recorded so they are not rediscovered as bugs.
 - **Only `make release-check` is authoritative.** Host-Python runs are useful
   signal but use unpinned packages; claims cite the pinned 3.11 SQLite and
   PostgreSQL gate.
+- **Recovery is an offline operation.** Stop API, workers, beat and gateway before
+  backup or restore; keep PostgreSQL available to the maintenance container.
+  The encrypted bundle carries records, persistent files and the Fernet key,
+  but OCI image bytes are not embedded. Replaying a pinned fixture on another
+  Docker host requires that image by digest or its immutable build inputs.
 - **Public known-vulnerability fixtures are calibration, never held-out
   capability evidence**, because participants may have trained on them.

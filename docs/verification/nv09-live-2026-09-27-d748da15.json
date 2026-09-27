@@ -1,0 +1,405 @@
+{
+  "budget": {
+    "action_cap": 8,
+    "deadline_seconds": 600
+  },
+  "builds": {
+    "baseline": {
+      "digest": "sha256:e1b6f4b55733eafbf421c0ca700f17fc509c2396b321b7f0f67c1253eb8cf9a1",
+      "driver": "scripted-mcp/v1",
+      "id": "c59ecb59-ab21-46b6-b4bc-f440b0fd96ef",
+      "tools": [
+        "browser_visit",
+        "browser_visit",
+        "http_request",
+        "report_finding"
+      ]
+    },
+    "candidate": {
+      "digest": "sha256:f14f25ace22453a1d26ab98987c227f1a102df638774a4c15033f11c13d5e66d",
+      "driver": "scripted-mcp/v1",
+      "id": "579e3e39-7046-4f3c-ad4f-16f3a28fbdae",
+      "tools": [
+        "browser_visit",
+        "browser_visit",
+        "http_request",
+        "report_finding"
+      ]
+    }
+  },
+  "comparison": {
+    "by_challenge": {
+      "229fe361-c487-4bdb-9d62-fa63668aa077": {
+        "differences": {
+          "cost_usd": {
+            "bootstrap_95": null,
+            "distinct_values": 0,
+            "interval_status": "no_pairs",
+            "mean": null,
+            "pairs": 0
+          },
+          "false_claims": {
+            "bootstrap_95": [
+              1.0,
+              1.0
+            ],
+            "distinct_values": 1,
+            "interval_status": "degenerate",
+            "mean": 1.0,
+            "pairs": 3
+          },
+          "latency_seconds": {
+            "bootstrap_95": [
+              -1.5999999999999996,
+              0.5
+            ],
+            "distinct_values": 3,
+            "interval_status": "insufficient_pairs",
+            "mean": -0.6999999999999998,
+            "pairs": 3
+          },
+          "requests": {
+            "bootstrap_95": [
+              0.0,
+              0.0
+            ],
+            "distinct_values": 1,
+            "interval_status": "degenerate",
+            "mean": 0.0,
+            "pairs": 3
+          },
+          "verified": {
+            "bootstrap_95": [
+              -1.0,
+              -1.0
+            ],
+            "distinct_values": 1,
+            "interval_status": "degenerate",
+            "mean": -1.0,
+            "pairs": 3
+          }
+        },
+        "infrastructure_failed_pairs": 0,
+        "leakage_label": "calibration",
+        "matched_pairs": 3,
+        "name": "BH-13 synthetic SPA cross-account comparison",
+        "version": "v1"
+      }
+    },
+    "differences": {
+      "cost_usd": {
+        "bootstrap_95": null,
+        "distinct_values": 0,
+        "interval_status": "no_pairs",
+        "mean": null,
+        "pairs": 0
+      },
+      "false_claims": {
+        "bootstrap_95": [
+          1.0,
+          1.0
+        ],
+        "distinct_values": 1,
+        "interval_status": "degenerate",
+        "mean": 1.0,
+        "pairs": 3
+      },
+      "latency_seconds": {
+        "bootstrap_95": [
+          -1.5999999999999996,
+          0.5
+        ],
+        "distinct_values": 3,
+        "interval_status": "insufficient_pairs",
+        "mean": -0.6999999999999998,
+        "pairs": 3
+      },
+      "requests": {
+        "bootstrap_95": [
+          0.0,
+          0.0
+        ],
+        "distinct_values": 1,
+        "interval_status": "degenerate",
+        "mean": 0.0,
+        "pairs": 3
+      },
+      "verified": {
+        "bootstrap_95": [
+          -1.0,
+          -1.0
+        ],
+        "distinct_values": 1,
+        "interval_status": "degenerate",
+        "mean": -1.0,
+        "pairs": 3
+      }
+    },
+    "evidence_scope": "calibration_or_unknown",
+    "infrastructure_failed_pairs": 0,
+    "leakage_labels": [
+      "calibration"
+    ],
+    "matched_pairs": 3,
+    "pairs": [
+      {
+        "baseline": {
+          "cost_usd": null,
+          "false_claims": 0,
+          "latency_seconds": 12.6,
+          "requests": 1,
+          "verified": 1
+        },
+        "baseline_state": "completed",
+        "candidate": {
+          "cost_usd": null,
+          "false_claims": 1,
+          "latency_seconds": 11.6,
+          "requests": 1,
+          "verified": 0
+        },
+        "candidate_state": "completed",
+        "challenge_id": "229fe361-c487-4bdb-9d62-fa63668aa077",
+        "leakage_label": "calibration",
+        "matched": true,
+        "seed": 1
+      },
+      {
+        "baseline": {
+          "cost_usd": null,
+          "false_claims": 0,
+          "latency_seconds": 12.2,
+          "requests": 1,
+          "verified": 1
+        },
+        "baseline_state": "completed",
+        "candidate": {
+          "cost_usd": null,
+          "false_claims": 1,
+          "latency_seconds": 10.6,
+          "requests": 1,
+          "verified": 0
+        },
+        "candidate_state": "completed",
+        "challenge_id": "229fe361-c487-4bdb-9d62-fa63668aa077",
+        "leakage_label": "calibration",
+        "matched": true,
+        "seed": 2
+      },
+      {
+        "baseline": {
+          "cost_usd": null,
+          "false_claims": 0,
+          "latency_seconds": 11.3,
+          "requests": 1,
+          "verified": 1
+        },
+        "baseline_state": "completed",
+        "candidate": {
+          "cost_usd": null,
+          "false_claims": 1,
+          "latency_seconds": 11.8,
+          "requests": 1,
+          "verified": 0
+        },
+        "candidate_state": "completed",
+        "challenge_id": "229fe361-c487-4bdb-9d62-fa63668aa077",
+        "leakage_label": "calibration",
+        "matched": true,
+        "seed": 3
+      }
+    ],
+    "verified_difference_mean": -1.0,
+    "verified_difference_range": [
+      -1,
+      -1
+    ]
+  },
+  "created_at": "2026-09-27T14:44:10.674913+00:00",
+  "final_resources": {
+    "2649a311-0f95-449a-8f0c-a8d13dc6bf91": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "26f7864b-d9c1-4263-a7f0-702f478eebd0": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "37a49db3-344d-4480-850c-3eeddd8cac61": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "5363c1f7-643f-4340-9b33-501e0ff5d89c": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "5e3b84bb-114f-446c-a095-1ce8ab17eeb1": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "a54d2f11-7864-4647-9b8a-bfa9319185cc": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "f54c95ac-6d46-47f0-bf6c-adb9408b6f1a": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    }
+  },
+  "healthy_control": {
+    "owner": "B",
+    "path": "/protected/B",
+    "validator": "authorization_effect/v1"
+  },
+  "participant_change": {
+    "baseline": "/objects/B",
+    "candidate": "/protected/B",
+    "field": "path",
+    "step": 3,
+    "tool": "http_request"
+  },
+  "provenance": {
+    "evaluation_id": "b2994977-bc74-4c39-b725-9859a6b29097",
+    "fixture_library_digest": "sha256:9680f1db70aab7066c7c99caad125b2c97ed03715d5ce5e62d61bfdf23377624",
+    "recipe_digest": "sha256:d3deae30335d559fff7cc3586c59842ec1f8c661bf32c857adb3fa724255dc5e",
+    "source_arena_id": "2649a311-0f95-449a-8f0c-a8d13dc6bf91",
+    "suite_id": "1dbfceb5-869b-4f57-b287-58a26ab91c72",
+    "synthetic_only": true
+  },
+  "schema": "nidavellir/bughunt-agentic-slice/v1",
+  "seed": {
+    "accounts": [
+      "A",
+      "B"
+    ],
+    "digest": "sha256:d01ed74566290f0869db26b9858dc11129040cb42d527cb949e505aab0471f96",
+    "owned_object": "B",
+    "schema": "nidavellir/nv09-spa/v1"
+  },
+  "setup": {
+    "elapsed_seconds": 18.65,
+    "manual_steps": [
+      "run make verify-nv09-live"
+    ],
+    "operator_decision": "Review whether this controlled workflow merits Bughunt attachment",
+    "reused": [
+      "NV-07 durable paired trials",
+      "NV-06 authorization validator",
+      "NV-02 replacement reset",
+      "MCP browser and HTTP tools"
+    ]
+  },
+  "target": {
+    "challenge_id": "229fe361-c487-4bdb-9d62-fa63668aa077",
+    "image_digest": "sha256:b9b38c09d48ac957aaaaed1fc49f4bbf3844a4c4370c2f96394c118105bae0e3",
+    "leakage_label": "calibration",
+    "scenario": "nv09-spa",
+    "version": "v1"
+  },
+  "target_effects": [
+    {
+      "action_digest": "sha256:d28866c155469e681c12454b37fb8d65d13042150bf29149e68beb5aa1b0a82d",
+      "arena_id": "5363c1f7-643f-4340-9b33-501e0ff5d89c",
+      "browser_dom_digests": [
+        "sha256:459e9893216723216c21564cd602bb0d211d1551a53aed02b2c0e1e235cd8095",
+        "sha256:9ec782469450384658cdf434be35749d663fb88b00bf7ef1be2499010f5e4528"
+      ],
+      "challenge_id": "229fe361-c487-4bdb-9d62-fa63668aa077",
+      "control_digest": "sha256:9c912987c1620c413daa119d669a45be9ab047ff2f74a5023241f4728db235b4",
+      "observation_digest": "sha256:14897734bc9b8395e436a79d44e4d5f8a1d69ac584169a175f69bf39c7fcf34d",
+      "reason_code": "unauthorized_read",
+      "side": "baseline",
+      "starting_digest": "sha256:531cf5398e44104ad03e89595537eab9b75c55c6b1639b6ef1288b013a156dfc",
+      "verdict": "confirmed"
+    },
+    {
+      "action_digest": "sha256:c35ac580d65bf6d586174278ff950615015ad258d1e614628fd4357fe09f7f9c",
+      "arena_id": "5e3b84bb-114f-446c-a095-1ce8ab17eeb1",
+      "browser_dom_digests": [
+        "sha256:459e9893216723216c21564cd602bb0d211d1551a53aed02b2c0e1e235cd8095",
+        "sha256:9ec782469450384658cdf434be35749d663fb88b00bf7ef1be2499010f5e4528"
+      ],
+      "challenge_id": "229fe361-c487-4bdb-9d62-fa63668aa077",
+      "control_digest": "sha256:c9dc30986d1ee9c76c96be3f74110ba2bcf12494febac2128c42fc4d038f3672",
+      "observation_digest": "sha256:14897734bc9b8395e436a79d44e4d5f8a1d69ac584169a175f69bf39c7fcf34d",
+      "reason_code": "unauthorized_read",
+      "side": "baseline",
+      "starting_digest": "sha256:531cf5398e44104ad03e89595537eab9b75c55c6b1639b6ef1288b013a156dfc",
+      "verdict": "confirmed"
+    },
+    {
+      "action_digest": "sha256:7b283366ecb43adf23e1b4f7e34c36b3bfd68abd754ba6a60b7690814db70666",
+      "arena_id": "37a49db3-344d-4480-850c-3eeddd8cac61",
+      "browser_dom_digests": [
+        "sha256:459e9893216723216c21564cd602bb0d211d1551a53aed02b2c0e1e235cd8095",
+        "sha256:9ec782469450384658cdf434be35749d663fb88b00bf7ef1be2499010f5e4528"
+      ],
+      "challenge_id": "229fe361-c487-4bdb-9d62-fa63668aa077",
+      "control_digest": "sha256:1c37d5370a2c6f7a87b88d7a10a1eb8fa447b1fa624a8960aec9cc47f0d7fe19",
+      "observation_digest": "sha256:14897734bc9b8395e436a79d44e4d5f8a1d69ac584169a175f69bf39c7fcf34d",
+      "reason_code": "unauthorized_read",
+      "side": "baseline",
+      "starting_digest": "sha256:531cf5398e44104ad03e89595537eab9b75c55c6b1639b6ef1288b013a156dfc",
+      "verdict": "confirmed"
+    },
+    {
+      "action_digest": "sha256:34c3ef65c137860898bf1202f5f873c9a36d4dbb97098eda9d2544508d593e6e",
+      "arena_id": "a54d2f11-7864-4647-9b8a-bfa9319185cc",
+      "browser_dom_digests": [
+        "sha256:459e9893216723216c21564cd602bb0d211d1551a53aed02b2c0e1e235cd8095",
+        "sha256:9ec782469450384658cdf434be35749d663fb88b00bf7ef1be2499010f5e4528"
+      ],
+      "challenge_id": "229fe361-c487-4bdb-9d62-fa63668aa077",
+      "control_digest": "sha256:9ee2b70c8958a7df144d740369f95ab770f290a52d82b7138f2067677fe57101",
+      "observation_digest": "sha256:027724ee92e3321590888208a4f8455983a9cf352cf9d16c1ad84fb8fd492e91",
+      "reason_code": "access_denied",
+      "side": "candidate",
+      "starting_digest": "sha256:531cf5398e44104ad03e89595537eab9b75c55c6b1639b6ef1288b013a156dfc",
+      "verdict": "refuted"
+    },
+    {
+      "action_digest": "sha256:56c71f95a9fe6b040a931a2c952dbb134bc2a19d38cd5f43cc0cbdf2cb3ac196",
+      "arena_id": "f54c95ac-6d46-47f0-bf6c-adb9408b6f1a",
+      "browser_dom_digests": [
+        "sha256:459e9893216723216c21564cd602bb0d211d1551a53aed02b2c0e1e235cd8095",
+        "sha256:9ec782469450384658cdf434be35749d663fb88b00bf7ef1be2499010f5e4528"
+      ],
+      "challenge_id": "229fe361-c487-4bdb-9d62-fa63668aa077",
+      "control_digest": "sha256:b51590501b6db8818e2c1771c97e965212fc48d2c0f74152455a9347a1cf12a8",
+      "observation_digest": "sha256:027724ee92e3321590888208a4f8455983a9cf352cf9d16c1ad84fb8fd492e91",
+      "reason_code": "access_denied",
+      "side": "candidate",
+      "starting_digest": "sha256:531cf5398e44104ad03e89595537eab9b75c55c6b1639b6ef1288b013a156dfc",
+      "verdict": "refuted"
+    },
+    {
+      "action_digest": "sha256:dc3064cc5cbed55a1ff5bcdf4e68336040a25371d4c83e21b721baae639c78a5",
+      "arena_id": "26f7864b-d9c1-4263-a7f0-702f478eebd0",
+      "browser_dom_digests": [
+        "sha256:459e9893216723216c21564cd602bb0d211d1551a53aed02b2c0e1e235cd8095",
+        "sha256:9ec782469450384658cdf434be35749d663fb88b00bf7ef1be2499010f5e4528"
+      ],
+      "challenge_id": "229fe361-c487-4bdb-9d62-fa63668aa077",
+      "control_digest": "sha256:b775d7f97bf3ba2a7ff07eef23919e10d33f8ab68a132e4ee92352cb0fa00f81",
+      "observation_digest": "sha256:027724ee92e3321590888208a4f8455983a9cf352cf9d16c1ad84fb8fd492e91",
+      "reason_code": "access_denied",
+      "side": "candidate",
+      "starting_digest": "sha256:531cf5398e44104ad03e89595537eab9b75c55c6b1639b6ef1288b013a156dfc",
+      "verdict": "refuted"
+    }
+  ]
+}

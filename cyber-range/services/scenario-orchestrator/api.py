@@ -2064,7 +2064,10 @@ def delete_deployment_record(
             ),
         )
 
-    db.delete_deployment(instance_id, actor=principal.name)
+    try:
+        db.delete_deployment(instance_id, actor=principal.name)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     logger.info(
         f"Deleted deployment record {instance_id} "
         f"requested by '{principal.name}' ({principal.role})"

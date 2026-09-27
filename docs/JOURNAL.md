@@ -3,6 +3,50 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-09-27 — NV-10 encrypted research and evaluation recovery
+
+**Outcome:** Implemented an offline, versioned AES-GCM recovery bundle for all
+research/evaluation tables and events plus persistent scenarios, target inputs,
+evidence, HTTP transactions, validation observations, runs, keys and traces.
+The bundle carries the Fernet key needed to decrypt historical records; restore
+writes it to a mode-0600 recovery environment file. An aggregate-only sharing
+report is generated through a separate command. Restore authenticates the
+bundle and validates schema/revision, file and content-address digests, and
+record/evidence references before writing to an empty installation. It rolls
+back copied files if database installation fails and advances PostgreSQL's
+event sequence after importing explicit audit IDs. Deployment record deletion
+and bulk purge retain research/evaluation records with evidence.
+
+**Files:** `recovery.py`, `database.py`, `api.py`, `tests/test_recovery.py`,
+`scripts/verify-nv10-live.py`, `docker-compose.nv10.yml`, `Makefile`,
+`docs/OPERATIONS.md`, `README.md`, `ROADMAP.md`, `TODO.md`, `ISSUES.md`, and
+NV-10/NV-09 verification manifests. Existing edits to ROADMAP, TODO and this
+journal were preserved.
+
+**Verification:** The isolated Docker-local gate produced a synthetic SPA
+evaluation, destroyed all arenas, encrypted a full backup, generated a
+redacted share report, restored into a new PostgreSQL database and empty
+volumes, decrypted/read the historical result and validation observation,
+then reran the restored fixture. Both runs produced three matched pairs,
+zero infrastructure-failed pairs and a verified difference of -1; all
+arena-labelled resources and NV-10 Compose containers, networks and volumes
+were absent after teardown. Evidence:
+`docs/verification/nv10-live-2026-09-27-7db3353d.json` and
+`docs/verification/nv10-gates-2026-09-27.json`. Six focused recovery tests
+cover decryptable round trip, redaction, tamper rejection, schema rejection,
+missing evidence, retention and rollback after a database-install error.
+The final pinned `make release-check` passed: 940 SQLite tests (four skips),
+944 PostgreSQL tests, six integration deselections per suite, Ruff clean,
+Bandit zero medium/high, and release smoke ready.
+
+**Unresolved risks / next step:** Recovery requires an offline maintenance
+window; concurrent writers cannot be made consistent across PostgreSQL and
+filesystem volumes. OCI image bytes are not in the bundle, so replay on a
+different Docker host requires the pinned image or immutable build inputs.
+NV-09 and the model-driven evaluation risk remain open. Next, use the recovery
+procedure on a scheduled maintenance window and retain an independent copy of
+the encrypted bundle and its passphrase in separate custody.
+
 ## 2026-09-27 — NV07-R1 smoke outcome and Claude Code MCP verification
 
 **Outcome:** The one authorized Gemini durable smoke was submitted against the

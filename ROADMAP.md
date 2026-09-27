@@ -26,7 +26,7 @@
 dependencies and acceptance criteria. This roadmap retains product/design detail;
 S/C/R/D/E/P labels below are subject areas, not a competing execution order.
 The operator requested this reorganization after reviewing both Nidavellir and Bughunt.
-NV-01–08 have completed their accepted gates; NV-09 is next. Open risks and
+NV-01–08 and NV-10 have completed their accepted gates; NV-09 is next. Open risks and
 verification gaps are tracked in [ISSUES.md](ISSUES.md).
 
 1. **P0 / NV-01–05:** restore a repeatable Python 3.11 release gate; prove pinned target

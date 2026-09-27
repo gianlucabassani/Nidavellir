@@ -81,7 +81,7 @@ for both human and agent callers; API/GUI/MCP share the same service boundary.
   repeated comparisons. **Accept:** reproduce one bounty-agent workflow, retain independently
   validated evidence, reset, repeat with one agent change, and detect a seeded regression.
   Record setup effort/reuse and whether this improves the operator's actual workflow.
-- [ ] **NV-10 — Recover research and experiment records.** Versioned consistent backup and
+- [x] **NV-10 — Recover research and experiment records.** Versioned consistent backup and
   restore of research DB/events, scenarios/target manifests, evidence/transactions, traces,
   experiment records and protected encryption keys/configuration. Separate redacted sharing
   from full recovery. Validate digests, schema and references before restoring.

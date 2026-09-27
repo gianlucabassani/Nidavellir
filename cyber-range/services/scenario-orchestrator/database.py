@@ -1515,6 +1515,8 @@ class Database:
             dep = session.get(Deployment, deployment_id)
             if dep is None:
                 return False
+            if self._record_has_evidence(session, deployment_id):
+                raise ValueError("research evidence or evaluation references require retaining this record")
             self._append_event(
                 session, deployment_id, actor, "record_deleted", {"status": dep.status}
             )
@@ -1532,13 +1534,30 @@ class Database:
             rows = session.scalars(
                 select(Deployment).where(Deployment.status.in_(list(statuses)))
             ).all()
+            removed = 0
             for dep in rows:
+                if self._record_has_evidence(session, dep.id):
+                    continue
                 self._append_event(
                     session, dep.id, actor, "record_deleted", {"status": dep.status}
                 )
                 session.delete(dep)
+                removed += 1
             session.commit()
-            return len(rows)
+            return removed
+
+    @staticmethod
+    def _record_has_evidence(session, deployment_id):
+        if session.scalar(select(Event.id).where(
+            Event.lab_id == deployment_id,
+            Event.type.notin_(("created", "status", "record_deleted")),
+        ).limit(1)) is not None:
+            return True
+        if session.scalar(select(EvalChallenge.id).where(
+            EvalChallenge.source_arena_id == deployment_id).limit(1)) is not None:
+            return True
+        return session.scalar(select(EvalTrial.id).where(
+            EvalTrial.arena_id == deployment_id).limit(1)) is not None
 
     # --- reaper (TTL + stuck reconciliation, audit #9) -----------------------
 
