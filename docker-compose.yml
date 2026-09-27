@@ -144,6 +144,7 @@ services:
       - ./data:/app/data
       - ./runs:/app/runs
       - ./keys:/app/keys
+      - ./traces:/app/traces
       - tf-cache:/app/cache
       
       # Terraform templates (read-only)

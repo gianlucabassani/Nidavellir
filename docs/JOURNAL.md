@@ -18,7 +18,7 @@ event sequence after importing explicit audit IDs. Deployment record deletion
 and bulk purge retain research/evaluation records with evidence.
 
 **Files:** `recovery.py`, `database.py`, `api.py`, `tests/test_recovery.py`,
-`scripts/verify-nv10-live.py`, `docker-compose.nv10.yml`, `Makefile`,
+`scripts/verify-nv10-live.py`, `docker-compose.nv10.yml`, `docker-compose.yml`, `Makefile`,
 `docs/OPERATIONS.md`, `README.md`, `ROADMAP.md`, `TODO.md`, `ISSUES.md`, and
 NV-10/NV-09 verification manifests. Existing edits to ROADMAP, TODO and this
 journal were preserved.

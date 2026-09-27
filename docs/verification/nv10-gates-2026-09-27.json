@@ -7,6 +7,7 @@
   "bandit_medium": 0,
   "bandit_high": 0,
   "release_smoke": "passed",
+  "main_compose_config": "docker compose config -q passed; orchestrator mounts traces alongside data, runs and keys",
   "sqlite": {"passed": 940, "skipped": 4, "deselected_integration": 6},
   "postgresql": {"passed": 944, "skipped": 0, "deselected_integration": 6},
   "live_command": "make verify-nv10-live",
