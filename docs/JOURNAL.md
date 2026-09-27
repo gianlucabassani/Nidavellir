@@ -3,6 +3,51 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-09-27 — Synthetic NV-09 SPA gate and NV07-R1 model smoke preparation
+
+**Outcome:** Added a synthetic, client-rendered two-account SPA and the versioned
+BH-13/NV-09 agentic test/evidence manifest. A scripted MCP browser/HTTP workflow
+ran three matched baseline/candidate pairs; only the cross-account request path
+changed. The independent target-local authorization validator confirmed all
+three vulnerable-path findings, refuted all three denied-path claims, and
+attributed the -1 verified regression to the SPA challenge with zero
+infrastructure-failed pairs. Evidence remained readable after teardown; all
+labelled arena resources were reclaimed. This establishes a useful harness
+regression, but not an actual Bughunt client integration or a held-out result.
+
+Added `model-mcp/v1` to durable evaluations using the operator's pinned model
+connection and the scoped gateway. It bounds model turns/output requests and
+records provider-reported usage, termination and trial trace. A separate
+operator-only single-trial calibration endpoint prevents a first smoke from
+silently launching the existing paired multi-seed suite. Only mocked provider
+responses were used. The running main stack has a standby `gemini-2.5-flash`
+connection but an older model-connection schema, so no model run is authorized
+or ready. NV07-R1 remains open.
+
+**Files:** `cyber-range/fixtures/nv09-spa/`,
+`cyber-range/services/scenario-orchestrator/{api,database,experiments,eval_model_driver}.py`,
+`scripts/verify-nv09-live.py`, `Makefile`, `tests/test_nv09_slice.py`,
+`tests/test_eval_model_driver.py`, `tests/test_nv07_experiments.py`,
+`docs/verification/nv09-live-2026-09-27-{aed88ffd,b17ac7a2}.json`,
+`docs/verification/nv09-assessment-2026-09-27.md`,
+`docs/verification/nv07-r1-preflight-2026-09-27.md`, and this journal.
+
+**Verification:** Final `make verify-nv09-live` passed: six trials, three matched
+pairs, zero infrastructure-failed pairs, three confirmed/three refuted verdicts,
+zero labelled resources. The final manifest is
+`docs/verification/nv09-live-2026-09-27-b17ac7a2.json` and records a 19.71 s
+setup stage. The pinned release gate passed with Ruff, zero medium/high Bandit,
+readiness smoke, 933 SQLite passes (four skips) and 937 PostgreSQL passes;
+six integration tests were deselected in each suite. No model API was called.
+
+**Unresolved risks / next step:** NV-09 stays open because the Bughunt repository
+was read-only and no Bughunt agentic client consumed the manifest or showed a
+measured operator benefit. Given the operator's emphasis on self-hosted 0-day
+research, retain this as a harness regression before considering a Bughunt
+adapter. NV07-R1 requires an aligned main-stack schema, a verified billing/usage
+connection, specific permission for one live smoke, then a repeated model-driven
+suite before closure. NV06-R1 and INFRA-R1 remain open.
+
 ## 2026-09-26 — Final NV-08 gates and collision-safe live evidence
 
 **Outcome:** Final NV-06, NV-07, NV-07 recovery and NV-08 Docker-local gates

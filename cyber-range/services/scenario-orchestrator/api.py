@@ -5810,19 +5810,49 @@ def arena_eval_export(
 class AgentBuildCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     version: str = Field(min_length=1, max_length=100)
-    plan: list[dict] = Field(min_length=1, max_length=20)
+    driver: Literal["scripted-mcp/v1", "model-mcp/v1"] = "scripted-mcp/v1"
+    plan: list[dict] | None = None
+    goal: str | None = Field(default=None, max_length=500)
+    max_model_calls: int = Field(default=8, ge=1, le=8)
+    max_output_tokens: int = Field(default=512, ge=64, le=512)
 
 
 @app.post("/agent-builds", status_code=201)
 def create_agent_build(req: AgentBuildCreate,
                        principal: Principal = Depends(require_principal)):
     _require_operator(principal)
-    allowed = {"announce_agent", "get_briefing", "get_topology", "http_request",
+    if req.driver == "model-mcp/v1":
+        if req.plan is not None or not req.goal or not req.goal.strip():
+            raise HTTPException(status_code=422, detail="model build requires a goal and no plan")
+        connection = db.get_model_connection(principal.name)
+        if not connection:
+            raise HTTPException(status_code=409, detail="operator model connection required")
+        config = {"connection_owner": principal.name, "provider": connection["provider"],
+                  "model": connection["model"], "base_url": connection.get("base_url"),
+                  "goal": req.goal.strip(), "max_model_calls": req.max_model_calls,
+                  "max_output_tokens": req.max_output_tokens, "deadline_seconds": 600,
+                  "scaffold": "model-mcp/v1"}
+        digest = "sha256:" + hashlib.sha256(json.dumps({"name": req.name,
+            "version": req.version, "config": config}, sort_keys=True,
+            separators=(",", ":")).encode()).hexdigest()
+        try:
+            return db.create_agent_build(name=req.name, version=req.version, digest=digest,
+                                         driver=req.driver, config=config)
+        except IntegrityError as exc:
+            raise HTTPException(status_code=409, detail="build already registered") from exc
+    if not req.plan or len(req.plan) > 20 or req.goal is not None:
+        raise HTTPException(status_code=422, detail="scripted build requires 1–20 steps")
+    allowed = {"announce_agent", "get_briefing", "get_topology", "browser_visit", "http_request",
                "report_finding"}
     for step in req.plan:
-        if set(step) != {"tool", "args"} or step["tool"] not in allowed or not isinstance(
+        keys = {"tool", "args", "expect_dom"} if step.get("tool") == "browser_visit" else {
+            "tool", "args"}
+        if not {"tool", "args"} <= set(step) or not set(step) <= keys or step["tool"] not in allowed or not isinstance(
                 step["args"], dict):
             raise HTTPException(status_code=422, detail="invalid scripted MCP step")
+        if "expect_dom" in step and (not isinstance(step["expect_dom"], str)
+                                      or not 1 <= len(step["expect_dom"]) <= 200):
+            raise HTTPException(status_code=422, detail="invalid browser DOM expectation")
         if "arena_id" in step["args"]:
             raise HTTPException(status_code=422, detail="arena_id is assigned per trial")
     config = {"plan": req.plan, "model": "scripted", "scaffold": "reference-harness/v1"}
@@ -5864,7 +5894,8 @@ def create_eval_challenge(req: EvalChallengeCreate,
         raise HTTPException(status_code=409, detail="Docker-local required")
     seed_schema = ((recipe.get("seed") or {}).get("schema") or "")
     if req.label == "held-out" and seed_schema.startswith((
-            "nidavellir/nv06-authz/", "nidavellir/nv08-grants/")):
+            "nidavellir/nv06-authz/", "nidavellir/nv08-grants/",
+            "nidavellir/nv09-spa/")):
         raise HTTPException(status_code=422, detail="public synthetic fixture is calibration")
     validator_ids = sorted({v.get("validator") for v in
         (recipe.get("scenario") or {}).get("vulnerabilities", []) if v.get("validator")})
@@ -5932,6 +5963,33 @@ def create_evaluation(req: EvaluationCreate,
     return evaluation
 
 
+class EvaluationSmokeCreate(BaseModel):
+    challenge_id: str
+    build_id: str
+    seed: int = 1
+    action_cap: int = Field(default=8, ge=1, le=8)
+    deadline_seconds: int = Field(default=600, ge=60, le=600)
+
+
+@app.post("/evaluation-smokes", status_code=202)
+def create_evaluation_smoke(req: EvaluationSmokeCreate,
+                            principal: Principal = Depends(require_principal)):
+    """Operator-owned one-trial calibration path; a POST starts model usage."""
+    _require_operator(principal)
+    build = db.get_agent_build(req.build_id)
+    if not build or build["driver"] != "model-mcp/v1" or build["config"].get(
+            "connection_owner") != principal.name:
+        raise HTTPException(status_code=422, detail="owned model build required")
+    try:
+        evaluation = db.create_eval_smoke(challenge_id=req.challenge_id,
+            build_id=req.build_id, seed=req.seed, action_cap=req.action_cap,
+            deadline_seconds=req.deadline_seconds)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    enqueue_evaluation(evaluation["id"])
+    return {**evaluation, "kind": "single_trial_smoke"}
+
+
 @app.get("/evaluations")
 def list_evaluations(principal: Principal = Depends(require_principal)):
     _require_operator(principal)
@@ -5946,6 +6004,7 @@ def get_evaluation(evaluation_id: str,
     if record is None:
         raise HTTPException(status_code=404, detail="evaluation not found")
     import experiments  # noqa: PLC0415
+    record["kind"] = "single_trial_smoke" if len(record["runs"]) == 1 else "paired"
     record["comparison"] = experiments.compare(record)
     return record
 

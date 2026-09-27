@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "nidavellir/bughunt-agentic-slice/v1",
+  "title": "BH-13/NV-09 synthetic agentic test and evidence manifest",
+  "description": "Operator-side interchange contract; references synthetic tests and immutable evidence, never campaign authority or credentials.",
+  "type": "object",
+  "required": ["schema", "created_at", "target", "builds", "seed", "budget", "healthy_control", "participant_change", "target_effects", "provenance", "comparison", "setup", "final_resources"],
+  "properties": {
+    "schema": {"const": "nidavellir/bughunt-agentic-slice/v1"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "target": {"type": "object", "required": ["scenario", "version", "image_digest", "challenge_id", "leakage_label"]},
+    "builds": {"type": "object", "required": ["baseline", "candidate"]},
+    "seed": {"type": "object", "required": ["schema", "digest", "accounts", "owned_object"]},
+    "budget": {"type": "object", "required": ["action_cap", "deadline_seconds"]},
+    "healthy_control": {"type": "object", "required": ["path", "owner", "validator"]},
+    "participant_change": {"type": "object", "required": ["step", "tool", "field", "baseline", "candidate"]},
+    "target_effects": {"type": "array", "minItems": 2, "items": {"type": "object", "required": ["arena_id", "challenge_id", "side", "starting_digest", "verdict", "reason_code", "action_digest", "observation_digest", "control_digest", "browser_dom_digests"]}},
+    "provenance": {"type": "object", "required": ["source_arena_id", "recipe_digest", "evaluation_id", "suite_id", "fixture_library_digest", "synthetic_only"]},
+    "comparison": {"type": "object", "required": ["by_challenge", "matched_pairs", "infrastructure_failed_pairs"]},
+    "setup": {"type": "object", "required": ["elapsed_seconds", "reused", "operator_decision"]},
+    "final_resources": {"type": "object"}
+  },
+  "additionalProperties": false
+}

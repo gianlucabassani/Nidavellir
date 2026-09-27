@@ -132,12 +132,18 @@ def test_trial_export_carries_challenge_label_and_validator(monkeypatch):
     monkeypatch.setattr(api, "_scenario_meta", lambda *_: None)
     monkeypatch.setattr(eval_export, "build_eval_record", lambda **_: {
         "metadata": {}, "tags": []})
-    result = experiments._trial_result(TrialDB(), "arena", [], {
+    result = experiments._trial_result(TrialDB(), "arena", {
+        "transcript": [], "model_usage": [{"input_tokens": 3, "output_tokens": 2,
+                                        "cost_usd": None}],
+        "termination": "model_end_turn"}, {
         "id": "challenge", "label": "calibration",
         "validator_version": "authorization_effect/v1"})
     row = result["export"]
     assert row["metadata"]["nv.challenge_id"] == "challenge"
     assert row["metadata"]["nv.leakage_label"] == "calibration"
+    assert row["metadata"]["tokens"] == 5
+    assert row["metadata"]["cost_usd"] is None
+    assert result["termination"] == "model_end_turn"
     assert row["metadata"]["nv.validator_version"] == "authorization_effect/v1"
     assert "leakage:calibration" in row["tags"]
 

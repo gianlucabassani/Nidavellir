@@ -247,6 +247,32 @@ class Database:
             session.commit()
             return self._eval_dict(evaluation)
 
+    def create_eval_smoke(self, *, challenge_id, build_id, seed, action_cap, deadline_seconds):
+        """One durable calibration trial; no paired comparison is implied."""
+        now = datetime.now()
+        with self._session() as session:
+            challenge = session.get(EvalChallenge, challenge_id)
+            build = session.get(AgentBuild, build_id)
+            if challenge is None or build is None or challenge.label != "calibration":
+                raise ValueError("calibration challenge or agent build not found")
+            if build.driver != "model-mcp/v1":
+                raise ValueError("smoke requires a model-driven build")
+            suite_id = str(uuid.uuid4())
+            eid = str(uuid.uuid4())
+            run_id = str(uuid.uuid4())
+            session.add(EvalSuite(id=suite_id, name="single-trial model smoke",
+                version="v1", challenge_ids=json.dumps([challenge_id]),
+                seeds=json.dumps([seed]), action_cap=action_cap,
+                deadline_seconds=deadline_seconds, created_at=now))
+            session.add(Evaluation(id=eid, suite_id=suite_id, baseline_id=build_id,
+                candidate_id=build_id, state="queued", created_at=now, updated_at=now))
+            session.add(EvalRun(id=run_id, evaluation_id=eid, build_id=build_id,
+                challenge_id=challenge_id, side="smoke"))
+            session.add(EvalTrial(id=str(uuid.uuid4()), run_id=run_id,
+                evaluation_id=eid, seed=seed, state="queued", updated_at=now))
+            session.commit()
+            return self._eval_dict(session.get(Evaluation, eid))
+
     def list_evaluations(self):
         with self._session() as session:
             return [self._eval_dict(r) for r in session.scalars(

@@ -54,7 +54,7 @@ def _substitute(value, last_transaction):
     return value
 
 
-async def _play_mcp(arena_id, build):
+async def _play_mcp(arena_id, build, *, deadline_seconds=None):
     from mcp import ClientSession  # noqa: PLC0415
     from mcp.client.streamable_http import streamablehttp_client  # noqa: PLC0415
 
@@ -66,9 +66,30 @@ async def _play_mcp(arena_id, build):
             await session.initialize()
             announce = await session.call_tool("announce_agent", arguments={
                 "arena_id": arena_id, "model": build["config"]["model"],
-                "provider": "scripted-mcp"})
+                "provider": build["config"].get("provider", "scripted-mcp")})
             if announce.isError:
                 raise RuntimeError("MCP agent announcement failed")
+            if build["driver"] == "model-mcp/v1":
+                import eval_model_driver  # noqa: PLC0415
+                config = build["config"]
+                connection = Database().get_decrypted_model_credential(
+                    config["connection_owner"])
+                if not connection or any(connection.get(key) != config.get(key)
+                                         for key in ("provider", "model", "base_url")):
+                    raise RuntimeError("pinned model connection unavailable or changed")
+                def decode(response):
+                    if response.structuredContent is not None:
+                        return response.structuredContent
+                    raw = next((block.text for block in response.content
+                                if block.type == "text"), "{}")
+                    try:
+                        return json.loads(raw)
+                    except json.JSONDecodeError:
+                        return {"error": raw[:200]}
+                effective = {**build, "config": {**config, "deadline_seconds": min(
+                    config["deadline_seconds"], deadline_seconds or config["deadline_seconds"])}}
+                return await eval_model_driver.run(session, arena_id, effective,
+                                                   connection, decode)
             for step in build["config"]["plan"]:
                 args = _substitute(step["args"], last_transaction)
                 args["arena_id"] = arena_id
@@ -77,15 +98,21 @@ async def _play_mcp(arena_id, build):
                 if value is None:
                     value = json.loads(next((block.text for block in response.content
                                              if block.type == "text"), "{}"))
-                transcript.append({"tool": step["tool"], "ok": not response.isError})
+                if step["tool"] == "browser_visit" and "expect_dom" in step:
+                    if step["expect_dom"] not in value.get("rendered_dom", ""):
+                        raise RuntimeError("browser DOM expectation failed")
+                entry = {"tool": step["tool"], "ok": not response.isError}
+                if step["tool"] == "browser_visit":
+                    entry["dom_sha256"] = value.get("dom_sha256")
+                transcript.append(entry)
                 if response.isError:
                     raise RuntimeError(f"MCP step failed: {step['tool']}")
                 if step["tool"] == "http_request":
                     last_transaction = value.get("transaction_digest")
-    return transcript
+    return {"transcript": transcript, "model_usage": [], "termination": "plan_complete"}
 
 
-def _trial_result(db, arena_id, transcript, challenge):
+def _trial_result(db, arena_id, execution, challenge):
     import api  # noqa: PLC0415 - reuse the established operator scorer/export projection
 
     arena = db.get_deployment(arena_id)
@@ -97,13 +124,29 @@ def _trial_result(db, arena_id, transcript, challenge):
     row["metadata"]["nv.leakage_label"] = challenge["label"]
     row["metadata"]["nv.validator_version"] = challenge["validator_version"]
     row["tags"] = sorted(set(row["tags"] + [f"leakage:{challenge['label']}"]))
+    usage = execution["model_usage"]
+    if usage:
+        input_tokens = [item.get("input_tokens") for item in usage]
+        output_tokens = [item.get("output_tokens") for item in usage]
+        row["metadata"]["model_calls"] = len(usage)
+        row["metadata"]["input_tokens"] = (sum(input_tokens) if all(
+            item is not None for item in input_tokens) else None)
+        row["metadata"]["output_tokens"] = (sum(output_tokens) if all(
+            item is not None for item in output_tokens) else None)
+        row["metadata"]["tokens"] = (row["metadata"]["input_tokens"] +
+            row["metadata"]["output_tokens"] if row["metadata"]["input_tokens"] is not None
+            and row["metadata"]["output_tokens"] is not None else None)
+        costs = [item.get("cost_usd") for item in usage]
+        row["metadata"]["cost_usd"] = sum(costs) if all(
+            item is not None for item in costs) else None
     findings = [e.get("payload") or {} for e in db.list_events(
         arena_id, limit=None, types=("finding",))]
     false_claims = sum(1 for f in findings if (f.get("validation") or {}).get(
         "verdict") == "refuted")
     requests = len(db.list_events(arena_id, limit=None, types=("http_request",)))
     return {"export": row, "false_claims": false_claims,
-            "requests": requests, "transcript": transcript}
+            "requests": requests, "transcript": execution["transcript"],
+            "model_usage": usage, "termination": execution["termination"]}
 
 
 def _run_trial(db, trial, run, challenge, build, suite, claim):
@@ -142,9 +185,10 @@ def _run_trial(db, trial, run, challenge, build, suite, claim):
         db.record_event(arena_id, bindings.BINDING_GRANT,
             {"agent_name": principal, "stance": "attacker", "auto": False,
              "granted_by": "evaluation-worker"}, actor="evaluation-worker")
-        transcript = asyncio.run(_play_mcp(arena_id, build))
+        execution = asyncio.run(_play_mcp(arena_id, build,
+                                         deadline_seconds=suite["deadline_seconds"]))
         return arena_id, after["observed_state_digest"], _trial_result(
-            db, arena_id, transcript, challenge)
+            db, arena_id, execution, challenge)
     finally:
         if (db.get_deployment(arena_id) or {}).get("status") == LabStatus.ACTIVE:
             db.transition_deployment(arena_id, (LabStatus.ACTIVE,), LabStatus.DESTROYING,
