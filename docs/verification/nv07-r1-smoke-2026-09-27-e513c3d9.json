@@ -1,0 +1,35 @@
+{
+  "attempt": "nv07-r1-setup-2026-09-27-e513c3d9-attempt.json",
+  "error": null,
+  "evaluation_id": "2e0b7652-3d4b-45d1-99b2-c037c0e53d45",
+  "final_resources": {
+    "09a9062f-0f3b-4614-99d4-3d85e2425887": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "a9aaf0f5-12a3-414e-a4bd-c6c62b46908d": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    }
+  },
+  "schema": "nidavellir/nv07-r1-smoke/v1",
+  "setup": "nv07-r1-setup-2026-09-27-e513c3d9.json",
+  "state": "complete",
+  "trials": [
+    {
+      "arena_id": "09a9062f-0f3b-4614-99d4-3d85e2425887",
+      "error": "ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)",
+      "id": "190df9a6-f672-487b-aee4-4d45f3323d9e",
+      "metadata": null,
+      "model_usage": null,
+      "score": null,
+      "state": "infrastructure_failure",
+      "termination": null,
+      "transcript": null
+    }
+  ]
+}

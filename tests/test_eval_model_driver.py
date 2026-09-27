@@ -133,6 +133,8 @@ def test_model_build_pins_connection_without_credential(monkeypatch):
     assert "key_last4" not in str(build)
     assert client.post("/agent-builds", json={"name": "bad", "version": "v1",
         "driver": "model-mcp/v1", "goal": "test", "max_model_calls": 9}).status_code == 422
+    assert client.post("/agent-builds", json={"name": "bad", "version": "v1",
+        "driver": "model-mcp/v1", "goal": "test", "cost_budget_usd": 1}).status_code == 422
 
 
 def test_single_trial_smoke_is_durable_and_unpaired(monkeypatch):
@@ -162,4 +164,6 @@ def test_single_trial_smoke_is_durable_and_unpaired(monkeypatch):
     assert queued == [record["id"]]
     assert client.post("/evaluation-smokes", json={"build_id": build["id"],
         "challenge_id": challenge["id"], "action_cap": 9}).status_code == 422
+    assert client.post("/evaluation-smokes", json={"build_id": build["id"],
+        "challenge_id": challenge["id"], "token_budget": 100}).status_code == 422
     assert experiments.compare(record)["evidence_scope"] == "calibration_or_unknown"

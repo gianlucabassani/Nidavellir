@@ -3,7 +3,7 @@ FastAPI REST Layer - Production Architecture (Redis/Celery)
 """
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile, WebSocket
 from fastapi.responses import Response, StreamingResponse
-from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -5808,6 +5808,8 @@ def arena_eval_export(
 
 
 class AgentBuildCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str = Field(min_length=1, max_length=100)
     version: str = Field(min_length=1, max_length=100)
     driver: Literal["scripted-mcp/v1", "model-mcp/v1"] = "scripted-mcp/v1"
@@ -5964,6 +5966,8 @@ def create_evaluation(req: EvaluationCreate,
 
 
 class EvaluationSmokeCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     challenge_id: str
     build_id: str
     seed: int = 1

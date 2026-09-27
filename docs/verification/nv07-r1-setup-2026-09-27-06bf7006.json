@@ -1,0 +1,22 @@
+{
+  "build_digest": "sha256:0973f3713528bf52ebdfa178f31ff52c2f51c29a527959721315849d17d0d1e9",
+  "build_id": "5447fa4d-0a28-4592-8556-9985dff6ce31",
+  "challenge_id": "cc7a6ea8-8ef9-4829-bb0e-ef7c2b275a1e",
+  "challenge_label": "calibration",
+  "connection": {
+    "model": "gemini-2.5-flash",
+    "provider": "gemini",
+    "status": "standby"
+  },
+  "fixture_image": "sha256:05f43f7e96cd4429faa15c237eef8e27e1756dd9c2f5a76ebb20e0a121ffc675",
+  "model_requests": 0,
+  "proposed_request": {
+    "action_cap": 8,
+    "build_id": "5447fa4d-0a28-4592-8556-9985dff6ce31",
+    "challenge_id": "cc7a6ea8-8ef9-4829-bb0e-ef7c2b275a1e",
+    "deadline_seconds": 600,
+    "seed": 1
+  },
+  "schema": "nidavellir/nv07-r1-smoke-setup/v1",
+  "source_arena": "900d8dd7-f014-48d6-8b05-9d10c2f101aa"
+}

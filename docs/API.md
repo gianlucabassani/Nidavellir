@@ -139,23 +139,33 @@ worker using durable jobs. The console's PoC workspace and attacker MCP tools
 
 ## Durable paired evaluations
 
-All five evaluation endpoints are **operator-only**; agent keys receive 403 and
+Evaluation endpoints are **operator-only**; agent keys receive 403 and
 no evaluation record is exposed through MCP. Participant calls still enter
 through the stance-scoped gateway, so a trial never grants the agent Docker or
 orchestrator access.
 
 - `POST /agent-builds` (201) — register a pinned `scripted-mcp/v1` build from
   `name`, `version` and a 1–20 step `plan`. Each step is `{"tool", "args"}`
-  limited to `announce_agent`, `get_briefing`, `get_topology`, `http_request`
-  and `report_finding`; `arena_id` is assigned per trial and is refused in
+  limited to `announce_agent`, `get_briefing`, `get_topology`, `browser_visit`,
+  `http_request` and `report_finding`. A browser step may include a bounded
+  `expect_dom` assertion on the rendered page. `arena_id` is assigned per trial and is refused in
   `args`. The response carries the content-addressed build digest over name,
   version and config, so a changed plan is a different build. A repeated
   name/version returns 409.
+- `POST /agent-builds` with `driver: "model-mcp/v1"` — register an operator-owned
+  build using the operator's saved model connection, a nonempty `goal`, and no
+  scripted plan. `max_model_calls` is 1–8 and `max_output_tokens` is 64–512.
+  Provider, model and base URL are pinned without copying the credential into
+  the build record. At trial time the worker resolves that connection and uses
+  only scoped `get_briefing`, `browser_visit`, `http_request` and
+  `report_finding` MCP actions. Unknown fields, including unenforceable token
+  or dollar caps, return 422. A saved connection is not proof of provider
+  availability or billing mode.
 - `POST /eval-challenges` (201) — pin a challenge to an **active**,
   reset-eligible, Docker-local source arena that already has a lifecycle
   observation. The record stores the scenario, source arena, recipe digest and
   validator identity/version. The required `label` is `calibration` or
-  `held-out`; the public NV-06 and NV-08 synthetic fixtures can only be calibration.
+  `held-out`; the public NV-06, NV-08 and NV-09 synthetic fixtures can only be calibration.
   A missing, inactive, non-eligible or non-Docker-local source returns 409.
 - `POST /eval-suites` (201) — a suite of unique `challenge_ids` (1–8) and at
   least three unique `seeds`, with `action_cap` (1–10000, default 100) and
@@ -163,13 +173,26 @@ orchestrator access.
 - `POST /evaluations` (202) — queue a baseline/candidate comparison over a
   suite. The two builds must differ. The worker task `run_evaluation` claims
   each trial atomically, so a restart never double-runs one.
+- `POST /evaluation-smokes` (202) — queue **one** calibration trial for a
+  `model-mcp/v1` build owned by the caller. Supply `challenge_id`, `build_id`,
+  optional `seed` (default 1), `action_cap` (1–8, default 8) and
+  `deadline_seconds` (60–600, default 600). This endpoint starts model usage;
+  it is not a paired or repeated suite. The record has `kind:
+  "single_trial_smoke"`, one run and one trial, with no matched-pair claim.
 - `GET /evaluations/{id}` — the durable record with its runs, trials and a
   computed `comparison`.
 
 Each trial deploys its own arena from the pinned recipe, re-checks that the
 observed starting state matches the pinned source, applies the suite budget and
-deadline, plays the build's scripted MCP plan and destroys the arena. The
+deadline, plays the build's scripted MCP plan or bounded model decisions, and destroys the arena. The
 trial's score and eval export remain readable after teardown.
+Model trial results also retain `model_usage` per provider call, termination,
+provider-reported input/output tokens and any reported cost. Cost remains
+unknown when the provider does not report it. Nidavellir cannot reserve an
+external provider's input tokens or dollars before a call; the enforceable
+limits are model call count, requested output tokens, gateway actions and
+wall-clock deadline. A model smoke is calibration only and does not close
+NV07-R1's repeated-suite requirement.
 Each trial export carries `metadata.nv.challenge_id`,
 `metadata.nv.leakage_label`, `metadata.nv.validator_version` and a
 `leakage:<label>` tag. The comparison carries each pair's label and an

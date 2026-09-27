@@ -1,6 +1,7 @@
 """Durable NV-07 records, pair accounting and operator boundary."""
 from __future__ import annotations
 
+import builtins
 import uuid
 from datetime import datetime, timedelta
 
@@ -11,6 +12,19 @@ import api
 import auth
 import experiments
 from database import Database
+
+
+def test_nested_trial_error_exposes_safe_cause_only():
+    group = builtins.__dict__["ExceptionGroup"]
+    assert experiments._safe_trial_error(group("task group", [
+        RuntimeError("model provider returned HTTP 401")])) == (
+            "RuntimeError: model provider returned HTTP 401")
+    assert experiments._safe_trial_error(group("task group", [
+        RuntimeError("private provider body and secret")])) == "RuntimeError"
+    assert experiments._safe_trial_error(group("task group", [
+        RuntimeError("model provider returned HTTP 401 secret")])) == "RuntimeError"
+    assert experiments._safe_trial_error(group("task group", [
+        OSError("credential in transport URL")])) == "OSError"
 
 
 def _build(db, name):

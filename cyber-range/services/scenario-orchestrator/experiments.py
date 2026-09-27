@@ -27,6 +27,26 @@ TRIAL_OVERHEAD_SECONDS = 600
 STALL_MINUTES = 70
 
 
+def _safe_trial_error(exc):
+    """Expose a useful nested cause without copying provider or MCP payloads."""
+    children = getattr(exc, "exceptions", ())
+    while type(exc).__name__ in ("ExceptionGroup", "BaseExceptionGroup") and children:
+        exc = children[0]
+        children = getattr(exc, "exceptions", ())
+    kind = type(exc).__name__
+    message = str(exc)
+    safe_messages = {"MCP agent announcement failed",
+                     "pinned model connection unavailable or changed",
+                     "model connection has no supported endpoint"}
+    provider_prefix = "model provider returned HTTP "
+    provider_status = message.removeprefix(provider_prefix)
+    safe_status = (message.startswith(provider_prefix) and
+                   len(provider_status) == 3 and provider_status.isdecimal())
+    if isinstance(exc, RuntimeError) and (message in safe_messages or safe_status):
+        return f"{kind}: {message}"[:500]
+    return kind
+
+
 def time_limits(trial_count, deadline_seconds):
     soft = trial_count * (deadline_seconds + TRIAL_OVERHEAD_SECONDS) + 60
     return soft, soft + 60
@@ -223,7 +243,7 @@ def execute(evaluation_id, claim):
             kind = "infrastructure_failure"
             db.finish_eval_trial(trial["id"], claim, state=kind,
                 arena_id=arena_id, starting_digest=digest,
-                error=f"{type(exc).__name__}: {exc}"[:500])
+                error=_safe_trial_error(exc))
     db.set_evaluation_state(evaluation_id, "complete", expected="running")
     return {"evaluation_id": evaluation_id, "state": "complete"}
 

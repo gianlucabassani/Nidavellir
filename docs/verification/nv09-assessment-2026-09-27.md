@@ -1,14 +1,15 @@
 # NV-09 synthetic workflow assessment — 2026-09-27
 
 The first live manifest is `nv09-live-2026-09-27-aed88ffd.json`; the final
-post-change gate is `nv09-live-2026-09-27-b17ac7a2.json`. The gate uses a
+post-change gate is `nv09-live-2026-09-27-b97417df.json` (the previous final
+manifest was `nv09-live-2026-09-27-b17ac7a2.json`). The gate uses a
 real client-rendered synthetic SPA, two test accounts, one B-owned object,
 browser views for A and B, an A-to-B HTTP comparison, independent target-local
 effect and healthy-control probes, and replacement trial arenas for reset.
 Three matched pairs showed a verified regression only when the cross-account
 path changed from `/objects/B` to `/protected/B`; no pair failed because of
 infrastructure. The final gate recorded six trial verdicts (three confirmed,
-three refuted), a -1 verified difference for the SPA challenge, a 19.71-second
+three refuted), a -1 verified difference for the SPA challenge, a 24.85-second
 setup stage and zero labelled residual resources. All results are public
 calibration evidence.
 

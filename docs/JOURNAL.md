@@ -3,6 +3,51 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-09-27 — NV07-R1 smoke outcome and Claude Code MCP verification
+
+**Outcome:** The one authorized Gemini durable smoke was submitted against the
+isolated, current PostgreSQL stack. Its evaluation completed, but the only trial
+failed as `infrastructure_failure` with a generic MCP `ExceptionGroup`; no
+provider usage, transcript or verdict was recorded. The stack used an ephemeral
+encryption key, and teardown left zero labelled Docker resources. No retry was
+made. Trial error handling now unwraps nested task-group failures while storing
+only an allowlisted status message or exception class, without provider bodies,
+prompts or credentials.
+
+At the operator's direction, Claude Code Haiku then participated directly over
+Nidavellir MCP in the synthetic NV-06 authorization arena. In five turns it
+read B's synthetic object as A and submitted one finding. The independent
+`authorization_effect` validator confirmed `unauthorized_read`; score was 1/1,
+and the export remained available after arena teardown. Claude Code reported
+$0.0477513 and token usage. This verifies direct Claude Code MCP access, not a
+successful durable `model-mcp/v1` trial; NV07-R1 remains open.
+
+The NV-09 live gate was rerun after the API request models began rejecting
+unknown budget fields: three matched pairs, three confirmed and three refuted
+verdicts, zero infrastructure failures and zero residual labelled resources.
+The recorded verified difference is -1 for the synthetic SPA challenge. NV-09
+remains open for a real Bughunt agentic-client handoff and operator workflow
+measurement.
+
+**Files:** `experiments.py`, `tests/test_nv07_experiments.py`,
+`docker-compose.nv07.yml`, `docs/API.md`, the NV07 setup, smoke and MCP records,
+the latest NV-09 manifest, and the Claude MCP preparation/finalization scripts.
+
+**Verification:** The NV-09 evidence is
+`docs/verification/nv09-live-2026-09-27-b97417df.json`; the direct MCP evidence
+is `docs/verification/nv07-claude-mcp-2026-09-27-58bcfa5a.json`; the failed
+durable smoke is `docs/verification/nv07-r1-smoke-2026-09-27-e513c3d9.json`.
+The final `make release-check` passed with Ruff, zero medium/high Bandit,
+release smoke, 934 SQLite passes (four skips) and 938 PostgreSQL passes;
+six integration tests were deselected in each suite.
+
+**Unresolved risks / next step:** The Gemini trial's underlying leaf cause is
+unknown because its worker stack was already torn down; provider usage and
+billing are also unknown. The safer diagnostic passed the pinned release gate.
+NV07-R1 still requires a successful model-driven durable trial
+and a repeated suite showing variability and token/cost attribution. NV-09
+remains calibration evidence only and has no maintained Bughunt adapter.
+
 ## 2026-09-27 — Synthetic NV-09 SPA gate and NV07-R1 model smoke preparation
 
 **Outcome:** Added a synthetic, client-rendered two-account SPA and the versioned
