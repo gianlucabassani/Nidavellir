@@ -92,6 +92,33 @@ NV07-R1 still requires a successful model-driven durable trial
 and a repeated suite showing variability and token/cost attribution. NV-09
 remains calibration evidence only and has no maintained Bughunt adapter.
 
+## 2026-09-28 — NV-09 scope clarified against current bughunt state
+
+**Outcome:** No code change. Gianluca flagged that bughunt is mostly deterministic
+pipelines (BH-01/03/04 — enumeration/baseline/worker/backup); the only agentic
+component is Hermes/Claude Code + MCP driving active testing against target webapps.
+Cross-checked with `@bughuntmanager` against bughunt's current authoritative
+PLAN.md/TODO.md (checkpoint 2026-09-15) — an earlier grep had hit a stale copy under
+`dev/history/2026-09-10-before-agent-driven/TODO.md`. Confirmed: BH-13/BH-14B/BH-15
+("Hermes execution/evaluation") name the agentic layer only. Bughunt D021 states the
+deterministic pipelines run independent of Nidavellir/Hermes by design; D017 states the
+BH-13/NV-09 manifest exchanges synthetic scenario/target + evidence, never live campaign
+credentials. Bughunt's 2026-09-10 proposal names the first concrete vertical slice: one
+synthetic SPA, two accounts, one owned object, one cross-account comparison, one restart;
+broad autonomous crawling explicitly excluded from that slice.
+
+**Files:** `TODO.md` (NV-09 entry), `ROADMAP.md` (BH-13/NV-09 integration paragraph) —
+scope clarification only, no change to dependencies or accept criteria.
+
+**Verification:** Confirmed via direct message from `@bughuntmanager`, citing bughunt
+D017, D021, TODO.md:178 and the 2026-09-10 agent-workflow proposal. Not independently
+re-read against the bughunt repo from this session.
+
+**Unresolved risks / next step:** NV-09 itself is still not started (depends on NV-02-06,
+first NV-08 fixture, NV-07). Next concrete step unchanged: pick the first vertical-slice
+fixture (bughunt's synthetic-SPA slice is the named candidate) and scope the joint
+manifest fields before any implementation work.
+
 ## 2026-09-27 — Synthetic NV-09 SPA gate and NV07-R1 model smoke preparation
 
 **Outcome:** Added a synthetic, client-rendered two-account SPA and the versioned
@@ -136,6 +163,37 @@ research, retain this as a harness regression before considering a Bughunt
 adapter. NV07-R1 requires an aligned main-stack schema, a verified billing/usage
 connection, specific permission for one live smoke, then a repeated model-driven
 suite before closure. NV06-R1 and INFRA-R1 remain open.
+
+## 2026-09-27 — Evaluation UI concept and mock engagement walkthrough
+
+**Outcome:** Corrected stale "foundation" navigation on the working Evaluations and
+Agent builds pages. Evaluations now presents a four-step operator journey with
+registry summaries, prerequisites, styled forms, honest calibration/model-driver
+boundaries and readable comparison details. Agent builds has a real registry view;
+Home counts durable evaluations instead of advertising them as future work.
+Created one operator-led, four-hour calibration engagement using the existing
+`container_web_pentest` scenario and explicit `mock` provider for UI exploration.
+The workspace labels every mock address/output as simulated and does not link
+to a simulated target URL. No real victim or agent/model execution was used.
+
+**Files:** `cyber-range/webui/{app.py,templates/base.html,templates/evaluations.html,templates/evaluation_detail.html,templates/agent_builds.html,templates/arena_detail.html,templates/overview.html,static/css/app.css}`,
+`tests/test_webui.py`, and `docs/verification/ui-concept-2026-09-27.json`.
+
+**Verification:** `make release-check` passed on pinned Python 3.11.14: Ruff,
+Bandit (zero medium/high), release smoke, 924 SQLite passed (four skipped) and
+928 PostgreSQL passed (six integration tests deselected in each). The rebuilt
+webui returned 200 for Home, Evaluations, Agent builds, Engagements and the
+demo workspace; guided anchors, demo listing, mock warning and suppression
+of the fake-target link were checked live. The demo had zero labelled Docker
+containers, networks and volumes. See the verification JSON for its ID and
+expiry.
+
+**Unresolved risks / next step:** The three true foundation destinations
+(Targets registry, Providers & capacity, Security) remain planned; this is a
+concept polish, not a full console rebuild. The demo is simulated and cannot
+validate a vulnerability. NV07-R1, NV06-R1 and INFRA-R1 remain open. Next
+product work is NV-09; the user may first review the UI concept and identify
+which flow needs redesign.
 
 ## 2026-09-26 — Final NV-08 gates and collision-safe live evidence
 

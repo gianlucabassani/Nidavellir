@@ -43,7 +43,10 @@ can prove operational usefulness before a broad discovery toolkit or private cor
 exists. Calibration must not be advertised as held-out capability evidence. Bughunt owns
 live bounty campaigns; Nidavellir owns controlled environments, independent validators
 and repeated experiments. BH-13/NV-09 exchange synthetic versioned test/evidence manifests,
-not real campaign credentials. Integration remains planned.
+not real campaign credentials. Integration remains planned. Scope is bughunt's agentic
+layer only (Hermes/Claude Code + MCP active testing, BH-13/BH-14B/BH-15) — bughunt's
+deterministic pipelines (enumeration/baseline/worker/backup) run independent of
+Nidavellir/Hermes by design (bughunt D021) and are not part of this manifest.
 
 Preserve Docker-local as the supported implementation focus. Cloud parity, hosted concerns,
 and multi-agent breadth remain deferred; local VM intake requires a selected research need.
