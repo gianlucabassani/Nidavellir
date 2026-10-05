@@ -3,6 +3,25 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-10-05 — Close NV-09 after operator review
+
+**Outcome:** The operator judged the paired BYO-agent run worth the actual
+workflow and closed NV-09. The direct-harness slice (opencode +
+opencode-go/deepseek-v4.1-flash on the NV-06 and NV-09 fixtures) is accepted
+with independent validation, matched fresh arenas, a detected seeded
+regression, zero infrastructure-failed pairs and zero residual resources.
+NV07-R1 (durable `model-mcp/v1` suite) and MODEL-R1 (custom connection
+headers) stay open.
+
+**Files:** `TODO.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, the local
+`.lab.yaml` milestones and this journal.
+
+**Verification:** Documentation-only change; no code, runtime or test change.
+The accepted evidence is `docs/verification/byo-agent-pair-2026-10-05-ce132ac4.json`
+plus the run manifests in the preceding 2026-10-05 entries, whose pinned
+`make release-check` passed (941 SQLite / 945 PostgreSQL, Ruff and Bandit
+clean).
+
 ## 2026-10-05 — Paired BYO-agent regression run (NV-09 slice)
 
 **Outcome:** Ran the NV-09 synthetic SPA as a paired agent comparison with two

@@ -1,6 +1,6 @@
 # Nidavellir — ordered delivery checklist
 
-Updated 2026-10-05 after the first BYO-agent MCP runs and the NV-09 re-scope.
+Updated 2026-10-05 after the paired BYO-agent run closed NV-09.
 This is the canonical work queue. [ROADMAP.md](ROADMAP.md) retains product scope,
 design detail and legacy milestone mapping. Unchecked means unfinished.
 Verification history is in [docs/JOURNAL.md](docs/JOURNAL.md).
@@ -75,7 +75,7 @@ for both human and agent callers; API/GUI/MCP share the same service boundary.
   **Depends:** NV-02, NV-06; grow alongside NV-07. **Accept:** repeated trials catch a known
   agent regression; public known-vulnerability fixtures are labeled calibration, not held-out
   capability evidence. Broad challenge intake is not a prerequisite for the first useful run.
-- [ ] **NV-09 — BYO-agent workflow proof (harness-agnostic).** Any operator-selected
+- [x] **NV-09 — BYO-agent workflow proof (harness-agnostic).** Any operator-selected
   MCP client drives active testing through the scoped gateway — opencode, Claude Code,
   Codex or Bughunt as one example; no client is a dependency. Nidavellir owns the pinned
   target, budgets, controls, observation digests and independent validation. Versioned
@@ -92,8 +92,9 @@ for both human and agent callers; API/GUI/MCP share the same service boundary.
   recorded in `docs/verification/byo-agent-*.json`. A paired run against the same SPA
   fixture (baseline vs the same harness with the HTTP tool removed) detected the
   regression: verified difference -1.0, two matched pairs, zero infrastructure-failed
-  pairs (`docs/verification/byo-agent-pair-2026-10-05-ce132ac4.json`). The operator
-  workflow judgment remains before this item closes.
+  pairs (`docs/verification/byo-agent-pair-2026-10-05-ce132ac4.json`). Closed after
+  operator review: setup reuses the pinned fixture and gate, and the paired result was
+  judged worth the operator's actual workflow.
 - [x] **NV-10 — Recover research and experiment records.** Versioned consistent backup and
   restore of research DB/events, scenarios/target manifests, evidence/transactions, traces,
   experiment records and protected encryption keys/configuration. Separate redacted sharing

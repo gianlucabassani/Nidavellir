@@ -26,8 +26,8 @@
 dependencies and acceptance criteria. This roadmap retains product/design detail;
 S/C/R/D/E/P labels below are subject areas, not a competing execution order.
 The operator requested this reorganization after reviewing the delivery state.
-NV-01–08 and NV-10 have completed their accepted gates; NV-09 is next. Open risks and
-verification gaps are tracked in [ISSUES.md](ISSUES.md).
+NV-01–10 have completed their accepted gates; P2 work starts when a concrete research
+target selects it. Open risks and verification gaps are tracked in [ISSUES.md](ISSUES.md).
 
 1. **P0 / NV-01–05:** restore a repeatable Python 3.11 release gate; prove pinned target
    lifecycle/reset; complete confined PoC execution, durable budgets/stop and scoped access.
@@ -58,24 +58,21 @@ count. The authoritative product boundary is
 [`docs/VISION.md`](docs/VISION.md). Architecture
 decisions live in [`docs/adr/`](docs/adr/).
 
-### Next to build — NV-09, BYO-agent workflow proof
+### Current status — NV-09 complete, P2 on demand
 
-NV-08 now has versioned authorization and single-use-grant calibration
-challenges with independent effect/control validators. A five-seed paired suite
-detected a deliberately broken grant step with zero infrastructure-failed
-pairs; per-challenge and pooled intervals are explicitly labelled. These
+NV-08's versioned authorization and single-use-grant calibration challenges
+with independent effect/control validators remain the scripted baseline; their
 synthetic results validate the workbench, not held-out capability.
 
-NV-09 joins any operator-selected MCP agent to Nidavellir's pinned target,
-agent build, budgets, controls, observation digests and reset/repeat record.
-The manifest uses synthetic identities and shows whether the workflow is
-useful to an operator, as specified in [TODO.md](TODO.md). First direct
-opencode + deepseek-v4.1-flash runs passed independent validation on the
-NV-06 and NV-09 synthetic fixtures (`docs/verification/byo-agent-*.json`);
-the agent-change comparison remains. NV07-R1 still needs a model-driven
-durable suite (the direct-harness runs are not a substitute); NV06-R1 still
-needs a non-synthetic target. Neither is implied by NV-08's scripted
-calibration gate.
+NV-09's synthetic-SPA slice is proven end to end with a real BYO agent:
+opencode + deepseek-v4.1-flash passed independent validation on the NV-06 and
+NV-09 fixtures, and a paired run (baseline vs the same harness with the scoped
+HTTP tool removed) detected the seeded regression with zero
+infrastructure-failed pairs
+(`docs/verification/byo-agent-pair-2026-10-05-ce132ac4.json`). The durable
+`model-mcp/v1` comparison (NV07-R1) and MODEL-R1 (custom connection headers)
+remain open under NV-07; NV06-R1 still needs a non-synthetic target. NV-11–15
+start only when a concrete research target selects them.
 
 ---
 

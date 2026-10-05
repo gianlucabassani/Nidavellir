@@ -153,10 +153,10 @@ NV-02–05 regression gates on 2026-09-24. NV-07 durable paired experiments comp
 their pinned release and isolated Docker live gates on 2026-09-25. NV-08's
 two-class calibration library and five-seed regression gate passed on 2026-09-26.
 NV-10 encrypted record recovery passed its release and clean-install Docker-local
-restore gates on 2026-09-27. NV-09 BYO-agent workflow proof is open; the first
-opencode + deepseek-v4.1-flash MCP runs passed independent validation on
-2026-10-05, and a paired run detected the seeded tool-removal regression with
-zero infrastructure-failed pairs.
+restore gates on 2026-09-27. NV-09 completed its direct-harness BYO-agent
+acceptance on 2026-10-05: the first opencode + deepseek-v4.1-flash MCP runs
+passed independent validation, and a paired run detected the seeded
+tool-removal regression with zero infrastructure-failed pairs.
 
 | Stage | Focus | Status |
 |---|---|---|
@@ -165,7 +165,7 @@ zero infrastructure-failed pairs.
 | **Console architecture** | Engagements, Evaluations, Library, Activity, unified creation, contextual workspace and SSE | ✅ shipped |
 | **Research-ready runtime** | NV-01–05 complete on Docker-local; unsupported model token/cost hard caps are explicit | ✅ complete |
 | **Discovery lane** | Patch-diff & variant hunting, fuzzing + crash triage, binary/appliance/VM intake, campaigns & disclosure output | ◻ planned |
-| **Evaluation workbench** | NV-06–08 independent validation, durable paired trials and a two-class calibration library plus NV-10 recovery shipped; NV-09 BYO-agent proof remains | 🟢 partially shipped |
+| **Evaluation workbench** | NV-06–10 independent validation, durable paired trials, a two-class calibration library, recovery and the NV-09 BYO-agent proof shipped | 🟢 partially shipped |
 | **Held-out proof** | A real vulnerability found and proven on-platform; then a comparison over challenges drawn from that work | ◻ planned |
 | **Deferred** | OAuth/multi-tenancy, live cloud/VM providers, purple-team, VNC and hosted-product concerns | ◻ deferred |
 
