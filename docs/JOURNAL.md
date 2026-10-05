@@ -3,6 +3,47 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-10-05 — Paired BYO-agent regression run (NV-09 slice)
+
+**Outcome:** Ran the NV-09 synthetic SPA as a paired agent comparison with two
+builds of the same opencode + opencode-go/deepseek-v4.1-flash harness. The
+baseline had the full scoped attacker toolset; the candidate was identical
+except the scoped HTTP request tool was unavailable. Each build ran twice
+against fresh arenas from the pinned fixture, and all four arenas reported the
+same observed starting-state digest. Both baseline runs produced the
+cross-account read and the independent `authorization_effect` validator
+confirmed `unauthorized_read` (4 and 9 model turns; $0.00244 and $0.00409).
+Both candidate runs reported the same claim without action evidence and the
+validator returned `inconclusive/missing_action` (18 and 33 turns; $0.00871 and
+$0.01691). The candidate spent its extra turns on `run_command`,
+`submit_poc`/`poc_result` and `list_http_transactions` workarounds, then made a
+persuasive but unsupported claim — the failure mode the independent validator
+exists to catch. The verified difference is -1.0 over two matched pairs, with
+zero infrastructure-failed pairs, evidence readable after teardown and zero
+labelled resources across all five arenas.
+
+**Files:** `scripts/verify-byo-agent-pair.py`,
+`docs/verification/byo-agent-pair-2026-10-05-ce132ac4.json`, the four
+`byo-agent-pair-ce132ac4-*-events.jsonl` streams, `TODO.md`, `README.md` and
+this journal.
+
+**Verification:** Matched conditions were the identical starting digest across
+the four freshly deployed arenas; the only build difference is the removed
+tool, recorded as `participant_change`. Every verdict came from the
+target-local validator, not the agent. Raw opencode event streams are stored
+beside the manifest, and the run issues no platform model calls. An earlier
+attempt hit Docker address-pool exhaustion from stale `nidavellir-*` dangling
+networks left by the 2026-09-21/27 gates; those orphaned networks were removed
+and the script now destroys each trial arena before the next deploy. The
+pinned `make release-check` passed: Ruff clean, Bandit zero medium/high, SQLite
+941 passed (4 skipped, 6 deselected), PostgreSQL 945 passed (6 deselected) and
+migration/API/UI/gateway smoke ready.
+
+**Unresolved risks / next step:** The direct-harness NV-09 slice is now
+evidenced end to end, and the operator decides whether that closes the item
+(workflow-value judgment). NV07-R1's durable `model-mcp/v1` comparison and
+MODEL-R1 (custom connection headers) remain open.
+
 ## 2026-10-05 — First BYO-agent MCP runs and the NV-09 re-scope
 
 **Outcome:** Re-scoped NV-09 from a Bughunt integration to a harness-agnostic

@@ -155,7 +155,8 @@ two-class calibration library and five-seed regression gate passed on 2026-09-26
 NV-10 encrypted record recovery passed its release and clean-install Docker-local
 restore gates on 2026-09-27. NV-09 BYO-agent workflow proof is open; the first
 opencode + deepseek-v4.1-flash MCP runs passed independent validation on
-2026-10-05.
+2026-10-05, and a paired run detected the seeded tool-removal regression with
+zero infrastructure-failed pairs.
 
 | Stage | Focus | Status |
 |---|---|---|
