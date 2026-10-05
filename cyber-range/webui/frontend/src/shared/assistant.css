@@ -1,0 +1,224 @@
+.assistant-launcher {
+  position: fixed;
+  right: 24px;
+  bottom: 18px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 16px;
+  border: 1px solid #ac8b51;
+  border-radius: 4px;
+  background: #16243a;
+  color: #f3d398;
+  box-shadow: 0 4px 18px #0004;
+  font-size: 12px;
+  cursor: pointer;
+}
+.assistant-launcher > span:first-child {
+  font-size: 19px;
+}
+.research-assistant {
+  position: fixed;
+  right: 24px;
+  bottom: 74px;
+  z-index: 49;
+  width: 400px;
+  max-width: calc(100vw - 24px);
+  max-height: min(720px, calc(100dvh - 110px));
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #8c7754;
+  background: #132036;
+  color: #edf1f8;
+  box-shadow: 0 16px 60px #0006;
+  animation: assistant-in 180ms ease-out;
+}
+.research-assistant header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px;
+  border-bottom: 1px solid #354760;
+  background: #1b2b43;
+}
+.research-assistant header strong {
+  font-size: 14px;
+}
+.research-assistant header small {
+  display: block;
+  margin-top: 5px;
+  color: #afbed2;
+  font-size: 10px;
+}
+.research-assistant button {
+  cursor: pointer;
+  color: #f3d398;
+  background: transparent;
+  border: 1px solid #52617a;
+  padding: 7px 10px;
+  font-size: 11px;
+}
+.research-assistant button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.research-assistant header button {
+  border: 0;
+  font-size: 22px;
+}
+.assistant-model {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid #354760;
+}
+.assistant-model > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: 10px monospace;
+  color: #afbed2;
+}
+.assistant-connection {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  overflow: auto;
+  max-height: 320px;
+  border-bottom: 1px solid #354760;
+  flex-shrink: 0;
+}
+.assistant-connection label {
+  display: grid;
+  gap: 5px;
+  font-size: 11px;
+  color: #afbed2;
+}
+.assistant-connection :is(input, select) {
+  min-width: 0;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #52617a;
+  background: #0e1929;
+  color: #edf1f8;
+  font-size: 12px;
+}
+.assistant-connection a {
+  color: #f3d398;
+  font-size: 11px;
+}
+.assistant-log {
+  flex: 1;
+  min-height: 100px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 15px;
+}
+.assistant-empty strong {
+  font-size: 13px;
+}
+.assistant-empty p {
+  color: #afbed2;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.assistant-message {
+  margin: 0 0 12px;
+  padding: 11px;
+  background: #1b2b43;
+  border-left: 2px solid #7d98bc;
+}
+.assistant-message.user {
+  background: #26354a;
+  border-color: #d5b06a;
+}
+.assistant-message small {
+  color: #afbed2;
+  font: 9px monospace;
+}
+.assistant-message p {
+  margin: 7px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.assistant-message.failed {
+  border-color: #d98b83;
+}
+.assistant-error {
+  padding: 10px 12px;
+  color: #ffbdb6;
+  font-size: 11px;
+}
+.assistant-progress {
+  min-height: 25px;
+  padding: 5px 12px;
+  color: #afbed2;
+  font-size: 10px;
+}
+.assistant-composer {
+  padding: 12px;
+  border-top: 1px solid #354760;
+}
+.assistant-composer textarea {
+  resize: vertical;
+  min-height: 60px;
+  max-height: 150px;
+  width: 100%;
+  padding: 9px;
+  border: 1px solid #52617a;
+  background: #0e1929;
+  color: #edf1f8;
+  font-size: 12px;
+}
+.assistant-composer > div {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+.research-assistant :is(button, input, textarea, select, a):focus-visible,
+.assistant-launcher:focus-visible {
+  outline: 2px solid #f4ce84;
+  outline-offset: 2px;
+}
+@keyframes assistant-in {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 600px) {
+  .assistant-launcher {
+    bottom: 12px;
+    right: 12px;
+  }
+  .research-assistant {
+    right: 12px;
+    bottom: 68px;
+    width: calc(100vw - 24px);
+    max-height: calc(100dvh - 92px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .research-assistant {
+    animation: none;
+  }
+}
+@media (max-width: 1279px) {
+  .assistant-launcher {
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+  }
+  .assistant-launcher-label {
+    display: none;
+  }
+}

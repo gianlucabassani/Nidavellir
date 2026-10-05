@@ -1,6 +1,7 @@
 # Nidavellir — open risk register
 
-Updated 2026-09-26 after the NV-08 two-class live gate closed NV07-R2.
+Updated 2026-09-29 after the Royal Command Research, Benchmark and Cyber Range
+Docker-local browser journeys.
 
 Known, currently-open risks and verification gaps. Each entry states what is
 actually true today, why it matters, and the concrete evidence that would close
@@ -13,6 +14,56 @@ Severity is the risk of drawing a wrong conclusion from the platform's output:
 **high** — a stated result could be believed and be wrong;
 **medium** — a result is correct but narrower than it reads;
 **low** — operational friction with no effect on reported truth.
+
+---
+
+## Open — operator console migration
+
+### UI-R1 · Console cutover needs parity and usability evidence · low
+
+The running development SQLite file initially lacked
+`model_connections.base_url` and `deployments.effective_provider`, and had no
+Alembic revision. On 2026-09-28 it was backed up to
+`/tmp/nv-ui-development-backup-2026-09-28.db`, reconciled with a clean schema
+and stamped at revision `0009`. SQLite integrity passed, both existing
+deployments remained, and the restarted Compose console returned 200 for
+Research, Benchmark, Cyber Range, Targets and Settings data in Chromium.
+One mock arena launched, its workspace and Browser/Transfer tabs loaded, and
+it was destroyed through the React UI with its record retained. The UI now
+labels this development simulation explicitly.
+
+A separate disposable mock API database at the current schema served the new
+Research, Benchmark, Cyber Range, Targets and Settings screens and accepted a
+source-bundle upload/preview on 2026-09-28. That confirms those read/intake
+contracts independently of the stale development database; it does not meet
+the Docker-local closure criterion below.
+
+On 2026-09-29 an isolated PostgreSQL/Redis/worker/WebUI Compose stack ran a
+real Docker-local fixture through the React Cyber Range path: scenario import,
+launch, HTTP transaction and linked finding, replacement reset, retained
+original finding, replacement destroy and scenario deletion. The live run
+found and fixed a transaction-list shape mismatch that had crashed the HTTP
+tab. Both arena IDs had no labelled containers or networks after teardown;
+the isolated stack and volumes were removed.
+
+The same date, a separate Research browser journey uploaded and pinned a local
+source bundle, ran and finished setup, completed a confined PoC, recorded an
+observation, destroyed the arena and reopened the finding on its archived
+record. A second isolated NV-07 stack completed a three-pair scripted
+calibration comparison through the React registry and comparison screens:
+all six trials completed, with zero infrastructure failures. See
+`docs/verification/ui-research-benchmark-live-2026-09-29.md`. An arena event
+filtering gap and disposable-stack reaper timeout were fixed during this work.
+All tested arena resources and both disposable stacks were removed.
+
+**Why it matters:** successful read-only pages and a clean release gate do not
+prove launch, arena operations, evidence retention or Docker-local task parity.
+
+**Closes when:** route/action parity, browser denial and failure states, and
+retained-record inspection are verified across the intended Research,
+Benchmark and Cyber Range paths. Complete the manual accessibility/usability
+and fallback gates before default cutover. Record the result in
+`docs/verification/`.
 
 ---
 

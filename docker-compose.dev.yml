@@ -8,9 +8,8 @@
 # Then open http://localhost:5000  (login: admin / nidavellir)
 # API:      http://localhost:8000  (header: X-API-Key: dev-insecure-key)
 #
-# DEV ONLY: this enables the Flask/Werkzeug debugger (interactive console =
-# code execution) and well-known credentials. Never use this file on a host
-# reachable by anyone you don't trust.
+# DEV ONLY: this uses well-known credentials and a Flask reloader. Never use
+# this file on a host reachable by anyone you don't trust.
 
 services:
   orchestrator:
@@ -45,7 +44,8 @@ services:
       ORCHESTRATOR_API_KEY: dev-insecure-key
       WEBUI_USERNAME: admin
       WEBUI_PASSWORD: nidavellir
-      # Enables the Werkzeug reloader + debugger (see warning above)
+      # Enables the Werkzeug reloader; app.py keeps the interactive debugger off
+      # because its /console route conflicts with the React operator console.
       FLASK_DEBUG: "true"
     volumes:
       # Image runs the app from /app/webui (see webui/Dockerfile)

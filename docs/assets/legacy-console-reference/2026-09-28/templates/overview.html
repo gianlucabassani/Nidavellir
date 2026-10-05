@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}Home{% endblock %}
+{% block crumb %}Home{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Command board</div>
+    <h1>Home</h1>
+    <div class="sub">What is running, what is waiting on you, and what needs attention.</div>
+  </div>
+  <div class="head-actions">
+    <a href="{{ url_for('challenge_library') }}" class="btn"><i class="fa-solid fa-cubes"></i> Challenges</a>
+    <a href="{{ url_for('new_engagement') }}" class="btn btn-primary"><i class="fa-solid fa-plus"></i> New engagement</a>
+  </div>
+</div>
+
+{% if not backend_ok %}
+<div class="notice flash--warning" style="margin-bottom:18px">
+  <i class="fa-solid fa-triangle-exclamation ico" style="color:var(--warn)"></i>
+  <span>The orchestrator API is unreachable — counts and engagements may be stale. Check the <span class="mono">orchestrator</span> service.</span>
+</div>
+{% endif %}
+
+<!-- KPI strip: one tile per thing an operator decides about -->
+<div class="grid cols-4" style="margin-bottom:16px">
+  <a class="card kpi" href="{{ url_for('engagements') }}"><span class="glyph"><i class="fa-solid fa-crosshairs"></i></span>
+    <div class="n accent">{{ stats.live }}</div>
+    <div class="l"><i class="fa-solid fa-crosshairs"></i> Live engagements</div>
+    <div class="delta">{{ stats.transient }} provisioning · {{ stats.total }} all time</div></a>
+  <a class="card kpi" href="{{ url_for('findings_index') }}"><span class="glyph"><i class="fa-solid fa-bug"></i></span>
+    <div class="n {{ 'warn' if stats.review }}">{{ stats.review }}</div>
+    <div class="l"><i class="fa-solid fa-bug"></i> Awaiting review</div>
+    <div class="delta">findings needing a verdict</div></a>
+  <a class="card kpi" href="{{ url_for('engagements') }}"><span class="glyph"><i class="fa-solid fa-triangle-exclamation"></i></span>
+    <div class="n {{ 'danger' if stats.attention }}">{{ stats.attention }}</div>
+    <div class="l"><i class="fa-solid fa-triangle-exclamation"></i> Needs attention</div>
+    <div class="delta">failed runs &amp; containment</div></a>
+  <a class="card kpi" href="{{ url_for('evaluations') }}"><span class="glyph"><i class="fa-solid fa-chart-column"></i></span>
+    <div class="n">{{ stats.evaluations if stats.evaluations is not none else '—' }}</div>
+    <div class="l"><i class="fa-solid fa-chart-column"></i> Evaluations</div>
+    <div class="delta">durable paired comparisons{{ ' · API unavailable' if stats.evaluations is none else '' }}</div></a>
+</div>
+
+<div class="grid" style="grid-template-columns:1.15fr 1fr; margin-bottom:16px; align-items:start">
+  <!-- live engagements -->
+  <div class="card">
+    <div class="card-head"><span class="label">Live engagements</span><a class="more" href="{{ url_for('engagements') }}">View all</a></div>
+    {% if live %}
+    <div class="rows">
+      {% for id, v in live %}
+      <div class="row">
+        {{ ui.status_dot(v.status) }}
+        <div class="grow">
+          <a class="title" href="{{ url_for('arena_detail', instance_id=id) }}">{{ v.user_id or id }}</a>
+          <div class="meta">{{ v.scenario or '—' }}{% if v.expires_at %} · expires {{ v.expires_at[:16] }}{% endif %}</div>
+        </div>
+        {{ ui.status_badge(v.status) }}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty"><i class="fa-solid fa-layer-group"></i>Nothing running. <a href="{{ url_for('new_engagement') }}" style="color:var(--accent)">Start an engagement</a>.</div>
+    {% endif %}
+    {% if recent %}
+    <div class="card-head" style="border-top:1px solid var(--line-soft);border-bottom:0"><span class="label">Recent records</span></div>
+    <div class="rows">
+      {% for id, v in recent %}
+      <div class="row">
+        {{ ui.status_dot(v.status) }}
+        <div class="grow">
+          <a class="title" href="{{ url_for('arena_detail', instance_id=id) }}">{{ v.user_id or id }}</a>
+          <div class="meta">{{ v.scenario or '—' }} · read-only record</div>
+        </div>
+        {{ ui.status_badge(v.status) }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- findings waiting on a verdict -->
+  <div class="card">
+    <div class="card-head"><span class="label">Findings awaiting review</span><a class="more" href="{{ url_for('findings_index') }}">View all</a></div>
+    {% if review_queue %}
+    <div class="rows">
+      {% for f in review_queue %}
+      <div class="row">
+        <span class="dot dot--warn"></span>
+        <div class="grow">
+          {% if f.arena_known %}
+          <a class="title" href="{{ url_for('arena_detail', instance_id=f.arena_id) }}#findings">{{ f.title }}</a>
+          {% else %}<span class="title">{{ f.title }}</span>{% endif %}
+          <div class="meta">{{ f.cwe or 'no CWE' }} · {{ f.arena_name }}{% if f.node %} · {{ f.node }}{% endif %}</div>
+        </div>
+        {% if f.manual %}<span class="badge">operator</span>{% else %}<span class="badge badge--info">agent</span>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty"><i class="fa-solid fa-check"></i>Nothing waiting — every reported finding has a verdict.</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="grid" style="grid-template-columns:1fr 1.15fr; margin-bottom:16px; align-items:start">
+  <!-- needs attention -->
+  <div class="card">
+    <div class="card-head"><span class="label">Needs attention</span></div>
+    {% if attention %}
+    <div class="rows">
+      {% for item in attention %}
+      <div class="row">
+        <span class="dot dot--{{ 'failed' if item.kind == 'failed' else 'warn' }}"></span>
+        <div class="grow">
+          <a class="title" href="{{ url_for('arena_detail', instance_id=item.arena_id) }}">{{ item.name }}</a>
+          <div class="meta">{{ item.detail }}</div>
+        </div>
+        <span class="badge {{ 'badge--danger' if item.kind == 'failed' else 'badge--warn' }}">
+          {{ 'failed' if item.kind == 'failed' else 'egress open' }}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty"><i class="fa-solid fa-shield-halved"></i>No failed runs, and every live arena is contained.</div>
+    {% endif %}
+  </div>
+
+  <!-- provider & capacity health -->
+  <div class="card">
+    <div class="card-head"><span class="label">Providers &amp; capacity</span><span class="more">docker-local</span></div>
+    <div class="card-pad" style="padding-top:6px">
+      <div class="gauge"><div class="top"><span class="name"><i class="fa-solid fa-microchip"></i> CPU load</span><span class="val" id="sys-cpu-val">—</span></div><div class="bar"><span id="sys-cpu-bar" style="width:0"></span></div></div>
+      <div class="gauge"><div class="top"><span class="name"><i class="fa-solid fa-memory"></i> Memory</span><span class="val" id="sys-mem-val">—</span></div><div class="bar def"><span id="sys-mem-bar" style="width:0"></span></div></div>
+      <div class="gauge"><div class="top"><span class="name"><i class="fa-solid fa-hard-drive"></i> Disk</span><span class="val" id="sys-disk-val">—</span></div><div class="bar ok"><span id="sys-disk-bar" style="width:0"></span></div></div>
+      <div class="sys-foot">
+        <div class="m"><div class="v" id="sys-containers">—</div><div class="k">containers</div></div>
+        <div class="m"><div class="v" id="sys-nets">—</div><div class="k">arena nets</div></div>
+        <div class="m"><div class="v" id="sys-arenas">{{ stats.live }}</div><div class="k">live</div></div>
+        <div class="m"><div class="v" id="sys-uptime">—</div><div class="k">uptime</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- activity feed -->
+<div class="card pad-0">
+  <div class="card-head"><span class="label">Live activity</span>
+    <div class="seg" id="dash-seg" style="margin-left:auto; padding:3px">
+      <button class="on" data-f="all">All</button>
+      <button data-f="agent">Agents</button>
+      <button data-f="human">Human</button>
+      <button data-f="system">System</button>
+    </div>
+    <a class="more" href="{{ url_for('audit_trail') }}" style="margin-left:12px">Audit trail</a>
+  </div>
+  {% if events %}
+  <div class="rows" id="dash-feed">
+    {% for e in events %}
+    <div class="log-row" data-src="{{ e.source }}">
+      <span class="ts">{{ (e.ts or '')[11:19] }}</span>
+      <span class="src src-{{ e.source }}">{{ e.source }}</span>
+      <span class="msg">{{ ui.event_badge(e.type) }} {{ ui.event_detail(e) }}</span>
+      <span class="arena">{{ (e.lab_id or '')[:8] }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty" style="padding:30px">No activity recorded yet.</div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}<script>Nidavellir.initDashboard();</script>{% endblock %}

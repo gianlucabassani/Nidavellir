@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}{{ feature }}{% endblock %}
+{% block crumb %}<b>{{ feature }}</b>{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ feature }}</h1>
+    <div class="sub">{{ summary }}</div>
+  </div>
+  <div class="actions"><span class="badge badge--accent">Planned</span></div>
+</div>
+
+<div class="stub-hero">
+  <div class="ico"><i class="fa-solid {{ icon }}"></i></div>
+  <h2>{{ feature }} is on the roadmap</h2>
+  <p>{{ blurb }}</p>
+
+  <ul class="todo">
+    {% for item in todo %}
+    <li>
+      <span class="box"><i class="fa-regular fa-square"></i></span>
+      <div><b>{{ item.title }}</b> — <span>{{ item.note }}</span></div>
+    </li>
+    {% endfor %}
+  </ul>
+
+  {% if roadmap %}<p class="faint" style="margin-top:18px;font-size:12.5px">Roadmap: {{ roadmap }}</p>{% endif %}
+</div>
+{% endblock %}
