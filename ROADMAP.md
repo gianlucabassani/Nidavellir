@@ -71,8 +71,10 @@ HTTP tool removed) detected the seeded regression with zero
 infrastructure-failed pairs
 (`docs/verification/byo-agent-pair-2026-10-05-ce132ac4.json`). The durable
 `model-mcp/v1` comparison (NV07-R1) and MODEL-R1 (custom connection headers)
-remain open under NV-07; NV06-R1 still needs a non-synthetic target. NV-11–15
-start only when a concrete research target selects them.
+remain open under NV-07; NV06-R1 closed on 2026-10-05 when the generic
+`http_access_control` validator confirmed and refuted CVE-2026-26012 on pinned
+Vaultwarden 1.35.2/1.37.3 fixtures. NV-11–15 start only when a concrete
+research target selects them.
 
 ---
 

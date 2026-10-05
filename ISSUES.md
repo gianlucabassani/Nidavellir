@@ -1,6 +1,6 @@
 # Nidavellir — open risk register
 
-Updated 2026-10-05 after the first direct BYO-agent MCP runs.
+Updated 2026-10-05 after the Vaultwarden non-synthetic calibration closed NV06-R1.
 
 Known, currently-open risks and verification gaps. Each entry states what is
 actually true today, why it matters, and the concrete evidence that would close
@@ -66,19 +66,6 @@ through such an endpoint.
 
 ## Open — carried from earlier gates
 
-### NV06-R1 · Validated results rest on one calibration fixture · medium
-
-The authorization and single-use-grant classes have independent validators,
-versioned synthetic provenance and a live paired regression gate. Both remain
-public calibration fixtures. No non-synthetic target has been independently
-validated, so the closing criterion is not met.
-
-**Why it matters:** calibration evidence must not read as capability evidence.
-Exports and comparisons now label it explicitly; external validity remains open.
-
-**Closes when:** NV-08 delivers challenges of known provenance and a result is
-reproduced on one non-synthetic target.
-
 ### INFRA-R1 · Docker-local is the only live-verified provider · medium
 
 `mock`, `docker-local`, `libvirt` and `openstack` drivers exist behind the
@@ -95,6 +82,23 @@ NV-13 for local hypervisors; cloud providers remain deferred.
 ---
 
 ## Closed
+
+### NV06-R1 · Validated results rest on one calibration fixture · closed 2026-10-05
+
+The authorization and single-use-grant classes had independent validators,
+versioned synthetic provenance and a live paired regression gate, but both
+remained public calibration fixtures with no non-synthetic result.
+
+On 2026-10-05 the platform's generic `http_access_control` validator confirmed
+CVE-2026-26012 on a pinned, non-synthetic Vaultwarden 1.35.2 arena (a regular
+organization member retrieved a cipher in a collection it could not access,
+while the owner control and the actor's allowed-control request behaved as
+declared) and refuted the same request on the fixed 1.37.3 fixture with
+`access_denied`. The gate runs on an isolated Docker-local stack, retains
+observation/control evidence after teardown and leaves zero labelled
+resources. The synthetic NV-08 fixtures remain calibration-only. Evidence:
+`docs/verification/vaultwarden-live-2026-10-05-b4c1bd2c.json`,
+`cyber-range/fixtures/vaultwarden/`, `scripts/verify-vaultwarden-live.py`.
 
 ### NV07-R2 · One challenge class, one fixture · closed 2026-09-26
 

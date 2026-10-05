@@ -5428,10 +5428,23 @@ def _validate_http_access_control_finding(record: dict, req: "FindingRequest", v
     action_digest = req.transaction_digests[0] if req.transaction_digests else None
     action = probe = None
     observation_digest = control_digest = None
+    foothold = req.node
     try:
-        config = validators.normalize_http_access_control_config(
-            vuln.get("validation_config") or {})
-    except ValueError as exc:
+        config_values = dict(vuln.get("validation_config") or {})
+        if not config_values.get("base_url"):
+            outputs = record.get("outputs") or {}
+            if isinstance(outputs, str):
+                outputs = json.loads(outputs)
+            target = _victim_internal_target(outputs, req.node)
+            if target is None:
+                raise ValueError("no victim web service for the probe")
+            config_values["base_url"] = f"http://{target[0]}:{target[1]}"
+            _, footholds = setup_phase.derive_nodes_footholds(outputs)
+            if not footholds:
+                raise ValueError("no foothold node for the probe")
+            foothold = sorted(footholds)[0]
+        config = validators.normalize_http_access_control_config(config_values)
+    except (ValueError, json.JSONDecodeError) as exc:
         logger.warning("[%s] invalid http_access_control config: %s", record["id"], exc)
         result = validators.ValidationResult(
             None, validators.HTTP_ACCESS_CONTROL, "invalid validator configuration",
@@ -5450,7 +5463,7 @@ def _validate_http_access_control_finding(record: dict, req: "FindingRequest", v
     if config is not None and action is not None:
         try:
             probe = _target_local_json(
-                record, req.node,
+                record, foothold,
                 validators.http_access_control_probe_source(config), timeout=15)
             observation_digest = validation_evidence.record(
                 record["id"], {"schema": "nidavellir/validation-observation/v1",

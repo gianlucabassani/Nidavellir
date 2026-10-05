@@ -473,12 +473,16 @@ def http_access_control_probe_source(config: dict) -> str:
     return (
         "import json,urllib.error,urllib.parse,urllib.request\n"
         f"cfg=json.loads({json.dumps(payload)})\n"
+        # The target is an arena-internal address the operator declared; bypass
+        # any foothold package-mirror proxy environment so the probe cannot be
+        # routed through (or denied by) an unrelated egress proxy.
+        "fetch=urllib.request.build_opener(urllib.request.ProxyHandler({})).open\n"
         "def call(req,extra):\n"
         "    url=cfg['base_url']+req['path']\n"
         "    if req.get('params'):url+='?'+urllib.parse.urlencode(req['params'])\n"
         "    r=urllib.request.Request(url,method=req['method'],headers={**req.get('headers',{}),**extra})\n"
         "    try:\n"
-        "        resp=urllib.request.urlopen(r,timeout=4);status=resp.status;body=resp.read().decode('utf-8','replace')\n"
+        "        resp=fetch(r,timeout=4);status=resp.status;body=resp.read().decode('utf-8','replace')\n"
         "    except urllib.error.HTTPError as e:\n"
         "        status=e.code;body=e.read().decode('utf-8','replace')\n"
         "    return {'status':status,'marker':cfg['forbidden_marker'] in body}\n"
@@ -509,19 +513,20 @@ def validate_http_access_control(action: dict | None, probe: dict | None, *,
     owner_result = probe.get("owner") or {}
     actor_result = probe.get("actor") or {}
     control_result = probe.get("control") or {}
+    evidence = (f"owner status={owner_result.get('status')} "
+                f"marker={owner_result.get('marker')}; actor status="
+                f"{actor_result.get('status')} marker={actor_result.get('marker')}; "
+                f"control status={control_result.get('status')} "
+                f"marker={control_result.get('marker')}")
     if (owner_result.get("status") != disclosure_status
             or owner_result.get("marker") is not True):
         return ValidationResult(None, method, "privileged control did not observe the marker",
-                                verdict="infrastructure_failure",
+                                evidence, verdict="infrastructure_failure",
                                 reason_code="control_failed")
     if (control_result.get("status") != 200 or control_result.get("marker") is not False):
         return ValidationResult(None, method, "actor control request failed or was tainted",
-                                verdict="infrastructure_failure",
+                                evidence, verdict="infrastructure_failure",
                                 reason_code="control_failed")
-    evidence = (f"owner status={owner_result.get('status')} marker=True; "
-                f"actor status={actor_result.get('status')} "
-                f"marker={actor_result.get('marker')}; control status="
-                f"{control_result.get('status')}")
     if actor_result.get("status") == disclosure_status \
             and actor_result.get("marker") is True:
         return ValidationResult(True, method,

@@ -3,6 +3,52 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-10-05 — Vaultwarden CVE-2026-26012 live calibration; NV06-R1 closed
+
+**Outcome:** Built the first non-synthetic Nidavellir fixture: a derived
+Vaultwarden image pinned from the upstream digest with a seeded SQLite state
+(two synthetic accounts, one organization, a shared and a restricted
+collection, one cipher in each, fixed object IDs). Ran the same platform flow
+on 1.35.2 (advisory-affected) and 1.37.3 (fixed). On 1.35.2 the unprivileged
+member's `GET /api/ciphers/organization-details` returned the restricted cipher
+(HTTP 200, marker present) and the new generic `http_access_control` validator
+confirmed `unauthorized_disclosure`; on 1.37.3 the same request returned 401
+without the marker and the validator refuted it with `access_denied`. Both
+runs had healthy controls, score 1.0/0.0, evidence retained after teardown and
+zero labelled resources. NV06-R1 is closed by this evidence.
+
+Two gate defects were found and fixed while bringing it up: the derived image
+inherits `VOLUME /data`, so the seed is copied into the container's anonymous
+volume and Vaultwarden needs `I_REALLY_WANT_VOLATILE_STORAGE=true` to run
+without a bind mount; and the generated probe originally returned 403 for all
+three requests because python-urllib honoured the foothold's package-mirror
+`http_proxy` (its `no_proxy` CIDRs are not honoured by urllib). The probe now
+bypasses environment proxies explicitly, and control failures carry the
+observed statuses in their explanation and evidence.
+
+**Files:** `cyber-range/fixtures/vaultwarden/{build_fixture.py,README.md}`
+(new), `scripts/verify-vaultwarden-live.py` (new),
+`docs/verification/vaultwarden-live-2026-10-05-b4c1bd2c.json` (new),
+`validators.py` (proxy bypass, control diagnostics), `Makefile`, `ISSUES.md`,
+and this journal.
+
+**Verification:** The gate ran on the isolated NV-06 Compose stack; fixture
+images were built from the pinned digests `sha256:d89a6d21…` (1.35.2) and
+`sha256:1587c45f…` (1.37.3), and the derived image IDs, action digests,
+observation/control digests and verdicts are recorded in the evidence
+manifest. No external target was contacted; credentials are synthetic and the
+manifest excludes them. The pinned `make release-check` passed: Ruff clean,
+Bandit zero medium/high, SQLite 946 passed (4 skipped, 6 deselected),
+PostgreSQL 950 passed (6 deselected), and migration/API/UI/gateway smoke ready.
+
+**Unresolved risks / next step:** The seed DB is produced by running the
+product's own API plus one bounded SQLite insert; the derived image ID is
+reproducible only through that recipe (not bit-identical across builds, since
+server-generated user/org IDs differ). Scenario `validation_config` still
+carries synthetic lab tokens in plaintext. Next candidates: apply the same
+pattern to a second hypothesis (H1 Sends, H3 import ownership) on this fixture,
+or pursue the durable model-driven evaluation path (NV07-R1/MODEL-R1).
+
 ## 2026-10-05 — Generic HTTP access-control validator
 
 **Outcome:** Added `http_access_control`, a target-agnostic validator that lets

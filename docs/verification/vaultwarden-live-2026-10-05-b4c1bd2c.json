@@ -1,0 +1,79 @@
+{
+  "advisory": "GHSA-h265-g7rm-h337",
+  "created_at": "2026-10-05T23:58:32.072485",
+  "cve": "CVE-2026-26012",
+  "final_resources": {
+    "ca266969-d304-4681-ad33-8e5adbfefefa": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "fc4de842-f58d-4cf2-b7bc-e4b89506781c": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    }
+  },
+  "pins": {
+    "1.35.2": "vaultwarden/server@sha256:d89a6d21e361254670c24a4272b4b5f245e402c284f2f55de2c379fdbcfa1fa5",
+    "1.37.3": "vaultwarden/server@sha256:1587c45feaa479f1f5e8af3b00eded36bff77bcf1880cf8dbf0541706dd470e0"
+  },
+  "results": {
+    "1.35.2": {
+      "action": {
+        "marker_in_body": true,
+        "status": 200,
+        "transaction_digest": "sha256:285325ae33640f2e012eee25a5ac16d0796af1fc9f5bc73cb31deec37892b9b1"
+      },
+      "arena": "fc4de842-f58d-4cf2-b7bc-e4b89506781c",
+      "evidence_after_teardown": true,
+      "image_id": "sha256:5a3e64aba024b70a697c3ccf93a42e37c1f622c503edd62ebf3854960c11ed69",
+      "org_id": "23e994d4-ce4b-4a6a-8e82-98baf4ddcfaa",
+      "score": {
+        "confirmed_findings": 1,
+        "value": 1.0
+      },
+      "verdict": {
+        "action_digest": "sha256:285325ae33640f2e012eee25a5ac16d0796af1fc9f5bc73cb31deec37892b9b1",
+        "control_digest": "sha256:17d660dfb8dc7756521bd62bf7dd1361e8d2b2cac4eb91f99b90bd72ce58145e",
+        "evidence": "owner status=200 marker=True; actor status=200 marker=True; control status=200 marker=False",
+        "explanation": "actor disclosed the operator-owned marker",
+        "observation_digest": "sha256:7600230905841ef174e56f31dab48e4ebcaae1f29e9084b91c066b90c5313281",
+        "reason_code": "unauthorized_disclosure",
+        "validator_id": "http_access_control",
+        "verdict": "confirmed"
+      },
+      "version": "1.35.2"
+    },
+    "1.37.3": {
+      "action": {
+        "marker_in_body": false,
+        "status": 401,
+        "transaction_digest": "sha256:5bbf4f31c1ca374e224d94d272a6dfe314ca2ae31e30768ecc8f177011567b4b"
+      },
+      "arena": "ca266969-d304-4681-ad33-8e5adbfefefa",
+      "evidence_after_teardown": true,
+      "image_id": "sha256:907e8cedc6ae48f3226603e20e52f486caa3de2ee2c0f638b812808dd2bdd2f0",
+      "org_id": "6d8f66e9-ad5e-4b0b-a150-ec3b1c3d7686",
+      "score": {
+        "confirmed_findings": 0,
+        "value": 0.0
+      },
+      "verdict": {
+        "action_digest": "sha256:5bbf4f31c1ca374e224d94d272a6dfe314ca2ae31e30768ecc8f177011567b4b",
+        "control_digest": "sha256:17d660dfb8dc7756521bd62bf7dd1361e8d2b2cac4eb91f99b90bd72ce58145e",
+        "evidence": "owner status=200 marker=True; actor status=401 marker=False; control status=200 marker=False",
+        "explanation": "actor did not observe the operator-owned marker",
+        "observation_digest": "sha256:0772bf32564a41b8ae2c4f35bbbc93bdfe204ef52124a4a7b5cf3b47f8ab2d7a",
+        "reason_code": "access_denied",
+        "validator_id": "http_access_control",
+        "verdict": "refuted"
+      },
+      "version": "1.37.3"
+    }
+  },
+  "schema": "nidavellir/vaultwarden-live-evidence/v1",
+  "target": "vaultwarden/server"
+}
