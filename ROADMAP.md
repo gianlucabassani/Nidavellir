@@ -25,28 +25,29 @@
 [TODO.md](TODO.md) is the canonical ordered checklist with stable NV task IDs,
 dependencies and acceptance criteria. This roadmap retains product/design detail;
 S/C/R/D/E/P labels below are subject areas, not a competing execution order.
-The operator requested this reorganization after reviewing both Nidavellir and Bughunt.
+The operator requested this reorganization after reviewing the delivery state.
 NV-01–08 and NV-10 have completed their accepted gates; NV-09 is next. Open risks and
 verification gaps are tracked in [ISSUES.md](ISSUES.md).
 
 1. **P0 / NV-01–05:** restore a repeatable Python 3.11 release gate; prove pinned target
    lifecycle/reset; complete confined PoC execution, durable budgets/stop and scoped access.
 2. **P1 / NV-06–10:** strengthen independent validation; persist experiments and paired
-   trials; maintain a small challenge library; prove usefulness with a Bughunt workflow;
-   restore research/evaluation records on a clean installation.
+   trials; maintain a small challenge library; prove usefulness with a real BYO-agent
+   workflow; restore research/evaluation records on a clean installation.
 3. **P2 / NV-11–15:** affected-versus-fixed replay, targeted variant/fuzzing work,
    binary/local VM intake and research campaign/disclosure output as concrete targets need
    them; held-out comparison and active episodes follow suitable evidence.
 
 Discovery and evaluation remain first-class objectives. One local calibration workflow
 can prove operational usefulness before a broad discovery toolkit or private corpus
-exists. Calibration must not be advertised as held-out capability evidence. Bughunt owns
-live bounty campaigns; Nidavellir owns controlled environments, independent validators
-and repeated experiments. BH-13/NV-09 exchange synthetic versioned test/evidence manifests,
-not real campaign credentials. Integration remains planned. Scope is bughunt's agentic
-layer only (Hermes/Claude Code + MCP active testing, BH-13/BH-14B/BH-15) — bughunt's
-deterministic pipelines (enumeration/baseline/worker/backup) run independent of
-Nidavellir/Hermes by design (bughunt D021) and are not part of this manifest.
+exists. Calibration must not be advertised as held-out capability evidence. Live bounty
+campaigns are a separate product; Nidavellir owns controlled environments, independent
+validators and repeated experiments. Any MCP-capable bring-your-own client (opencode,
+Claude Code, Codex; Bughunt as one example) drives the same scoped gateway and exchanges
+only synthetic versioned test/evidence manifests — never real campaign credentials.
+No client is a dependency. First direct runs with opencode and
+opencode-go/deepseek-v4.1-flash are recorded in `docs/verification/`; the agent-change
+comparison and the durable model-driven suite remain open.
 
 Preserve Docker-local as the supported implementation focus. Cloud parity, hosted concerns,
 and multi-agent breadth remain deferred; local VM intake requires a selected research need.
@@ -57,7 +58,7 @@ count. The authoritative product boundary is
 [`docs/VISION.md`](docs/VISION.md). Architecture
 decisions live in [`docs/adr/`](docs/adr/).
 
-### Next to build — NV-09, Bughunt integration and usefulness proof
+### Next to build — NV-09, BYO-agent workflow proof
 
 NV-08 now has versioned authorization and single-use-grant calibration
 challenges with independent effect/control validators. A five-seed paired suite
@@ -65,12 +66,16 @@ detected a deliberately broken grant step with zero infrastructure-failed
 pairs; per-challenge and pooled intervals are explicitly labelled. These
 synthetic results validate the workbench, not held-out capability.
 
-NV-09 joins a selected Bughunt workflow to Nidavellir's pinned target,
+NV-09 joins any operator-selected MCP agent to Nidavellir's pinned target,
 agent build, budgets, controls, observation digests and reset/repeat record.
-The joint manifest must use synthetic identities and show whether the workflow
-is useful to an operator, as specified in [TODO.md](TODO.md). NV07-R1 still
-needs a permitted model-driven suite; NV06-R1 still needs a non-synthetic
-target. Neither is implied by NV-08's scripted calibration gate.
+The manifest uses synthetic identities and shows whether the workflow is
+useful to an operator, as specified in [TODO.md](TODO.md). First direct
+opencode + deepseek-v4.1-flash runs passed independent validation on the
+NV-06 and NV-09 synthetic fixtures (`docs/verification/byo-agent-*.json`);
+the agent-change comparison remains. NV07-R1 still needs a model-driven
+durable suite (the direct-harness runs are not a substitute); NV06-R1 still
+needs a non-synthetic target. Neither is implied by NV-08's scripted
+calibration gate.
 
 ---
 

@@ -3,6 +3,49 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-10-05 — First BYO-agent MCP runs and the NV-09 re-scope
+
+**Outcome:** Re-scoped NV-09 from a Bughunt integration to a harness-agnostic
+BYO-agent workflow proof: any MCP-capable client (opencode today; Claude Code,
+Codex or Bughunt as one example) drives the scoped gateway, no client is a
+dependency, and live bounty campaigns stay outside this platform. Ran opencode
+with the operator's opencode-go `deepseek-v4.1-flash` directly against two
+isolated synthetic fixtures. On the NV-06 authorization calibration the agent
+announced itself, read `/objects/B` as account A (`{"object":"private-B"}`,
+HTTP 200) and reported the finding; the independent `authorization_effect`
+validator confirmed `unauthorized_read`, score 1/1, in five model turns for
+$0.00213. On the NV-09 synthetic SPA the agent visited both account sessions in
+the browser, performed the same cross-account read and reported it; the
+target-local validator confirmed the effect in six turns for $0.00232. The
+agent never saw a verdict, both exports survived teardown, and no labelled
+container, network, volume or image remained.
+
+**Files:** `scripts/prepare-byo-agent-mcp.py`,
+`scripts/finalize-byo-agent-mcp.py`,
+`docs/verification/byo-agent-nv06-{setup,evidence}-2026-10-05-ac33b066.json`,
+`byo-agent-nv06-opencode-events-2026-10-05-ac33b066.jsonl`, the matching
+`byo-agent-nv09-...-8f6c3832` files, `TODO.md`, `ROADMAP.md`, `README.md`,
+`AGENTS.md`, `ISSUES.md` (NV07-R1 progress note and new MODEL-R1) and this
+journal.
+
+**Verification:** Both runs completed through the scoped MCP gateway with the
+worker-injected participant key; independent validators, not the agent, decided
+the verdicts. Evidence manifests record the tool transcript, provider-reported
+usage and cost, verdict digests, score and zero residual resources. The
+finalize step issues no model calls. The pinned `make release-check` passed:
+Ruff clean, Bandit zero medium/high, SQLite 941 passed (4 skipped, 6
+deselected), PostgreSQL 945 passed (6 deselected), and migration/API/UI/gateway
+smoke ready.
+
+**Unresolved risks / next step:** NV-09 remains open for the agent-change
+comparison on the same fixtures; NV07-R1 remains open because the durable
+`model-mcp/v1` driver still has no model-driven suite. The driver cannot call
+opencode-go as stored (Cloudflare rejects `python-requests` with 403 and the
+gateway requires `x-opencode-session`), recorded as MODEL-R1. Next: run the
+same BYO-agent pair with one deliberate agent/build change and record the
+detected regression, then decide whether custom connection headers belong on
+the platform path.
+
 ## 2026-09-27 — NV-10 encrypted research and evaluation recovery
 
 **Outcome:** Implemented an offline, versioned AES-GCM recovery bundle for all

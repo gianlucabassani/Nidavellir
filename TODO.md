@@ -1,6 +1,6 @@
 # Nidavellir — ordered delivery checklist
 
-Updated 2026-09-26 after completing the NV-08 two-class calibration gate.
+Updated 2026-10-05 after the first BYO-agent MCP runs and the NV-09 re-scope.
 This is the canonical work queue. [ROADMAP.md](ROADMAP.md) retains product scope,
 design detail and legacy milestone mapping. Unchecked means unfinished.
 Verification history is in [docs/JOURNAL.md](docs/JOURNAL.md).
@@ -11,7 +11,8 @@ Build a professional local research and agent-testing platform: reproduce a targ
 give a human/BYO agent a contained research position, independently validate the result,
 reset and compare a changed agent or target. Docker-local is the first supported path.
 Discovery and evaluation both remain in scope; broader research features follow a
-demonstrated target need. Bughunt owns live bounty campaigns and their agent workflow.
+demonstrated target need. Any MCP-capable BYO client can use the scoped gateway; Bughunt
+is one example, not a dependency, and live bounty campaigns stay outside this platform.
 
 ## P0 — trustworthy research runtime
 
@@ -74,19 +75,21 @@ for both human and agent callers; API/GUI/MCP share the same service boundary.
   **Depends:** NV-02, NV-06; grow alongside NV-07. **Accept:** repeated trials catch a known
   agent regression; public known-vulnerability fixtures are labeled calibration, not held-out
   capability evidence. Broad challenge intake is not a prerequisite for the first useful run.
-- [ ] **NV-09 — Bughunt integration and usefulness proof.** Scoped to bughunt's agentic
-  layer only (Hermes/Claude Code + MCP driving active testing, playbook choice, escalation
-  — BH-13/BH-14B/BH-15), not its deterministic pipelines (BH-01/03/04 enumeration/baseline/
-  worker/backup, which run independent of Nidavellir/Hermes by design, per bughunt D021).
-  Joint versioned test/evidence manifest with BH-13: target/scenario, build/tools, seed,
-  budgets, controls, observed outcomes, provenance and digests. Use synthetic identities,
-  never live bounty credentials/captures (bughunt D017).
+- [ ] **NV-09 — BYO-agent workflow proof (harness-agnostic).** Any operator-selected
+  MCP client drives active testing through the scoped gateway — opencode, Claude Code,
+  Codex or Bughunt as one example; no client is a dependency. Nidavellir owns the pinned
+  target, budgets, controls, observation digests and independent validation. Versioned
+  test/evidence manifest: target/scenario, build/tools, seed, budgets, controls, observed
+  outcomes, provenance and digests. Use synthetic identities and calibration fixtures;
+  live campaign credentials/captures stay out of scope.
   **Depends:** NV-02–06 plus the first NV-08 fixture for a vertical run; NV-07 for durable
-  repeated comparisons. **Accept:** reproduce one bounty-agent workflow (e.g. bughunt's
-  synthetic-SPA vertical slice — two accounts, one owned object, one cross-account
-  comparison, one restart; broad autonomous crawling excluded), retain independently
-  validated evidence, reset, repeat with one agent change, and detect a seeded regression.
-  Record setup effort/reuse and whether this improves the operator's actual workflow.
+  repeated comparisons. **Accept:** reproduce one agent workflow (the synthetic-SPA
+  vertical slice — two accounts, one owned object, one cross-account comparison, one
+  restart; broad autonomous crawling excluded), retain independently validated evidence,
+  reset, repeat with one agent change, and detect a seeded regression. Record setup
+  effort/reuse and whether this improves the operator's actual workflow. First direct
+  runs (opencode + opencode-go/deepseek-v4.1-flash on the NV-06 and NV-09 fixtures) are
+  recorded in `docs/verification/byo-agent-*.json`; the agent-change comparison remains.
 - [x] **NV-10 — Recover research and experiment records.** Versioned consistent backup and
   restore of research DB/events, scenarios/target manifests, evidence/transactions, traces,
   experiment records and protected encryption keys/configuration. Separate redacted sharing
@@ -118,7 +121,7 @@ focused maintenance scope if broader features do not improve actual research.
   deduplicate findings by affected identity, track version/fix/disclosure state and generate
   sanitized reproducible output. **Depends:** NV-10–11.
   **Accept:** trace one finding across versions and produce a reviewable disclosure bundle;
-  do not duplicate Bughunt's live bounty scope/scouting/credential management.
+  live bounty scope/scouting/credential management stay outside this platform.
 - [ ] **NV-15 — Held-out proof and optional active episodes.** Build private challenges from
   confirmed research findings with truth withheld; repeated trials, leakage policy, build
   identity and uncertainty. Add staged releases or LLM-app targets when used by the agent

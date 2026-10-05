@@ -1,6 +1,6 @@
 # Nidavellir — open risk register
 
-Updated 2026-09-26 after the NV-08 two-class live gate closed NV07-R2.
+Updated 2026-10-05 after the first direct BYO-agent MCP runs.
 
 Known, currently-open risks and verification gaps. Each entry states what is
 actually true today, why it matters, and the concrete evidence that would close
@@ -29,6 +29,12 @@ An authenticated local Claude CLI is not such a connection or a completed
 model-driven trial; each subscription-backed live run requires separate
 operator permission and none was used for NV-08.
 
+On 2026-10-05 direct opencode + deepseek-v4.1-flash MCP sessions passed
+independent validation on the NV-06 and NV-09 fixtures
+(`docs/verification/byo-agent-*.json`). Those are harness-side participant
+sessions: they exercised the gateway, budgets and validators, but not the
+durable `model-mcp/v1` driver, its per-trial records or its comparison.
+
 **Why it matters:** the workbench's purpose is comparing real agent builds. A
 deterministic script exercises the record and comparison machinery, not the
 conditions those records are meant to describe.
@@ -36,6 +42,25 @@ conditions those records are meant to describe.
 **Closes when:** one model-driven build completes a suite through the same
 endpoints, with its per-trial variance, token/cost attribution and any
 budget/timeout terminations visible in the comparison. Tracked by ROADMAP E2.
+
+### MODEL-R1 · A model connection cannot send custom request headers · low
+
+The durable `model-mcp/v1` driver calls an OpenAI-compatible endpoint with
+`Authorization` and the default `python-requests` user agent. Some
+OpenAI-compatible gateways reject that shape: opencode-go
+(`opencode.ai/zen/go/v1`, fronted by Cloudflare) answers 403 without
+`User-Agent: opencode*` and 400 without `x-opencode-session`. The same provider
+the operator uses as a direct harness therefore cannot be stored as a usable
+durable-trial connection, and `POST /agent/model/verify` reports it as
+unverified rather than invalid.
+
+**Why it matters:** the platform cannot run a durable model-driven build against
+a provider family the operator actually uses; the direct-harness path still
+works and is the recorded NV-09 evidence.
+
+**Closes when:** model connections can carry operator-approved static headers
+(or a documented local compatibility proxy exists) and a durable trial succeeds
+through such an endpoint.
 
 ---
 
