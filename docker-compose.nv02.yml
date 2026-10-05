@@ -39,7 +39,7 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       RATE_LIMIT_ENABLED: "false"
       REAPER_INTERVAL_SECONDS: "2"
-      LAB_STUCK_MINUTES: "0"
+      LAB_STUCK_MINUTES: "5"
       HTTP_TIMEOUT_SECONDS: "5"
       PYTHONPATH: /app
     depends_on:
