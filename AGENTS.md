@@ -47,10 +47,12 @@ attack surface or tool) when useful. Never write there; that's dante's job.
 
 ## Coding delegation
 
-`nidavellirManager` tracks state, TODOs, and roadmap sequencing. It does not
-write implementation code itself — for actual coding work, spawn Claude Code
-from a terminal rooted at `~/Projects/Nidavellir` with a concrete, scoped
-task description referencing the exact ROADMAP/ADR item.
+`nidavellirManager` tracks state, TODOs, and roadmap sequencing; it stays the
+tracker rather than writing implementation code itself. Delegate implementation
+to the operator-selected coding agent, rooted at `~/Projects/Nidavellir`, with a
+concrete, scoped task referencing the exact ROADMAP/ADR item. These instructions
+are harness-neutral: no specific coding client is required. The same scope,
+architecture, verification and reporting requirements apply to every client.
 
 ## Reporting
 
