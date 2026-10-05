@@ -5243,13 +5243,13 @@ def _validate_finding(record: dict, req: "FindingRequest", vuln: dict | None) ->
     return result.to_dict()
 
 
-def _target_local_json(record: dict, node: str, source: str) -> dict:
+def _target_local_json(record: dict, node: str, source: str, timeout: int = 5) -> dict:
     """Run a fixed, bounded observer command inside the owned target container."""
     if resolve_provider_name(record.get("effective_provider") or record.get("provider")) != "docker-local":
         raise RuntimeError("target-local observer requires docker-local")
     command = "python -c " + shlex.quote(source)
     result = Orchestrator(provider_name="docker-local").exec_in_node(
-        record["id"], node, command, timeout=5
+        record["id"], node, command, timeout=timeout
     )
     if not result.get("success") or result.get("exit_code") != 0:
         raise RuntimeError("target-local observer unavailable")
@@ -5414,6 +5414,73 @@ def _validate_grant_finding(record: dict, req: "FindingRequest", vuln: dict,
             "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
+def _validate_http_access_control_finding(record: dict, req: "FindingRequest", vuln: dict,
+                                          *, finding_id: str, actor: str,
+                                          manual: bool) -> dict:
+    """Verify a linked action against a generic, operator-declared HTTP probe.
+
+    The plan names an unprivileged actor and a privileged owner, one request
+    under test, one control request, and an operator-owned marker. The platform
+    issues all three probes itself from inside the arena node; a confirmed
+    verdict needs the owner to observe the marker, the actor's control request
+    to succeed without it, and the actor's request under test to disclose it.
+    """
+    action_digest = req.transaction_digests[0] if req.transaction_digests else None
+    action = probe = None
+    observation_digest = control_digest = None
+    try:
+        config = validators.normalize_http_access_control_config(
+            vuln.get("validation_config") or {})
+    except ValueError as exc:
+        logger.warning("[%s] invalid http_access_control config: %s", record["id"], exc)
+        result = validators.ValidationResult(
+            None, validators.HTTP_ACCESS_CONTROL, "invalid validator configuration",
+            verdict="infrastructure_failure", reason_code="invalid_validator_config")
+        config = None
+    else:
+        result = None
+    if config is not None and action_digest:
+        tx_manifest, envelope = http_transactions.get(record["id"], action_digest)
+        tx_req = envelope.get("request") or {}
+        if (tx_req.get("node") == req.node
+                and (tx_req.get("method") or "GET").upper() == config["action"]["method"]
+                and tx_req.get("path") == config["action"]["path"]
+                and (manual or tx_manifest.get("actor") == actor)):
+            action = {"digest": action_digest}
+    if config is not None and action is not None:
+        try:
+            probe = _target_local_json(
+                record, req.node,
+                validators.http_access_control_probe_source(config), timeout=15)
+            observation_digest = validation_evidence.record(
+                record["id"], {"schema": "nidavellir/validation-observation/v1",
+                               "kind": validators.HTTP_ACCESS_CONTROL,
+                               "data": probe.get("actor")})
+            control_digest = validation_evidence.record(
+                record["id"], {"schema": "nidavellir/validation-observation/v1",
+                               "kind": "healthy_control",
+                               "data": {"owner": probe.get("owner"),
+                                        "control": probe.get("control")}})
+        except (RuntimeError, ValueError, OSError, json.JSONDecodeError) as exc:
+            logger.warning("[%s] http access-control probe failed: %s", record["id"],
+                           type(exc).__name__)
+            probe = None
+    if result is None:
+        result = validators.validate_http_access_control(
+            action, probe, actor=config["actor"], owner=config["owner"],
+            disclosure_status=config["disclosure_status"],
+            denied_statuses=tuple(config["denied_statuses"]))
+    recipe = db.get_lifecycle_recipe(record["id"]) or {}
+    return {**result.to_dict(), "schema": "nidavellir/validation-verdict/v1",
+            "finding_id": finding_id, "arena_id": record["id"],
+            "recipe_digest": recipe.get("recipe_digest"),
+            "target_identity_digest": lifecycle_manifest.digest(recipe.get("nodes") or {}),
+            "validator_id": validators.HTTP_ACCESS_CONTROL,
+            "validator_version": 1, "action_digest": action_digest,
+            "observation_digest": observation_digest, "control_digest": control_digest,
+            "timestamp": datetime.now(timezone.utc).isoformat()}
+
+
 @app.get("/scenarios/{scenario_id}/vulnerabilities")
 def reveal_vulnerabilities(
     scenario_id: str, principal: Principal = Depends(require_principal)
@@ -5541,6 +5608,13 @@ def _record_finding(instance_id, record, req: "FindingRequest", *, actor: str,
         {"cwe": req.cwe}, matched_vuln
     ) == validators.SINGLE_USE_GRANT_EFFECT:
         validation = _validate_grant_finding(
+            record, req, matched_vuln, finding_id=finding_id,
+            actor=actor, manual=manual,
+        )
+    elif matched_vuln and validators.method_for(
+        {"cwe": req.cwe}, matched_vuln
+    ) == validators.HTTP_ACCESS_CONTROL:
+        validation = _validate_http_access_control_finding(
             record, req, matched_vuln, finding_id=finding_id,
             actor=actor, manual=manual,
         )

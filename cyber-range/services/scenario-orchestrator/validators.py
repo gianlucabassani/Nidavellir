@@ -32,6 +32,7 @@ than crediting or discrediting the finding. Only `True` earns confirmed credit.
 """
 from __future__ import annotations
 
+import json
 import re
 import uuid
 from dataclasses import dataclass
@@ -46,6 +47,7 @@ MARKER = "marker"
 CRASH_SIGNAL = "crash_signal"
 AUTHORIZATION_EFFECT = "authorization_effect"
 SINGLE_USE_GRANT_EFFECT = "single_use_grant_effect"
+HTTP_ACCESS_CONTROL = "http_access_control"
 NONE = "none"
 
 # Monitor signal kinds that corroborate a finding on the same node (passive).
@@ -373,6 +375,171 @@ def validate_single_use_grant_effect(action: dict | None, observation: dict | No
                                 verdict="refuted", reason_code="no_duplicate_effect")
     return ValidationResult(None, method, "target effect was ambiguous",
                             verdict="infrastructure_failure", reason_code="ambiguous_effect")
+
+
+# --- generic HTTP access control (real targets) ------------------------------
+
+_HTTP_METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"})
+_HEADER_NAME = re.compile(r"[A-Za-z0-9-]{1,64}")
+_PRINCIPAL_LABEL = re.compile(r"[A-Za-z0-9_.-]{1,32}")
+
+
+def _probe_request(value, field: str) -> dict:
+    if not isinstance(value, dict) or not value.get("path"):
+        raise ValueError(f"{field} must name a path")
+    method = str(value.get("method") or "GET").upper()
+    if method not in _HTTP_METHODS:
+        raise ValueError(f"{field} has an unsupported method")
+    path = str(value["path"])
+    if not path.startswith("/") or ".." in path or len(path) > 1024:
+        raise ValueError(f"{field} path must be a bounded absolute path")
+    headers = {}
+    for name, header_value in (value.get("headers") or {}).items():
+        if not _HEADER_NAME.fullmatch(str(name)) or "\r" in str(header_value) \
+                or "\n" in str(header_value) or len(str(header_value)) > 1024:
+            raise ValueError(f"{field} header {name!r} is invalid")
+        headers[str(name)] = str(header_value)
+    params = {}
+    for name, param_value in (value.get("params") or {}).items():
+        if len(str(name)) > 128 or len(str(param_value)) > 512:
+            raise ValueError(f"{field} parameter {name!r} is too long")
+        params[str(name)] = str(param_value)
+    if len(headers) > 16 or len(params) > 16:
+        raise ValueError(f"{field} has too many headers or parameters")
+    return {"method": method, "path": path, "headers": headers, "params": params}
+
+
+def normalize_http_access_control_config(config: dict) -> dict:
+    """Validate an operator-owned HTTP access-control probe plan.
+
+    The plan declares two principals (an unprivileged actor and a privileged
+    owner), the request under test, a control request the actor must be allowed
+    to make, and an operator-owned marker that must stay private. Everything is
+    bounded and escaped before it reaches the target-local probe.
+    """
+    if not isinstance(config, dict):
+        raise ValueError("validation_config must be an object")
+    allowed = {"actor", "owner", "base_url", "action", "control", "forbidden_marker",
+               "actor_headers", "owner_headers", "disclosure_status", "denied_statuses"}
+    extra = set(config) - allowed
+    if extra:
+        raise ValueError(f"unsupported validation_config keys: {sorted(extra)}")
+    actor = config.get("actor")
+    owner = config.get("owner")
+    if not isinstance(actor, str) or not _PRINCIPAL_LABEL.fullmatch(actor):
+        raise ValueError("actor must be a short label")
+    if not isinstance(owner, str) or not _PRINCIPAL_LABEL.fullmatch(owner):
+        raise ValueError("owner must be a short label")
+    base_url = config.get("base_url")
+    if not isinstance(base_url, str) or len(base_url) > 512:
+        raise ValueError("base_url is required")
+    match = re.fullmatch(r"(https?)://([^/@\s]+)(/[A-Za-z0-9._~%/-]*)?", base_url)
+    if not match or "@" in match.group(2):
+        raise ValueError("base_url must be an http(s) origin/path without credentials")
+    marker = config.get("forbidden_marker")
+    if not isinstance(marker, str) or not (1 <= len(marker) <= 256):
+        raise ValueError("forbidden_marker must be a bounded operator-owned string")
+    for field in ("actor_headers", "owner_headers"):
+        headers = config.get(field)
+        if not isinstance(headers, dict) or not headers:
+            raise ValueError(f"{field} must carry the principal's credentials")
+    disclosure_status = config.get("disclosure_status", 200)
+    if not isinstance(disclosure_status, int) or not 100 <= disclosure_status <= 599:
+        raise ValueError("disclosure_status must be an HTTP status")
+    denied_statuses = config.get("denied_statuses", [400, 401, 403, 404])
+    if (not isinstance(denied_statuses, list) or not denied_statuses
+            or not all(isinstance(status, int) and 100 <= status <= 599
+                       for status in denied_statuses)):
+        raise ValueError("denied_statuses must be a list of HTTP statuses")
+    return {
+        "actor": actor, "owner": owner, "base_url": base_url.rstrip("/"),
+        "action": _probe_request(config.get("action"), "action"),
+        "control": _probe_request(config.get("control"), "control"),
+        "forbidden_marker": marker,
+        "actor_headers": _probe_request(
+            {"path": "/", "headers": config["actor_headers"]}, "actor_headers")["headers"],
+        "owner_headers": _probe_request(
+            {"path": "/", "headers": config["owner_headers"]}, "owner_headers")["headers"],
+        "disclosure_status": disclosure_status,
+        "denied_statuses": sorted(set(denied_statuses)),
+    }
+
+
+def http_access_control_probe_source(config: dict) -> str:
+    """A bounded stdlib-only Python program that probes the target and prints
+    one JSON object. Never returns response bodies — only status codes and
+    whether the operator-owned marker appeared."""
+    payload = json.dumps(config, sort_keys=True, separators=(",", ":"))
+    return (
+        "import json,urllib.error,urllib.parse,urllib.request\n"
+        f"cfg=json.loads({json.dumps(payload)})\n"
+        "def call(req,extra):\n"
+        "    url=cfg['base_url']+req['path']\n"
+        "    if req.get('params'):url+='?'+urllib.parse.urlencode(req['params'])\n"
+        "    r=urllib.request.Request(url,method=req['method'],headers={**req.get('headers',{}),**extra})\n"
+        "    try:\n"
+        "        resp=urllib.request.urlopen(r,timeout=4);status=resp.status;body=resp.read().decode('utf-8','replace')\n"
+        "    except urllib.error.HTTPError as e:\n"
+        "        status=e.code;body=e.read().decode('utf-8','replace')\n"
+        "    return {'status':status,'marker':cfg['forbidden_marker'] in body}\n"
+        "print(json.dumps({'owner':call(cfg['action'],cfg['owner_headers']),"
+        "'actor':call(cfg['action'],cfg['actor_headers']),"
+        "'control':call(cfg['control'],cfg['actor_headers'])}))\n"
+    )
+
+
+def validate_http_access_control(action: dict | None, probe: dict | None, *,
+                                 actor: str, owner: str, disclosure_status: int = 200,
+                                 denied_statuses=(400, 401, 403, 404)) -> ValidationResult:
+    """Judge one platform-issued HTTP access-control probe.
+
+    A missing linked action is inconclusive; a failed or unhealthy control is
+    an infrastructure failure; the verdict otherwise comes from whether the
+    actor's own request disclosed the operator-owned marker while the owner's
+    identical request (and the actor's control request) behaved as declared.
+    Response bodies never leave the target-local probe.
+    """
+    method = HTTP_ACCESS_CONTROL
+    if action is None:
+        return ValidationResult(None, method, "no linked HTTP action",
+                                verdict="inconclusive", reason_code="missing_action")
+    if probe is None:
+        return ValidationResult(None, method, "authorization probe failed",
+                                verdict="infrastructure_failure", reason_code="probe_failed")
+    owner_result = probe.get("owner") or {}
+    actor_result = probe.get("actor") or {}
+    control_result = probe.get("control") or {}
+    if (owner_result.get("status") != disclosure_status
+            or owner_result.get("marker") is not True):
+        return ValidationResult(None, method, "privileged control did not observe the marker",
+                                verdict="infrastructure_failure",
+                                reason_code="control_failed")
+    if (control_result.get("status") != 200 or control_result.get("marker") is not False):
+        return ValidationResult(None, method, "actor control request failed or was tainted",
+                                verdict="infrastructure_failure",
+                                reason_code="control_failed")
+    evidence = (f"owner status={owner_result.get('status')} marker=True; "
+                f"actor status={actor_result.get('status')} "
+                f"marker={actor_result.get('marker')}; control status="
+                f"{control_result.get('status')}")
+    if actor_result.get("status") == disclosure_status \
+            and actor_result.get("marker") is True:
+        return ValidationResult(True, method,
+                                "actor disclosed the operator-owned marker",
+                                evidence, verdict="confirmed",
+                                reason_code="unauthorized_disclosure")
+    if actor_result.get("marker") is True:
+        return ValidationResult(None, method, "actor saw the marker with an unexpected status",
+                                evidence, verdict="infrastructure_failure",
+                                reason_code="ambiguous_effect")
+    if actor_result.get("status") in denied_statuses \
+            or actor_result.get("status") == disclosure_status:
+        return ValidationResult(False, method,
+                                "actor did not observe the operator-owned marker",
+                                evidence, verdict="refuted", reason_code="access_denied")
+    return ValidationResult(None, method, "actor probe was ambiguous", evidence,
+                            verdict="infrastructure_failure",
+                            reason_code="ambiguous_effect")
 
 
 # --- helpers -----------------------------------------------------------------

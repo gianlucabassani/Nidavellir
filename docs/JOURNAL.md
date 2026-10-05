@@ -3,6 +3,63 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-10-05 — Generic HTTP access-control validator
+
+**Outcome:** Added `http_access_control`, a target-agnostic validator that lets
+operator-declared HTTP probes independently confirm authorization findings on
+real targets, not only the synthetic oracle fixtures. A scenario's hidden
+manifest declares two principals (an unprivileged actor and a privileged
+owner), the request under test, a control request the actor must be allowed to
+make, and an operator-owned forbidden marker. The platform issues all three
+probes target-side, records observation and healthy-control evidence digests,
+and returns the same tri-state verdicts as the existing authorization
+validator: confirmed `unauthorized_disclosure` when the actor's request leaks
+the marker while both controls hold, refuted `access_denied`, infrastructure
+failure on probe/control faults, and inconclusive without a linked action.
+`validation_config` widened from string-only values to a bounded JSON object,
+and the target-local observer gained a timeout parameter.
+
+**Files:** `cyber-range/services/scenario-orchestrator/validators.py`, `api.py`,
+`scenario_spec.py`, `tests/test_validators.py`, `tests/test_http_access_control.py`.
+
+**Verification:** Unit tests cover config rejection (bad scheme, credentials in
+URL, unsafe paths/methods/headers, size), the verdict matrix, and an
+end-to-end probe run against a loopback server. API tests exercise manifest
+matching, dispatch, evidence recording, scoring and post-teardown retention.
+The pinned `make release-check` passed: Ruff clean, Bandit zero medium/high,
+SQLite 946 passed (4 skipped, 6 deselected), PostgreSQL 950 passed
+(6 deselected), and migration/API/UI/gateway smoke ready.
+
+**Unresolved risks / next step:** The plan carries synthetic lab credentials in
+the operator-only scenario manifest in plaintext, matching the existing
+`control_token` convention; credential encryption at rest remains a follow-up.
+Next: the pinned Vaultwarden fixture and live calibration gate on 1.35.2 and
+1.37.3.
+
+## 2026-10-05 — Research target selection for the next vulnerability campaign
+
+**Outcome:** Selected the next Docker-local research target from 25 screened self-hosted
+projects. Top pick is Vaultwarden (AGPL-3.0, single-container Docker image, SQLite volume)
+because single-use Sends and organization/collection ACLs map directly onto both existing
+validator calibration classes, deployment and reset are the simplest of any candidate, and
+its 2026 advisory stream is active but not saturated. Runner-up is Paperless-ngx. The ranked
+shortlist, a Vaultwarden onboarding plan (image digest pin, compose, seed state, first three
+authorization/business-logic hypotheses and validator evidence) and an uncertainty register
+with date-stamped counts are in the new research note.
+
+**Files:** `docs/research/2026-10-05-research-target-selection.md` (new), this journal.
+
+**Verification:** Documentation-only change; no code, runtime or test change. All live
+claims retrieved from primary sources on 2026-10-05: GitHub REST
+repository/release/advisory endpoints, the Codeberg API, NVD 2.0 API, Docker Hub API, and
+project docs/security pages. Known limitations (GHSA list endpoint caps at 100 and ignores
+pagination, NVD keyword counts are directional) are recorded in the note.
+
+**Unresolved risks / next step:** The note is a recommendation, not a deployed fixture.
+Next step is operator approval of Vaultwarden, then implementing the pinned compose fixture
+and seed script; re-resolve the multi-arch image digest and re-check advisory counts at pin
+time (they are date-stamped 2026-10-05).
+
 ## 2026-10-05 — Close NV-09 after operator review
 
 **Outcome:** The operator judged the paired BYO-agent run worth the actual
