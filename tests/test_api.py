@@ -126,6 +126,12 @@ def test_events_endpoints_expose_the_audit_trail(client):
     events = per_arena.json()["events"]
     assert any(e["type"] == "created" for e in events)
     assert all(e["lab_id"] == sysid for e in events)
+    assert all(e["type"] == "created" for e in client.get(
+        f"/deployments/{sysid}/events?type=created&limit=1"
+    ).json()["events"])
+    assert client.get(
+        f"/deployments/{sysid}/events?type=setup_finished&limit=1"
+    ).json()["events"] == []
 
     glob = client.get("/events?limit=20")
     assert glob.status_code == 200

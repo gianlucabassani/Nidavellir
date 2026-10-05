@@ -3037,7 +3037,8 @@ def list_events(limit: int = 100, type: str | None = None,
 
 @app.get("/deployments/{instance_id}/events")
 def list_arena_events(
-    instance_id: str, limit: int = 100, principal: Principal = Depends(require_principal)
+    instance_id: str, limit: int = 100, type: str | None = None,
+    principal: Principal = Depends(require_principal)
 ):
     """Audit events for a single arena (newest first) — deploy/status/exec/etc."""
     if not db.get_deployment(instance_id):
@@ -3045,7 +3046,8 @@ def list_arena_events(
     limit = max(1, min(limit, EVENTS_MAX_LIMIT))
     return {
         "events": _redact_findings_for_agent(
-            principal, db.list_events(lab_id=instance_id, limit=limit)
+            principal, db.list_events(lab_id=instance_id, limit=limit,
+                                      types=[type] if type else None)
         )
     }
 
