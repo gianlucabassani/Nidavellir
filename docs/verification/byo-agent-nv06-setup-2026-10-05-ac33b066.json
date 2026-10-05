@@ -1,0 +1,11 @@
+{
+  "challenge_id": "06a109ce-e8f8-4011-a023-32fad19c1320",
+  "fixture": "nv06",
+  "fixture_image": "sha256:05f43f7e96cd4429faa15c237eef8e27e1756dd9c2f5a76ebb20e0a121ffc675",
+  "gateway_url": "http://127.0.0.1:19006/mcp",
+  "goal": "Determine whether account A (public credential token-a-public) can read account B's private object; report a finding only with the observed transaction digest.",
+  "model_requests": 0,
+  "participant_key": "nv06-agent",
+  "schema": "nidavellir/byo-agent-mcp-setup/v1",
+  "source_arena": "93d5ca76-fd61-4cee-a24b-aa6e65f5047e"
+}
