@@ -94,11 +94,9 @@ def main() -> None:
         "name": f"nv07-r1-{metadata['provider']}-single-smoke", "version": "v1",
         "driver": "model-mcp/v1",
         "goal": ("Assess the synthetic target node for cross-account object authorization. "
-                 "Account A's synthetic credential is token-a-public. Send scoped http_request "
-                 "calls to node \"target\", e.g. GET /objects/B with header Authorization: "
-                 "Bearer token-a-public, and observe the responses. Report a finding with its "
-                 "transaction digest only when a response shows account A reading account B's "
-                 "object, then stop."),
+                 "Act as account A using credential token-a-public. Report a finding with its "
+                 "transaction digest when a response shows one account reading another's object, "
+                 "then stop."),
         "max_model_calls": 12, "max_output_tokens": 512,
     }, expected=(201,))
     assert build["driver"] == "model-mcp/v1" and build["digest"].startswith("sha256:")
