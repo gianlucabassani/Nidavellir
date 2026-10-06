@@ -288,6 +288,83 @@ def test_model_trial_rejects_headers_digest_drift():
         experiments.check_model_connection(connection, {**config, "model": "other"})
 
 
+# --- topology orientation (class-C root cause) ------------------------------
+
+def test_topology_offered_with_no_model_args():
+    schemas = driver._schemas()
+    assert "get_topology" in schemas
+    assert schemas["get_topology"]["required"] == []
+    assert schemas["get_topology"]["properties"] == {}
+    # arena_id is driver-injected; the model must not supply it or anything else
+    with pytest.raises(driver.ModelProtocolError):
+        driver._valid_action({"tool": "get_topology",
+                              "args": {"arena_id": "arena"}})
+    with pytest.raises(driver.ModelProtocolError):
+        driver._valid_action({"tool": "get_topology",
+                              "args": {"node": "target"}})
+
+
+def test_topology_call_routed_recorded_and_fed_back():
+    session = Session()
+    build = {"config": {"goal": "Test", "max_model_calls": 3,
+                        "max_output_tokens": 128, "deadline_seconds": 600}}
+    prompts = []
+    calls = [0]
+    topology = {"arena_id": "arena", "nodes": [
+        {"node": "target", "url": "http://10.0.0.3:8080",
+         "state": "active", "foothold": False}]}
+
+    class TopoResponse:
+        isError = False
+        structuredContent = topology
+
+    def decide(_connection, prompt, _tokens, _timeout):
+        prompts.append(prompt)
+        calls[0] += 1
+        if calls[0] == 1:
+            return {"tool": "get_topology", "args": {}}, {
+                "input_tokens": 1, "output_tokens": 1, "cost_usd": None}
+        return None, {"input_tokens": 1, "output_tokens": 1, "cost_usd": None}
+
+    async def call_tool(name, arguments):
+        session.calls.append((name, arguments))
+        return TopoResponse()
+
+    session.call_tool = call_tool
+    result = asyncio.run(driver.run(session, "arena", build, {},
+        lambda response: response.structuredContent, decide=decide))
+    assert ("get_topology", {"arena_id": "arena"}) in session.calls
+    # tool + ok only: no topology content (and no truth) lands in evidence
+    assert result["transcript"][0] == {"tool": "get_topology", "ok": True}
+    # the agent actually receives names/URLs in the next turn's history
+    assert "target" in prompts[1] and "http://10.0.0.3:8080" in prompts[1]
+
+
+def test_failed_call_retains_truncated_error_text():
+    session = Session()
+    build = {"config": {"goal": "Test", "max_model_calls": 1,
+                        "max_output_tokens": 128, "deadline_seconds": 600}}
+
+    class FailResponse:
+        isError = True
+        structuredContent = {"error": "unknown node(s) ['nope']; arena nodes: ['target']"}
+
+    async def call_tool(name, arguments):
+        session.calls.append((name, arguments))
+        return FailResponse()
+
+    session.call_tool = call_tool
+    result = asyncio.run(driver.run(session, "arena", build, {},
+        lambda response: response.structuredContent,
+        decide=lambda *_: ({"tool": "http_request",
+                            "args": {"node": "nope", "path": "/"}},
+                           {"input_tokens": 1, "output_tokens": 1, "cost_usd": None})))
+    entry = result["transcript"][-1]
+    assert entry["ok"] is False
+    assert "unknown node" in entry["error"]
+    assert len(entry["error"]) <= 200
+
+
 def test_single_trial_smoke_is_durable_and_unpaired(monkeypatch):
     db = Database()
     key = auth.generate_api_key()

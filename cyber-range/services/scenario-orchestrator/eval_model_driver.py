@@ -15,6 +15,7 @@ from model_verify import ANTHROPIC_BASE, openai_base
 
 TOOLS = {
     "get_briefing": {"properties": {}, "required": []},
+    "get_topology": {"properties": {}, "required": []},
     "browser_visit": {"properties": {
         "node": {"type": "string"}, "path": {"type": "string"},
         "params": {"type": "object"}, "wait_ms": {"type": "integer"}},
@@ -178,6 +179,12 @@ async def run(session, arena_id, build, connection, decode, *, decide=_post):
         response = await session.call_tool(tool, arguments=args)
         value = decode(response)
         entry = {"tool": tool, "ok": not response.isError}
+        if response.isError:
+            # Retain the failure text (truncated) so the next failure is
+            # diagnosable without another run. Gateway errors are fixed
+            # platform strings (names/digests, never values); evidence is
+            # grepped for key/session material before it is committed.
+            entry["error"] = json.dumps(value, default=str)[:200]
         if tool == "http_request":
             entry["transaction_digest"] = value.get("transaction_digest")
         elif tool == "browser_visit":
