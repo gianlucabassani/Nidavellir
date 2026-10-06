@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 
+import pytest
 from fastapi.testclient import TestClient
 
 import api
@@ -132,9 +133,129 @@ def test_model_build_pins_connection_without_credential(monkeypatch):
     assert build["config"]["max_model_calls"] == 8
     assert "key_last4" not in str(build)
     assert client.post("/agent-builds", json={"name": "bad", "version": "v1",
-        "driver": "model-mcp/v1", "goal": "test", "max_model_calls": 9}).status_code == 422
+        "driver": "model-mcp/v1", "goal": "test", "max_model_calls": 13}).status_code == 422
     assert client.post("/agent-builds", json={"name": "bad", "version": "v1",
         "driver": "model-mcp/v1", "goal": "test", "cost_budget_usd": 1}).status_code == 422
+
+
+# --- MODEL-R1: extra_headers passthrough ----------------------------------
+
+def _openai_ok(payload):
+    class HTTP:
+        status_code = 200
+
+        def json(self):
+            return payload
+    return HTTP()
+
+
+def test_post_sends_extra_headers_openai_path():
+    seen = {}
+
+    def transport(url, *, headers, json, timeout, allow_redirects):
+        seen.update(url=url, headers=headers)
+        return _openai_ok({"choices": [{"message": {"tool_calls": [{"function": {
+            "name": "get_briefing", "arguments": "{}"}}]}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1}})
+
+    action, _ = driver._post({
+        "provider": "openai", "model": "gpt-4o", "api_key": "fake-key",
+        "extra_headers": {"User-Agent": "opencode-test/1.0",
+                          "x-opencode-session": "sess-123"}},
+        "synthetic task", 128, 5, transport)
+    assert action == {"tool": "get_briefing", "args": {}}
+    assert seen["headers"]["User-Agent"] == "opencode-test/1.0"
+    assert seen["headers"]["x-opencode-session"] == "sess-123"
+    assert seen["headers"]["Authorization"] == "Bearer fake-key"
+
+
+def test_post_sends_extra_headers_anthropic_path():
+    seen = {}
+
+    def transport(url, *, headers, json, timeout, allow_redirects):
+        seen.update(url=url, headers=headers)
+
+        class HTTP:
+            status_code = 200
+
+            def json(self):
+                return {"content": [{"type": "tool_use", "name": "get_briefing",
+                                     "input": {}}],
+                        "usage": {"input_tokens": 1, "output_tokens": 1}}
+        return HTTP()
+
+    action, _ = driver._post({
+        "provider": "anthropic", "model": "mock-haiku", "api_key": "fake-key",
+        "extra_headers": {"User-Agent": "opencode-test/1.0",
+                          "x-opencode-session": "sess-123"}},
+        "synthetic task", 128, 5, transport)
+    assert action == {"tool": "get_briefing", "args": {}}
+    assert seen["headers"]["User-Agent"] == "opencode-test/1.0"
+    assert seen["headers"]["x-opencode-session"] == "sess-123"
+    assert seen["headers"]["x-api-key"] == "fake-key"
+
+
+def test_post_authorization_cannot_be_overridden():
+    seen = {}
+
+    def transport(url, *, headers, json, timeout, allow_redirects):
+        seen["headers"] = headers
+        return _openai_ok({"choices": [{"message": {"tool_calls": [{"function": {
+            "name": "get_briefing", "arguments": "{}"}}]}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1}})
+
+    # Even if extra_headers smuggled Authorization past validation, the
+    # driver's own credential always wins.
+    driver._post({
+        "provider": "openai", "model": "gpt-4o", "api_key": "real-key",
+        "extra_headers": {"Authorization": "Bearer evil"}},
+        "synthetic task", 128, 5, transport)
+    assert seen["headers"]["Authorization"] == "Bearer real-key"
+
+
+def test_model_build_pins_headers_digest(monkeypatch):
+    import hashlib
+    import json as _json
+
+    db = Database()
+    key = auth.generate_api_key()
+    owner = f"model-headers-{uuid.uuid4().hex}"
+    db.create_api_key(auth.hash_api_key(key), name=owner, role="operator")
+    client = TestClient(api.app)
+    client.headers["X-API-Key"] = key
+    headers = {"User-Agent": "opencode-test/1.0", "x-opencode-session": "s"}
+    digest = "sha256:" + hashlib.sha256(_json.dumps(
+        headers, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    monkeypatch.setattr("database.Database.get_model_connection", lambda self, owner: {
+        "provider": "custom", "model": "m", "key_last4": None,
+        "base_url": "http://vllm.internal:8000/v1",
+        "header_names": sorted(headers), "headers_digest": digest})
+    response = client.post("/agent-builds", json={
+        "name": f"model-headers-build-{uuid.uuid4().hex}", "version": "v1",
+        "driver": "model-mcp/v1", "goal": "Test synthetic ownership"})
+    assert response.status_code == 201, response.text
+    build = response.json()
+    assert build["config"]["headers_digest"] == digest
+    assert "opencode-test" not in str(build)
+
+
+def test_model_trial_rejects_headers_digest_drift():
+    connection = {"provider": "custom", "model": "m",
+                  "base_url": "http://vllm.internal:8000/v1",
+                  "extra_headers": {"User-Agent": "opencode-test/1.0"}}
+    config = {"provider": "custom", "model": "m",
+              "base_url": "http://vllm.internal:8000/v1",
+              "headers_digest": "sha256:" + "0" * 64}
+    with pytest.raises(RuntimeError, match="headers_digest"):
+        experiments.check_model_connection(connection, config)
+    # matching digest passes silently
+    import model_headers
+    config["headers_digest"] = model_headers.extra_headers_digest(
+        connection["extra_headers"])
+    experiments.check_model_connection(connection, config)
+    # a model drift names the model field
+    with pytest.raises(RuntimeError, match="model"):
+        experiments.check_model_connection(connection, {**config, "model": "other"})
 
 
 def test_single_trial_smoke_is_durable_and_unpaired(monkeypatch):
@@ -163,7 +284,7 @@ def test_single_trial_smoke_is_durable_and_unpaired(monkeypatch):
     assert record["comparison"]["matched_pairs"] == 0
     assert queued == [record["id"]]
     assert client.post("/evaluation-smokes", json={"build_id": build["id"],
-        "challenge_id": challenge["id"], "action_cap": 9}).status_code == 422
+        "challenge_id": challenge["id"], "action_cap": 13}).status_code == 422
     assert client.post("/evaluation-smokes", json={"build_id": build["id"],
         "challenge_id": challenge["id"], "token_budget": 100}).status_code == 422
     assert experiments.compare(record)["evidence_scope"] == "calibration_or_unknown"

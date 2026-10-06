@@ -1,6 +1,6 @@
 # Nidavellir — open risk register
 
-Updated 2026-10-05 after the Vaultwarden non-synthetic calibration closed NV06-R1.
+Updated 2026-10-06 after the MODEL-R1 live smokes (MODEL-R1 closed, NV07-R1 advanced).
 
 Known, currently-open risks and verification gaps. Each entry states what is
 actually true today, why it matters, and the concrete evidence that would close
@@ -43,24 +43,19 @@ conditions those records are meant to describe.
 endpoints, with its per-trial variance, token/cost attribution and any
 budget/timeout terminations visible in the comparison. Tracked by ROADMAP E2.
 
-### MODEL-R1 · A model connection cannot send custom request headers · low
+On 2026-10-06 the durable `model-mcp/v1` driver completed its first live
+trials: two single-shot calibration smokes through opencode-go
+(`deepseek-v4.1-flash`) with pinned header digests. Both trials completed
+with real tool transcripts, provider-reported token usage and recorded
+terminations (`model_call_limit` at cap 8 with no report; `model_end_turn`
+at cap 12, still no report) and zero residual resources; the agent scored
+0/1 in both, so no validator verdict exists yet. Token usage is retained;
+cost is unavailable from this provider (`cost_usd: null`). Evidence:
+`docs/verification/nv07-r1-smoke-2026-10-06-{e7f3ba95,8063d12f}.json`.
 
-The durable `model-mcp/v1` driver calls an OpenAI-compatible endpoint with
-`Authorization` and the default `python-requests` user agent. Some
-OpenAI-compatible gateways reject that shape: opencode-go
-(`opencode.ai/zen/go/v1`, fronted by Cloudflare) answers 403 without
-`User-Agent: opencode*` and 400 without `x-opencode-session`. The same provider
-the operator uses as a direct harness therefore cannot be stored as a usable
-durable-trial connection, and `POST /agent/model/verify` reports it as
-unverified rather than invalid.
-
-**Why it matters:** the platform cannot run a durable model-driven build against
-a provider family the operator actually uses; the direct-harness path still
-works and is the recorded NV-09 evidence.
-
-**Closes when:** model connections can carry operator-approved static headers
-(or a documented local compatibility proxy exists) and a durable trial succeeds
-through such an endpoint.
+**Still open:** a full model-driven suite with per-trial variance and
+comparison; at cap 8 a suite would measure the cap, not the model, and the
+cap-12 smoke produced no report, so no suite has run.
 
 ---
 
@@ -82,6 +77,26 @@ NV-13 for local hypervisors; cloud providers remain deferred.
 ---
 
 ## Closed
+
+### MODEL-R1 · Model connections carry custom request headers · closed 2026-10-06
+
+Model connections store operator-approved static `extra_headers`
+(Fernet-encrypted at rest; masked views expose names + digest only),
+validated at the API boundary (≤16, name shape, case-insensitive
+deny/duplicate, no CR/LF; `Authorization` et al. refused so driver
+credentials always win), forwarded through `/agent/model/verify` and every
+durable `model-mcp/v1` provider call, pinned into agent builds as
+`headers_digest` and checked at trial-match with drifted fields named.
+Live: two single-shot calibration smokes ran the durable driver against
+opencode-go (`deepseek-v4.1-flash`) with `User-Agent:
+opencode-nidavellir/1.0` plus a static `x-opencode-session` — the
+stored-credential verify returned `verified: True` and both trials
+completed with real transcripts and provider-reported usage, zero residual
+resources. Evidence:
+`docs/verification/nv07-r1-setup-2026-10-06-{e7f3ba95,8063d12f}.json`,
+`docs/verification/nv07-r1-smoke-2026-10-06-{e7f3ba95,8063d12f}.json`,
+migration `0010_add_model_connection_headers`, and a green
+`make release-check` (Ruff/Bandit clean, 977 SQLite / 981 PostgreSQL).
 
 ### NV06-R1 · Validated results rest on one calibration fixture · closed 2026-10-05
 

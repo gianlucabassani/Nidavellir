@@ -42,14 +42,21 @@ def _schemas():
 
 
 def _post(connection, prompt, max_output_tokens, timeout, transport=requests.post):
-    """One provider call; return one tool decision and reported usage, if any."""
+    """One provider call; return one tool decision and reported usage, if any.
+
+    The connection's operator-approved static ``extra_headers`` (MODEL-R1)
+    are merged into the request. Driver-managed credentials always win: a
+    smuggled ``Authorization`` / ``x-api-key`` can never override them."""
     provider = connection["provider"]
     model = connection["model"]
+    extra = {name: value for name, value in (connection.get("extra_headers") or {}).items()
+             if name.lower() not in ("authorization", "x-api-key")}
     schemas = _schemas()
     if provider == "anthropic":
         base = (connection.get("base_url") or ANTHROPIC_BASE).rstrip("/")
         url = base + "/messages"
-        headers = {"x-api-key": connection["api_key"], "anthropic-version": "2023-06-01"}
+        headers = {**extra, "x-api-key": connection["api_key"],
+                   "anthropic-version": "2023-06-01"}
         body = {"model": model, "max_tokens": max_output_tokens,
                 "messages": [{"role": "user", "content": prompt}],
                 "tools": [{"name": name, "description": f"Scoped arena {name} action",
@@ -81,7 +88,8 @@ def _post(connection, prompt, max_output_tokens, timeout, transport=requests.pos
         # Gemini's OpenAI compatibility maps this to a disabled thinking budget.
         # A short smoke should spend its bounded output on tool decisions.
         body["reasoning_effort"] = "none"
-    response = transport(url, headers={"Authorization": "Bearer " + connection["api_key"]},
+    response = transport(url, headers={**extra,
+                          "Authorization": "Bearer " + connection["api_key"]},
                          json=body, timeout=timeout, allow_redirects=False)
     if response.status_code != 200:
         raise RuntimeError(f"model provider returned HTTP {response.status_code}")

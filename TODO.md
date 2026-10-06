@@ -67,8 +67,11 @@ for both human and agent callers; API/GUI/MCP share the same service boundary.
   Pin model/scaffold/tools/config, target/version, initial state/seed, budgets and validators;
   resume or terminalize interrupted trials. Repeated paired trials report outcomes, false
   claims, requests, latency, available cost, uncertainty and infrastructure failures.
-  **Depends:** NV-02, NV-04, NV-06. **Accept:** compare builds A/B on matched conditions from
+  **Depends:** NV-02, NV-04, NV-06.   **Accept:** compare builds A/B on matched conditions from
   the GUI/API and explain a change without conflating broken infrastructure with agent failure.
+  *Status 2026-10-06: durable `model-mcp/v1` trials proven live (two opencode-go
+  calibration smokes with transcripts + token usage retained, `cost_usd: null`);
+  NV07-R1 still needs the paired model-driven suite (see ISSUES.md).*
 - [x] **NV-08 — Small dependable challenge library.** Begin with one resettable authorization
   fixture, then cover sessions/business logic, browser behavior and service faults as used.
   Version synthetic accounts/seed data, private truth, validators and leakage labels.

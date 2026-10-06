@@ -3,6 +3,138 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-10-06 — Cap-12 smoke: report turn reachable, agent still does not report
+
+**Outcome:** Follow-up to the cap-8 smoke, which terminated on
+`model_call_limit` with 0 claims: the cap, not the toolset, was binding
+(`report_finding` was offered). One small diff, no refactor, no new
+configuration surface, defaults unchanged: `AgentBuildCreate.max_model_calls`
+and `EvaluationSmokeCreate.action_cap` bounds raised 8→12 (`api.py`), the
+smoke build proposes `max_model_calls: 12` / `action_cap: 12` with a goal
+that now names the mechanics (node `target`, `GET /objects/B` with
+`Authorization: Bearer token-a-public`, report-with-digest-then-stop —
+endpoint shape, not the verdict, matching the successful direct-harness
+prompt), and the run-script guard asserts `(1, 12, 600)`. Boundary-test
+sentinels moved 9→13 accordingly.
+
+**Cap justification (observed, not round):** smoke 1 spent 7 calls exploring
+(one failed) with 0 claims in 23.1s (~2.9s/turn). 12 = 7 explore + 1 report
++ 1 confirming re-read + 3 headroom; ~40s projected wall ≪ 600s deadline
+(unchanged); per-turn input growth (665→2762) projects ~25k in / ~2.5k out,
+trivial on the subscription.
+
+**Trial `d58230cc-…`:** `complete`, `termination: model_end_turn` — the cap
+no longer binds (5 model calls: 4 tool actions — briefing + 3×
+`http_request`, all ok — plus the closing no-tool turn). Score 0/1, no
+finding, no validator verdict. Usage retained: 7,224 in / 1,099 out,
+`cost_usd: null` (provider reports none). Zero residual resources,
+isolated stack down, all three evidence files verified secret-free.
+Evidence: `docs/verification/nv07-r1-setup-2026-10-06-8063d12f.json`
+(+ `-attempt`), `nv07-r1-smoke-2026-10-06-8063d12f.json`.
+
+**Established, not assumed:** score metadata `steps: 0` is by design.
+`_run_metrics` (`api.py`) counts `agent_exec`/`agent_setup_step` arena
+events — the legacy harness channel (ADR-0009). Model-driver MCP calls
+record `http_request`/finding events instead, so 0 is expected for model
+trials and the trial transcript is the authoritative per-turn record. No
+code change made.
+
+**Decision:** no 3-seed suite. Per instruction it runs only on a smoke with
+a report and a real verdict; this one produced neither, so a suite would
+measure the agent's reporting failure, not a comparison. The open question
+is now agent behaviour (two smokes, two 0/1 with different terminations),
+not platform machinery. `ISSUES.md` records MODEL-R1 closed and NV07-R1
+advanced; `TODO.md` carries the NV-07 status note. Nothing committed.
+
+**Verification:** `make release-check` re-run after the bound change (exit
+0): Ruff clean, Bandit zero medium/high, SQLite 977 passed (4 skipped,
+6 deselected), smoke ready, PostgreSQL 981 passed (6 deselected).
+
+## 2026-10-06 — MODEL-R1 live smoke: durable trial via opencode-go (machinery proven, agent scored 0)
+
+**Outcome:** First durable `model-mcp/v1` trial through a header-gated
+provider. With operator authorization, stored a `custom` connection
+(`deepseek-v4.1-flash` @ `https://opencode.ai/zen/go/v1`, encrypted at rest)
+carrying `User-Agent: opencode-nidavellir/1.0` + a fresh static
+`x-opencode-session`. `POST /agent/model/verify` against the isolated stack
+returned `verified: True` via the stored-headers path. The single authorized
+smoke then ran to `complete`: 8/8 model turns against the live provider, a
+real tool transcript (`get_briefing` + 7 `http_request`, 6 ok), provider-
+reported usage (13,686 in / 1,665 out, `cost_usd: null` — opencode-go
+reports no cost, per A4), and zero residual resources. The agent never called
+`report_finding`, so score is 0/1 with no validator verdict: an honest agent
+miss inside a healthy trial, not an infrastructure failure. Notably,
+`/models` answered 200 even without the headers, so the ISSUES.md 403/400
+rules appear to apply to `/chat/completions` — and the trial's 8 successful
+turns prove the pinned headers satisfy that path. MODEL-R1's passthrough is
+therefore proven live; NV07-R1 still needs its suite (variance/comparison),
+and NV07-R1 cannot close on cost attribution for this provider.
+
+**Files:** `docs/verification/nv07-r1-setup-2026-10-06-e7f3ba95.json` (+
+`-attempt.json`), `docs/verification/nv07-r1-smoke-2026-10-06-e7f3ba95.json`;
+no product-code change. Evidence verified secret-free (subscription key and
+session id absent from all three files); teardown left zero labelled
+resources and the isolated stack is down.
+
+**Verification:** Trial `40a5d003-…` completed with transcript, usage and
+score retained post-teardown; `termination: model_call_limit`. Single-shot
+discipline held (exclusive attempt marker, zero-evaluation precondition,
+`(1, 8, 600)` scope assertion).
+
+**Unresolved risks / next step:** The agent's 0/1 is a capability signal
+about this build/goal on the NV-06 fixture, not a platform defect — worth
+revisiting if the suite shows a pattern. Next (each needs operator
+permission): 3-seed paired calibration suite, then the Vaultwarden
+model-driven run. A second smoke (new setup) would also be legitimate if the
+goal text is tuned first.
+
+## 2026-10-06 — MODEL-R1 header passthrough build (code + unit tests only)
+
+**Outcome:** Model connections can now carry operator-approved static
+`extra_headers` (e.g. `User-Agent: opencode*`, `x-opencode-session`) from
+storage through verification, durable `model-mcp/v1` trials and build
+pinning. New shared `model_headers.py` validates (max 16, names
+`[A-Za-z0-9-]{1,64}`, case-insensitive deny + duplicate checks, values ≤1024
+with no CR/LF) and digests (sha256 over canonical sorted JSON, None when
+empty); `Authorization`/`x-api-key`/`host`/`content-length`/
+`transfer-encoding`/`connection`/`proxy-authorization` are rejected (422) so
+driver-managed credentials always win. New nullable
+`ModelConnection.encrypted_headers` (Fernet, like `encrypted_key`) via
+migration `0010_add_model_connection_headers`; `upsert` keeps stored headers
+on blank and clears on `{}`; masked views expose sorted `header_names` +
+`headers_digest`, never values; `create_agent_build` pins `headers_digest`
+and the trial-match names drifted fields (`provider`/`model`/`base_url`/
+`headers_digest`, values never exposed). The NV07-R1 smoke prepare script is
+generalised off hardcoded Gemini to operator-supplied
+`NV07_SMOKE_PROVIDER/MODEL/BASE_URL/API_KEY/HEADERS_JSON` without printing
+secrets. Per A6, NV-10 needed no production change: headers survive
+backup→restore via the generic reflection path and the share report stays
+aggregate-only (proven by tests). No live model call, smoke or suite ran —
+those remain separately authorized. MODEL-R1 and NV07-R1 stay open in
+`ISSUES.md` until a durable trial succeeds through such an endpoint.
+
+**Files:** `cyber-range/services/scenario-orchestrator/{model_headers.py,
+models.py,database.py,api.py,model_verify.py,eval_model_driver.py,
+experiments.py,migrations/versions/0010_add_model_connection_headers.py}` +
+`scripts/prepare-nv07-r1-smoke.py` + `tests/{test_model_connection.py,
+test_eval_model_driver.py,test_model_providers.py,test_recovery.py}`.
+
+**Verification:** New tests failed first (missing `header_names`), then
+passed after implementation. Pinned `make release-check` passed (exit 0):
+Ruff clean, Bandit zero medium/high, SQLite 977 passed (4 skipped,
+6 deselected), release smoke ready, PostgreSQL 981 passed (6 deselected).
+Migration `0010` verified as Alembic head with a 0009↔0010 round-trip on
+scratch SQLite. Test figures (corrected): 60/60 passing across the four
+touched files (29+11+11+9), 16 of them new.
+
+**Unresolved risks / next step:** Two pre-existing verify-test fakes were
+updated for the new `headers=` kwarg (contract change, not a behavior
+fix). Old bundles restore-refused on schema mismatch is correct behavior,
+asserted implicitly by the existing mismatch test. Next: separately
+authorized smoke through the existing prepare/run scripts (A1), then the
+3-seed calibration suite labelled as such (A5); NV07-R1 cannot close on cost
+attribution for providers that report none (A4).
+
 ## 2026-10-06 — Affected-versus-fixed finding groups (NV-11)
 
 **Outcome:** Findings can now be linked across arenas. `report_finding` (agent

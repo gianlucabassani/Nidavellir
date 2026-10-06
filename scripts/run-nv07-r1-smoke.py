@@ -21,7 +21,7 @@ def main(setup_path: Path) -> None:
     if setup["schema"] != "nidavellir/nv07-r1-smoke-setup/v1" or setup["model_requests"]:
         raise RuntimeError("not an unused NV07-R1 setup")
     request = setup["proposed_request"]
-    if (request["seed"], request["action_cap"], request["deadline_seconds"]) != (1, 8, 600):
+    if (request["seed"], request["action_cap"], request["deadline_seconds"]) != (1, 12, 600):
         raise RuntimeError("smoke request exceeds the authorized scope")
     if nv07.fixture.api("GET", f"/status/{setup['source_arena']}")["status"] != "active":
         raise RuntimeError("source arena expired; prepare a new setup before asking permission")

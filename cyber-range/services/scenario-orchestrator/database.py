@@ -26,6 +26,7 @@ from sqlalchemy.orm import sessionmaker
 
 from crypto import decrypt_secret, encrypt_secret
 import setup_phase
+from model_headers import extra_headers_digest, normalize_extra_headers
 from models import (
     AgentBuild, ApiKey, Base, BudgetAccount, BudgetAction, BudgetControl, BudgetGate, Deployment,
     EvalChallenge, EvalRun, EvalSuite, EvalTrial, Evaluation, Event,
@@ -1672,26 +1673,49 @@ class Database:
     # get_decrypted_model_credential for in-process use by activation features.
 
     @staticmethod
+    def _mc_headers(row: ModelConnection) -> dict:
+        """Decrypted extra headers, or {} when unset or undecryptable.
+
+        Values are secret-adjacent: callers must never log or return them —
+        only sorted names and the digest leave storage (see _mc_masked)."""
+        raw = decrypt_secret(row.encrypted_headers)
+        if not raw:
+            return {}
+        try:
+            data = json.loads(raw)
+        except (ValueError, TypeError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    @staticmethod
     def _mc_masked(row: ModelConnection) -> dict:
+        headers = Database._mc_headers(row)
         return {
             "configured": True,
             "provider": row.provider,
             "model": row.model,
             "key_last4": row.key_last4,
             "base_url": row.base_url,  # non-secret (P3-4)
+            "header_names": sorted(headers),  # names only, never values
+            "headers_digest": extra_headers_digest(headers),
             "status": row.status,
             "updated_at": _stringify(row.updated_at),
         }
 
     def upsert_model_connection(self, owner, provider, model, api_key, base_url=None,
-                                keep_key=False):
+                                keep_key=False, extra_headers=None):
         """Create/replace the operator's model connection. Encrypts the API key
         at rest, keeps only a last-4 hint in clear, resets status to standby.
         Returns the masked view (never the key).
 
         ``keep_key=True`` updates provider/model but retains the stored key
         (the "update model, leave key blank" path); if there is no stored key
-        yet it stores an empty one (keyless local runtimes)."""
+        yet it stores an empty one (keyless local runtimes).
+
+        ``extra_headers=None`` keeps any stored headers (blank-update-keeps-
+        stored, matching the key convention); ``{}`` clears them; a dict
+        replaces them (validated by ``model_headers``; values encrypted
+        exactly like the API key)."""
         now = datetime.now()
         with self._session() as session:
             row = session.get(ModelConnection, owner)
@@ -1707,6 +1731,12 @@ class Database:
             elif row.encrypted_key is None:
                 row.encrypted_key = encrypt_secret("")
                 row.key_last4 = None
+            if extra_headers is not None:
+                normalized = normalize_extra_headers(extra_headers)
+                row.encrypted_headers = (
+                    encrypt_secret(json.dumps(normalized, sort_keys=True))
+                    if normalized else None
+                )
             row.status = "standby"
             row.updated_at = now
             session.commit()
@@ -1743,6 +1773,7 @@ class Database:
                 "model": row.model,
                 "api_key": decrypt_secret(row.encrypted_key),
                 "base_url": row.base_url,
+                "extra_headers": self._mc_headers(row),
             }
 
     def delete_model_connection(self, owner) -> bool:

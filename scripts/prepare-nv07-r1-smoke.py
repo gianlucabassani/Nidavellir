@@ -7,7 +7,6 @@ import base64
 import json
 import os
 import secrets
-import sqlite3
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -19,48 +18,88 @@ nv07 = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(nv07)
 
 
-def saved_gemini_key() -> str:
-    """Read the existing local connection without displaying its credential."""
-    with sqlite3.connect(f"file:{ROOT / 'data/deployments.db'}?mode=ro", uri=True) as db:
-        rows = db.execute(
-            "SELECT provider, model, encrypted_key FROM model_connections "
-            "WHERE owner = ? AND status = ?", ("bootstrap", "standby")
-        ).fetchall()
-    if len(rows) != 1 or rows[0][:2] != ("gemini", "gemini-2.5-flash"):
-        raise RuntimeError("expected one standby bootstrap Gemini 2.5 Flash connection")
-    secret = rows[0][2]
-    if not secret or secret.startswith("enc:v1:"):
-        raise RuntimeError("saved Gemini credential cannot be copied by this local preflight")
-    return secret
+def smoke_connection() -> dict:
+    """Read the operator-specified smoke connection without displaying secrets.
+
+    Source (all operator-supplied, never logged or written to evidence):
+
+    - ``NV07_SMOKE_PROVIDER`` / ``NV07_SMOKE_MODEL`` (required)
+    - ``NV07_SMOKE_BASE_URL`` (optional; required for ``custom``/``local``)
+    - ``NV07_SMOKE_API_KEY`` (optional for keyless providers; empty = none)
+    - ``NV07_SMOKE_HEADERS_JSON`` (optional JSON object of static extra
+      headers, e.g. ``{"User-Agent": "opencode-x", "x-opencode-session": "…"}``)
+
+    The secret is transferred over loopback into PostgreSQL tmpfs and never
+    put in evidence. Raises before touching the isolated stack when required
+    inputs are missing or malformed.
+    """
+    provider = (os.getenv("NV07_SMOKE_PROVIDER") or "").strip().lower()
+    model = (os.getenv("NV07_SMOKE_MODEL") or "").strip()
+    if not provider or not model:
+        raise RuntimeError("NV07_SMOKE_PROVIDER and NV07_SMOKE_MODEL are required")
+    base_url = (os.getenv("NV07_SMOKE_BASE_URL") or "").strip() or None
+    api_key = os.getenv("NV07_SMOKE_API_KEY") or ""
+    raw_headers = (os.getenv("NV07_SMOKE_HEADERS_JSON") or "").strip()
+    headers: dict = {}
+    if raw_headers:
+        try:
+            parsed = json.loads(raw_headers)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("NV07_SMOKE_HEADERS_JSON is not valid JSON") from exc
+        if not isinstance(parsed, dict):
+            raise RuntimeError("NV07_SMOKE_HEADERS_JSON must be a JSON object")
+        headers = parsed
+    return {"provider": provider, "model": model, "base_url": base_url,
+            "api_key": api_key, "extra_headers": headers}
 
 
 def main() -> None:
-    # Check the legacy source before replacing the isolated stack. The key is
-    # transferred over loopback into PostgreSQL tmpfs and never put in evidence.
-    secret = saved_gemini_key()
+    # Read the operator-specified connection before replacing the isolated
+    # stack. Secrets never reach evidence or stdout.
+    connection = smoke_connection()
     os.environ["NV07_SECRETS_ENCRYPTION_KEY"] = base64.urlsafe_b64encode(
         secrets.token_bytes(32)).decode()
     image_id, source, challenge, _, _ = nv07.prepare()
-    metadata = nv07.fixture.api("PUT", "/agent/model", {
-        "provider": "gemini", "model": "gemini-2.5-flash", "api_key": secret,
-    })
-    del secret
-    if metadata.get("provider") != "gemini" or metadata.get("model") != "gemini-2.5-flash":
+    payload = {"provider": connection["provider"], "model": connection["model"],
+               "api_key": connection["api_key"]}
+    if connection["base_url"]:
+        payload["base_url"] = connection["base_url"]
+    if connection["extra_headers"]:
+        payload["extra_headers"] = connection["extra_headers"]
+    metadata = nv07.fixture.api("PUT", "/agent/model", payload)
+    provider, model, has_headers = (connection["provider"], connection["model"],
+                                    bool(connection["extra_headers"]))
+    # Drop secrets from memory as soon as the loopback PUT is done.
+    connection["api_key"] = ""
+    connection["extra_headers"] = {}
+    del payload
+    if metadata.get("provider") != provider or metadata.get("model") != model:
         raise RuntimeError("isolated model connection metadata did not match")
-    encrypted = nv07.fixture.run(*nv07.fixture.COMPOSE, "exec", "-T", "postgres",
-        "psql", "-U", "nidavellir", "-d", "nidavellir_nv06", "-Atc",
-        "SELECT count(*), bool_and(left(encrypted_key,7)='enc:v1:') "
-        "FROM model_connections").stdout.strip()
-    if encrypted != "1|t":
-        raise RuntimeError("isolated credential was not encrypted at rest")
+    if has_headers:
+        encrypted = nv07.fixture.run(*nv07.fixture.COMPOSE, "exec", "-T", "postgres",
+            "psql", "-U", "nidavellir", "-d", "nidavellir_nv06", "-Atc",
+            "SELECT count(*), bool_and(left(encrypted_key,7)='enc:v1:'), "
+            "bool_and(encrypted_headers IS NULL OR left(encrypted_headers,7)='enc:v1:') "
+            "FROM model_connections").stdout.strip()
+        if encrypted != "1|t|t":
+            raise RuntimeError("isolated credential was not encrypted at rest")
+    else:
+        encrypted = nv07.fixture.run(*nv07.fixture.COMPOSE, "exec", "-T", "postgres",
+            "psql", "-U", "nidavellir", "-d", "nidavellir_nv06", "-Atc",
+            "SELECT count(*), bool_and(left(encrypted_key,7)='enc:v1:') "
+            "FROM model_connections").stdout.strip()
+        if encrypted != "1|t":
+            raise RuntimeError("isolated credential was not encrypted at rest")
     build = nv07.fixture.api("POST", "/agent-builds", {
-        "name": "nv07-r1-gemini-single-smoke", "version": "v1",
+        "name": f"nv07-r1-{metadata['provider']}-single-smoke", "version": "v1",
         "driver": "model-mcp/v1",
         "goal": ("Assess the synthetic target node for cross-account object authorization. "
-                 "Account A's synthetic credential is token-a-public. Use the scoped "
-                 "tools to observe requests; report a finding with its transaction "
-                 "digest only when the response supports it."),
-        "max_model_calls": 8, "max_output_tokens": 512,
+                 "Account A's synthetic credential is token-a-public. Send scoped http_request "
+                 "calls to node \"target\", e.g. GET /objects/B with header Authorization: "
+                 "Bearer token-a-public, and observe the responses. Report a finding with its "
+                 "transaction digest only when a response shows account A reading account B's "
+                 "object, then stop."),
+        "max_model_calls": 12, "max_output_tokens": 512,
     }, expected=(201,))
     assert build["driver"] == "model-mcp/v1" and build["digest"].startswith("sha256:")
     assert nv07.fixture.api("GET", "/agent/model")["status"] == "standby"
@@ -76,9 +115,11 @@ def main() -> None:
         "build_digest": build["digest"],
         "fixture_image": image_id,
         "connection": {"provider": metadata["provider"], "model": metadata["model"],
-                       "status": metadata["status"], "encrypted_at_rest": True},
+                       "status": metadata["status"], "encrypted_at_rest": True,
+                       "header_names": metadata.get("header_names", []),
+                       "headers_digest": metadata.get("headers_digest")},
         "proposed_request": {"challenge_id": challenge["id"], "build_id": build["id"],
-                             "seed": 1, "action_cap": 8, "deadline_seconds": 600},
+                             "seed": 1, "action_cap": 12, "deadline_seconds": 600},
     }
     path = ROOT / "docs/verification" / (
         f"nv07-r1-setup-{datetime.now():%Y-%m-%d}-{uuid.uuid4().hex[:8]}.json")

@@ -157,6 +157,56 @@ def test_missing_evidence_reference_refuses_backup(tmp_path, monkeypatch):
     assert not bundle.exists()
 
 
+# --- MODEL-R1 (A6): headers survive backup/restore; share stays redacted ---
+
+def _source_with_headers(tmp_path, monkeypatch):
+    from models import ModelConnection
+
+    root, engine, key = _source(tmp_path, monkeypatch)
+    headers = {"User-Agent": "opencode-test/1.0", "x-opencode-session": "sess-123"}
+    cipher = SecretCipher(key)
+    with engine.begin() as conn:
+        conn.execute(ModelConnection.__table__.insert().values(
+            owner="bootstrap", provider="custom", model="m",
+            encrypted_key=cipher.encrypt(""),
+            encrypted_headers=cipher.encrypt(json.dumps(headers, sort_keys=True)),
+            key_last4=None, base_url="http://vllm.internal:8000/v1",
+            status="standby"))
+    return root, engine, key, headers
+
+
+def test_model_headers_survive_backup_restore(tmp_path, monkeypatch):
+    from models import ModelConnection
+
+    root, source_db, key, headers = _source_with_headers(tmp_path, monkeypatch)
+    bundle = tmp_path / "result.nvr"
+    recovery.backup(root, bundle, "a-long-fixture-passphrase", url=str(source_db.url))
+    assert b"opencode-test" not in bundle.read_bytes()
+    assert b"sess-123" not in bundle.read_bytes()
+
+    target = tmp_path / "clean"
+    target_db = _database(tmp_path / "clean.sqlite")
+    recovery.restore(bundle, target, "a-long-fixture-passphrase", url=str(target_db.url))
+    with target_db.connect() as conn:
+        row = conn.execute(select(ModelConnection).where(
+            ModelConnection.owner == "bootstrap")).mappings().one()
+        assert json.loads(SecretCipher(key).decrypt(row["encrypted_headers"])) == headers
+
+
+def test_share_report_contains_no_header_material(tmp_path, monkeypatch):
+    root, source_db, _, _ = _source_with_headers(tmp_path, monkeypatch)
+    bundle = tmp_path / "result.nvr"
+    recovery.backup(root, bundle, "a-long-fixture-passphrase", url=str(source_db.url))
+    share = tmp_path / "share.json"
+    recovery.share(bundle, share, "a-long-fixture-passphrase")
+    raw = share.read_bytes()
+    assert b"opencode-test" not in raw
+    assert b"sess-123" not in raw
+    assert b"x-opencode-session" not in raw
+    assert b"header_names" not in raw
+    assert b"headers_digest" not in raw
+
+
 def test_retention_cannot_delete_only_research_record():
     database = Database()
     arena = "nv10-retain-" + uuid4().hex

@@ -66,6 +66,96 @@ def test_verify_local_checked_with_override(monkeypatch):
     assert out["verified"] is True and out["checked"] is True
 
 
+# --- MODEL-R1: extra_headers forwarding ------------------------------------
+
+def test_verify_forwards_supplied_headers(monkeypatch):
+    seen = {}
+
+    def fake_get(url, headers=None, timeout=None):
+        seen["headers"] = headers
+        return _Resp(200)
+
+    monkeypatch.setattr(model_verify.requests, "get", fake_get)
+    out = model_verify.verify_credential(
+        "openai", "gpt-4o", "sk-x",
+        headers={"User-Agent": "opencode-test/1.0",
+                 "x-opencode-session": "sess-123"})
+    assert out["verified"] is True
+    assert seen["headers"]["User-Agent"] == "opencode-test/1.0"
+    assert seen["headers"]["x-opencode-session"] == "sess-123"
+    assert seen["headers"]["Authorization"] == "Bearer sk-x"
+
+
+def test_verify_forwards_headers_on_anthropic_path(monkeypatch):
+    seen = {}
+
+    def fake_get(url, headers=None, timeout=None):
+        seen["headers"] = headers
+        return _Resp(200)
+
+    monkeypatch.setattr(model_verify.requests, "get", fake_get)
+    out = model_verify.verify_credential(
+        "anthropic", "claude", "sk-ant",
+        headers={"x-opencode-session": "sess-123"})
+    assert out["verified"] is True
+    assert seen["headers"]["x-opencode-session"] == "sess-123"
+    assert seen["headers"]["x-api-key"] == "sk-ant"
+
+
+def test_api_verify_forwards_stored_headers(monkeypatch):
+    import api
+    import auth
+    from database import Database
+    from fastapi.testclient import TestClient
+
+    db = Database()
+    raw = auth.generate_api_key()
+    owner = "op-verify-headers"
+    db.create_api_key(auth.hash_api_key(raw), name=owner, role="operator")
+    client = TestClient(api.app)
+    client.headers["X-API-Key"] = raw
+    client.put("/agent/model", json={
+        "provider": "custom", "model": "m", "api_key": "",
+        "base_url": "http://vllm.internal:8000/v1",
+        "extra_headers": {"x-opencode-session": "stored-sess"}})
+    captured = {}
+
+    def fake(provider, model, api_key, base_url=None, headers=None):
+        captured.update(headers=headers)
+        return {"verified": True, "detail": "ok", "checked": True}
+
+    monkeypatch.setattr("api.model_verify.verify_credential", fake)
+    r = client.post("/agent/model/verify", json={})
+    assert r.status_code == 200
+    assert captured["headers"] == {"x-opencode-session": "stored-sess"}
+
+
+def test_api_verify_forwards_supplied_headers(monkeypatch):
+    import api
+    import auth
+    from database import Database
+    from fastapi.testclient import TestClient
+
+    db = Database()
+    raw = auth.generate_api_key()
+    db.create_api_key(auth.hash_api_key(raw), name="op-verify-headers-2",
+                      role="operator")
+    client = TestClient(api.app)
+    client.headers["X-API-Key"] = raw
+    captured = {}
+
+    def fake(provider, model, api_key, base_url=None, headers=None):
+        captured.update(headers=headers)
+        return {"verified": True, "detail": "ok", "checked": True}
+
+    monkeypatch.setattr("api.model_verify.verify_credential", fake)
+    r = client.post("/agent/model/verify", json={
+        "provider": "openai", "model": "gpt-4o", "api_key": "sk-supplied",
+        "extra_headers": {"x-opencode-session": "supplied-sess"}})
+    assert r.status_code == 200
+    assert captured["headers"] == {"x-opencode-session": "supplied-sess"}
+
+
 def test_verify_per_call_base_url_wins_over_preset(monkeypatch):
     seen = {}
 

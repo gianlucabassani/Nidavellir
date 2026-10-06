@@ -38,11 +38,16 @@ def _safe_trial_error(exc):
     safe_messages = {"MCP agent announcement failed",
                      "pinned model connection unavailable or changed",
                      "model connection has no supported endpoint"}
+    # A drifted pinned connection names only field names (never values), so
+    # the suffixed form is equally safe to store.
+    safe_prefixes = ("pinned model connection unavailable or changed: ",)
     provider_prefix = "model provider returned HTTP "
     provider_status = message.removeprefix(provider_prefix)
     safe_status = (message.startswith(provider_prefix) and
                    len(provider_status) == 3 and provider_status.isdecimal())
-    if isinstance(exc, RuntimeError) and (message in safe_messages or safe_status):
+    if isinstance(exc, RuntimeError) and (
+            message in safe_messages or safe_status
+            or message.startswith(safe_prefixes)):
         return f"{kind}: {message}"[:500]
     return kind
 
@@ -55,6 +60,26 @@ def time_limits(trial_count, deadline_seconds):
 # Below this many matched pairs a bootstrap interval is reported but labelled
 # ``insufficient_pairs``; it is never ``supported``.
 MIN_INTERVAL_PAIRS = 5
+
+
+def check_model_connection(connection, config):
+    """Refuse a trial when the stored connection drifted from the pinned build.
+
+    Compares provider, model, base_url and headers_digest (MODEL-R1); raises
+    RuntimeError naming which field(s) drifted so failures are diagnosable.
+    Only field *names* are exposed — never connection values."""
+    import model_headers  # noqa: PLC0415 - keep worker import timing as-is
+
+    if not connection:
+        raise RuntimeError("pinned model connection unavailable or changed")
+    drifted = [key for key in ("provider", "model", "base_url")
+               if connection.get(key) != config.get(key)]
+    if (model_headers.extra_headers_digest(connection.get("extra_headers"))
+            != config.get("headers_digest")):
+        drifted.append("headers_digest")
+    if drifted:
+        raise RuntimeError("pinned model connection unavailable or changed: "
+                           + ", ".join(drifted))
 
 
 def _observation(db, arena_id):
@@ -94,9 +119,7 @@ async def _play_mcp(arena_id, build, *, deadline_seconds=None):
                 config = build["config"]
                 connection = Database().get_decrypted_model_credential(
                     config["connection_owner"])
-                if not connection or any(connection.get(key) != config.get(key)
-                                         for key in ("provider", "model", "base_url")):
-                    raise RuntimeError("pinned model connection unavailable or changed")
+                check_model_connection(connection, config)
                 def decode(response):
                     if response.structuredContent is not None:
                         return response.structuredContent

@@ -42,6 +42,7 @@ import image_check
 import images
 import lifecycle_manifest
 import model_chat
+import model_headers
 import model_verify
 import netguard
 import oci_intake
@@ -3739,6 +3740,12 @@ class ModelConnectionRequest(BaseModel):
     # preset + NIDAVELLIR_MODEL_BASE_URL. Required for `custom`/`local`; optional
     # for named OpenAI-compatible providers.
     base_url: str | None = Field(default=None, max_length=512)
+    # Operator-approved static request headers (MODEL-R1) for gateways that
+    # reject the default request shape. None keeps stored headers, {} clears
+    # them. Values are encrypted at rest and never returned (only sorted
+    # names + a digest are surfaced). `Authorization` and friends are refused:
+    # the driver's own credential always wins.
+    extra_headers: dict | None = Field(default=None)
 
     @field_validator("provider")
     @classmethod
@@ -3749,6 +3756,16 @@ class ModelConnectionRequest(BaseModel):
                 f"(known: {', '.join(MODEL_PROVIDERS)})"
             )
         return value.lower()
+
+    @field_validator("extra_headers")
+    @classmethod
+    def _valid_headers(cls, value: dict | None) -> dict | None:
+        if value is None:
+            return None
+        try:
+            return model_headers.normalize_extra_headers(value)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
 
 
 @app.put("/agent/model")
@@ -3773,6 +3790,7 @@ def set_model_connection(
     masked = db.upsert_model_connection(
         principal.name, req.provider, req.model, req.api_key,
         base_url=req.base_url, keep_key=keep_key,
+        extra_headers=req.extra_headers,
     )
     # Only the non-secret provider/model are logged — never the key.
     logger.info(
@@ -3800,10 +3818,23 @@ def remove_model_connection(principal: Principal = Depends(require_principal)):
 class ModelVerifyRequest(BaseModel):
     # All optional: with provider+api_key, verify the supplied credential
     # (pre-save "test"); with an empty body, verify the operator's stored one.
+    # extra_headers follows the same validator as stored connections; when
+    # verifying the stored credential, supplied headers override stored ones.
     provider: str | None = Field(default=None, max_length=32)
     model: str | None = Field(default=None, max_length=128)
     api_key: str | None = Field(default=None, max_length=512)
     base_url: str | None = Field(default=None, max_length=512)
+    extra_headers: dict | None = Field(default=None)
+
+    @field_validator("extra_headers")
+    @classmethod
+    def _valid_headers(cls, value: dict | None) -> dict | None:
+        if value is None:
+            return None
+        try:
+            return model_headers.normalize_extra_headers(value)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
 
 
 @app.post("/agent/model/verify")
@@ -3819,13 +3850,17 @@ def verify_model_connection(
     if req.api_key and req.provider:
         provider, model, api_key = req.provider.lower(), req.model or "", req.api_key
         base_url = req.base_url
+        headers = req.extra_headers or {}
     else:
         cred = db.get_decrypted_model_credential(principal.name)
         if not cred:
             raise HTTPException(status_code=404, detail="no model connection to verify")
         provider, model, api_key = cred["provider"], cred["model"], cred["api_key"]
         base_url = cred.get("base_url")
-    return model_verify.verify_credential(provider, model, api_key, base_url=base_url)
+        headers = req.extra_headers if req.extra_headers is not None else cred.get(
+            "extra_headers") or {}
+    return model_verify.verify_credential(provider, model, api_key, base_url=base_url,
+                                           headers=headers)
 
 
 # --- Co-pilot chat (operator's connected model + arena context) -------------
@@ -6032,7 +6067,7 @@ class AgentBuildCreate(BaseModel):
     driver: Literal["scripted-mcp/v1", "model-mcp/v1"] = "scripted-mcp/v1"
     plan: list[dict] | None = None
     goal: str | None = Field(default=None, max_length=500)
-    max_model_calls: int = Field(default=8, ge=1, le=8)
+    max_model_calls: int = Field(default=8, ge=1, le=12)
     max_output_tokens: int = Field(default=512, ge=64, le=512)
 
 
@@ -6048,6 +6083,7 @@ def create_agent_build(req: AgentBuildCreate,
             raise HTTPException(status_code=409, detail="operator model connection required")
         config = {"connection_owner": principal.name, "provider": connection["provider"],
                   "model": connection["model"], "base_url": connection.get("base_url"),
+                  "headers_digest": connection.get("headers_digest"),
                   "goal": req.goal.strip(), "max_model_calls": req.max_model_calls,
                   "max_output_tokens": req.max_output_tokens, "deadline_seconds": 600,
                   "scaffold": "model-mcp/v1"}
@@ -6188,7 +6224,7 @@ class EvaluationSmokeCreate(BaseModel):
     challenge_id: str
     build_id: str
     seed: int = 1
-    action_cap: int = Field(default=8, ge=1, le=8)
+    action_cap: int = Field(default=8, ge=1, le=12)
     deadline_seconds: int = Field(default=600, ge=60, le=600)
 
 

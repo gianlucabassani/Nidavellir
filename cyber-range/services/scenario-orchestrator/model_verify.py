@@ -66,19 +66,30 @@ def _classify_status(code: int):
     return _result(False, f"unexpected provider response (HTTP {code})", checked=False)
 
 
-def verify_credential(provider: str, model: str, api_key: str, base_url: str | None = None) -> dict:
+def verify_credential(provider: str, model: str, api_key: str, base_url: str | None = None,
+                      headers: dict | None = None) -> dict:
     """Confirm a credential by listing the provider's models. Returns
     {verified: bool, detail: str, checked: bool}. ``checked=False`` means we
     could not reach a verdict (network blocked / host unknown) — treat as
     "unverified", not "invalid". ``base_url`` (per-connection) overrides the
-    provider preset / env for OpenAI-compatible hosts."""
+    provider preset / env for OpenAI-compatible hosts. ``headers`` carries the
+    connection's operator-approved static extra headers (MODEL-R1); they are
+    merged into the probe without ever overriding the driver's own
+    ``Authorization`` / ``x-api-key`` credential."""
     provider = (provider or "").lower()
+    extra = dict(headers or {})
+    # Belt-and-braces: the API validator already rejects these, but the
+    # driver's credential must win even for direct callers.
+    for name in list(extra):
+        if name.lower() in ("authorization", "x-api-key"):
+            del extra[name]
     try:
         if provider == "anthropic":
             return _classify_status(
                 requests.get(
                     f"{ANTHROPIC_BASE}/models",
                     headers={
+                        **extra,
                         "x-api-key": api_key,
                         "anthropic-version": "2023-06-01",
                     },
@@ -95,7 +106,7 @@ def verify_credential(provider: str, model: str, api_key: str, base_url: str | N
             return _classify_status(
                 requests.get(
                     f"{base.rstrip('/')}/models",
-                    headers={"Authorization": f"Bearer {api_key}"},
+                    headers={**extra, "Authorization": f"Bearer {api_key}"},
                     timeout=_VERIFY_TIMEOUT,
                 ).status_code
             )
