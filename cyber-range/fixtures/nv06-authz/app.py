@@ -33,48 +33,6 @@ def classify_request(actor, owner, request_id):
     return None, None
 
 
-def index_body():
-    """The `/` index: resource family names and nothing else. No owner
-    names, no hint that reading another account's object discloses
-    anything — the verdict stays undiscoverable from here."""
-    return {"resources": ["objects", "protected"]}
-
-
-def openapi_body():
-    """Minimal `/openapi.json`: the two object families with `{owner}`
-    path parameters. No owners, no headers, no response shapes — the
-    header contract and the disclosure rule stay discoverable only
-    through probing."""
-    return {
-        "openapi": "3.0.0",
-        "paths": {
-            "/objects/{owner}": {"get": {"responses": {"200": {"description": "object"}}}},
-            "/protected/{owner}": {"get": {"responses": {"200": {"description": "object"}}}},
-        },
-    }
-
-
-def route(path, port):
-    """Map (path, port) to a route name. Pure dispatch seam over the exact
-    historical behaviour: health and oracle first, then the 8080 object
-    surface (index, schema, two-segment object reads), everything else
-    not found."""
-    if path == "/health":
-        return "health"
-    if port == 8081:
-        return "oracle" if path.startswith("/oracle/") else "not_found"
-    if port != 8080:
-        return "not_found"
-    if path == "/":
-        return "index"
-    if path == "/openapi.json":
-        return "openapi"
-    parts = path.strip("/").split("/")
-    if len(parts) != 2 or parts[0] not in {"objects", "protected"}:
-        return "not_found"
-    return "object"
-
-
 class Handler(BaseHTTPRequestHandler):
     def _send(self, status: int, value: dict) -> None:
         body = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
@@ -86,26 +44,22 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):  # noqa: N802 - stdlib callback
         path = urlsplit(self.path).path
-        name = route(path, self.server.server_port)
-        if name == "health":
+        if path == "/health":
             self._send(200, {"seed": "nv06-v1", "ready": True})
             return
-        if name == "index":
-            self._send(200, index_body())
-            return
-        if name == "openapi":
-            self._send(200, openapi_body())
-            return
-        if name == "oracle":
+        if path.startswith("/oracle/") and self.server.server_port == 8081:
             request_id = path.removeprefix("/oracle/")
             with LOCK:
                 item = EFFECTS.get(request_id)
             self._send(200 if item else 404, item or {"error": "unknown request"})
             return
-        if name == "not_found":
+        if self.server.server_port != 8080:
             self._send(404, {"error": "not found"})
             return
         parts = path.strip("/").split("/")
+        if len(parts) != 2 or parts[0] not in {"objects", "protected"}:
+            self._send(404, {"error": "not found"})
+            return
         owner = parts[1]
         actor = TOKENS.get(self.headers.get("Authorization", "").removeprefix("Bearer "))
         request_id = self.headers.get("X-Request-ID", "")

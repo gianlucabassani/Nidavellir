@@ -3,6 +3,23 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-10-06 — STANDING NOTE: nv06-authz stays calibration (scope correction)
+
+Nidavellir is both benchmark (P1: calibration fixtures, known truth,
+path supplied — measures harness and agent against a known answer) and
+research (P0/P2: sessions, findings, PoC, campaigns — targets with no
+answer). `nv06-authz` is benchmark by design. The index/openapi surface
+landed in `71bb924` is reverted here: a fixture cannot both supply the
+path (calibration) and measure discovery, and the unspoilered-smoke
+program on this fixture is cancelled for the same reason — neither a
+fair benchmark nor a realistic research target. A discoverable
+index/schema is a research-class requirement and belongs to a future
+discovery-class target, not to this fixture. Do not re-attempt here.
+Kept: the 401/404/400 differentiation (settled shape-gate contract),
+`get_topology`, rejection-reason retention, and all records. The
+`f191b848` smoke ran against the reverted surface; it stands as history
+of what that surface taught, not as a benchmark score.
+
 ## 2026-10-06 — RESULT: class C, link-localized — namespace not enumerated
 
 Trial `b540bb12-…` (evaluation `9ae398fe-…`): `complete`,
