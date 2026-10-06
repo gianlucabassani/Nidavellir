@@ -18,14 +18,17 @@ no verdict key at all. Re-emitted (not annotated): the transform is
 mechanical and verdict-preserving, so the original
 `paperless-mail-hunt-2026-10-06.json` stays untouched as the recorded
 output and `...-corrected.json` carries `controls_schema:
-assertive-v1`. Exactly the 2 non-asserting controls changed
-(M1/M4 owner-observables); all 12 verdicts byte-identical, zero
-`held: false` remains. M1/M4 stay refuted, and the 200 / 500-with-IMAP
-observations remain the proof the denials are authorization decisions.
+assertive-v1`. All 11 control blocks changed schema (9 asserting
+controls gained `assertive: true` with `held` intact; the 2
+non-asserting M1/M4 owner-observables dropped `held`); all 12 verdicts
+byte-identical, zero `held: false` remains. (Correction: an earlier
+revision of this entry said only 2 blocks changed — wrong; the 9
+asserting blocks changed too, by gaining the flag.) M1/M4 stay
+refuted, and the 200 / 500-with-IMAP observations remain the proof the
+denials are authorization decisions.
 
 **Verification:** `make release-check` exit 0 (Ruff/Bandit clean, SQLite
-1002 passed, smoke ready, PostgreSQL 1006 passed — real numbers below in
-the gate log, not quoted from memory).
+1002 passed, smoke ready, PostgreSQL 1006 passed).
 
 ## 2026-10-06 — Mail hunt: 6/6 refuted, Paperless exhausted for this family
 

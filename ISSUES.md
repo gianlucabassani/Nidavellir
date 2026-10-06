@@ -45,6 +45,24 @@ NV-13 for local hypervisors; cloud providers remain deferred.
 
 R1 and R2 closed 2026-10-06 (see Closed); R3 stays deferred by its own trigger.
 
+### RESEARCH-R4 · Pre-reg check binds ordering, not content · medium
+
+**True today:** `--require-prereg` proves a *commit* predates the run, but
+nothing binds that commit's *content* to the run — any old ancestor sha
+(including one from an unrelated round) satisfies the check. Ordering is
+mechanical; correspondence is still prose.
+
+**Why it matters:** the failure mode R1 closed was silent reordering; the
+remaining failure mode is a mismatched pre-registration passing the gate
+unnoticed, which degrades the same fail-closed discipline one step
+removed.
+
+**Closes when:** the probe run records the pre-reg sha alongside the run's
+parameters, and a check (human or mechanical) confirms the recorded
+hypotheses match the pre-registration's. Minimal form: the attempt marker
+carries both the pre-reg sha and the setup manifest digest, and the
+journal result cites both.
+
 ### RESEARCH-R3 · Mail sink is embedded in the Paperless fixture · low
 
 **True today:** GreenMail 2.1.14 (digest-pinned, SMTP 3025 / IMAP 3143 / HTTP
@@ -77,8 +95,10 @@ failing twice + an in-process pass). Next round records both ids.
 M1/M4 observational controls carried `"held": false`. Closed by the
 `assertive` flag (`held` only when a value is asserted) and the
 re-emitted `paperless-mail-hunt-2026-10-06-corrected.json`
-(`controls_schema: assertive-v1`): 2 controls changed, 12 verdicts
-identical, zero `held: false`. M1/M4 stay refuted.
+(`controls_schema: assertive-v1`): all 11 control blocks changed schema
+(9 gained the flag, 2 dropped `held`), 12 verdicts
+identical, zero `held: false`. M1/M4 stay refuted. (Correction: this entry
+first said only 2 blocks changed — the 9 asserting blocks changed too.)
 
 ### NV07-R1 · Only one deterministic driver has been exercised · closed 2026-10-06
 
