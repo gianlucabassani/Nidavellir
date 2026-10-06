@@ -108,11 +108,18 @@ focused maintenance scope if broader features do not improve actual research.
 
 ## P2 — research iteration driven by target needs
 
-- [ ] **NV-11 — Affected-versus-fixed replay.** Link a finding/PoC to exact vulnerable and
+- [x] **NV-11 — Affected-versus-fixed replay.** Link a finding/PoC to exact vulnerable and
   fixed versions and their configurations; compare effects and retain both evidence sets.
-  Extend existing Git diff/patch artifacts with targeted variant hypotheses.
+  Git-diff variant hypotheses move to the discovery-layer spec (operator sequencing,
+  2026-10-05).
   **Depends:** NV-02, NV-06, NV-10. **Accept:** reproduce a flaw and show its observed effect
   disappears on the fixed version under matching controls; unknown versions remain unknown.
+  Implemented: `variant_of` on both finding write paths and the MCP tool; the operator-only
+  `GET /findings/{finding_id}` group with a whitelisted target identity and evidence-derived
+  outcome. Live: CVE-2026-26012 confirmed on Vaultwarden 1.35.2 and refuted on 1.37.3, linked
+  into one `disappeared_under_controls` group
+  (`docs/verification/vaultwarden-live-2026-10-06-3eaf790a.json`); tests in
+  `tests/test_finding_variants.py` and `tests/test_http_access_control.py`.
 - [ ] **NV-12 — Fuzzing and crash triage when selected research needs it.** Bounded harness,
   corpus/seed and build identity, existing crash oracle, minimization, deduplication and
   reproducible crash bundle. **Depends:** NV-03–04, NV-06, NV-11.

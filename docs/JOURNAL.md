@@ -3,6 +3,44 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-10-06 — Affected-versus-fixed finding groups (NV-11)
+
+**Outcome:** Findings can now be linked across arenas. `report_finding` (agent
+and operator paths, and the MCP tool) accepts an optional `variant_of`; the
+recorded finding event carries `variant_of` and a shared `research_key`. A new
+operator-only `GET /findings/{finding_id}` returns the group with each member's
+verdict and a whitelisted target identity from the pinned lifecycle recipe, and
+derives an evidence-only outcome: `disappeared_under_controls` only when the
+reference is confirmed and a variant refuted under the same validator version;
+`still_observed` when a variant confirms; `inconclusive` on infrastructure
+failure or mixed validator versions; `unknown` with fewer than two members, a
+missing reference verdict, or any unknown identity. No migration: the event
+spine stays the source of truth, with a documented path to a link table if
+volume demands it.
+
+**Files:** `cyber-range/services/scenario-orchestrator/api.py`;
+`cyber-range/services/agent-gateway/gateway/{server,tools,rest_client}.py`;
+`tests/test_finding_variants.py`, `tests/test_http_access_control.py`,
+`tests/test_agent_gateway.py`; `scripts/verify-vaultwarden-live.py`;
+`docs/API.md`, `README.md`, `TODO.md`; evidence
+`docs/verification/vaultwarden-live-2026-10-06-3eaf790a.json`.
+
+**Verification:** Eleven new tests cover the write path, duplicate-id
+determinism, cross-arena linking, the full outcome matrix, identity
+whitelisting, legacy findings and access control; the end-to-end loopback test
+links two real validator verdicts into `disappeared_under_controls`. The live
+Vaultwarden gate now reports the fixed-version finding with `variant_of` and
+asserts the live group outcome on the real 1.35.2/1.37.3 pair. The pinned
+`make release-check` passed: Ruff clean, Bandit zero medium/high, SQLite 957
+passed (4 skipped, 6 deselected), PostgreSQL 961 passed (6 deselected), smoke
+ready.
+
+**Unresolved risks / next step:** An agent can probe a 12-hex finding id's
+existence (accepted residual; ids are unguessable and no cross-arena content is
+returned). The console does not surface groups yet (UI branch). Git-diff variant
+hypotheses move to the discovery-layer spec. Next: that discovery layer
+(cross-version diff, static-analysis providers, hypothesis queue).
+
 ## 2026-10-05 — Vaultwarden CVE-2026-26012 live calibration; NV06-R1 closed
 
 **Outcome:** Built the first non-synthetic Nidavellir fixture: a derived

@@ -52,7 +52,7 @@ def _base_image() -> str:
                        "--format", "{{.Id}}").stdout.strip()
 
 
-def _run_version(meta: dict, base_id: str) -> dict:
+def _run_version(meta: dict, base_id: str, variant_of: str | None = None) -> dict:
     version = meta["version"]
     tag = version.replace(".", "")
     scenario_id = f"vaultwarden-{tag}-{RUN_ID}"
@@ -102,10 +102,13 @@ def _run_version(meta: dict, base_id: str) -> dict:
         "headers": {"Authorization": "Bearer " + meta["tokens"]["B"],
                     "X-Request-ID": "vw" + uuid.uuid4().hex}},
         key=AGENT_KEY)
-    finding = fixture.api("POST", f"/arenas/{arena}/findings", {
-        "title": "Organization cipher enumeration", "cwe": "CWE-639",
-        "node": "target", "transaction_digests": [action["transaction_digest"]]},
-        key=AGENT_KEY)
+    finding_body = {"title": "Organization cipher enumeration", "cwe": "CWE-639",
+                    "node": "target",
+                    "transaction_digests": [action["transaction_digest"]]}
+    if variant_of:
+        finding_body["variant_of"] = variant_of
+    finding = fixture.api("POST", f"/arenas/{arena}/findings", finding_body,
+                          key=AGENT_KEY)
     events = fixture.api("GET", f"/deployments/{arena}/events")["events"]
     payload = next(event["payload"] for event in events if event["type"] == "finding"
                    and event["payload"]["finding_id"] == finding["finding_id"])
@@ -113,7 +116,8 @@ def _run_version(meta: dict, base_id: str) -> dict:
     score = fixture.api("GET", f"/arenas/{arena}/score")
     verdict_data = {
         "arena": arena, "version": version, "image_id": meta["image_id"],
-        "org_id": meta["org_id"],
+        "org_id": meta["org_id"], "finding_id": finding["finding_id"],
+        "variant_of": variant_of,
         "action": {"status": action["status"],
                    "transaction_digest": action["transaction_digest"],
                    "marker_in_body": meta["restricted_cipher"] in (action.get("body") or "")},
@@ -139,11 +143,13 @@ def main():
     _start_stack()
     results = {}
     try:
+        root = None
         for version in sorted(builder.PINS):
             meta = builder.build(version)
-            results[version] = _run_version(meta, base_id)
+            results[version] = _run_version(meta, base_id, variant_of=root)
             expected = EXPECTED[version]
             result = results[version]
+            root = root or result["finding_id"]
             assert result["verdict"]["verdict"] == expected[0], result
             assert result["verdict"]["reason_code"] == expected[1], result
             assert result["verdict"]["validator_id"] == "http_access_control"
@@ -154,6 +160,12 @@ def main():
             assert result["evidence_after_teardown"] is True
             print(f"{version}: {result['verdict']['verdict']} "
                   f"({result['verdict']['reason_code']})", flush=True)
+        group = fixture.api("GET", f"/findings/{root}")
+        assert group["comparison"]["outcome"] == "disappeared_under_controls", group
+        assert group["comparison"]["validator_comparable"] is True, group
+        assert len(group["members"]) == 2, group
+        assert [member["verdict"]["verdict"] for member in group["members"]] == \
+            ["confirmed", "refuted"], group
         resources = {arena: fixture.inventory(arena) for arena in fixture.ARENAS}
         assert not any(any(counts.values()) for counts in resources.values()), resources
         evidence = {
@@ -164,6 +176,16 @@ def main():
             "target": "vaultwarden/server",
             "pins": {version: builder.PINS[version] for version in builder.PINS},
             "results": results,
+            "group": {
+                "research_key": group["research_key"],
+                "comparison": group["comparison"],
+                "members": [{key: member[key] for key in (
+                    "finding_id", "arena_id", "variant_of", "scenario")}
+                    | {"verdict": member["verdict"].get("verdict"),
+                       "identity_known": member["identity"]["known"],
+                       "recipe_digest": member["identity"]["recipe_digest"]}
+                    for member in group["members"]],
+            },
             "final_resources": resources,
         }
         path = ROOT / "docs/verification" / (

@@ -161,3 +161,36 @@ def test_http_access_control_dispatch_and_verdict(clients, monkeypatch, server,
     assert operator.get(
         f"/arenas/{arena}/validation-evidence/{verdict['observation_digest']}"
     ).status_code == 200
+
+
+def test_variant_group_disappeared_under_controls(clients, monkeypatch, server):
+    db, operator, agent = clients
+
+    def local_probe(_record, _node, source, timeout=5):
+        completed = subprocess.run([sys.executable, "-c", source], capture_output=True,
+                                   text=True, timeout=30, check=True)
+        return json.loads(completed.stdout)
+
+    monkeypatch.setattr(api, "_target_local_json", local_probe)
+    arenas = {}
+    for side, path in (("vuln", "/api/objects/vuln"), ("fixed", "/api/objects/fixed")):
+        arenas[side] = _arena(db, f"acl-e2e-{side}", server, path)
+
+    def report(side, variant_of=None):
+        digest = _transaction(arenas[side], f"/api/objects/{side}")
+        body = {"title": "cross-account read", "cwe": "CWE-639", "node": "target",
+                "transaction_digests": [digest]}
+        if variant_of:
+            body["variant_of"] = variant_of
+        response = agent.post(f"/arenas/{arenas[side]}/findings", json=body)
+        assert response.status_code == 200, response.text
+        return response.json()["finding_id"]
+
+    root = report("vuln")
+    report("fixed", variant_of=root)
+    group = operator.get(f"/findings/{root}").json()
+    assert group["comparison"]["outcome"] == "disappeared_under_controls"
+    assert len(group["members"]) == 2
+    assert all(member["identity"]["known"] for member in group["members"])
+    assert [member["verdict"]["verdict"] for member in group["members"]] == \
+        ["confirmed", "refuted"]

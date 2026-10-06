@@ -61,6 +61,12 @@ its engagement becomes a **read-only record**: no live actions and no stale clai
 nodes, but findings, evidence, score, and trace stay reviewable — evidence outlives the
 infrastructure it came from.
 
+Findings can be linked across arenas with one field (`variant_of`). The operator-only
+`GET /findings/{id}` group read then shows each target's pinned identity and independently
+validated verdict side by side, and states — only when the evidence supports it — that a
+confirmed effect disappeared on the fixed target under matched controls. Unknown versions
+stay unknown.
+
 The **PoC** tab runs Python in disposable, resource-limited Docker helpers. Choose
 one target for HTTP(S) through `nidavellir.request("/path")`, or leave the job
 networkless. Explicitly selected transfer files are copied into `/workspace/input`;

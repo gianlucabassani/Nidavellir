@@ -1,0 +1,117 @@
+{
+  "advisory": "GHSA-h265-g7rm-h337",
+  "created_at": "2026-10-06T14:27:12.064786",
+  "cve": "CVE-2026-26012",
+  "final_resources": {
+    "7bc8a3eb-bfad-41c3-aeea-5e497817bdee": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "bcebe667-faf8-434b-94c8-72aad4769744": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    }
+  },
+  "group": {
+    "comparison": {
+      "counts": {
+        "confirmed": 1,
+        "inconclusive": 0,
+        "infrastructure_failure": 0,
+        "refuted": 1
+      },
+      "identity_match": "different_recipe",
+      "outcome": "disappeared_under_controls",
+      "validator_comparable": true
+    },
+    "members": [
+      {
+        "arena_id": "bcebe667-faf8-434b-94c8-72aad4769744",
+        "finding_id": "723c0f87a16f",
+        "identity_known": true,
+        "recipe_digest": "sha256:255dc031ed945915b5238f66c759e18bb3d97397bc1fabb7dee69c95cdc6b4f9",
+        "scenario": "vaultwarden-1352-3eaf790a",
+        "variant_of": null,
+        "verdict": "confirmed"
+      },
+      {
+        "arena_id": "7bc8a3eb-bfad-41c3-aeea-5e497817bdee",
+        "finding_id": "2d79520fecac",
+        "identity_known": true,
+        "recipe_digest": "sha256:5c714f3fb5300971e340aa20910d95c792bcf48fb1a5070911ee094fe1fdab41",
+        "scenario": "vaultwarden-1373-3eaf790a",
+        "variant_of": "723c0f87a16f",
+        "verdict": "refuted"
+      }
+    ],
+    "research_key": "723c0f87a16f"
+  },
+  "pins": {
+    "1.35.2": "vaultwarden/server@sha256:d89a6d21e361254670c24a4272b4b5f245e402c284f2f55de2c379fdbcfa1fa5",
+    "1.37.3": "vaultwarden/server@sha256:1587c45feaa479f1f5e8af3b00eded36bff77bcf1880cf8dbf0541706dd470e0"
+  },
+  "results": {
+    "1.35.2": {
+      "action": {
+        "marker_in_body": true,
+        "status": 200,
+        "transaction_digest": "sha256:de60f9c7361d4edf707aaed170ce809bab6c12fb38b803844a697302e57fd8de"
+      },
+      "arena": "bcebe667-faf8-434b-94c8-72aad4769744",
+      "evidence_after_teardown": true,
+      "finding_id": "723c0f87a16f",
+      "image_id": "sha256:0076e1656a8769625a85c77b11c6828f1c579cc6d0e06824ab5b988ca136884b",
+      "org_id": "bb35c042-e35f-4891-9538-127d3458c2a5",
+      "score": {
+        "confirmed_findings": 1,
+        "value": 1.0
+      },
+      "variant_of": null,
+      "verdict": {
+        "action_digest": "sha256:de60f9c7361d4edf707aaed170ce809bab6c12fb38b803844a697302e57fd8de",
+        "control_digest": "sha256:17d660dfb8dc7756521bd62bf7dd1361e8d2b2cac4eb91f99b90bd72ce58145e",
+        "evidence": "owner status=200 marker=True; actor status=200 marker=True; control status=200 marker=False",
+        "explanation": "actor disclosed the operator-owned marker",
+        "observation_digest": "sha256:7600230905841ef174e56f31dab48e4ebcaae1f29e9084b91c066b90c5313281",
+        "reason_code": "unauthorized_disclosure",
+        "validator_id": "http_access_control",
+        "verdict": "confirmed"
+      },
+      "version": "1.35.2"
+    },
+    "1.37.3": {
+      "action": {
+        "marker_in_body": false,
+        "status": 401,
+        "transaction_digest": "sha256:601c16914898dcdd06827a4ec80326e15f66c9d0a76a88758fb656a68a63c66f"
+      },
+      "arena": "7bc8a3eb-bfad-41c3-aeea-5e497817bdee",
+      "evidence_after_teardown": true,
+      "finding_id": "2d79520fecac",
+      "image_id": "sha256:1a94b73dd58a1feb1ccad5673eb41825ae9edc82979edb139bff32d84c794b25",
+      "org_id": "ef36bf2f-60e1-496d-8b28-7f69e0ad096a",
+      "score": {
+        "confirmed_findings": 0,
+        "value": 0.0
+      },
+      "variant_of": "723c0f87a16f",
+      "verdict": {
+        "action_digest": "sha256:601c16914898dcdd06827a4ec80326e15f66c9d0a76a88758fb656a68a63c66f",
+        "control_digest": "sha256:17d660dfb8dc7756521bd62bf7dd1361e8d2b2cac4eb91f99b90bd72ce58145e",
+        "evidence": "owner status=200 marker=True; actor status=401 marker=False; control status=200 marker=False",
+        "explanation": "actor did not observe the operator-owned marker",
+        "observation_digest": "sha256:0772bf32564a41b8ae2c4f35bbbc93bdfe204ef52124a4a7b5cf3b47f8ab2d7a",
+        "reason_code": "access_denied",
+        "validator_id": "http_access_control",
+        "verdict": "refuted"
+      },
+      "version": "1.37.3"
+    }
+  },
+  "schema": "nidavellir/vaultwarden-live-evidence/v1",
+  "target": "vaultwarden/server"
+}
