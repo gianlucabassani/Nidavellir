@@ -5071,6 +5071,78 @@ def _find_finding_event(finding_id: str) -> dict | None:
     return None
 
 
+_FINDING_VERDICT_KEYS = ("verdict", "reason_code", "validator_id",
+                         "validator_version", "action_digest",
+                         "observation_digest", "control_digest")
+
+
+def _finding_target_identity(arena_id: str) -> dict:
+    """Whitelisted, operator-safe target identity for one arena."""
+    recipe = db.get_lifecycle_recipe(arena_id)
+    if not recipe:
+        return {"known": False, "scenario": None, "provider": None,
+                "recipe_digest": None, "images": {}}
+    images = {}
+    for node in recipe.get("nodes") or []:
+        source = node.get("source") or {}
+        images[node.get("name")] = {
+            "image": node.get("image"),
+            "image_pinned": bool(node.get("image_pinned")),
+            "source_repo": source.get("repo"),
+            "source_ref": source.get("ref"),
+        }
+    return {"known": True, "scenario": recipe.get("scenario_name"),
+            "provider": recipe.get("effective_provider"),
+            "recipe_digest": recipe.get("recipe_digest"), "images": images}
+
+
+def _finding_member_view(event: dict) -> dict:
+    payload = event.get("payload") or {}
+    verdict = payload.get("validation") or {}
+    identity = _finding_target_identity(event.get("lab_id"))
+    return {"finding_id": payload.get("finding_id"), "arena_id": event.get("lab_id"),
+            "scenario": identity.get("scenario"), "title": payload.get("title"),
+            "cwe": payload.get("cwe"), "reported_at": event.get("ts"),
+            "actor": event.get("actor"), "variant_of": payload.get("variant_of"),
+            "verdict": {key: verdict.get(key) for key in _FINDING_VERDICT_KEYS},
+            "identity": identity}
+
+
+def _finding_group_outcome(members: list[dict]) -> dict:
+    counts = {"confirmed": 0, "refuted": 0, "inconclusive": 0,
+              "infrastructure_failure": 0}
+    validators = set()
+    for member in members:
+        verdict = member["verdict"]
+        counts[verdict["verdict"] if verdict.get("verdict") in counts
+               else "inconclusive"] += 1
+        if verdict.get("verdict"):
+            validators.add((verdict.get("validator_id"),
+                            verdict.get("validator_version")))
+    comparable = len(validators) <= 1
+    digests = {member["identity"]["recipe_digest"] for member in members}
+    if any(not member["identity"]["known"] for member in members):
+        identity_match = "unknown"
+    else:
+        identity_match = "same_recipe" if len(digests) == 1 else "different_recipe"
+    reference, variants = members[0], members[1:]
+    reference_verdict = reference["verdict"].get("verdict")
+    if len(members) < 2 or reference_verdict is None \
+            or any(not member["identity"]["known"] for member in members):
+        outcome = "unknown"
+    elif not comparable or counts["infrastructure_failure"]:
+        outcome = "inconclusive"
+    elif any(m["verdict"].get("verdict") == "confirmed" for m in variants):
+        outcome = "still_observed"
+    elif reference_verdict == "confirmed" and any(
+            m["verdict"].get("verdict") == "refuted" for m in variants):
+        outcome = "disappeared_under_controls"
+    else:
+        outcome = "inconclusive"
+    return {"outcome": outcome, "validator_comparable": comparable,
+            "identity_match": identity_match, "counts": counts}
+
+
 def _arena_manifest(record: dict) -> list[dict]:
     """Return truth pinned at deployment; consult the mutable registry only for
     legacy records predating lifecycle recipes."""
@@ -5707,6 +5779,27 @@ def add_manual_finding(
         raise HTTPException(status_code=404, detail="Arena not found")
     finding_id = _record_finding(instance_id, record, req, actor=principal.name, manual=True)
     return {"recorded": True, "finding_id": finding_id, "manual": True}
+
+
+@app.get("/findings/{finding_id}")
+def get_finding_group(finding_id: str,
+                      principal: Principal = Depends(require_principal)):
+    """Operator-only cross-arena view of a finding and its linked variants."""
+    _require_operator(principal)
+    event = _find_finding_event(finding_id)
+    if event is None:
+        raise HTTPException(status_code=404, detail="finding not found")
+    root = (event.get("payload") or {}).get("research_key") or finding_id
+    members = []
+    for candidate in db.list_events(limit=None, types=("finding",)):
+        payload = candidate.get("payload") or {}
+        if payload.get("research_key") == root or payload.get("finding_id") == root:
+            members.append(_finding_member_view(candidate))
+    members.sort(key=lambda member: (member["finding_id"] != root,
+                                     member["reported_at"] or ""))
+    return {"schema": "nidavellir/finding-group/v1", "research_key": root,
+            "reference_finding_id": root, "members": members,
+            "comparison": _finding_group_outcome(members)}
 
 
 @app.post("/arenas/{instance_id}/findings/{finding_id}/verify")
