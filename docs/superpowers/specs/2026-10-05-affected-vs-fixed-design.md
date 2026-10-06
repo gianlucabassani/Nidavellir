@@ -118,7 +118,10 @@ Response:
         "scenario": "vaultwarden-1352",
         "provider": "docker-local",
         "recipe_digest": "sha256:…",
-        "images": {"target": "sha256:…"}
+        "images": {
+          "target": {"image": "sha256:…", "image_pinned": true,
+                     "source_repo": null, "source_ref": null}
+        }
       }
     }
   ],
