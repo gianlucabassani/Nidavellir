@@ -3,6 +3,94 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-10-06 — Mail hunt: 6/6 refuted, Paperless exhausted for this family
+
+Mail sink: GreenMail 2.1.14 (amd64 digest pinned; SMTP 3025 + IMAP 3143
++ HTTP user/message API; reset = DELETE user + recreate, verified) plus
+a gotenberg 8.37.0 sidecar — the mail parser shells email→PDF conversion
+to `PAPERLESS_TIKA_GOTENBERG_ENDPOINT`, and without it consumption fails
+closed ([Errno 111], no document). Fixture extended (seeded mailbox,
+admin account + consuming rule, one consumed doc, owner admin) with
+three new control cells; reset determinism re-proven (identical IDs,
+matrix, digest across rebuilds).
+
+Probes (all with controls held): M1 process-another's-account → 403
+(owner trigger 200 OK); M2 rule-on-another's-account → 403 (owner
+201); M3 processed-mail list → 200 with zero admin rows visible; M4
+test-another's-account → 403 (owner reaches IMAP, 500, i.e. not
+denied); M5 mixed bulk mail delete → atomic 403, row survives; M6
+account detail → member 404, owner 200. Counts: 0 confirmed /
+6 refuted (+6 earlier document siblings refuted) / 0 by-design /
+0 infra-failure. No pre-fix pins needed; held-out test never
+triggered; no bundle built.
+
+Derivation cost, measured: the mail fix rows came from 3 fix_lookup
+calls (~40 output lines) plus ~6 targeted code reads for the
+cross-function paths the tools cannot follow (rule→account FK
+validation, ownership flow into consume, process/test branch guards).
+Manual equivalent last round was ~10 git invocations plus ~600 hunk
+lines and open-ended greps. Roughly 3× less context touched, and the
+sibling verdicts (covered/uncovered/review) replaced the exploratory
+reads. Tool gaps hit honestly: one fix needed hand-reading (single
+`owner=request.user` line, no perm-call keyword), and wrong probe paths
+still masquerade as infra-failures until routes are verified.
+
+Explicit conclusion per the stop rule: this is Paperless's third dry
+round on the authorization-sibling family (endpoint guesses, document
+siblings, mail siblings — 21 refuted hypotheses, 0 confirms). Paperless
+is exhausted for this hypothesis family. The next decision is
+**target-versus-layer**: a new target, or the discovery layer that
+makes wider hypothesis classes cheap — not another Paperless class.
+
+**Verification:** evidence `docs/verification/paperless-mail-hunt-2026-10-06.json`
+(secret-free) and `docs/verification/paperless-fixture-3.3.0.json`
+(refreshed with mail cells); stacks/volumes/networks all torn down;
+no product code changed (fixture + probe scripts only), ruff clean, so
+the green gate stands unrerun.
+
+## 2026-10-06 — Mail hunt PRE-REGISTRATION (before any probe)
+
+Hypotheses (mail-shaped; each states provenance, observable, falsifying
+controls, fixture surface). Target: pinned Paperless 3.3.0 + local sink
+(Phase C). Controls in the established shape unless noted.
+
+- M1 — process another's account. Prov: GHSA-7qqc/65ca78e9e (update path
+  fixed; `process` action untested). Probe: member POST
+  `/api/mail_accounts/{admin-acct}/process/`. Expect denied 403/404.
+  Falsified by: member 200/OK, or admin control failing. Needs: seeded
+  admin mail account. (Class 3.)
+- M2 — rule on another's account. Prov: `validate_account` in
+  MailRuleSerializer (change_mailaccount owner-aware). Probe: member POST
+  rule with `account=<admin-acct>`. Expect denied 403. Falsified by:
+  201 created. Controls: admin creates rule on own account → 201.
+  (Class 4.)
+- M3 — processed-mail leakage. Prov: F2/GlobalSearch class by another
+  path; `ProcessedMailViewSet` claims `PermittedObjectsFilter`. Probe:
+  member lists/reads processed mails of admin's account activity.
+  Expect filtered/empty/denied. Falsified by: subject/sender/attachment
+  metadata visible. Needs: processed-mail rows (ingestion ran). (Class 5.)
+- M4 — `test` action on another's account. Prov: test branch requires
+  change_mailaccount owner-aware (code-read). Probe: member POST
+  `.../test/` with `id=<admin-acct>`. Expect denied. Falsified by:
+  success response. (Class 3.)
+- M5 — bulk mail delete mixed batch (F8 regression). Prov: c28c532be
+  (whole-batch atomic reject). Probe: member bulk-deletes own+other
+  mails. Expect atomic 403, nothing deleted. Falsified by: partial
+  delete or 200. (Class 6.)
+- M6 — trash/member scope. Prov: TrashView/`TrashPermissions` unprobed
+  last round. Probe: member lists trash + deletes. Expect denied/empty
+  unless member-owned content present. Falsified by: another user's
+  content visible or deletable. (Class 7.)
+
+Control matrix: owner 200 / actor denied (403/404 per endpoint shape) /
+control 200, or class-appropriate equivalents recorded per hypothesis.
+Time box: this session; stop rule stands (no novel confirm → bank
+calibration, second dry round ends Paperless for this family).
+Outcome classes: confirmed / refuted / by-design / infrastructure-failure,
+by-design first-class. Client-side probe failures are
+infrastructure-failure, never refutation — routes verified before
+classifying.
+
 ## 2026-10-06 — Research code-intel: thin slice built, mail acceptance green
 
 Built the collect+derive tool surface per `docs/research/research-code-tools-spec.md`:

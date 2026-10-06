@@ -1,10 +1,18 @@
 {
   "admin": "admin",
-  "behavior_digest": "sha256:1c2548f2f49493b6b21b96fdfbec4f5edaf5465751d50e0ecc7bd4acdeb68117",
+  "behavior_digest": "sha256:b49c3e7605f8e12f16754e9a2a4c7d0163adc696f4b4865675b547fbb0d9e13f",
   "control_matrix": {
     "member_list": {
       "expected": 200,
       "status": 200
+    },
+    "member_processed_list": {
+      "expected": 200,
+      "status": 200
+    },
+    "member_read_consumed": {
+      "expected": 404,
+      "status": 404
     },
     "member_read_restricted": {
       "expected": 404,
@@ -14,14 +22,24 @@
       "expected": 200,
       "status": 200
     },
+    "owner_read_consumed": {
+      "expected": 200,
+      "status": 200
+    },
     "owner_read_restricted": {
       "expected": 200,
       "status": 200
     }
   },
+  "mail_account_id": 1,
+  "mail_consumed_document": 3,
+  "mail_consumed_owner": 2,
+  "mail_rule_id": 1,
   "member": "member",
   "member_id": 3,
   "pins": {
+    "gotenberg": "gotenberg/gotenberg:8.37.0@sha256:3fdee07e0dcd5005c3db4d81d1600d081fc6fb424da87e409e1c1f9624a249b8",
+    "greenmail": "greenmail/standalone:2.1.14@sha256:2bcd0470f569af3c8b98509421b23f1ad11ebb2d58c3648f4233bf450f3b5e2b",
     "paperless": "paperlessngx/paperless-ngx:3.3.0@sha256:d70526917791fb99ee61b40a91f111d60c59914f36cfd481af494107054aed06",
     "postgres": "postgres:16@sha256:65b16a8b326e0cfbdf33fa7e783f2a0cb352a61448616ccccfd616ef42aa0f65",
     "redis": "redis:7-alpine@sha256:520775a41a63e77e06c73e35d2fd9cc15921a609516818796b4ecbb813078bc7"

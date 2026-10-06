@@ -24,6 +24,15 @@ control matrix before returning:
 | member reads restricted doc | 404 |
 | member reads shared doc | 200 |
 | member lists documents | 200 |
+| owner reads mail-consumed doc | 200 |
+| member reads mail-consumed doc | 404 |
+| member lists processed mails | 200 |
+
+The mail cells cover a GreenMail 2.1.14 sink (digest-pinned, same pattern:
+arch digest, SMTP 3025 + IMAP 3143 + HTTP API) with one seeded mailbox,
+one consumed message, one admin mail account and one consuming rule. Reset
+covers the sink: the seed recreates the mailbox user, so message UIDs and
+consumed document IDs are identical across rebuilds.
 
 Reset is deleting the `paperless-fixture-*` volumes and re-running the
 script; two consecutive builds produced identical object IDs, matrix and

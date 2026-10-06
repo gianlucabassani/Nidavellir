@@ -184,8 +184,88 @@ def main() -> None:
                                             "restricted-secret"))
            else ("confirmed" if s == 200 else "infrastructure-failure")))
 
+    # --- mail round M1-M6 (needs manifest mail ids) -------------------------
+    acct = manifest["mail_account_id"]
+    # M1 (class 3; F5-sibling 65ca78e9e): member triggers processing on the
+    # admin's mail account.
+    record("M1", "GHSA-7qqc-wrcw-2fj9 / 65ca78e9e (process vs fixed update)",
+           "denied 403/404; admin trigger not denied",
+           lambda: call(base, "POST", f"/api/mail_accounts/{acct}/process/",
+                        token=B),
+           [("owner_process_not_denied", lambda: call(
+               base, "POST", f"/api/mail_accounts/{acct}/process/",
+               token=A), None)],
+           lambda s, b, c: "refuted" if s in (403, 404) else
+           ("confirmed" if s == 200 else "infrastructure-failure"))
+    # M2 (class 4; rule->account FK): member creates a rule on admin's account.
+    record("M2", "MailRuleSerializer.validate_account (change_mailaccount owner-aware)",
+           "denied 403; admin rule create 201",
+           lambda: call(base, "POST", "/api/mail_rules/", token=B, body={
+               "name": "rogue-rule", "account": acct, "enabled": False,
+               "folder": "INBOX"}),
+           [("owner_rule_create", lambda: call(
+               base, "POST", "/api/mail_rules/", token=A, body={
+                   "name": "control-rule", "account": acct, "enabled": False,
+                   "folder": "INBOX"}), 201)],
+           lambda s, b, c: "refuted" if s in (403, 404) else
+           ("confirmed" if s == 201 else "infrastructure-failure"))
+    # M3 (class 5; processed-mail leakage): member lists processed mails.
+    record("M3", "F2 class by another path (ProcessedMailViewSet filter)",
+           "200 with no admin rows visible",
+           lambda: call(base, "GET", "/api/processed_mail/?page_size=10", token=B),
+           [("owner_processed_list", lambda: call(
+               base, "GET", "/api/processed_mail/?page_size=10", token=A), 200)],
+           lambda s, b, c: "refuted" if s == 200 and not (b.get("results") or [])
+           else ("confirmed" if s == 200 and (b.get("results") or [])
+                 else "infrastructure-failure"))
+    # M4 (class 3; test-action sibling): member tests admin's account.
+    record("M4", "MailAccountViewSet.test branch (change_mailaccount owner-aware)",
+           "denied 403; admin test not denied",
+           lambda: call(base, "POST", "/api/mail_accounts/test/", token=B, body={
+               "name": "probe", "id": acct, "imap_server": "x",
+               "imap_port": 143, "imap_security": 1,
+               "username": "x", "password": "****"}),
+           [("owner_test_not_denied", lambda: call(
+               base, "POST", "/api/mail_accounts/test/", token=A, body={
+                   "name": "probe", "id": acct, "imap_server": "x",
+                   "imap_port": 143, "imap_security": 1,
+                   "username": "x", "password": "****"}), None)],
+           lambda s, b, c: "refuted" if s in (403, 404) else
+           ("confirmed" if s == 200 else "infrastructure-failure"))
+    # M5 (class 6; F8 regression c28c532be): mixed-batch bulk mail delete.
+    try:
+        _, _owned = call(base, "GET", "/api/processed_mail/?page_size=10", token=A)
+        admin_pm = (_owned.get("results") or [{}])[0].get("id")
+        if admin_pm is None:
+            raise RuntimeError("no processed mail rows to target")
+    except Exception as exc:  # noqa: BLE001
+        results.append({"id": "M5", "provenance": "setup failed", "expected": "",
+                        "actor_status": None, "controls": {},
+                        "verdict": "infrastructure-failure",
+                        "note": f"{type(exc).__name__}: {str(exc)[:160]}"})
+        admin_pm = None
+    if admin_pm is not None:
+        record("M5", "c28c532be whole-batch atomic reject",
+               "atomic 403 and admin row survives",
+               lambda: call(base, "POST", "/api/processed_mail/bulk_delete/", token=B,
+                            body={"mail_ids": [admin_pm]}),
+               [("admin_row_survives", lambda: call(
+                   base, "GET", "/api/processed_mail/?page_size=10",
+                   token=A), 200)],
+               lambda s, b, c: "refuted" if s in (403, 404) else
+               ("confirmed" if s == 200 else "infrastructure-failure"))
+    # M6 (class 3 detail; account read): member reads admin's mail account.
+    record("M6", "MailAccountViewSet detail (PaperlessObjectPermissions)",
+           "denied 403/404; owner reads 200",
+           lambda: call(base, "GET", f"/api/mail_accounts/{acct}/", token=B),
+           [("owner_read_account", lambda: call(
+               base, "GET", f"/api/mail_accounts/{acct}/", token=A), 200)],
+           lambda s, b, c: "refuted" if s in (403, 404) and c["owner_read_account"]["held"]
+           else ("confirmed" if s == 200 else "infrastructure-failure"))
+
     teardown = ["docker", "rm", "-f", "paperless-fixture-web",
-                "paperless-fixture-db", "paperless-fixture-redis"]
+                "paperless-fixture-db", "paperless-fixture-redis",
+                "paperless-fixture-sink", "paperless-fixture-gotenberg"]
     volumes = [f"paperless-fixture-{v}" for v in
                ("pgdata", "data", "media", "consume", "export")]
     try:
