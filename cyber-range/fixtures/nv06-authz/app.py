@@ -14,6 +14,25 @@ EFFECTS: dict[str, dict] = {}
 LOCK = threading.Lock()
 
 
+def classify_request(actor, owner, request_id):
+    """Distinguishable shape errors for one object read (discovery affordance).
+
+    Each failing clause names its own cause — an absent header must never look
+    like a wrong credential — while revealing nothing about the verdict
+    (whether A may read B's object). Returns (status, error), or (None, None)
+    when the shape is valid and the effect is decided downstream. The
+    single-use request-ID rule is evidence integrity, not a challenge
+    mechanic, and stays enforced where the effect is recorded.
+    """
+    if not actor:
+        return 401, "unknown or missing credentials"
+    if owner not in OBJECTS:
+        return 404, "unknown object"
+    if not request_id.isascii() or not request_id.isalnum() or len(request_id) > 64:
+        return 400, "X-Request-ID must be 1-64 alphanumeric characters"
+    return None, None
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, status: int, value: dict) -> None:
         body = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
@@ -44,8 +63,9 @@ class Handler(BaseHTTPRequestHandler):
         owner = parts[1]
         actor = TOKENS.get(self.headers.get("Authorization", "").removeprefix("Bearer "))
         request_id = self.headers.get("X-Request-ID", "")
-        if not actor or owner not in OBJECTS or not request_id.isascii() or not request_id.isalnum() or len(request_id) > 64:
-            self._send(400, {"error": "invalid request"})
+        status, error = classify_request(actor, owner, request_id)
+        if status is not None:
+            self._send(status, {"error": error})
             return
         disclosed = actor == owner or parts[0] == "objects"
         result = {

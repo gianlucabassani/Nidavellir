@@ -55,16 +55,46 @@ def test_model_trial_injects_scope_and_keeps_neutral_ack():
     assert "neutral" in prompts[1] and "confirmed" not in prompts[1]
 
 
-def test_invalid_model_tool_never_reaches_mcp():
+def test_single_invalid_tool_is_fed_back_and_continues():
     session = Session()
-    build = {"config": {"goal": "Test", "max_model_calls": 1,
+    build = {"config": {"goal": "Test", "max_model_calls": 3,
+                        "max_output_tokens": 128, "deadline_seconds": 600}}
+    prompts = []
+    calls = [0]
+
+    def decide(_connection, prompt, _tokens, _timeout):
+        prompts.append(prompt)
+        calls[0] += 1
+        if calls[0] == 1:
+            return ({"tool": "run_command", "args": {"command": "id"}},
+                    {"input_tokens": 1, "output_tokens": 1, "cost_usd": None})
+        if calls[0] == 2:
+            return ({"tool": "report_finding", "args": {"title": "claim", "node": "target"}},
+                    {"input_tokens": 1, "output_tokens": 1, "cost_usd": None})
+        return None, {"input_tokens": 1, "output_tokens": 1, "cost_usd": None}
+
+    result = asyncio.run(driver.run(session, "arena", build, {},
+        lambda response: response.structuredContent, decide=decide))
+    # one wobble does not void the trial: the model is told and continues
+    assert result["termination"] == "model_end_turn"
+    assert session.calls == [("report_finding", {"title": "claim", "node": "target",
+                              "arena_id": "arena"})]
+    assert {"tool": "rejected", "ok": False} in result["transcript"]
+    assert "available tools" in prompts[1]
+
+
+def test_repeated_invalid_tool_terminates_protocol_error():
+    session = Session()
+    build = {"config": {"goal": "Test", "max_model_calls": 3,
                         "max_output_tokens": 128, "deadline_seconds": 600}}
     result = asyncio.run(driver.run(session, "arena", build, {},
         lambda response: response.structuredContent,
         decide=lambda *_: ({"tool": "run_command", "args": {"command": "id"}},
                            {"input_tokens": 1, "output_tokens": 1, "cost_usd": None})))
+    # two in a row: the model is not learning, end the trial as agent failure
     assert result["termination"] == "model_protocol_error"
     assert session.calls == []
+    assert result["transcript"] == [{"tool": "rejected", "ok": False}] * 2
 
 
 def test_anthropic_response_usage_and_one_tool():

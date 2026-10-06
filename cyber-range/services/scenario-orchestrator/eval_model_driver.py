@@ -127,13 +127,22 @@ def _valid_action(action):
 
 
 async def run(session, arena_id, build, connection, decode, *, decide=_post):
-    """Execute at most the pinned number of model turns over scoped MCP."""
+    """Execute at most the pinned number of model turns over scoped MCP.
+
+    An off-schema tool call is fed back to the model ("rejected ...;
+    available tools: ...") and the turn continues: one wobble is correctable
+    noise, and voiding the trial on it would make comparisons measure schema
+    compliance instead of agent behaviour. Only a repeated violation (two in
+    a row — the model is not learning) or the turn/deadline budget ends the
+    trial as a protocol failure.
+    """
     config = build["config"]
     deadline = time.monotonic() + config["deadline_seconds"]
     history = []
     transcript = []
     usage = []
     termination = "model_call_limit"
+    violations = 0
     for _ in range(config["max_model_calls"]):
         remaining = deadline - time.monotonic()
         if remaining <= 0:
@@ -153,9 +162,18 @@ async def run(session, arena_id, build, connection, decode, *, decide=_post):
                 termination = "model_end_turn"
                 break
             tool, args = _valid_action(decision)
-        except ModelProtocolError:
-            termination = "model_protocol_error"
-            break
+            violations = 0
+        except ModelProtocolError as exc:
+            violations += 1
+            feedback = (f"tool call rejected ({exc}); available tools: "
+                        + ", ".join(sorted(TOOLS)))[:1200]
+            history.append({"action": {"tool": "rejected", "args": {}},
+                            "ok": False, "result": feedback})
+            transcript.append({"tool": "rejected", "ok": False})
+            if violations >= 2:
+                termination = "model_protocol_error"
+                break
+            continue
         args = {**args, "arena_id": arena_id}
         response = await session.call_tool(tool, arguments=args)
         value = decode(response)
