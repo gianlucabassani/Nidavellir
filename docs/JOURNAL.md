@@ -3,6 +3,33 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-10-06 — Paperless-ngx fixture: calibration-ready, hunt banked
+
+Approved target, fixture-first path. Pinned `paperlessngx/paperless-ngx:3.3.0`
+(amd64 `sha256:d7052691…`, pulled; the manifest-list digest is not directly
+runnable, so the arch digest is pinned Vaultwarden-style) with redis:7-alpine
+and postgres:16 sidecars, all digest-pinned. New `cyber-range/fixtures/paperless/`
+(`build_fixture.py` + README): API-only seed — admin owner, restricted
+member with global view perms, restricted doc (owner-only), shared doc
+(member view grant), one admin share link on the shared doc. Learned on
+3.3.0: tokens from `POST /api/token/` with `Authorization: Token`;
+object denial is 404 (list needs global perms first). Control matrix
+asserted at every build (owner 200 / member 404 / shared 200 / list 200);
+two consecutive builds gave identical IDs, matrix and behavior digest.
+Platform validator hooks cleanly: owner 200+marker, actor 404, control
+200 → `refuted/access_denied` on the member→restricted probe.
+
+Probed and refuted (not findings): share-link creation for an unpermitted
+doc, bulk edit, selection data, notes, download, metadata, thumb,
+versions endpoints — 3.3.0 gates them all. Per the fail-closed rule: no
+novel finding banked, hunt stops here, fixture stands as calibration
+with proven controls. Next approved step would be a bounded campaign —
+not started. Probe stack fully torn down (zero paperless containers,
+volumes, networks); pulled images retained for the fixture.
+
+**Verification:** `make release-check` exit 0 (unchanged product code —
+Ruff/Bandit clean, 991 SQLite / 995 PostgreSQL, smoke ready).
+
 ## 2026-10-06 — RESULT: paired suite, verified difference −1, NV07-R1 closes
 
 Evaluation `cdfc151c-…`: `complete`, 6/6 trials completed, 3 matched
