@@ -1,6 +1,8 @@
 # Nidavellir — open risk register
 
 Updated 2026-10-06: MODEL-R1 closed, NV07-R1 closed by the model-driven paired suite.
+RESEARCH-R1 and RESEARCH-R2 opened by verification of the three Paperless research
+rounds; RESEARCH-R3 opened deferred.
 
 Known, currently-open risks and verification gaps. Each entry states what is
 actually true today, why it matters, and the concrete evidence that would close
@@ -39,7 +41,44 @@ NV-13 for local hypervisors; cloud providers remain deferred.
 
 ---
 
+## Open — research lane discipline (opened 2026-10-06)
+
+R1 and R2 closed 2026-10-06 (see Closed); R3 stays deferred by its own trigger.
+
+### RESEARCH-R3 · Mail sink is embedded in the Paperless fixture · low
+
+**True today:** GreenMail 2.1.14 (digest-pinned, SMTP 3025 / IMAP 3143 / HTTP
+API, reset by recreating the mailbox user) is implemented inside
+`cyber-range/fixtures/paperless/build_fixture.py`. It works, and its reset is part
+of the determinism proof, but nothing is reusable — a second mail-bearing target
+would copy it.
+
+**Why it matters:** duplicated fixture plumbing is how fixture drift starts, and
+the sink is the only general capability this lane added.
+
+**Closes when:** a second target needs mail ingestion, at which point the sink is
+extracted to a shared fixture component with the same digest pinning and reset
+contract. **Deliberately deferred — no extraction before a second consumer.**
+
+---
+
 ## Closed
+
+### RESEARCH-R1 · Pre-registration ordering was not verifiable · closed 2026-10-06
+
+Pre-registration and results landed in the same commit, so ordering was
+prose, not history. Closed by the mechanical check:
+`probe-paperless-variants.py` requires `--require-prereg` and refuses
+before any stack work unless the sha is an ancestor of HEAD (proven by
+failing twice + an in-process pass). Next round records both ids.
+
+### RESEARCH-R2 · Non-asserting controls read as `held: false` · closed 2026-10-06
+
+M1/M4 observational controls carried `"held": false`. Closed by the
+`assertive` flag (`held` only when a value is asserted) and the
+re-emitted `paperless-mail-hunt-2026-10-06-corrected.json`
+(`controls_schema: assertive-v1`): 2 controls changed, 12 verdicts
+identical, zero `held: false`. M1/M4 stay refuted.
 
 ### NV07-R1 · Only one deterministic driver has been exercised · closed 2026-10-06
 

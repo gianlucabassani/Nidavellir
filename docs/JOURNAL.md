@@ -3,6 +3,30 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-10-06 — Hygiene: mechanical pre-reg gate (R1) + assertive controls (R2)
+
+R1: `probe-paperless-variants.py` takes mandatory `--require-prereg
+<sha>` and refuses (non-zero, before any stack work) unless it resolves
+and is an ancestor of HEAD. Proven by failing twice with no pre-reg
+commit in play: missing flag → argparse refusal; bogus sha → "unknown
+pre-registration" refusal. Pass branch proven in-process (HEAD verifies).
+Next real round will record its pre-reg commit id plus this result id.
+
+R2: `record()` now emits `assertive` per control; `held` appears only
+when a value is asserted, and observational controls carry status with
+no verdict key at all. Re-emitted (not annotated): the transform is
+mechanical and verdict-preserving, so the original
+`paperless-mail-hunt-2026-10-06.json` stays untouched as the recorded
+output and `...-corrected.json` carries `controls_schema:
+assertive-v1`. Exactly the 2 non-asserting controls changed
+(M1/M4 owner-observables); all 12 verdicts byte-identical, zero
+`held: false` remains. M1/M4 stay refuted, and the 200 / 500-with-IMAP
+observations remain the proof the denials are authorization decisions.
+
+**Verification:** `make release-check` exit 0 (Ruff/Bandit clean, SQLite
+1002 passed, smoke ready, PostgreSQL 1006 passed — real numbers below in
+the gate log, not quoted from memory).
+
 ## 2026-10-06 — Mail hunt: 6/6 refuted, Paperless exhausted for this family
 
 Mail sink: GreenMail 2.1.14 (amd64 digest pinned; SMTP 3025 + IMAP 3143

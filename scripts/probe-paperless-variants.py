@@ -6,11 +6,17 @@ observable, and controls in the established shape. Results classify as
 confirmed / refuted / by-design / infrastructure-failure. Synthetic lab
 credentials only; local lab target only.
 
-Usage: python3 scripts/probe-paperless-variants.py  (builds a keep-alive
-seeded stack, probes, tears everything down, prints a JSON result table)
+Usage: python3 scripts/probe-paperless-variants.py --require-prereg <sha>
+(builds a keep-alive seeded stack, probes, tears everything down, prints
+a JSON result table)
+
+RESEARCH-R1: the round's journal pre-registration must already be
+committed; the script refuses to run unless <sha> is an ancestor of the
+current HEAD, so the ordering is provable from history, not prose.
 """
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
 import subprocess
@@ -37,7 +43,33 @@ def status_of(call):
         return None, {"error": f"unparsable response: {type(exc).__name__}"}
 
 
-def main() -> None:
+def check_prereg(prereg: str) -> None:
+    """Refuse to probe unless the pre-registration commit predates this run.
+
+    Exits non-zero (before any stack work) unless <prereg> resolves and is
+    an ancestor of HEAD. Proved by invoking with a bogus sha.
+    """
+    if not prereg or len(prereg) > 64:
+        raise SystemExit("refusing to probe: --require-prereg <commit> is mandatory")
+    resolved = subprocess.run(
+        ["git", "-C", str(ROOT), "rev-parse", "--verify", prereg],
+        capture_output=True, text=True, check=False)
+    if resolved.returncode:
+        raise SystemExit(f"refusing to probe: unknown pre-registration {prereg!r}")
+    ancestor = subprocess.run(
+        ["git", "-C", str(ROOT), "merge-base", "--is-ancestor",
+         resolved.stdout.strip(), "HEAD"],
+        capture_output=True, check=False)
+    if ancestor.returncode:
+        raise SystemExit(
+            f"refusing to probe: {prereg!r} is not an ancestor of HEAD "
+            "(commit the pre-registration first)")
+    print(f"pre-registration {resolved.stdout.strip()} verified as ancestor of HEAD",
+          flush=True)
+
+
+def main(prereg: str) -> None:
+    check_prereg(prereg)
     manifest = fixture.build(keep=True)
     base, tokens = manifest["base_url"], manifest["tokens"]
     A, B = tokens["A"], tokens["B"]
@@ -45,13 +77,20 @@ def main() -> None:
     results = []
 
     def record(hid, provenance, expected, actor_call, control_calls, classify):
+        # RESEARCH-R2: a control carries assertive=true only when it asserts
+        # an expected value; observational controls record observed status
+        # with no verdict (no `held` key at all — never `held: false`).
         try:
             status, body = status_of(actor_call)
             controls = {}
             for label, fn, want in control_calls:
                 got, _ = status_of(fn)
-                controls[label] = {"status": got, "expected": want,
-                                   "held": got == want}
+                if want is None:
+                    controls[label] = {"status": got, "expected": None,
+                                       "assertive": False}
+                else:
+                    controls[label] = {"status": got, "expected": want,
+                                       "assertive": True, "held": got == want}
             verdict = classify(status, body, controls)
         except Exception as exc:  # noqa: BLE001 - one bad probe must not kill the round
             status, controls, verdict = None, {}, "infrastructure-failure"
@@ -280,4 +319,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--require-prereg", required=True,
+                        help="pre-registration commit sha (must predate this run)")
+    args = parser.parse_args()
+    sys.exit(main(args.require_prereg))
