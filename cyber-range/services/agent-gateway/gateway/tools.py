@@ -657,6 +657,7 @@ def report_finding(
     poc: str | None = None,
     evidence_artifact_digests: list[str] | None = None,
     transaction_digests: list[str] | None = None,
+    variant_of: str | None = None,
 ) -> dict:
     """Report a discovered vulnerability. The engagement goal is to DISCOVER the
     arena's known weaknesses; this records your finding for scoring. Pass the
@@ -678,7 +679,7 @@ def report_finding(
             ctx.session.api_key, arena_id, title, cwe=cwe, node=node, evidence=evidence,
             path=path, param=param, payload=payload, oast_token=oast_token, poc=poc,
             evidence_artifact_digests=evidence_artifact_digests,
-            transaction_digests=transaction_digests,
+            transaction_digests=transaction_digests, variant_of=variant_of,
         )
     except Exception:
         _trace(ctx, "report_finding", trace_args, ok=False, arena_id=arena_id)

@@ -252,14 +252,16 @@ class RestClient:
                        param: str | None = None, payload: str | None = None,
                        oast_token: str | None = None, poc: str | None = None,
                        evidence_artifact_digests: list[str] | None = None,
-                       transaction_digests: list[str] | None = None) -> dict:
+                       transaction_digests: list[str] | None = None,
+                       variant_of: str | None = None) -> dict:
         body: dict = {"title": title}
         # Only send set fields; path/param/payload/oast_token are the optional
         # verification inputs that let the orchestrator ACTIVELY confirm a finding;
         # `poc` is the reproducible proof a human can run to verify.
         for key, val in (("cwe", cwe), ("node", node), ("evidence", evidence),
                          ("path", path), ("param", param), ("payload", payload),
-                         ("oast_token", oast_token), ("poc", poc)):
+                         ("oast_token", oast_token), ("poc", poc),
+                         ("variant_of", variant_of)):
             if val:
                 body[key] = val
         if evidence_artifact_digests:

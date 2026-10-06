@@ -139,13 +139,15 @@ class _FakeRestClient:
 
     def report_finding(self, api_key, arena_id, title, cwe=None, node=None, evidence=None,
                        path=None, param=None, payload=None, oast_token=None, poc=None,
-                       evidence_artifact_digests=None, transaction_digests=None):
+                       evidence_artifact_digests=None, transaction_digests=None,
+                       variant_of=None):
         self.calls.append(("report_finding", api_key, arena_id, title, cwe, node))
         self.last_finding = {"title": title, "cwe": cwe, "node": node, "evidence": evidence,
                              "path": path, "param": param, "payload": payload,
                              "oast_token": oast_token, "poc": poc,
                              "evidence_artifact_digests": evidence_artifact_digests,
-                             "transaction_digests": transaction_digests}
+                             "transaction_digests": transaction_digests,
+                             "variant_of": variant_of}
         return {"recorded": True, "finding_id": "abc123"}
 
     def announce_agent(self, api_key, arena_id, model, provider, stance=None):
@@ -369,11 +371,13 @@ def test_report_finding_forwards_verification_inputs():
     tools.report_finding(ctx, arena_id="a1", title="reflected XSS", cwe="CWE-79",
                          node="web", path="/search", param="q",
                          payload="<svg/onload=alert(1)>", oast_token="tok9",
-                         evidence_artifact_digests=["sha256:" + "a" * 64])
+                         evidence_artifact_digests=["sha256:" + "a" * 64],
+                         variant_of="rootid000001")
     f = ctx.client.last_finding
     assert f["path"] == "/search" and f["param"] == "q"
     assert f["payload"] == "<svg/onload=alert(1)>" and f["oast_token"] == "tok9"
     assert f["evidence_artifact_digests"] == ["sha256:" + "a" * 64]
+    assert f["variant_of"] == "rootid000001"
 
 
 def test_get_topology_returns_named_nodes():
