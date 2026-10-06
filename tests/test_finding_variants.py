@@ -223,6 +223,7 @@ def test_group_legacy_root_and_access_control(clients):
     assert [m["finding_id"] for m in body["members"]] == \
         ["rootid000040", "varid0000040"]
     assert body["members"][0]["verdict"]["verdict"] is None
+    assert body["comparison"]["outcome"] == "unknown"
     assert operator.get("/findings/doesnotexist").status_code == 404
 
     agent_key = auth.generate_api_key()
@@ -230,3 +231,75 @@ def test_group_legacy_root_and_access_control(clients):
     agent = TestClient(api.app)
     agent.headers["X-API-Key"] = agent_key
     assert agent.get("/findings/rootid000040").status_code == 403
+
+
+def test_group_identity_degrades_on_unreadable_recipe(clients, monkeypatch):
+    db, operator = clients
+    broken = _arena_with_recipe(db, "group-broken")
+    other = _arena_with_recipe(db, "group-broken2")
+    _record_verdict(db, broken, "rootid000060", verdict="confirmed",
+                    reason="unauthorized_disclosure", research_key="rootid000060")
+    _record_verdict(db, other, "varid0000060", verdict="refuted",
+                    reason="access_denied", variant_of="rootid000060",
+                    research_key="rootid000060")
+    real = db.get_lifecycle_recipe
+
+    def broken_recipe(arena):
+        if arena == broken:
+            raise ValueError("cannot decrypt lifecycle recipe")
+        return real(arena)
+
+    monkeypatch.setattr(db, "get_lifecycle_recipe", broken_recipe)
+    response = operator.get("/findings/rootid000060")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["comparison"]["outcome"] == "unknown"
+    member = next(m for m in body["members"] if m["arena_id"] == broken)
+    assert member["identity"]["known"] is False
+
+
+def test_group_unverified_variant_counts_inconclusive(clients):
+    db, operator = clients
+    root_arena = _arena_with_recipe(db, "group-uv-root")
+    var_arena = _arena_with_recipe(db, "group-uv-var")
+    _record_verdict(db, root_arena, "rootid000070", verdict="confirmed",
+                    reason="unauthorized_disclosure", research_key="rootid000070")
+    db.record_event(var_arena, "finding", {
+        "finding_id": "varid0000070", "title": "unverified",
+        "variant_of": "rootid000070", "research_key": "rootid000070"})
+    body = operator.get("/findings/rootid000070").json()
+    assert body["comparison"]["outcome"] == "inconclusive"
+    assert body["comparison"]["counts"]["inconclusive"] == 1
+
+
+def test_group_unverified_reference_is_unknown(clients):
+    db, operator = clients
+    root_arena = _arena_with_recipe(db, "group-ur-root")
+    var_arena = _arena_with_recipe(db, "group-ur-var")
+    db.record_event(root_arena, "finding", {"finding_id": "rootid000071",
+                                            "title": "unverified root",
+                                            "research_key": "rootid000071"})
+    _record_verdict(db, var_arena, "varid0000071", verdict="refuted",
+                    reason="access_denied", variant_of="rootid000071",
+                    research_key="rootid000071")
+    assert operator.get("/findings/rootid000071").json()["comparison"]["outcome"] \
+        == "unknown"
+
+
+def test_group_orders_variants_and_resolves_chains(clients):
+    db, operator = clients
+    first = _arena_with_recipe(db, "group-chain-a")
+    second = _arena_with_recipe(db, "group-chain-b")
+    third = _arena_with_recipe(db, "group-chain-c")
+    _record_verdict(db, first, "rootid000080", verdict="confirmed",
+                    reason="unauthorized_disclosure", research_key="rootid000080")
+    _record_verdict(db, second, "varid0000080", verdict="refuted",
+                    reason="access_denied", variant_of="rootid000080",
+                    research_key="rootid000080")
+    _record_verdict(db, third, "varid0000081", verdict="refuted",
+                    reason="access_denied", variant_of="varid0000080",
+                    research_key="rootid000080")
+    body = operator.get("/findings/varid0000081").json()
+    assert [m["finding_id"] for m in body["members"]] == \
+        ["rootid000080", "varid0000080", "varid0000081"]
+    assert body["research_key"] == "rootid000080"

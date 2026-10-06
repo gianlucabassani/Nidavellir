@@ -5078,7 +5078,11 @@ _FINDING_VERDICT_KEYS = ("verdict", "reason_code", "validator_id",
 
 def _finding_target_identity(arena_id: str) -> dict:
     """Whitelisted, operator-safe target identity for one arena."""
-    recipe = db.get_lifecycle_recipe(arena_id)
+    try:
+        recipe = db.get_lifecycle_recipe(arena_id)
+    except (ValueError, RuntimeError):
+        logger.warning("[%s] lifecycle recipe unreadable; identity unknown", arena_id)
+        recipe = None
     if not recipe:
         return {"known": False, "scenario": None, "provider": None,
                 "recipe_digest": None, "images": {}}
