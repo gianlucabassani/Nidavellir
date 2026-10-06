@@ -5063,6 +5063,14 @@ def _finding_events(instance_id: str) -> list[dict]:
     return db.list_events(lab_id=instance_id, limit=None, types=("finding",))
 
 
+def _find_finding_event(finding_id: str) -> dict | None:
+    """Newest finding event with this id across all arenas (events are newest-first)."""
+    for event in db.list_events(limit=None, types=("finding",)):
+        if (event.get("payload") or {}).get("finding_id") == finding_id:
+            return event
+    return None
+
+
 def _arena_manifest(record: dict) -> list[dict]:
     """Return truth pinned at deployment; consult the mutable registry only for
     legacy records predating lifecycle recipes."""
@@ -5533,6 +5541,16 @@ class FindingRequest(BaseModel):
     # R1 slice 6: content-addressed HTTP transaction records attachable as
     # evidence — verified against this arena's store at submission time.
     transaction_digests: list[str] = Field(default_factory=list, max_length=10)
+    # Affected-versus-fixed linkage: the finding id this report is a variant of.
+    # The group read resolves the shared research key from the referenced event.
+    variant_of: str | None = Field(default=None, max_length=32)
+
+    @field_validator("variant_of")
+    @classmethod
+    def _variant_id_shape(cls, v: str | None) -> str | None:
+        if v is not None and not re.fullmatch(r"[0-9a-f]{12}", v):
+            raise ValueError("variant_of must be a 12-hex finding id")
+        return v
 
 
 @app.post("/arenas/{instance_id}/findings")
@@ -5609,6 +5627,14 @@ def _record_finding(instance_id, record, req: "FindingRequest", *, actor: str,
             "replay_of": tx_manifest.get("replay_of"),
         })
 
+    research_key = None
+    if req.variant_of:
+        referenced = _find_finding_event(req.variant_of)
+        if referenced is None:
+            raise HTTPException(status_code=422, detail="unknown variant_of finding")
+        research_key = ((referenced.get("payload") or {}).get("research_key")
+                        or req.variant_of)
+
     finding_id = uuid.uuid4().hex[:12]
     if matched_vuln and validators.method_for(
         {"cwe": req.cwe}, matched_vuln
@@ -5652,6 +5678,8 @@ def _record_finding(instance_id, record, req: "FindingRequest", *, actor: str,
             "validation": validation,
             "manual": manual,
             "actor": actor,
+            "variant_of": req.variant_of,
+            "research_key": research_key or finding_id,
         },
         actor=actor,
     )
