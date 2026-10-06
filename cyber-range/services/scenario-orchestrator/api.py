@@ -35,6 +35,7 @@ import config
 import dockerfile_synth
 import evidence_artifact
 import eval_export
+import eval_model_driver
 import generator
 import http_transactions
 import helper_jobs
@@ -6069,6 +6070,12 @@ class AgentBuildCreate(BaseModel):
     goal: str | None = Field(default=None, max_length=500)
     max_model_calls: int = Field(default=8, ge=1, le=12)
     max_output_tokens: int = Field(default=512, ge=64, le=512)
+    # Build variation for paired comparisons (e.g. tool-surface ablation):
+    # model-driver tools withheld from this build. Unknown names, disabling
+    # get_briefing (orientation is required for a fair trial), or emptying
+    # the whole surface are all refused. Stored in config, so the build
+    # digest pins the exact surface each side ran with.
+    disabled_tools: list[str] | None = Field(default=None, max_length=8)
 
 
 @app.post("/agent-builds", status_code=201)
@@ -6081,12 +6088,20 @@ def create_agent_build(req: AgentBuildCreate,
         connection = db.get_model_connection(principal.name)
         if not connection:
             raise HTTPException(status_code=409, detail="operator model connection required")
+        disabled = sorted(set(req.disabled_tools or []))
+        unknown = [name for name in disabled if name not in eval_model_driver.TOOLS]
+        if unknown:
+            raise HTTPException(status_code=422, detail=f"unknown model tool(s): {', '.join(unknown)}")
+        if "get_briefing" in disabled:
+            raise HTTPException(status_code=422, detail="get_briefing cannot be disabled")
+        if len(disabled) >= len(eval_model_driver.TOOLS):
+            raise HTTPException(status_code=422, detail="cannot disable every model tool")
         config = {"connection_owner": principal.name, "provider": connection["provider"],
                   "model": connection["model"], "base_url": connection.get("base_url"),
                   "headers_digest": connection.get("headers_digest"),
                   "goal": req.goal.strip(), "max_model_calls": req.max_model_calls,
                   "max_output_tokens": req.max_output_tokens, "deadline_seconds": 600,
-                  "scaffold": "model-mcp/v1"}
+                  "disabled_tools": disabled, "scaffold": "model-mcp/v1"}
         digest = "sha256:" + hashlib.sha256(json.dumps({"name": req.name,
             "version": req.version, "config": config}, sort_keys=True,
             separators=(",", ":")).encode()).hexdigest()

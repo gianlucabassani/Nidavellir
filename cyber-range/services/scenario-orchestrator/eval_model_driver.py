@@ -36,10 +36,11 @@ class ModelProtocolError(ValueError):
     """A model chose an invalid action; the trial completed with agent failure."""
 
 
-def _schemas():
+def _schemas(tools=None):
+    tools = TOOLS if tools is None else tools
     return {name: {"type": "object", "properties": item["properties"],
                    "required": item["required"], "additionalProperties": False}
-            for name, item in TOOLS.items()}
+            for name, item in tools.items()}
 
 
 def _post(connection, prompt, max_output_tokens, timeout, transport=requests.post):
@@ -52,7 +53,12 @@ def _post(connection, prompt, max_output_tokens, timeout, transport=requests.pos
     model = connection["model"]
     extra = {name: value for name, value in (connection.get("extra_headers") or {}).items()
              if name.lower() not in ("authorization", "x-api-key")}
-    schemas = _schemas()
+    # The build's pinned surface travels on the connection mapping: a build
+    # with disabled tools must not be *offered* them either, not merely
+    # rejected on use. run() injects the build's list here.
+    disabled = connection.get("disabled_tools") or []
+    schemas = _schemas({name: spec for name, spec in TOOLS.items()
+                        if name not in disabled})
     if provider == "anthropic":
         base = (connection.get("base_url") or ANTHROPIC_BASE).rstrip("/")
         url = base + "/messages"
@@ -115,11 +121,12 @@ def _post(connection, prompt, max_output_tokens, timeout, transport=requests.pos
     return {"tool": function.get("name"), "args": args}, measured
 
 
-def _valid_action(action):
-    if not isinstance(action, dict) or action.get("tool") not in TOOLS:
+def _valid_action(action, tools=None):
+    tools = TOOLS if tools is None else tools
+    if not isinstance(action, dict) or action.get("tool") not in tools:
         raise ModelProtocolError("model chose an unavailable tool")
     args = action.get("args")
-    schema = TOOLS[action["tool"]]
+    schema = tools[action["tool"]]
     if not isinstance(args, dict) or "arena_id" in args or not set(schema["required"]) <= args.keys():
         raise ModelProtocolError("model tool arguments violate the scoped contract")
     if not args.keys() <= schema["properties"].keys():
@@ -139,6 +146,8 @@ async def run(session, arena_id, build, connection, decode, *, decide=_post):
     """
     config = build["config"]
     deadline = time.monotonic() + config["deadline_seconds"]
+    disabled = config.get("disabled_tools") or []
+    active = {name: spec for name, spec in TOOLS.items() if name not in disabled}
     history = []
     transcript = []
     usage = []
@@ -156,18 +165,19 @@ async def run(session, arena_id, build, connection, decode, *, decide=_post):
                   + config["goal"] + "\nRecent tool history:\n" +
                   json.dumps(history[-8:], separators=(",", ":"))[-6000:])
         try:
-            decision, measured = decide(connection, prompt, config["max_output_tokens"],
+            decision, measured = decide({**connection, "disabled_tools": disabled},
+                                        prompt, config["max_output_tokens"],
                                         min(30, remaining))
             usage.append(measured)
             if decision is None:
                 termination = "model_end_turn"
                 break
-            tool, args = _valid_action(decision)
+            tool, args = _valid_action(decision, active)
             violations = 0
         except ModelProtocolError as exc:
             violations += 1
             feedback = (f"tool call rejected ({exc}); available tools: "
-                        + ", ".join(sorted(TOOLS)))[:1200]
+                        + ", ".join(sorted(active)))[:1200]
             history.append({"action": {"tool": "rejected", "args": {}},
                             "ok": False, "result": feedback})
             transcript.append({"tool": "rejected", "ok": False,

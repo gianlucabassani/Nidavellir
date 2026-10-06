@@ -306,8 +306,17 @@ def compare(record):
                 if row["candidate"].get(metric) is not None
                 and row["baseline"].get(metric) is not None]
 
-    def summary(values):
+    def summary(values, *, metric, available):
         if not values:
+            if available > 0:
+                # Matched pairs exist but nobody reported this metric: the
+                # measurement is absent, not inconclusive. An empty cost
+                # column must read as unmeasured, never as zero cost.
+                note = ("cost unavailable from this provider"
+                        if metric == "cost_usd" else "no reported values")
+                return {"pairs": 0, "mean": None, "bootstrap_95": None,
+                        "distinct_values": 0, "interval_status": "not_reported",
+                        "note": note}
             return {"pairs": 0, "mean": None, "bootstrap_95": None,
                     "distinct_values": 0, "interval_status": "no_pairs"}
         rng = random.Random(7)
@@ -336,7 +345,8 @@ def compare(record):
             "matched_pairs": len(matched_rows),
             "infrastructure_failed_pairs": sum(1 for row in challenge_rows if
                 "infrastructure_failure" in (row["baseline_state"], row["candidate_state"])),
-            "differences": {metric: summary(delta(metric, matched_rows)) for metric in metrics},
+            "differences": {metric: summary(delta(metric, matched_rows),
+                metric=metric, available=len(matched_rows)) for metric in metrics},
         }
     labels = sorted({row["leakage_label"] for row in rows})
     evidence_scope = "held-out" if labels == ["held-out"] else "calibration_or_unknown"
@@ -345,7 +355,8 @@ def compare(record):
             "matched_pairs": len(valid),
             "infrastructure_failed_pairs": sum(1 for row in rows if
                 "infrastructure_failure" in (row["baseline_state"], row["candidate_state"])),
-            "differences": {metric: summary(delta(metric)) for metric in metrics},
+            "differences": {metric: summary(delta(metric), metric=metric,
+                available=len(valid)) for metric in metrics},
             "verified_difference_mean": sum(differences) / len(differences)
             if differences else None, "verified_difference_range":
             [min(differences), max(differences)] if differences else None}

@@ -1,6 +1,6 @@
 # Nidavellir — open risk register
 
-Updated 2026-10-06 after the MODEL-R1 live smokes (MODEL-R1 closed, NV07-R1 advanced).
+Updated 2026-10-06: MODEL-R1 closed, NV07-R1 closed by the model-driven paired suite.
 
 Known, currently-open risks and verification gaps. Each entry states what is
 actually true today, why it matters, and the concrete evidence that would close
@@ -18,44 +18,7 @@ Severity is the risk of drawing a wrong conclusion from the platform's output:
 
 ## Open — evaluation evidence (NV-07)
 
-### NV07-R1 · Only one deterministic driver has been exercised · medium
-
-Paired evaluation is proven with `scripted-mcp/v1`, a fixed tool plan replayed
-identically on every trial. No model-driven bring-your-own agent has ever run
-through the evaluation path, so variance, retries, tool misuse, budget
-exhaustion under real reasoning and partial-progress scoring are untested.
-No operator model connection is configured for the durable evaluation path.
-An authenticated local Claude CLI is not such a connection or a completed
-model-driven trial; each subscription-backed live run requires separate
-operator permission and none was used for NV-08.
-
-On 2026-10-05 direct opencode + deepseek-v4.1-flash MCP sessions passed
-independent validation on the NV-06 and NV-09 fixtures
-(`docs/verification/byo-agent-*.json`). Those are harness-side participant
-sessions: they exercised the gateway, budgets and validators, but not the
-durable `model-mcp/v1` driver, its per-trial records or its comparison.
-
-**Why it matters:** the workbench's purpose is comparing real agent builds. A
-deterministic script exercises the record and comparison machinery, not the
-conditions those records are meant to describe.
-
-**Closes when:** one model-driven build completes a suite through the same
-endpoints, with its per-trial variance, token/cost attribution and any
-budget/timeout terminations visible in the comparison. Tracked by ROADMAP E2.
-
-On 2026-10-06 the durable `model-mcp/v1` driver completed its first live
-trials: two single-shot calibration smokes through opencode-go
-(`deepseek-v4.1-flash`) with pinned header digests. Both trials completed
-with real tool transcripts, provider-reported token usage and recorded
-terminations (`model_call_limit` at cap 8 with no report; `model_end_turn`
-at cap 12, still no report) and zero residual resources; the agent scored
-0/1 in both, so no validator verdict exists yet. Token usage is retained;
-cost is unavailable from this provider (`cost_usd: null`). Evidence:
-`docs/verification/nv07-r1-smoke-2026-10-06-{e7f3ba95,8063d12f}.json`.
-
-**Still open:** a full model-driven suite with per-trial variance and
-comparison; at cap 8 a suite would measure the cap, not the model, and the
-cap-12 smoke produced no report, so no suite has run.
+(no open evaluation-evidence items; NV07-R1 closed 2026-10-06, see below)
 
 ---
 
@@ -77,6 +40,28 @@ NV-13 for local hypervisors; cloud providers remain deferred.
 ---
 
 ## Closed
+
+### NV07-R1 · Only one deterministic driver has been exercised · closed 2026-10-06
+
+A model-driven paired suite completed through the same endpoints: baseline
+(`deepseek-v4.1-flash`, full five-tool surface) vs candidate (identical
+except `report_finding` withheld via the `disabled_tools` build field) on
+the pinned NV-06 calibration challenge, seeds 1–3, cap 12, deadline 600.
+Six trials completed, three matched pairs, zero infrastructure-failed
+pairs, zero residual resources. Baseline confirmed 1/1 on every seed
+(filed with the observed digest after a 400→200 header-learning shape);
+candidate observed the same 200 and ended its turn with nowhere to file.
+Verified difference −1.0 (`degenerate` — constant, honestly labelled);
+per-trial token attribution retained (4–7 calls, 5k–12k input tokens);
+cost renders `not_reported` with "cost unavailable from this provider"
+(token usage retained, cost explicitly unmeasured — the A4 resolution);
+all terminations `model_end_turn` and visible. Guarded suite path
+(single-attempt marker, freshness precondition, exact-parameter
+assertion) now exists as `scripts/prepare-nv07-suite.py` /
+`run-nv07-suite.py`. Evidence:
+`docs/verification/nv07-suite-setup-2026-10-06-fd02d7f6.json` (+
+`-attempt`), `nv07-suite-suite-2026-10-06-fd02d7f6.json`; green
+`make release-check` (Ruff/Bandit clean, 991 SQLite / 995 PostgreSQL).
 
 ### MODEL-R1 · Model connections carry custom request headers · closed 2026-10-06
 

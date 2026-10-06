@@ -3,6 +3,78 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-10-06 — RESULT: paired suite, verified difference −1, NV07-R1 closes
+
+Evaluation `cdfc151c-…`: `complete`, 6/6 trials completed, 3 matched
+pairs, 0 infrastructure-failed pairs, zero residual resources, stack
+down, evidence secret-free (key, session, supplied credential absent
+from all three files).
+
+Per trial (seed, side → termination, calls, tokens, verdict): baseline
+1→`model_end_turn`, 6 calls, 9428/1314, confirmed 1/1; 2→end_turn, 6,
+9011/1312, confirmed; 3→end_turn, 7, 11805/1537, confirmed. Candidate
+1→end_turn, 4, 5082/958, no finding, no verdict; 2→end_turn, 5,
+6643/934, none; 3→end_turn, 5, 6452/1072, none. Every trial shows the
+same shape — `GET /objects/B → 400` (missing header), then `→ 200` —
+baseline files with the digest, candidate ends its turn with nowhere
+to file. One baseline turn survived a rejection (retained reason in
+transcript). No baseline wobble; no retries.
+
+Comparison: verified mean −1.0 over 3 matched pairs (`degenerate` —
+constant, honestly labelled); latency/requests vary
+(`insufficient_pairs` below the 5-pair floor); cost renders
+`not_reported` with "cost unavailable from this provider" — the first
+live rendering of the fix, and the A4 resolution (token usage
+retained, cost explicitly unmeasured, never blank). Sides provably
+identical apart from the toggle (prepare asserted config equality
+minus `disabled_tools`; digests differ).
+
+Acceptance holds against the quoted criterion: a model-driven build
+completed a suite through the same endpoints, with per-trial variance
+(latency/request spread, call-count spread 4–7), per-trial token
+attribution, explicit cost-unavailability, recorded terminations, and
+zero infra-failed pairs. NV07-R1 closes on this evidence; MODEL-R1
+already closed. The two open risks are now one (INFRA-R1).
+
+## 2026-10-06 — PRE-REGISTRATION: model-driven paired suite (before firing)
+
+Pair per the recorded decision: baseline full surface vs candidate
+without `report_finding`, same model/brief/target/cap/deadline, seeds
+1–3, guarded prepare/run path, single attempt, no retries.
+
+- Expected: baseline 1/1 on each seed (class A demonstrated it),
+  candidate 0/1 with no verdict on each seed, verified difference −1,
+  intervals reported per metric.
+- A baseline wobble on some seed is variance data, not failure. Visible
+  terminations and per-trial variance are the point.
+- Zero infrastructure-failed pairs is the target; any infra-failed pair
+  is recorded as-is, never retried.
+- Closing criterion for NV07-R1, quoted: a model-driven build completes
+  a suite through the same endpoints with per-trial variance, token/cost
+  attribution and any budget/timeout terminations visible in the
+  comparison.
+
+## 2026-10-06 — PAIR DECISION (recorded before coding): tool-surface variation
+
+- Baseline: `deepseek-v4.1-flash`, full five-tool surface, class-A
+  spoilered brief (endpoint + credential supplied).
+- Candidate: byte-identical in every respect except `report_finding`
+  withheld (new `disabled_tools` build-config field).
+- Same pinned target, same challenge revision, same brief text, same
+  model, same cap 12, same deadline 600, same seeds 1–3.
+- Why not model-vs-model: on this fixture a stronger model most likely
+  also confirms, so the pair goes degenerate by construction and
+  discriminates nothing; and on a calibration fixture there is no ground
+  truth about which model *should* win, so any split is uninterpretable.
+  glm-5.3-flash is banked for the future fixture hard enough to separate
+  models.
+- Why not a topology toggle: class A filed and confirmed without
+  topology, so withholding it likely reproduces a pass on both sides —
+  degenerate again. Withholding `report_finding` is deterministic: the
+  candidate cannot score by construction, the baseline provably can.
+  Expected verified difference −1 — the exact analogue of the NV-09
+  tool-removal pair, now with a model driver.
+
 ## 2026-10-06 — STANDING NOTE: nv06-authz stays calibration (scope correction)
 
 Nidavellir is both benchmark (P1: calibration fixtures, known truth,

@@ -370,6 +370,105 @@ def test_failed_call_retains_truncated_error_text():
     assert len(entry["error"]) <= 200
 
 
+# --- disabled_tools build variation --------------------------------------
+
+def test_disabled_tool_neither_offered_nor_accepted():
+    seen = {}
+
+    def transport(url, *, headers, json, timeout, allow_redirects):
+        seen["tools"] = [t["function"]["name"] for t in json["tools"]]
+        return _openai_ok({"choices": [{"message": {"tool_calls": [{"function": {
+            "name": "get_briefing", "arguments": "{}"}}]}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1}})
+
+    conn = {"provider": "openai", "model": "gpt-4o", "api_key": "k",
+            "disabled_tools": ["report_finding"]}
+    action, _ = driver._post(conn, "task", 128, 5, transport)
+    assert action == {"tool": "get_briefing", "args": {}}
+    assert "report_finding" not in seen["tools"]
+    assert "get_briefing" in seen["tools"]
+
+
+def test_disabled_tool_call_rejected_with_filtered_list():
+    session = Session()
+    build = {"config": {"goal": "Test", "max_model_calls": 2,
+                        "max_output_tokens": 128, "deadline_seconds": 600,
+                        "disabled_tools": ["report_finding"]}}
+    prompts = []
+
+    def decide(_connection, prompt, _tokens, _timeout):
+        prompts.append(prompt)
+        if len(prompts) == 1:
+            return ({"tool": "report_finding",
+                     "args": {"title": "x", "node": "target"}},
+                    {"input_tokens": 1, "output_tokens": 1, "cost_usd": None})
+        return None, {"input_tokens": 1, "output_tokens": 1, "cost_usd": None}
+
+    result = asyncio.run(driver.run(session, "arena", build, {},
+        lambda response: response.structuredContent, decide=decide))
+    assert session.calls == []
+    assert result["termination"] == "model_end_turn"
+    assert "report_finding" not in prompts[1]
+    assert "get_briefing" in prompts[1]
+
+
+def test_disabled_tools_validation_at_build(monkeypatch):
+    db = Database()
+    key = auth.generate_api_key()
+    db.create_api_key(auth.hash_api_key(key), name="op-disabled-tools",
+                      role="operator")
+    client = TestClient(api.app)
+    client.headers["X-API-Key"] = key
+    monkeypatch.setattr("database.Database.get_model_connection", lambda self, owner: {
+        "provider": "custom", "model": "m", "key_last4": None,
+        "base_url": "http://vllm.internal:8000/v1",
+        "header_names": [], "headers_digest": None})
+
+    def build(payload):
+        return client.post("/agent-builds", json={
+            "name": f"build-{uuid.uuid4().hex}", "version": "v1",
+            "driver": "model-mcp/v1", "goal": "Test synthetic ownership",
+            **payload})
+
+    base = {}
+    full = build(base)
+    assert full.status_code == 201, full.text
+    assert full.json()["config"]["disabled_tools"] == []
+    assert build({"disabled_tools": ["report_finding"]}).status_code == 201
+    assert build({"disabled_tools": ["nope"]}).status_code == 422
+    assert build({"disabled_tools": ["get_briefing"]}).status_code == 422
+    assert build({"disabled_tools": ["get_briefing", "browser_visit", "http_request",
+                                      "report_finding", "get_topology"]}).status_code == 422
+
+
+def test_build_digest_pins_disabled_surface(monkeypatch):
+    db = Database()
+    key = auth.generate_api_key()
+    db.create_api_key(auth.hash_api_key(key), name="op-disabled-digest",
+                      role="operator")
+    client = TestClient(api.app)
+    client.headers["X-API-Key"] = key
+    monkeypatch.setattr("database.Database.get_model_connection", lambda self, owner: {
+        "provider": "custom", "model": "m", "key_last4": None,
+        "base_url": None, "header_names": [], "headers_digest": None})
+    first, second = None, None
+    for disabled in ([], ["report_finding"]):
+        response = client.post("/agent-builds", json={
+            "name": f"digest-build-{uuid.uuid4().hex}", "version": "v1",
+            "driver": "model-mcp/v1", "goal": "Same goal",
+            **({"disabled_tools": disabled} if disabled else {})})
+        assert response.status_code == 201, response.text
+        if first is None:
+            first = response.json()
+        else:
+            second = response.json()
+    assert first["digest"] != second["digest"]
+    # same owner, same goal: configs provably identical apart from the toggle
+    assert {k: v for k, v in first["config"].items() if k != "disabled_tools"} == {
+        k: v for k, v in second["config"].items() if k != "disabled_tools"}
+    assert second["config"]["disabled_tools"] == ["report_finding"]
+
+
 def test_single_trial_smoke_is_durable_and_unpaired(monkeypatch):
     db = Database()
     key = auth.generate_api_key()

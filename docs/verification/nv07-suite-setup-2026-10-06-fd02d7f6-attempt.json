@@ -1,0 +1,17 @@
+{
+  "setup": "nv07-suite-setup-2026-10-06-fd02d7f6.json",
+  "request": {
+    "action_cap": 12,
+    "baseline_id": "60c39cd1-c70e-4644-a005-f8e7da7ee143",
+    "candidate_id": "c248c6d7-58e6-481a-963a-aad7a63d0ccd",
+    "deadline_seconds": 600,
+    "seeds": [
+      1,
+      2,
+      3
+    ],
+    "suite_id": "fc69707e-9c01-4543-a8d3-1c5ba0e16b1e"
+  },
+  "evaluation_id": "cdfc151c-3ca9-42e2-be4b-07efb1bd9e9e",
+  "started_at": "2026-10-06T17:06:35.782125"
+}

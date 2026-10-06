@@ -375,6 +375,24 @@ def test_two_class_regression_is_attributed_and_pooled_interval_supported():
         "interval_status"] == "degenerate"
 
 
+# --- unmeasured cost (opencode-go reports none) ----------------------------
+
+def test_unmeasured_cost_is_not_reported_not_inconclusive():
+    comparison = experiments.compare(_paired([1, 0, 1]))
+    cost = comparison["differences"]["cost_usd"]
+    assert cost["interval_status"] == "not_reported"
+    assert cost["note"] == "cost unavailable from this provider"
+    assert cost["mean"] is None and cost["pairs"] == 0
+    # other unmeasured metrics get the generic note, not the cost one
+    latency = comparison["differences"]["latency_seconds"]
+    assert latency["interval_status"] == "not_reported"
+    assert latency["note"] == "no reported values"
+    # genuinely empty comparisons keep the old label
+    empty = experiments.compare({"runs": [], "trials": []})["differences"]["cost_usd"]
+    assert empty["interval_status"] == "no_pairs"
+    assert "note" not in empty
+
+
 # --- heartbeat and suite-sized limits ---------------------------------------
 
 def test_trial_progress_refreshes_the_evaluation_heartbeat(evaluations):
