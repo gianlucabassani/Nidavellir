@@ -79,7 +79,9 @@ def test_single_invalid_tool_is_fed_back_and_continues():
     assert result["termination"] == "model_end_turn"
     assert session.calls == [("report_finding", {"title": "claim", "node": "target",
                               "arena_id": "arena"})]
-    assert {"tool": "rejected", "ok": False} in result["transcript"]
+    rejected = result["transcript"][0]
+    assert rejected["ok"] is False and "available tools" in rejected["error"]
+    assert len(rejected["error"]) <= 200
     assert "available tools" in prompts[1]
 
 
@@ -94,7 +96,10 @@ def test_repeated_invalid_tool_terminates_protocol_error():
     # two in a row: the model is not learning, end the trial as agent failure
     assert result["termination"] == "model_protocol_error"
     assert session.calls == []
-    assert result["transcript"] == [{"tool": "rejected", "ok": False}] * 2
+    assert len(result["transcript"]) == 2
+    assert all(entry["ok"] is False for entry in result["transcript"])
+    assert all("available tools" in entry["error"] for entry in result["transcript"])
+    assert all(len(entry["error"]) <= 200 for entry in result["transcript"])
 
 
 def test_anthropic_response_usage_and_one_tool():

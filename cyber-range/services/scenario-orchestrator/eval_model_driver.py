@@ -170,7 +170,8 @@ async def run(session, arena_id, build, connection, decode, *, decide=_post):
                         + ", ".join(sorted(TOOLS)))[:1200]
             history.append({"action": {"tool": "rejected", "args": {}},
                             "ok": False, "result": feedback})
-            transcript.append({"tool": "rejected", "ok": False})
+            transcript.append({"tool": "rejected", "ok": False,
+                               "error": feedback[:200]})
             if violations >= 2:
                 termination = "model_protocol_error"
                 break
