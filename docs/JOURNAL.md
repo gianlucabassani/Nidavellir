@@ -3,6 +3,37 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-10-06 — Diagnostic smoke: effect not reachable, agent correctly silent
+
+**Outcome:** Committed the MODEL-R1 body as `33084a4` first (23 files, tree
+clean), then made the one evidence fix: `run-nv07-r1-smoke.py` now retains
+per-call method/path/status per trial from the arena's `http_request` audit
+events (metadata only — header names and digests, never values — projected
+to digest/method/path/status, call order preserved; listing failures are
+reported, never raised). One smoke through the guarded path, no second
+attempt. Trial `6749a559-…`: `complete`, 5 model calls (briefing + 4×
+`http_request`), then `model_protocol_error`. Score 0/1, no verdict. Usage
+7,172 in / 1,217 out, cost null. Zero residual resources, stack down,
+evidence secret-free (subscription key, session id, and even the synthetic
+bearer token all absent).
+
+**The diagnostic paid off — finding 1 of the two:** effect not reachable.
+Retained calls: `GET /objects/B → 400`, `GET / → 404`, `GET /objects →
+404`, `GET /objects/1 → 400`. The agent never saw a 200. The fixture gates
+every object read behind an undocumented shape contract (`app.py:45-48`:
+known Bearer token, existing owner, *and* an ascii-alnum `X-Request-ID`
+≤64 chars, else 400) — the brief names the endpoint but never the
+`X-Request-ID` rule, while the successful direct-harness prompt supplied
+`"X-Request-ID": "byopair01"` explicitly. Not filing on four failed
+probes is correct discipline (BH-09A in reverse: no false promotion), not
+silent failure. The fix belongs in the fixture/brief contract, and it is
+not made here. No suite: still no report, still no verdict.
+
+**Verification:** ruff clean on the script diff. Evidence:
+`docs/verification/nv07-r1-{setup,smoke}-2026-10-06-92b249bf.json`
+(+ `-attempt`). Uncommitted on top of `33084a4`: the run-script diff plus
+these three files.
+
 ## 2026-10-06 — Cap-12 smoke: report turn reachable, agent still does not report
 
 **Outcome:** Follow-up to the cap-8 smoke, which terminated on

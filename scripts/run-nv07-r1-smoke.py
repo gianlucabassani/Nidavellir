@@ -16,6 +16,33 @@ nv07 = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(nv07)
 
 
+def _http_calls(arena_id):
+    """Per-call method/path/status for one trial arena (diagnostic retention).
+
+    Reads the arena's `http_request` audit events, whose payload is metadata
+    only (header *names*, digests — never header/body values), and projects
+    each call down to digest/method/path/status. Returns (calls, error);
+    a listing failure is reported, never raised, so diagnostics cannot break
+    the smoke itself.
+    """
+    try:
+        listing = nv07.fixture.api(
+            "GET", f"/deployments/{arena_id}/events?type=http_request")
+    except (OSError, RuntimeError) as exc:
+        return [], f"event listing failed: {type(exc).__name__}"
+    calls = []
+    for event in listing.get("events") or []:
+        payload = event.get("payload") or {}
+        calls.append({
+            "digest": payload.get("transaction_digest"),
+            "method": payload.get("method"),
+            "path": str(payload.get("path") or "")[:2048],
+            "status": payload.get("status"),
+        })
+    calls.reverse()  # events arrive newest-first; retain call order
+    return calls, None
+
+
 def main(setup_path: Path) -> None:
     setup = json.loads(setup_path.read_text())
     if setup["schema"] != "nidavellir/nv07-r1-smoke-setup/v1" or setup["model_requests"]:
@@ -64,16 +91,24 @@ def main(setup_path: Path) -> None:
                           if trial.get("arena_id"))
         nv07.fixture.ARENAS.extend(arenas)
         trial_results = []
+        calls_by_arena = {}
+        for arena_id in arenas:
+            calls_by_arena[arena_id] = _http_calls(arena_id)
         for trial in (record or {}).get("trials", []):
             result = trial.get("result") or {}
-            trial_results.append({"id": trial["id"], "arena_id": trial.get("arena_id"),
-                                  "state": trial["state"],
-                                  "error": trial.get("error"),
-                                  "termination": result.get("termination"),
-                                  "model_usage": result.get("model_usage"),
-                                  "transcript": result.get("transcript"),
-                                  "score": (result.get("export") or {}).get("score"),
-                                  "metadata": (result.get("export") or {}).get("metadata")})
+            calls, calls_error = calls_by_arena.get(trial.get("arena_id"), ([], None))
+            entry = {"id": trial["id"], "arena_id": trial.get("arena_id"),
+                     "state": trial["state"],
+                     "error": trial.get("error"),
+                     "termination": result.get("termination"),
+                     "model_usage": result.get("model_usage"),
+                     "transcript": result.get("transcript"),
+                     "http_calls": calls,
+                     "score": (result.get("export") or {}).get("score"),
+                     "metadata": (result.get("export") or {}).get("metadata")}
+            if calls_error:
+                entry["http_calls_error"] = calls_error
+            trial_results.append(entry)
         try:
             nv07.fixture.cleanup_arenas()
         finally:
