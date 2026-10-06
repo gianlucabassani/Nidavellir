@@ -49,6 +49,7 @@ import netguard
 import oci_intake
 import poc_execution
 import repo_introspect
+import research_code
 import research_session
 import scenarios
 import scoring
@@ -6279,6 +6280,85 @@ def get_evaluation(evaluation_id: str,
     record["kind"] = "single_trial_smoke" if len(record["runs"]) == 1 else "paired"
     record["comparison"] = experiments.compare(record)
     return record
+
+
+# --- Research code-intel (variant-hunt collect+derive) -----------------------
+# Answer-shaped, read-only queries over the operator-provisioned pinned
+# repository (RESEARCH_REPO_DIR). Operator-only on both surfaces; every
+# call appends an audit event carrying refs + output digest (never code).
+
+
+def _research_audit(principal: Principal, tool: str, detail: dict, result: dict) -> None:
+    db.record_event("research-code", "research_code_lookup",
+                    {"tool": tool, **detail, "digest": result["digest"],
+                     "truncated": result["truncation"]["truncated"]},
+                    actor=principal.name)
+
+
+class ResearchFixLookup(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    fix_ref: str = Field(min_length=4, max_length=64)
+    advisory_id: str | None = Field(default=None, max_length=32)
+
+
+@app.post("/research/code/fix-lookup")
+def research_fix_lookup(req: ResearchFixLookup,
+                        principal: Principal = Depends(require_principal)):
+    """Fix commit -> patch facts + deterministic one-line check summary."""
+    _require_operator(principal)
+    try:
+        result = research_code.fix_lookup(
+            research_code.repo_root(), req.fix_ref, req.advisory_id)
+    except research_code.ResearchCodeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    _research_audit(principal, "fix_lookup", {"fix_ref": req.fix_ref}, result)
+    return result
+
+
+class ResearchLayerDiff(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    from_ref: str = Field(min_length=1, max_length=64)
+    to_ref: str = Field(min_length=1, max_length=64)
+    paths: list[str] | None = Field(default=None, max_length=8)
+
+
+@app.post("/research/code/layer-diff")
+def research_layer_diff(req: ResearchLayerDiff,
+                       principal: Principal = Depends(require_principal)):
+    """Permission-call delta between two pins over a bounded path set."""
+    _require_operator(principal)
+    try:
+        result = research_code.layer_diff(
+            research_code.repo_root(), req.from_ref, req.to_ref, req.paths)
+    except research_code.ResearchCodeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    _research_audit(principal, "layer_diff",
+                    {"from_ref": req.from_ref, "to_ref": req.to_ref}, result)
+    return result
+
+
+class ResearchSiblingSearch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    pattern: Literal["unscoped-queryset", "bare-auth-view", "bulk-permission"]
+    ref: str | None = Field(default=None, max_length=64)
+    path_scope: list[str] | None = Field(default=None, max_length=8)
+
+
+@app.post("/research/code/sibling-search")
+def research_sibling_search(req: ResearchSiblingSearch,
+                            principal: Principal = Depends(require_principal)):
+    """Named-pattern call-site search with per-site composition status."""
+    _require_operator(principal)
+    try:
+        result = research_code.sibling_search(
+            research_code.repo_root(), req.ref or "HEAD", req.pattern, req.path_scope)
+    except research_code.ResearchCodeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    _research_audit(principal, "sibling_search", {"pattern": req.pattern}, result)
+    return result
 
 
 if __name__ == "__main__":

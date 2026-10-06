@@ -3,6 +3,44 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-10-06 — Research code-intel: thin slice built, mail acceptance green
+
+Built the collect+derive tool surface per `docs/research/research-code-tools-spec.md`:
+`research_code.py` (fix lookup with deterministic check-line extraction,
+permission-layer diff, three named sibling searches with function-scope
+composition verdicts), operator-only REST (`POST /research/code/*`,
+audit event per call under `lab_id="research-code"`), and operator-stance
+MCP tools (auto-traced, budget-checked). Read-only contract enforced in
+code: allowlisted git verbs, no clone/fetch/push, pinned-dir provisioning,
+byte caps with reported (never silent) truncation, digest-bound outputs.
+
+Acceptance (mail collect+derive, no probes): 6 tool calls, 416 output
+lines, zero truncation — three fix rows crisp
+(`has_perms_owner_aware` in MailAccountViewSet;
+`get_objects_for_user_owner_aware` in GlobalSearchView;
+`permitted_object_ids` in ProcessedMailViewSet), mail-diff delta exact,
+30+ sibling sites with verdicts. Versus the manual round (~10 git
+invocations, ~600 hunk lines plus follow-up greps/reads, ~20 min):
+~4× less context for the same rows, and verdicts instead of raw hunks
+to synthesize. Evidence:
+`docs/verification/research-code-accept-2026-10-06-2788771.json`.
+
+Honest limits (not covered): sibling search has no path-exclusion
+presets — migrations/tests files pollute `unscoped-queryset` results;
+check-line quality depends on the fixed permission-call vocabulary;
+composition analysis is function-scoped (cross-function flows out of
+scope, stated in output). Console page deferred — REST JSON is the human
+view in this slice.
+
+Lesson (same pass): the first acceptance run wrote an API key and audit
+events into the developer `deployments.db` because the script did not
+redirect runtime state like `tests/conftest.py` does — caught at commit
+time via `git status`, reverted, script hardened. Any future TestClient
+script must set throwaway state first.
+
+**Verification:** `make release-check` exit 0 (Ruff/Bandit clean, SQLite
+1002 passed, smoke ready, PostgreSQL 1006 passed).
+
 ## 2026-10-06 — Variant hunt: 6/6 refuted, calibration banked
 
 Source table `docs/research/paperless-variant-table.md` (9 fixed checks

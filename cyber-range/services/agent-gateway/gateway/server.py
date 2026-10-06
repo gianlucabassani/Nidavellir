@@ -474,6 +474,27 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
             scaffold_scenario). Returns the registered scenario id."""
             return tools.import_scenario(ctx(), spec=spec, scenario_id=id, overwrite=overwrite)
 
+        @mcp.tool()
+        def research_fix_lookup(fix_ref: str, advisory_id: str | None = None) -> dict:
+            """Read-only fix-commit intel over the pinned research repo: patch
+            facts + a one-line check summary. Bounded, digest-bound."""
+            return tools.research_fix_lookup(ctx(), fix_ref=fix_ref, advisory_id=advisory_id)
+
+        @mcp.tool()
+        def research_layer_diff(from_ref: str, to_ref: str,
+                                paths: list | None = None) -> dict:
+            """Read-only permission-call delta between two pinned refs."""
+            return tools.research_layer_diff(ctx(), from_ref=from_ref, to_ref=to_ref,
+                                             paths=paths)
+
+        @mcp.tool()
+        def research_sibling_search(pattern: str, ref: str | None = None,
+                                    path_scope: list | None = None) -> dict:
+            """Read-only named-pattern call-site search (unscoped-queryset |
+            bare-auth-view | bulk-permission) with composition status."""
+            return tools.research_sibling_search(ctx(), pattern=pattern, ref=ref,
+                                                 path_scope=path_scope)
+
     return mcp
 
 

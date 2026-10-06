@@ -64,7 +64,8 @@ STANCE_TOOLS: dict[Stance, frozenset[str]] = {
     ),
     Stance.operator: frozenset({"scaffold_scenario", "import_scenario",
                                "stop_arena", "resume_arena", "emergency_stop",
-                               "clear_emergency_stop"}),
+                               "clear_emergency_stop", "research_fix_lookup",
+                               "research_layer_diff", "research_sibling_search"}),
 }
 
 
