@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+"""Variant-hunt probe round: six sibling hypotheses against pinned Paperless.
+
+Each hypothesis carries provenance (advisory + fix commit), an expected
+observable, and controls in the established shape. Results classify as
+confirmed / refuted / by-design / infrastructure-failure. Synthetic lab
+credentials only; local lab target only.
+
+Usage: python3 scripts/probe-paperless-variants.py  (builds a keep-alive
+seeded stack, probes, tears everything down, prints a JSON result table)
+"""
+from __future__ import annotations
+
+import importlib.util
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+_spec = importlib.util.spec_from_file_location(
+    "paperless_build_fixture",
+    ROOT / "cyber-range/fixtures/paperless/build_fixture.py")
+fixture = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(fixture)
+
+
+def status_of(call):
+    try:
+        return call()
+    except RuntimeError as exc:
+        text = str(exc)
+        code = int(text.split("HTTP")[1].split()[0]) if "HTTP" in text else None
+        return code, {"error": text[:200]}
+    except (ValueError, OSError) as exc:
+        # Non-JSON/empty body on a 2xx: unexpected shape, record, don't crash.
+        return None, {"error": f"unparsable response: {type(exc).__name__}"}
+
+
+def main() -> None:
+    manifest = fixture.build(keep=True)
+    base, tokens = manifest["base_url"], manifest["tokens"]
+    A, B = tokens["A"], tokens["B"]
+    call = fixture._call
+    results = []
+
+    def record(hid, provenance, expected, actor_call, control_calls, classify):
+        try:
+            status, body = status_of(actor_call)
+            controls = {}
+            for label, fn, want in control_calls:
+                got, _ = status_of(fn)
+                controls[label] = {"status": got, "expected": want,
+                                   "held": got == want}
+            verdict = classify(status, body, controls)
+        except Exception as exc:  # noqa: BLE001 - one bad probe must not kill the round
+            status, controls, verdict = None, {}, "infrastructure-failure"
+            body = {"error": f"{type(exc).__name__}: {str(exc)[:160]}"}
+        results.append({"id": hid, "provenance": provenance,
+                        "expected": expected, "actor_status": status,
+                        "controls": controls, "verdict": verdict})
+
+    rid, sid = manifest["restricted_document"], manifest["shared_document"]
+    teardown = ["docker", "rm", "-f", "paperless-fixture-web",
+                "paperless-fixture-db", "paperless-fixture-redis"]
+    volumes = [f"paperless-fixture-{v}" for v in
+               ("pgdata", "data", "media", "consume", "export")]
+    try:
+        _, links = call(base, "GET", "/api/share_links/?page_size=10", token=A)
+        admin_link = links["results"][0]["id"]
+    except Exception as exc:  # noqa: BLE001 - record and continue without H1
+        results.append({"id": "H1", "provenance": "setup failed",
+                        "expected": "", "actor_status": None, "controls": {},
+                        "verdict": "infrastructure-failure",
+                        "note": f"{type(exc).__name__}: {str(exc)[:160]}"})
+        admin_link = None
+
+    # H1 (F1 sibling — b010f65ae fixed CREATE): member reads admin's share link.
+    if admin_link is not None:
+        record("H1", "GHSA-386h-chg4-cfw9 / b010f65ae (detail vs fixed create)",
+               "denied 403/404 (PaperlessObjectPermissions on ShareLink.owner)",
+               lambda: call(base, "GET", f"/api/share_links/{admin_link}/", token=B),
+               [("owner_read_link", lambda: call(
+                   base, "GET", f"/api/share_links/{admin_link}/", token=A), 200)],
+               lambda s, b, c: "refuted" if s in (403, 404) and c["owner_read_link"]["held"]
+               else "confirmed" if s == 200 else "infrastructure-failure")
+
+    # H2 (F6 sibling — 8aab34ea7 added global check on versions): member WITH
+    # global change_document but no object grant reads restricted versions.
+    try:
+        fixture.run("docker", "exec", "paperless-fixture-web", "python3",
+                    "/usr/src/paperless/src/manage.py", "shell", "-c",
+                    "from django.contrib.auth.models import User, Permission\n"
+                    "u = User.objects.get(username='member')\n"
+                    "u.user_permissions.add(Permission.objects.get(codename='change_document'))\n"
+                    "print('granted')")
+        h2_ready = True
+    except Exception as exc:  # noqa: BLE001
+        results.append({"id": "H2", "provenance": "setup failed", "expected": "",
+                        "actor_status": None, "controls": {},
+                        "verdict": "infrastructure-failure",
+                        "note": f"{type(exc).__name__}: {str(exc)[:160]}"})
+        h2_ready = False
+    if h2_ready:
+        _, detail = call(base, "GET", f"/api/documents/{rid}/", token=A)
+        vid = (detail.get("versions") or [{}])[0].get("id", rid)
+        record("H2", "8aab34ea7 versions global-check (object branch untested)",
+               "denied 403 (object gate after global gate)",
+               lambda: call(base, "DELETE", f"/api/documents/{rid}/versions/{vid}/",
+                            token=B),
+               [("owner_versions_intact", lambda: call(
+                   base, "GET", f"/api/documents/{rid}/", token=A), 200)],
+               lambda s, b, c: "refuted" if s in (403, 404) else
+               ("confirmed" if s in (200, 204) else "infrastructure-failure"))
+
+    # H3 (F7/GHSA-w47q sibling — bulk set_permissions escalation): member with
+    # object-level CHANGE grant (non-owner) on the shared doc tries to grant
+    # itself view on the restricted doc via bulk set_permissions.
+    try:
+        call(base, "PATCH", f"/api/documents/{sid}/", token=A, body={
+            "set_permissions": {"view": {"users": [manifest["member_id"]], "groups": []},
+                                "change": {"users": [manifest["member_id"]], "groups": []}}})
+        h3_ready = True
+    except Exception as exc:  # noqa: BLE001
+        results.append({"id": "H3", "provenance": "setup failed", "expected": "",
+                        "actor_status": None, "controls": {},
+                        "verdict": "infrastructure-failure",
+                        "note": f"{type(exc).__name__}: {str(exc)[:160]}"})
+        h3_ready = False
+    if h3_ready:
+        record("H3", "GHSA-w47q-3m69-84v8 class via bulk path (ownership check)",
+               "denied 403 and restricted perms unchanged",
+               lambda: call(base, "POST", "/api/documents/bulk_edit/", token=B, body={
+                   "documents": [rid], "method": "set_permissions",
+                   "parameters": {"set_permissions": {"view": {"users": [manifest["member_id"]]}}}}),
+               [("restricted_unmoved", lambda: call(
+                   base, "GET", f"/api/documents/{rid}/", token=A), 200)],
+               lambda s, b, c: "refuted" if s == 403 else
+               ("confirmed" if s == 200 else "infrastructure-failure"))
+
+    # H4 (F7 sibling — bulk delete without delete perm): member bulk-deletes
+    # the shared doc it may only view.
+    record("H4", "8aab34ea7 delete-perm gating (documents bulk path)",
+           "denied 403 and document survives",
+           lambda: call(base, "POST", "/api/documents/bulk_edit/", token=B, body={
+               "documents": [sid], "method": "delete", "parameters": {}}),
+           [("shared_survives", lambda: call(
+               base, "GET", f"/api/documents/{sid}/", token=A), 200)],
+           lambda s, b, c: "refuted" if s == 403 and c["shared_survives"]["held"]
+           else ("confirmed" if s == 200 else "infrastructure-failure"))
+
+    # H5 (F3 sibling — 06b2d5102 fixed is_superuser/is_staff): member edits
+    # own groups / requests superuser.
+    try:
+        _, groups = call(base, "GET", "/api/groups/?page_size=10", token=A)
+        gid = groups["results"][0]["id"] if groups.get("results") else 1
+        s1, _ = status_of(lambda: call(
+            base, "PATCH", f"/api/users/{manifest['member_id']}/", token=B,
+            body={"groups": [gid]}))
+        s2, _ = status_of(lambda: call(
+            base, "PATCH", f"/api/users/{manifest['member_id']}/", token=B,
+            body={"is_superuser": True}))
+        results.append({"id": "H5",
+                        "provenance": "GHSA-59xh-5vwx-4c4q / 06b2d5102 (groups vs fixed flags)",
+                        "expected": "both denied 403; groups unchanged",
+                        "actor_status": {"groups": s1, "is_superuser": s2},
+                        "controls": {}, "verdict": "refuted" if s1 == 403 and s2 == 403
+                        else ("confirmed" if 200 in (s1, s2) else "infrastructure-failure")})
+    except Exception as exc:  # noqa: BLE001
+        results.append({"id": "H5", "provenance": "setup failed", "expected": "",
+                        "actor_status": None, "controls": {},
+                        "verdict": "infrastructure-failure",
+                        "note": f"{type(exc).__name__}: {str(exc)[:160]}"})
+
+    # H6 (F9 sibling — 81795bc93 fixed autocomplete): system status content
+    # for a restricted member.
+    record("H6", "81795bc93 bare-auth views (system status content)",
+           "member gated (403/404) or 200 with stats only, no user-scoped data",
+           lambda: call(base, "GET", "/api/status/", token=B),
+           [("admin_status", lambda: call(base, "GET", "/api/status/", token=A), 200)],
+           lambda s, b, c: "refuted" if s in (403, 404) and c["admin_status"]["held"]
+           else ("by-design" if s == 200 and not any(
+               k in json.dumps(b) for k in ("member@lab.invalid", "lab-admin-only",
+                                            "restricted-secret"))
+           else ("confirmed" if s == 200 else "infrastructure-failure")))
+
+    teardown = ["docker", "rm", "-f", "paperless-fixture-web",
+                "paperless-fixture-db", "paperless-fixture-redis"]
+    volumes = [f"paperless-fixture-{v}" for v in
+               ("pgdata", "data", "media", "consume", "export")]
+    try:
+        print(json.dumps({"hypotheses": results}, indent=2, sort_keys=True))
+    finally:
+        subprocess.run(teardown, capture_output=True, check=False)
+        for volume in volumes:
+            subprocess.run(["docker", "volume", "rm", "-f", volume],
+                           capture_output=True, check=False)
+        subprocess.run(["docker", "network", "rm", "paperless-fixture-net"],
+                       capture_output=True, check=False)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

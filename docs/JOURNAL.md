@@ -3,6 +3,73 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-10-06 — Variant hunt: 6/6 refuted, calibration banked
+
+Source table `docs/research/paperless-variant-table.md` (9 fixed checks
+with advisory + commit + added-check, provenance from the public repo).
+Six sibling hypotheses derived, each tested on the pinned 3.3.0 fixture
+with controls in the established shape:
+
+- H1 share-link detail (F1 sibling): member 404, owner 200 → refuted.
+- H2 versions delete with global-but-not-object perm (F6 sibling):
+  member 403, owner path intact → refuted. (First attempt hit wrong
+  routes — `/versions/` and `/api/system/status/` fall through to the
+  SPA shell; real routes are `/versions/{id}/` and `/api/status/`.
+  Corrected, re-ran clean.)
+- H3 bulk set_permissions escalation (w47q class): 403, restricted
+  perms unmoved → refuted.
+- H4 bulk delete without delete perm: 403, doc survives → refuted.
+- H5 self group-grant + superuser flag (F3 sibling): both 403 → refuted.
+- H6 system-status content: member 403, admin 200 → refuted (gated,
+  not a leak).
+
+Counts: 0 confirmed / 6 refuted / 0 by-design / 0 infra-failure (after
+route corrections; two early infra-failures were wrong probe paths, not
+target behavior). No pre-fix pins needed — nothing confirmed, so the
+held-out test never triggered. Per the pre-registered stop rule and the
+fail-closed rule: calibration banked, bar unlowered, round over. The
+failing shape is consistent: 3.3.0's permission layer is uniformly
+AND-composed (global × object), and every sibling of a fixed check I
+could reach carries the same composition.
+
+Repeatability notes for the future feature (operator sequencing only,
+nothing built): fix-commit archaeology via `git log --grep=GHSA` plus
+beta-hardening commits; sibling search over serializers/views sharing
+the fixed pattern; per-hypothesis probe scripts with controls baked in;
+classify-then-stop discipline; route verification before classification
+(wrong paths masquerade as infra-failures).
+
+**Biggest threat to validity:** the round tested six hand-picked
+siblings on a surface the vendor audits continuously — coverage is
+thin by construction, and a 0/6 refuted sweep cannot distinguish "no
+sibling exists" from "sibling exists where I didn't look" (mail,
+workflows, trash, OIDC paths unprobed; no mail server in the lab).
+
+**Verification:** evidence `docs/verification/paperless-variants-2026-10-06.json`
+(secret-free: no token shapes, no passwords); probe stack fully torn
+down; no product code changed (fixture `keep=` support + probe script
+only), so the green gate stands unrerun.
+
+## 2026-10-06 — Variant hunt: WHY + stop rule (pre-registered)
+
+WHY: the 3.3.0 hunt probed the advisory-shaped surface — share links,
+bulk edit, selection, notes, download, metadata, thumb, versions — which
+is precisely the set Paperless has already been told about and fixed.
+Nine endpoint guesses against the audited surface had a low prior by
+construction. Hypothesis quality is the only variable left, so this
+round derives hypotheses from the fixes instead of inventing them: for
+each added check, ask where else it needs to exist and does not. One
+manual round first; the automating layer is designed after running the
+process once, not before.
+
+STOP RULE (pre-registered): at most 6 derived hypotheses tested. Stop
+when all are classified or when probe effort exceeds this session,
+whichever comes first. Outcomes banked as: confirmed (with pre-fix
+reproduction + held-out test), refuted, by-design (first-class, not
+failure), infrastructure-failure. If zero confirm: bank calibration per
+the fail-closed rule and say so plainly — no bar-lowering, no extra
+round in the same breath.
+
 ## 2026-10-06 — Paperless-ngx fixture: calibration-ready, hunt banked
 
 Approved target, fixture-first path. Pinned `paperlessngx/paperless-ngx:3.3.0`

@@ -132,10 +132,16 @@ def _manage(*args):
     return result.stdout.strip()
 
 
-def build() -> dict:
-    """Deploy the pinned stack, seed it, snapshot the control matrix."""
+def build(keep: bool = False) -> dict:
+    """Deploy the pinned stack, seed it, snapshot the control matrix.
+
+    With keep=True the stack is left running (containers, volumes,
+    network) and its loopback base URL is returned as ``base_url`` for
+    hypothesis probing; the caller owns teardown.
+    """
     net = "paperless-fixture-net"
     run("docker", "network", "create", net, check=False)
+    keep_alive = [False]
     volumes = {name: f"paperless-fixture-{name}"
                for name in ("pgdata", "data", "media", "consume", "export")}
     containers = ["paperless-fixture-redis", "paperless-fixture-db", "paperless-fixture-web"]
@@ -250,13 +256,17 @@ def build() -> dict:
                 json.dumps(matrix, sort_keys=True).encode()).hexdigest(),
             "tokens": {"A": token_a, "B": token_b},
         }
+        if keep:
+            manifest["base_url"] = base
+            keep_alive[0] = True
         return manifest
     finally:
-        for name in reversed(containers):
-            run("docker", "rm", "-f", name, check=False)
-        for volume in volumes.values():
-            run("docker", "volume", "rm", "-f", volume, check=False)
-        run("docker", "network", "rm", net, check=False)
+        if not keep_alive[0]:
+            for name in reversed(containers):
+                run("docker", "rm", "-f", name, check=False)
+            for volume in volumes.values():
+                run("docker", "volume", "rm", "-f", volume, check=False)
+            run("docker", "network", "rm", net, check=False)
 
 
 if __name__ == "__main__":

@@ -39,6 +39,13 @@ behavior digest.
   share-link creation for an unpermitted doc, bulk edit, selection data,
   notes, download, metadata, thumb, versions endpoints.
 
+## Pin gotcha
+
+Pin the arch-specific image digest (e.g. amd64), not the manifest-list
+digest: the list digest is not directly runnable by the daemon
+(`manifest unknown`), so `build_fixture.py` pins Vaultwarden-style per
+architecture. Re-resolve at each version pin.
+
 ## Research status
 
 Calibration-ready with proven controls. No novel finding banked —
