@@ -17,6 +17,9 @@ import hashlib
 import json
 import os
 import re
+import selectors
+import signal
+import time
 import subprocess
 from pathlib import Path
 
@@ -37,7 +40,7 @@ MAX_FILE_BYTES = 262144
 # no language-model judgment — the "classification" is this match set).
 PERM_CALLS = re.compile(
     r"\b(has_perms_owner_aware|get_objects_for_user_owner_aware|permitted_object_ids"
-    r"|has_perm\(|permission_classes|Paperless\w*Permissions"
+    r"|has_perms?|permission_classes|Paperless\w*Permissions"
     r"|def validate_\w+|is_superuser|is_staff)\b"
 )
 REF_RE = re.compile(r"\A[0-9a-fA-F]{4,64}\Z")
@@ -49,11 +52,12 @@ class ResearchCodeError(ValueError):
 
 
 def repo_root() -> Path:
-    root = Path(os.getenv("RESEARCH_REPO_DIR", "") or "")
+    configured = os.getenv("RESEARCH_REPO_DIR")
+    if not configured:
+        raise ResearchCodeError("research repository is not provisioned (RESEARCH_REPO_DIR required)")
+    root = Path(configured).resolve()
     if not root.is_dir() or not (root / ".git").exists():
-        raise ResearchCodeError(
-            "research repository is not provisioned "
-            "(operator clones the pinned repo to RESEARCH_REPO_DIR out of band)")
+        raise ResearchCodeError("research repository is not provisioned")
     return root
 
 
@@ -63,23 +67,98 @@ def _digest(data) -> str:
         ensure_ascii=False).encode()).hexdigest()
 
 
-def run_git(repo: Path, *args: str, ok_codes: tuple[int, ...] = (0,)) -> str:
-    """Run one allowlisted read-only git command, byte-capped."""
+class GitOutput(str):
+    """Bounded UTF-8 output; callers must carry its truncation into results."""
+
+    def __new__(cls, raw: bytes, truncated: bool):
+        try:
+            raw.decode("utf-8")
+        except UnicodeDecodeError:
+            truncated = True
+        obj = super().__new__(cls, raw.decode("utf-8", "ignore"))
+        obj.truncated = truncated
+        return obj
+
+
+def run_git(repo: Path, *args: str, ok_codes: tuple[int, ...] = (0,),
+            max_bytes: int = MAX_BYTES) -> GitOutput:
+    """No configured helpers/transports; retain at most max_bytes per pipe.
+
+    Kill the process group on overflow/timeout rather than buffering or
+    spilling unbounded output. Partial facts are explicitly labelled by
+    the caller; identity/file reads reject partial output.
+    """
     if not args or args[0] not in READONLY_VERBS:
         raise ResearchCodeError(f"refusing non-read git verb: {args[0] if args else None}")
     for token in args:
-        if any(forbidden in token for forbidden in FORBIDDEN_TOKENS):
+        if any(forbidden in token for forbidden in FORBIDDEN_TOKENS) or token.startswith(
+                ("--output", "--ext-diff", "--textconv", "--filters",
+                 "--open-files-in-pager", "--help")):
             raise ResearchCodeError(f"refusing git argument: {token[:60]}")
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
+               GIT_NO_LAZY_FETCH="1", GIT_ALLOW_PROTOCOL="",
+               GIT_TERMINAL_PROMPT="0", GIT_OPTIONAL_LOCKS="0")
+    command = ["git", "--no-pager", "--no-replace-objects", "-C", str(repo),
+               "-c", "diff.external=", "-c", f"core.hooksPath={os.devnull}",
+               "-c", "core.fsmonitor=false", "-c", "protocol.allow=never",
+               "-c", "credential.helper="]
+    command.extend(args)
+    if args[0] in {"show", "diff", "log"}:
+        command.insert(len(command) - len(args) + 1, "--no-ext-diff")
+        command.insert(len(command) - len(args), "--no-textconv")
+    buffers = {"stdout": bytearray(), "stderr": bytearray()}
+    truncated = False
     try:
-        result = subprocess.run(
-            ["git", "-C", str(repo), *args], capture_output=True, text=True,
-            timeout=GIT_TIMEOUT, check=False)
-    except (OSError, subprocess.TimeoutExpired) as exc:
+        with subprocess.Popen(command, stdin=subprocess.DEVNULL,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              env=env, start_new_session=True) as process:  # nosec B603
+            with selectors.DefaultSelector() as reader:
+                for name in buffers:
+                    reader.register(getattr(process, name), selectors.EVENT_READ, name)
+                deadline = time.monotonic() + GIT_TIMEOUT
+                try:
+                    while reader.get_map():
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            raise ResearchCodeError("git failed to run: TimeoutExpired")
+                        for key, _ in reader.select(min(remaining, 0.1)):
+                            chunk = os.read(key.fileobj.fileno(), 8192)
+                            if not chunk:
+                                reader.unregister(key.fileobj)
+                                continue
+                            buffer = buffers[key.data]
+                            room = max_bytes - len(buffer)
+                            buffer.extend(chunk[:room])
+                            if len(chunk) > room:
+                                truncated = True
+                                break
+                        if truncated:
+                            break
+                finally:
+                    if process.poll() is None and reader.get_map():
+                        os.killpg(process.pid, signal.SIGKILL)
+                    try:
+                        process.wait(timeout=max(0.1, deadline - time.monotonic()))
+                    except subprocess.TimeoutExpired as exc:
+                        os.killpg(process.pid, signal.SIGKILL)
+                        process.wait()
+                        raise ResearchCodeError("git failed to run: TimeoutExpired") from exc
+            if process.returncode not in ok_codes and not truncated:
+                error = buffers["stderr"].decode("utf-8", "replace").strip()
+                raise ResearchCodeError(f"git {args[0]} failed: {error[:200]}" +
+                                        (" [error text shortened]" if len(error) > 200 else ""))
+    except OSError as exc:
         raise ResearchCodeError(f"git failed to run: {type(exc).__name__}") from exc
-    if result.returncode not in ok_codes:
-        raise ResearchCodeError(
-            f"git {' '.join(args[:3])} failed: {result.stderr.strip()[:200]}")
-    return result.stdout
+    return GitOutput(bytes(buffers["stdout"]), truncated)
+
+
+def _clip(text: str, limit: int, cuts: list[str], label: str) -> str:
+    raw = text.encode()
+    if len(raw) > limit:
+        cuts.append(label)
+        return raw[:limit].decode("utf-8", "ignore")
+    return text
 
 
 def resolve_ref(repo: Path, ref: str) -> str:
@@ -87,7 +166,10 @@ def resolve_ref(repo: Path, ref: str) -> str:
     ref = (ref or "").strip()
     if not (REF_RE.fullmatch(ref) or TAG_RE.fullmatch(ref)):
         raise ResearchCodeError(f"invalid ref: {ref[:60]}")
-    return run_git(repo, "rev-parse", "--verify", ref).strip()
+    out = run_git(repo, "rev-parse", "--verify", ref + "^{commit}")
+    if out.truncated:
+        raise ResearchCodeError("ref resolution output truncated")
+    return out.strip()
 
 
 def _check_paths(paths: list[str] | None, default: list[str]) -> list[str]:
@@ -103,42 +185,62 @@ def _check_paths(paths: list[str] | None, default: list[str]) -> list[str]:
 def _envelope(data: dict, provenance: dict, truncated: bool, note: str = "") -> dict:
     body = {"data": data, "truncation": {"truncated": truncated, "note": note},
             "provenance": provenance}
+    # Bound the whole JSON envelope too, including multibyte evidence.
+    while len(json.dumps({**body, "digest": "0" * 64}).encode()) > MAX_BYTES:
+        lists = [value for value in data.values() if isinstance(value, list) and value]
+        if lists:
+            max(lists, key=lambda value: len(json.dumps(value))).pop()
+        elif data.get("files"):
+            data["files"].pop(next(reversed(data["files"])))
+            data["counts_complete"] = False
+        else:
+            raise ResearchCodeError("output metadata exceeds JSON byte cap")
+        body["truncation"] = {"truncated": True,
+                              "note": (note + "; envelope byte cap; evidence omitted").strip("; ")}
     return {**body, "digest": _digest(body)}
 
 
 def _hunk_func(header: str) -> str:
     text = header.split("@@")[-1].strip()
     if text.startswith("def ") or text.startswith("class "):
-        return text[:120]
+        return text
     return "(file scope)"
 
 
 def fix_lookup(repo: Path, fix_ref: str, advisory_id: str | None = None) -> dict:
     """Advisory fix commit -> patch facts + deterministic one-line check."""
     sha = resolve_ref(repo, fix_ref)
-    subject = run_git(repo, "log", "-1", "--format=%s", sha).strip()
-    files = [line for line in run_git(
-        repo, "diff-tree", "--no-commit-id", "--name-only", "-r", sha).splitlines()
+    subject_out = run_git(repo, "log", "-1", "--format=%s", sha)
+    subject = subject_out.strip()
+    files_out = run_git(repo, "diff-tree", "--root", "--no-commit-id", "--name-only", "-r", sha)
+    file_lines = files_out.splitlines()
+    if files_out.truncated and file_lines:
+        file_lines = file_lines[:-1]
+    files = [line for line in file_lines
         if line.strip()]
     py_files = [f for f in files if f.endswith(".py")]
-    hunks, truncated = [], False
+    hunks, truncated, cuts = [], files_out.truncated or subject_out.truncated, []
+    counts_complete = not truncated and len(py_files) <= MAX_HUNKS
     for path in py_files[:MAX_HUNKS]:
         try:
             diff = run_git(repo, "show", "--format=", sha, "--", path)
         except ResearchCodeError:
             truncated = True
+            counts_complete = False
+            cuts.append("source diff unavailable")
             continue
-        if len(diff) > MAX_BYTES:
-            diff = diff[:MAX_BYTES]
+        if diff.truncated:
             truncated = True
+            counts_complete = False
+            cuts.append("git diff byte cap")
         func, calls = "(file scope)", []
         for line in diff.splitlines():
             if line.startswith("@@"):
-                func = _hunk_func(line)
+                func = _clip(_hunk_func(line), 120, cuts, "hunk context")
             elif line.startswith("+") and not line.startswith("+++"):
                 for match in PERM_CALLS.findall(line[1:]):
                     calls.append({"call": match, "context": func,
-                                  "line": line[1:].strip()[:160]})
+                                  "line": _clip(line[1:].strip(), 160, cuts, "added-check evidence")})
         hunks.append({"file": path, "added_perm_calls": calls})
     if len(py_files) > MAX_HUNKS:
         truncated = True
@@ -154,7 +256,7 @@ def fix_lookup(repo: Path, fix_ref: str, advisory_id: str | None = None) -> dict
             match = re.match(r"class\s+(\w+)", text)
             if match:
                 return match.group(1)
-            return text[:80]
+            return _clip(text, 80, cuts, "check context")
 
         calls = sorted({c["call"] for _, c in flat
                         if not (c["call"].startswith("def ") and
@@ -162,15 +264,20 @@ def fix_lookup(repo: Path, fix_ref: str, advisory_id: str | None = None) -> dict
         where = (defined[0] if defined else None) or _short(next(
             (c["context"] for _, c in flat if c["context"] != "(file scope)"),
             first_file))
-        check = f"added {', '.join(calls[:4])} gate in {where} ({first_file})" \
+        check = f"added {', '.join(calls)} gate in {where} ({first_file})" \
             if calls else f"added {where} ({first_file})"
     else:
-        check = "no permission-call change detected (non-permission fix or docs/test-only)"
+        check = ("no permission-call change detected in partial output; absence unverified"
+                 if truncated else "no permission-call change detected in the named vocabulary")
+    if cuts:
+        truncated = True
     data = {"advisory_id": advisory_id, "fix_ref": sha, "subject": subject,
-            "files_changed": files, "hunks": hunks, "check_line": check}
+            "files_changed": files, "hunks": hunks, "check_line": check,
+            "counts_complete": counts_complete}
     note = "" if not truncated else \
         f"hunk output capped ({len(py_files)} python files, first {MAX_HUNKS} shown)"
-    return _envelope(data, {"repo": str(repo), "ref": sha}, truncated, note)
+    return _envelope(data, {"repo": str(repo), "ref": sha}, truncated,
+                     "; ".join(filter(None, [note, *sorted(set(cuts))])))
 
 
 def layer_diff(repo: Path, from_ref: str, to_ref: str,
@@ -186,8 +293,8 @@ def layer_diff(repo: Path, from_ref: str, to_ref: str,
         diff = run_git(repo, "diff", "--unified=0", old, new, "--", *chosen)
     except ResearchCodeError as exc:
         raise ResearchCodeError(f"diff failed (bad ref or path?): {exc}") from exc
-    if len(diff) > MAX_BYTES:
-        diff = diff[:MAX_BYTES]
+    input_truncated = diff.truncated
+    cuts = []
     files: dict[str, dict] = {}
     current, func = None, "(file scope)"
     sites, capped = [], False
@@ -199,7 +306,7 @@ def layer_diff(repo: Path, from_ref: str, to_ref: str,
                 files.setdefault(current, {"added": 0, "removed": 0})
             func = "(file scope)"
         elif line.startswith("@@"):
-            func = _hunk_func(line)
+            func = _clip(_hunk_func(line), 120, cuts, "diff context")
         elif current and (line.startswith("+") and not line.startswith("+++")):
             hits = PERM_CALLS.findall(line[1:])
             if hits:
@@ -214,394 +321,302 @@ def layer_diff(repo: Path, from_ref: str, to_ref: str,
             hits = PERM_CALLS.findall(line[1:])
             if hits:
                 files[current]["removed"] += len(hits)
-    truncated = capped or len(sites) >= MAX_DIFF_SITES
+    truncated = input_truncated or capped or bool(cuts)
     data = {"from_ref": old, "to_ref": new, "paths": chosen,
-            "files": files, "sites": sites}
+            "files": files, "sites": sites, "counts_complete": not input_truncated}
     note = "" if not truncated else \
-        f"site list capped at {MAX_DIFF_SITES}; per-file counts are complete"
+        ("git diff byte cap; per-file counts incomplete" if input_truncated else
+         f"site/detail output capped at {MAX_DIFF_SITES}; per-file counts are complete")
     return _envelope(data, {"repo": str(repo), "from_ref": old, "to_ref": new},
                      truncated, note)
 
 
 def _show_file(repo: Path, ref: str, path: str) -> str:
     try:
-        text = run_git(repo, "show", f"{ref}:{path}")
+        text = run_git(repo, "show", f"{ref}:{path}", max_bytes=MAX_FILE_BYTES)
     except ResearchCodeError as exc:
         raise ResearchCodeError(f"cannot read {path} at {ref[:12]}: {exc}") from exc
-    if len(text) > MAX_FILE_BYTES:
+    if text.truncated:
         raise ResearchCodeError(f"{path} exceeds the readable size cap")
     return text
 
 
-def _function_calls(tree: ast.AST):
-    """Call sets per function: union by name plus per-(class, method).
+def _local_nodes(node):
+    """Walk a scope without attributing nested functions/classes to its owner."""
+    yield node
+    for child in ast.iter_child_nodes(node):
+        if not isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            yield from _local_nodes(child)
 
-    Returns (by_name, by_owner, spans) where spans maps a method name to
-    every (start, end) definition span (names repeat across classes).
+
+def _function_calls(tree: ast.AST):
+    """Definitions indexed by qualified owner + method + definition line.
+
+    A span resolves to exactly one definition, including free/nested functions;
+    repeated method names cannot import another class's permission calls.
     """
-    by_name: dict[str, set[str]] = {}
-    by_owner: dict[tuple[str, str], set[str]] = {}
-    spans: dict[str, list[tuple[int, int]]] = {}
+    by_owner, spans = {}, []
 
     class Visitor(ast.NodeVisitor):
         def __init__(self):
-            self.stack: list[str] = []
-            self.owner: list[str] = []
+            self.owners = []
 
-        def _record_call(self, name: str):
-            if self.stack:
-                by_name.setdefault(self.stack[-1], set()).add(name)
-                owner = self.owner[-1] if self.owner else ""
-                by_owner.setdefault((owner, self.stack[-1]), set()).add(name)
-
-        def visit_ClassDef(self, node):  # noqa: N802 - ast hook
-            self.owner.append(node.name)
+        def visit_ClassDef(self, node):  # noqa: N802
+            self.owners.append(node.name)
             self.generic_visit(node)
-            self.owner.pop()
+            self.owners.pop()
 
-        def visit_FunctionDef(self, node):  # noqa: N802 - ast hook
-            self.stack.append(node.name)
-            spans.setdefault(node.name, []).append(
-                (node.lineno, node.end_lineno or node.lineno))
+        def visit_FunctionDef(self, node):  # noqa: N802
+            key = (".".join(self.owners), node.name, node.lineno)
+            by_owner[key] = node
+            spans.append((node.lineno, node.end_lineno, key))
+            self.owners.append(node.name)
             self.generic_visit(node)
-            self.stack.pop()
+            self.owners.pop()
 
-        def visit_Call(self, node):  # noqa: N802 - ast hook
-            func = node.func
-            name = func.attr if isinstance(func, ast.Attribute) else \
-                (func.id if isinstance(func, ast.Name) else "?")
-            self._record_call(name)
-            self.generic_visit(node)
+        visit_AsyncFunctionDef = visit_FunctionDef
 
     Visitor().visit(tree)
-    return by_name, by_owner, spans
+    return by_owner, spans
 
 
-def _enclosing(by_name: dict[str, set[str]], spans: dict[str, list[tuple[int, int]]],
-               lineno: int | None) -> set[str] | None:
-    """Call set of the innermost function enclosing a line, else None."""
-    if lineno is None:
-        return None
-    best, best_len = None, None
-    for name, ranges in spans.items():
-        for start, end in ranges:
-            if start <= lineno <= end and (best_len is None or
-                                           (end - start) < best_len):
-                best, best_len = name, end - start
-    return by_name.get(best) if best else None
+def _enclosing(by_owner, spans, lineno):
+    matches = [(end - start, key) for start, end, key in spans
+               if start <= lineno <= end]
+    return by_owner[min(matches)[1]] if matches else None
 
 
-def _grep(repo: Path, ref: str, pattern: str, scope: list[str]) -> list[str]:
-    # Exit 1 means no match, not failure.
-    out = run_git(repo, "grep", "-n", pattern, ref, "--", *scope, ok_codes=(0, 1))
-    return [line for line in out.splitlines() if line.strip()]
+def _call_name(call):
+    func = call.func
+    return func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
 
 
-def sibling_search(repo: Path, ref: str, pattern: str,
-                   path_scope: list[str] | None = None) -> dict:
-    """Named-pattern call-site search with per-site composition status."""
-    sha = resolve_ref(repo, ref) if ref else resolve_ref(repo, "HEAD")
-    scope = _check_paths(path_scope, ["src/documents/", "src/paperless_mail/"])
-    if pattern == "unscoped-queryset":
-        return _pattern_unscoped_queryset(repo, sha, scope)
-    if pattern == "bare-auth-view":
-        return _pattern_bare_auth_view(repo, sha, scope)
-    if pattern == "bulk-permission":
-        return _pattern_bulk_permission(repo, sha, scope)
-    if pattern == "half-composed-check":
-        return _pattern_half_composed_check(repo, sha, scope)
-    if pattern == "unguarded-verb":
-        return _pattern_unguarded_verb(repo, sha, scope)
-    raise ResearchCodeError(
-        "unknown pattern (known: unscoped-queryset, bare-auth-view, "
-        "bulk-permission, half-composed-check, unguarded-verb)")
+def _permission_args(call):
+    """Literal permission arguments; unknown/dynamic expressions stay unknown."""
+    args = call.args[1:2] if _call_name(call) == "has_perms_owner_aware" else call.args[:1]
+    if not args:
+        return set()
+    arg = args[0]
+    values = arg.elts if isinstance(arg, (ast.List, ast.Tuple, ast.Set)) else [arg]
+    if not all(isinstance(v, ast.Constant) and isinstance(v.value, str) for v in values):
+        return set()
+    return {v.value for v in values}
 
 
-def _evidence(repo: Path, sha: str, scope: list[str], needle: str,
-              status_fn) -> dict:
-    raw = _grep(repo, sha, needle, scope)
-    truncated = len(raw) > MAX_SITES
-    sites = []
-    for entry in raw[:MAX_SITES]:
-        # git grep with a rev prints rev:path:lineno:text.
-        parts = entry.split(":", 3)
-        if len(parts) != 4:
-            continue
-        _, path, lineno, text = parts
-        sites.append({"line": int(lineno) if lineno.isdigit() else None,
-                      "status": None, "evidence": text.strip()[:160],
-                      "_file": path})
-    by_file: dict[str, list[dict]] = {}
-    for site in sites:
-        by_file.setdefault(site.pop("_file"), []).append(site)
-    out, shown = [], 0
-    for path, group in sorted(by_file.items()):
-        try:
-            tree = ast.parse(_show_file(repo, sha, path))
-            calls, _, spans = _function_calls(tree)
-        except (ResearchCodeError, SyntaxError):
-            for site in group:
-                site["status"] = "unparsed"
-            out.extend({**s, "file": path} for s in group)
-            continue
-        for site in group:
-            used = _enclosing(calls, spans, site["line"])
-            site["status"] = status_fn(used, site["evidence"])
-            shown += 1
-            out.append({**site, "file": path})
-    data = {"pattern_status": "heuristic function-scope analysis; "
-            "uncovered means candidate, not finding",
-            "total_matches": len(raw), "sites": out}
-    return _envelope(data, {"repo": str(repo), "ref": sha}, truncated,
-                     "" if not truncated else
-                     f"site list capped at {MAX_SITES}; refine path_scope")
+def _negative_guard_calls(test):
+    # A disjunction denies if ANY branch rejects. A conjunction with another
+    # condition can bypass that rejection and cannot establish this guard.
+    if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not) and isinstance(test.operand, ast.Call):
+        return [test.operand]
+    if isinstance(test, ast.BoolOp) and isinstance(test.op, ast.Or):
+        return [call for value in test.values for call in _negative_guard_calls(value)]
+    return []
 
 
-def _pattern_unscoped_queryset(repo, sha, scope):
-    def status(used, _evidence):
-        if used is None:
-            return "review"
-        bare = "filter" in used or "all" in used
-        aware = any("owner_aware" in name or "permitted_" in name for name in used)
-        if bare and not aware:
-            return "uncovered"
-        if aware:
-            return "covered"
-        return "review"
+def _guards(function):
+    """Fail-closed condition checks, not discarded calls or call-name guesses.
 
-    return _evidence(repo, sha, scope, r"\.objects\.filter(", status)
-
-
-def _pattern_bare_auth_view(repo, sha, scope):
-    def status(_used, _evidence):
-        return "review"
-
-    return _evidence(repo, sha, scope,
-                     "permission_classes = (IsAuthenticated,)", status)
-
-
-def _pattern_bulk_permission(repo, sha, scope):
-    def status(used, evidence):
-        rhs = evidence.split("=", 1)[-1]
-        if "has_perms" not in rhs:
-            return "review"  # initializer, not a composition decision
-        if " and " in rhs:
-            return "covered"
-        return "uncovered"
-
-    return _evidence(repo, sha, scope, r"has_perms\s*=", status)
-
-
-def _pattern_half_composed_check(repo, sha, scope):
-    """F6/F7 shape: where does the global half of the composition live?
-
-    For each `has_perms_owner_aware` site: a global `has_perm` in the same
-    function is `composed`; an object check under an object-permission
-    class with no global half in the function is `class-covered`
-    (composition lives one level up — the F6 gap looked exactly like
-    this before its fix); an object check under a bare-`IsAuthenticated`
-    class is `not composed`; anything else is `review`.
+    This proves only local syntactic guard presence, not dataflow dominance or
+    framework/caller enforcement. Unknown control flow remains manual review.
     """
-    needle = "has_perms_owner_aware("
-    raw = _grep(repo, sha, needle, scope)
-    truncated = len(raw) > MAX_SITES
-    sites = []
-    for entry in raw[:MAX_SITES]:
-        parts = entry.split(":", 3)
-        if len(parts) != 4:
+    guarded = []
+    for node in function.body:
+        if isinstance(node, (ast.Return, ast.Raise)):
+            break
+        if not isinstance(node, ast.If):
             continue
-        _, path, lineno, text = parts
-        sites.append({"line": int(lineno) if lineno.isdigit() else None,
-                      "status": None, "evidence": text.strip()[:160],
-                      "_file": path})
-    by_file: dict[str, list[dict]] = {}
-    for site in sites:
-        by_file.setdefault(site.pop("_file"), []).append(site)
-    out = []
-    for path, group in sorted(by_file.items()):
-        try:
-            tree = ast.parse(_show_file(repo, sha, path))
-            by_name, by_owner, spans = _function_calls(tree)
-            class_perms = _class_permissions(tree)
-        except (ResearchCodeError, SyntaxError):
-            for site in group:
-                site["status"] = "unparsed"
-            out.extend({**s, "file": path} for s in group)
-            continue
-        # Map each method definition (by line) to its owning class.
-        methods: list[tuple[str, str, int]] = []
-
-        class OwnerVisitor(ast.NodeVisitor):
-            def __init__(self):
-                self.owner: list[str] = []
-
-            def visit_ClassDef(self, node):  # noqa: N802 - ast hook
-                self.owner.append(node.name)
-                self.generic_visit(node)
-                self.owner.pop()
-
-            def visit_FunctionDef(self, node):  # noqa: N802 - ast hook
-                if self.owner:
-                    methods.append((node.name, self.owner[-1], node.lineno))
-                self.generic_visit(node)
-
-        OwnerVisitor().visit(tree)
-        # Line -> innermost enclosing function name.
-        def enclosing_name(lineno):
-            best, best_len = None, None
-            for name, ranges in spans.items():
-                for start, end in ranges:
-                    if start <= lineno <= end and (best_len is None or
-                                                   (end - start) < best_len):
-                        best, best_len = name, end - start
-            return best
-
-        for site in group:
-            name = enclosing_name(site["line"]) if site["line"] else None
-            owner = ""
-            if name and site["line"]:
-                owned = [(n, o) for n, o, start in methods
-                         if n == name and start <= site["line"]]
-                if owned:
-                    owner = owned[-1][1]
-            used = by_owner.get((owner, name), set()) if name else set()
-            text = class_perms.get((owner, name), "") if name else ""
-            glob = "has_perm" in used
-            obj_class = any(m in text for m in _OBJECT_PERM_MARKERS)
-            bare = "IsAuthenticated" in text and not obj_class
-            if glob:
-                site["status"] = "composed"
-            elif obj_class:
-                site["status"] = "class-covered"
-            elif bare:
-                site["status"] = "not composed"
-            else:
-                site["status"] = "review"
-            out.append({**site, "file": path})
-    data = {"pattern_status": "heuristic function+class analysis; "
-            "class-covered/not composed are candidates, not findings",
-            "total_matches": len(raw), "sites": out}
-    return _envelope(data, {"repo": str(repo), "ref": sha}, truncated,
-                     "" if not truncated else
-                     f"site list capped at {MAX_SITES}; refine path_scope")
+        # Recognize a negative test whose body denies/raises. A positive check
+        # or an unrecognized denial shape is left for manual analysis.
+        negative_calls = _negative_guard_calls(node.test)
+        terminal = next((n for n in node.body if isinstance(n, (ast.Raise, ast.Return))), None)
+        prefix = node.body[:node.body.index(terminal)] if terminal else node.body
+        straightforward = all(isinstance(n, (ast.Expr, ast.Assign, ast.AnnAssign)) for n in prefix)
+        denies = straightforward and (isinstance(terminal, ast.Raise) or
+            (isinstance(terminal, ast.Return) and isinstance(terminal.value, ast.Call) and
+             _call_name(terminal.value) in {"HttpResponseForbidden", "PermissionDenied"}))
+        if denies:
+            guarded.extend(negative_calls)
+    return guarded
 
 
-def _class_permissions(tree: ast.AST) -> dict[tuple[str, str], str]:
-    """Map (class, method) -> source text of the class's permission_classes."""
+def _class_permissions(tree):
+    permissions = {}
 
     class Visitor(ast.NodeVisitor):
         def __init__(self):
-            self.perms: dict[tuple[str, str], str] = {}
+            self.owners = []
 
-        def visit_ClassDef(self, node):  # noqa: N802 - ast hook
-            text = ""
+        def visit_ClassDef(self, node):  # noqa: N802
+            self.owners.append(node.name)
+            names = set()
             for stmt in node.body:
                 if isinstance(stmt, ast.Assign) and any(
                         isinstance(t, ast.Name) and t.id == "permission_classes"
                         for t in stmt.targets):
-                    try:
-                        text = ast.unparse(stmt)
-                    except Exception:  # noqa: BLE001 - best effort
-                        text = "permission_classes = ..."
+                    names = {n.id for n in ast.walk(stmt.value) if isinstance(n, ast.Name)}
             for stmt in node.body:
                 if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    if text:
-                        self.perms[(node.name, stmt.name)] = text
+                    chosen = names
+                    for deco in stmt.decorator_list:
+                        if isinstance(deco, ast.Call):
+                            for kw in deco.keywords:
+                                if kw.arg == "permission_classes":
+                                    chosen = {n.id for n in ast.walk(kw.value) if isinstance(n, ast.Name)}
+                    permissions[(".".join(self.owners), stmt.name, stmt.lineno)] = chosen
             self.generic_visit(node)
+            self.owners.pop()
 
-    visitor = Visitor()
-    visitor.visit(tree)
-    return visitor.perms
-
-
-_OBJECT_PERM_MARKERS = ("PaperlessObjectPermissions", "ViewDocumentsPermissions",
-                        "DeleteProcessedMailPermissions", "TrashPermissions")
+    Visitor().visit(tree)
+    return permissions
 
 
-def _pattern_unguarded_verb(repo, sha, scope):
-    """F1/F5 shape: DRF verb with neither body check nor object-permission class.
+_OBJECT_PERM_MARKERS = {"PaperlessObjectPermissions", "ViewDocumentsPermissions", "TrashPermissions"}
 
-    For each `@action`-decorated method: a permission call in the body, or
-    an object-permission marker on the enclosing class, is `composed`; a
-    bare-`IsAuthenticated` class with no body check is `not composed`;
-    anything else (custom classes, decorators-only) is `review`.
-    """
-    needle = "@action"
-    raw = _grep(repo, sha, needle, scope)
-    truncated = len(raw) > MAX_SITES
-    sites = []
-    for entry in raw[:MAX_SITES]:
+
+def sibling_search(repo: Path, ref: str, pattern: str,
+                   path_scope: list[str] | None = None) -> dict:
+    """Bounded syntactic candidates. No status establishes vulnerability absence."""
+    needles = {
+        "unscoped-queryset": r"\.objects\.[[:alpha:]_][[:alnum:]_]*[[:space:]]*(",
+        "bare-auth-view": "permission_classes",
+        "bulk-permission": r"has_perms[[:space:]]*=",
+        "half-composed-check": "has_perms_owner_aware(",
+        "unguarded-verb": "@action",
+    }
+    if pattern not in needles:
+        raise ResearchCodeError("unknown pattern")
+    sha = resolve_ref(repo, ref or "HEAD")
+    scope = _check_paths(path_scope, ["src/documents/", "src/paperless_mail/"])
+    raw = run_git(repo, "grep", "-n", needles[pattern], sha, "--", *scope,
+                  ok_codes=(0, 1))
+    lines = raw.splitlines()
+    if raw.truncated and lines:
+        lines = lines[:-1]  # Never analyze an incomplete grep line.
+    cuts = ["git grep byte cap; total_matches is a lower bound"] if raw.truncated else []
+    candidates = []
+    for entry in lines:
         parts = entry.split(":", 3)
-        if len(parts) != 4:
-            continue
-        _, path, lineno, text = parts
-        sites.append({"line": int(lineno) if lineno.isdigit() else None,
-                      "status": None, "evidence": text.strip()[:160],
-                      "_file": path})
-    by_file: dict[str, list[dict]] = {}
-    for site in sites:
-        by_file.setdefault(site.pop("_file"), []).append(site)
-    out = []
-    for path, group in sorted(by_file.items()):
-        try:
-            tree = ast.parse(_show_file(repo, sha, path))
-            _, by_owner, _ = _function_calls(tree)
-            class_perms = _class_permissions(tree)
-        except (ResearchCodeError, SyntaxError):
-            for site in group:
-                site["status"] = "unparsed"
-            out.extend({**s, "file": path} for s in group)
-            continue
-        # Map decorator line -> following method definition (list: method
-        # names repeat across classes).
-        methods: list[tuple[str, str, int]] = []
-
-        class MethodVisitor(ast.NodeVisitor):
-            def __init__(self):
-                self.owner: list[str] = []
-
-            def visit_ClassDef(self, node):  # noqa: N802 - ast hook
-                self.owner.append(node.name)
-                self.generic_visit(node)
-                self.owner.pop()
-
-            def visit_FunctionDef(self, node):  # noqa: N802 - ast hook
-                for deco in node.decorator_list:
-                    src = ast.unparse(deco) if hasattr(ast, "unparse") else ""
-                    if "action" in src:
-                        methods.append((node.name,
-                                        self.owner[-1] if self.owner else "",
-                                        node.lineno))
-
-        MethodVisitor().visit(tree)
-        for site in group:
-            target = None
-            for name, owner, start in methods:
-                if site["line"] is not None and start >= site["line"] and (
-                        target is None or start < target[1]):
-                    target = (name, start, owner)
-            if target is None:
-                site["status"] = "review"
+        if len(parts) == 4 and parts[2].isdigit():
+            candidates.append((parts[1], int(parts[2]), parts[3].strip()))
+    # Filtering a bare-auth site needs the full class/action context. Do not
+    # truncate before filtering or silently treat absent AST as no matches.
+    cache, matches = {}, []
+    for path, lineno, evidence in candidates:
+        if path not in cache:
+            try:
+                tree = ast.parse(_show_file(repo, sha, path))
+                by_owner, spans = _function_calls(tree)
+                cache[path] = (tree, by_owner, spans, _class_permissions(tree))
+            except (ResearchCodeError, SyntaxError) as exc:
+                cache[path] = str(exc)
+        parsed = cache[path]
+        if isinstance(parsed, str):
+            status, classification = "manual-review", "unparsed-source"
+            cuts.append("source unavailable or exceeds file byte cap")
+        else:
+            tree, by_owner, spans, permissions = parsed
+            function = _enclosing(by_owner, spans, lineno)
+            if pattern == "bare-auth-view":
+                assignments = [n for n in ast.walk(tree) if isinstance(n, ast.Assign)
+                               and n.lineno == lineno]
+                if not assignments:
+                    continue
+                names = {n.id for n in ast.walk(assignments[0].value) if isinstance(n, ast.Name)}
+                if names != {"IsAuthenticated"}:
+                    continue
+                status, classification = "manual-review", (
+                    "runtime-permission-override" if function else "bare-auth-class")
+            elif pattern == "unguarded-verb":
+                decorated = [f for f in by_owner.values() if any(
+                    isinstance(d, ast.Call) and _call_name(d) == "action" and
+                    d.lineno == lineno for d in f.decorator_list)]
+                function = decorated[0] if decorated else None
+                status, classification = _classify_guard(function, by_owner, permissions, None)
+            elif pattern == "half-composed-check":
+                calls = [n for n in _local_nodes(function) if isinstance(n, ast.Call) and
+                         _call_name(n) == "has_perms_owner_aware" and n.lineno <= lineno <= n.end_lineno]                     if function else []
+                expected = _permission_args(calls[0]) if calls else set()
+                status, classification = _classify_guard(function, by_owner, permissions, expected)
+            elif pattern == "bulk-permission":
+                status, classification = _classify_accumulator(function, lineno)
             else:
-                name, _, owner = target
-                used = by_owner.get((owner, name), set())
-                class_text = class_perms.get((owner, name), "")
-                body_ok = any("owner_aware" in c or "permitted_" in c or c == "has_perm"
-                              for c in used)
-                class_ok = any(marker in class_text for marker in _OBJECT_PERM_MARKERS)
-                names = set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*",
-                                       class_text.split("=", 1)[-1]))
-                bare = names == {"IsAuthenticated"}
-                if body_ok or class_ok:
-                    site["status"] = "composed"
-                elif bare:
-                    site["status"] = "not composed"
-                else:
-                    site["status"] = "review"
-            out.append({**site, "file": path})
-    data = {"pattern_status": "heuristic decorator+class analysis; "
-            "not composed means candidate, not finding",
-            "total_matches": len(raw), "sites": out}
-    return _envelope(data, {"repo": str(repo), "ref": sha}, truncated,
-                     "" if not truncated else
-                     f"site list capped at {MAX_SITES}; refine path_scope")
+                calls = list(_local_nodes(function)) if function else []
+                aware = any(isinstance(n, ast.Call) and
+                            ("owner_aware" in _call_name(n) or "permitted_" in _call_name(n))
+                            for n in calls)
+                status, classification = ("manual-review", "owner-check-dataflow-unverified") if aware else (
+                    ("uncovered", "no-local-owner-check") if function else
+                    ("manual-review", "framework-queryset-or-module-scope"))
+        matches.append({"file": path, "line": lineno, "status": status,
+                        "classification": classification,
+                        "evidence": _clip(evidence, 160, cuts, "site evidence byte cap")})
+    total = len(matches)
+    if total > MAX_SITES:
+        cuts.append(f"site list capped at {MAX_SITES}; refine path_scope")
+    data = {"pattern_status": "heuristic local syntax; composed means matching guard presence only; "
+            "class-covered and manual-review require caller/dataflow/framework analysis; "
+            "uncovered/not composed are candidates, not findings",
+            "total_matches": total, "total_matches_complete": not raw.truncated,
+            "sites": matches[:MAX_SITES]}
+    return _envelope(data, {"repo": str(repo), "ref": sha}, bool(cuts), "; ".join(sorted(set(cuts))))
+
+
+def _classify_guard(function, by_owner, permissions, expected):
+    if function is None:
+        return "manual-review", "outside-recognized-function"
+    used = _guards(function)
+    globals_ = set().union(*(_permission_args(c) for c in used
+                            if _call_name(c) in {"has_perm", "has_perms"}))
+    dynamic = any(_call_name(c) in {"has_perm", "has_perms"} and not _permission_args(c)
+                  for c in used)
+    if expected is not None:
+        if expected and expected <= globals_:
+            return "composed", "matching-global-permission-guard"
+        if not expected:
+            return "manual-review", "object-permission-argument-unresolved"
+    else:
+        objects = set().union(*(_permission_args(c) for c in used
+                                if _call_name(c) == "has_perms_owner_aware"))
+        if objects and objects <= globals_:
+            return "composed", "matching-global-and-object-guards"
+    # Do not infer a namespace from the global call itself. Django object
+    # helpers may add a model's app label; that model identity needs manual
+    # resolution before an unqualified object permission can be compared.
+    required = expected if expected is not None else objects
+    if any("." not in value for value in required) and any("." in value for value in globals_):
+        return "manual-review", "implicit-object-permission-namespace"
+    ambiguous = any(isinstance(n, ast.If) and any(
+        isinstance(c, ast.Call) and _call_name(c) in {"has_perm", "has_perms"}
+        and _permission_args(c) & required and c not in used
+        for c in ast.walk(n.test)) for n in _local_nodes(function))
+    if ambiguous:
+        return "manual-review", "ambiguous-permission-control-flow"
+    key = next((key for key, value in by_owner.items() if value is function), None)
+    names = permissions.get(key, set())
+    if dynamic:
+        return "manual-review", "dynamic-global-permission-argument"
+    if names & _OBJECT_PERM_MARKERS:
+        return "class-covered", "framework-permission-reference-unverified"
+    if names == {"IsAuthenticated"}:
+        return "not composed", "missing-matching-global-and-object-guards"
+    return "manual-review", ("custom-permission-class" if names else "inherited-permission-policy")
+
+
+def _classify_accumulator(function, lineno):
+    if function is None:
+        return "manual-review", "accumulator-outside-function"
+    assignments = sorted((n for n in _local_nodes(function) if isinstance(n, ast.Assign)
+                          and any(isinstance(t, ast.Name) and t.id == "has_perms" for t in n.targets)),
+                         key=lambda n: n.lineno)
+    current = next((n for n in assignments if n.lineno == lineno), None)
+    if current is None:
+        return "manual-review", "multiline-or-unrecognized-assignment"
+    rhs = current.value
+    if isinstance(rhs, ast.Constant) and rhs.value is False:
+        return "deny-reset", "deny-reset"
+    if isinstance(rhs, ast.BoolOp) and isinstance(rhs.op, ast.And) and any(
+            isinstance(n, ast.Name) and n.id == "has_perms" for n in ast.walk(rhs)):
+        return "covered", "and-composed"
+    if current is assignments[0]:
+        return "initializer", "initializer"
+    return "uncovered", "overwrite"

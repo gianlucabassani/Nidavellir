@@ -118,14 +118,16 @@ def test_sibling_search_composition_status(repo):
         "    def composed(self):\n"
         "        has_perms = has_perms and user_is_owner\n")}, "views")
     bare = research_code.sibling_search(repo, "HEAD", "bare-auth-view", ["pkg/"])
-    assert [(s["line"], s["status"]) for s in bare["data"]["sites"]] == [(2, "review")]
+    assert [(s["line"], s["classification"]) for s in bare["data"]["sites"]] == [(2, "bare-auth-class")]
     unscoped = research_code.sibling_search(
         repo, "HEAD", "unscoped-queryset", ["pkg/"])
     by_line = {s["line"]: s["status"] for s in unscoped["data"]["sites"]}
-    assert by_line[4] == "covered" and by_line[8] == "uncovered"
+    # An owner-aware call in the same function is a signal, not proof that
+    # the returned queryset is filtered by it ("allowed" is unused here).
+    assert by_line[4] == "manual-review" and by_line[8] == "uncovered"
     bulk = research_code.sibling_search(repo, "HEAD", "bulk-permission", ["pkg/"])
     by_line = {s["line"]: s["status"] for s in bulk["data"]["sites"]}
-    assert by_line[10] == "review" and by_line[12] == "covered"
+    assert by_line[10] == "initializer" and by_line[12] == "covered"
     with pytest.raises(research_code.ResearchCodeError, match="unknown pattern"):
         research_code.sibling_search(repo, "HEAD", "everything")
 
@@ -199,10 +201,12 @@ def test_half_composed_check_statuses(repo):
         repo, "HEAD", "half-composed-check", ["pkg/"])
     by_line = {s["line"]: s["status"] for s in result["data"]["sites"]}
     assert result["data"]["total_matches"] == 4
-    assert by_line[7] == "composed"
+    # The object's implicit model namespace is not inferred from the global
+    # permission it is being compared against.
+    assert by_line[7] == "manual-review"
     assert by_line[9] == "class-covered"
     assert by_line[13] == "not composed"
-    assert by_line[14] == "review"
+    assert by_line[14] == "manual-review"
 
 
 def test_unguarded_verb_statuses(repo):
@@ -230,6 +234,6 @@ def test_unguarded_verb_statuses(repo):
         repo, "HEAD", "unguarded-verb", ["pkg/"])
     by_line = {s["line"]: s["status"] for s in result["data"]["sites"]}
     assert result["data"]["total_matches"] == 3
-    assert by_line[5] == "composed"
+    assert by_line[5] == "class-covered"
     assert by_line[10] == "not composed"
-    assert by_line[15] == "review"
+    assert by_line[15] == "manual-review"

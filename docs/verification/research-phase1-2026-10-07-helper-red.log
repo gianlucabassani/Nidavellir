@@ -1,0 +1,40 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+___________________ test_other_helper_options_refused[args0] ___________________
+
+scratch = PosixPath('/tmp/pytest-of-prime/pytest-18/test_other_helper_options_refu0')
+args = ('cat-file', '--filters', 'HEAD:views.py')
+
+    @pytest.mark.parametrize("args", [
+        ("cat-file", "--filters", "HEAD:views.py"),
+        ("grep", "--open-files-in-pager=helper", "x", "HEAD"),
+    ])
+    def test_other_helper_options_refused(scratch, args):
+        commit(scratch, "x = 1\n")
+>       with pytest.raises(code.ResearchCodeError, match="refusing git argument"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ResearchCodeError
+
+tests/test_research_code_hardening.py:89: Failed
+___________________ test_other_helper_options_refused[args1] ___________________
+
+scratch = PosixPath('/tmp/pytest-of-prime/pytest-18/test_other_helper_options_refu1')
+args = ('grep', '--open-files-in-pager=helper', 'x', 'HEAD')
+
+    @pytest.mark.parametrize("args", [
+        ("cat-file", "--filters", "HEAD:views.py"),
+        ("grep", "--open-files-in-pager=helper", "x", "HEAD"),
+    ])
+    def test_other_helper_options_refused(scratch, args):
+        commit(scratch, "x = 1\n")
+>       with pytest.raises(code.ResearchCodeError, match="refusing git argument"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: 'refusing git argument'
+E         Actual message: 'git grep failed: fatal: --open-files-in-pager only works on the worktree'
+
+tests/test_research_code_hardening.py:89: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_research_code_hardening.py::test_other_helper_options_refused[args0]
+FAILED tests/test_research_code_hardening.py::test_other_helper_options_refused[args1]
+2 failed, 19 deselected in 0.16s

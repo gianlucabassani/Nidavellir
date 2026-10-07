@@ -1,0 +1,827 @@
+{
+  "bare-auth-view": {
+    "data": {
+      "pattern_status": "heuristic local syntax; composed means matching guard presence only; class-covered and manual-review require caller/dataflow/framework analysis; uncovered/not composed are candidates, not findings",
+      "sites": [
+        {
+          "classification": "bare-auth-class",
+          "evidence": "permission_classes = (IsAuthenticated,)",
+          "file": "src/documents/views.py",
+          "line": 2950,
+          "status": "manual-review"
+        },
+        {
+          "classification": "bare-auth-class",
+          "evidence": "permission_classes = (IsAuthenticated,)",
+          "file": "src/documents/views.py",
+          "line": 3468,
+          "status": "manual-review"
+        },
+        {
+          "classification": "bare-auth-class",
+          "evidence": "permission_classes = (IsAuthenticated,)",
+          "file": "src/documents/views.py",
+          "line": 3763,
+          "status": "manual-review"
+        },
+        {
+          "classification": "bare-auth-class",
+          "evidence": "permission_classes = (IsAuthenticated,)",
+          "file": "src/documents/views.py",
+          "line": 3986,
+          "status": "manual-review"
+        },
+        {
+          "classification": "bare-auth-class",
+          "evidence": "permission_classes = (IsAuthenticated,)",
+          "file": "src/documents/views.py",
+          "line": 5024,
+          "status": "manual-review"
+        },
+        {
+          "classification": "bare-auth-class",
+          "evidence": "permission_classes = (IsAuthenticated,)",
+          "file": "src/documents/views.py",
+          "line": 5328,
+          "status": "manual-review"
+        },
+        {
+          "classification": "runtime-permission-override",
+          "evidence": "self.permission_classes = (IsAuthenticated,)",
+          "file": "src/paperless_mail/views.py",
+          "line": 94,
+          "status": "manual-review"
+        },
+        {
+          "classification": "bare-auth-class",
+          "evidence": "permission_classes = (IsAuthenticated,)",
+          "file": "src/paperless_mail/views.py",
+          "line": 262,
+          "status": "manual-review"
+        }
+      ],
+      "total_matches": 8,
+      "total_matches_complete": true
+    },
+    "digest": "45ebcebcaefcc34a2e4f954ac8277388370dd0d99fa6df722245c3ace15a08a7",
+    "provenance": {
+      "ref": "6f7ed1d4a7f06c1373b84f8b606fd011e294c4b4",
+      "repo": "/tmp/paperless-adv/repo"
+    },
+    "truncation": {
+      "note": "",
+      "truncated": false
+    }
+  },
+  "bulk-permission": {
+    "data": {
+      "pattern_status": "heuristic local syntax; composed means matching guard presence only; class-covered and manual-review require caller/dataflow/framework analysis; uncovered/not composed are candidates, not findings",
+      "sites": [
+        {
+          "classification": "initializer",
+          "evidence": "has_perms = (",
+          "file": "src/documents/views.py",
+          "line": 2989,
+          "status": "initializer"
+        },
+        {
+          "classification": "and-composed",
+          "evidence": "has_perms = has_perms and user_is_owner_of_all_documents",
+          "file": "src/documents/views.py",
+          "line": 3023,
+          "status": "covered"
+        },
+        {
+          "classification": "deny-reset",
+          "evidence": "has_perms = False",
+          "file": "src/documents/views.py",
+          "line": 3037,
+          "status": "deny-reset"
+        },
+        {
+          "classification": "deny-reset",
+          "evidence": "has_perms = False",
+          "file": "src/documents/views.py",
+          "line": 3059,
+          "status": "deny-reset"
+        },
+        {
+          "classification": "initializer",
+          "evidence": "has_perms = (",
+          "file": "src/documents/views.py",
+          "line": 5081,
+          "status": "initializer"
+        }
+      ],
+      "total_matches": 5,
+      "total_matches_complete": true
+    },
+    "digest": "cd08d4c143207c6674583a71ca05fc64fd3b763e1fc4257670f44b3374cacc37",
+    "provenance": {
+      "ref": "6f7ed1d4a7f06c1373b84f8b606fd011e294c4b4",
+      "repo": "/tmp/paperless-adv/repo"
+    },
+    "truncation": {
+      "note": "",
+      "truncated": false
+    }
+  },
+  "half-composed-check": {
+    "data": {
+      "pattern_status": "heuristic local syntax; composed means matching guard presence only; class-covered and manual-review require caller/dataflow/framework analysis; uncovered/not composed are candidates, not findings",
+      "sites": [
+        {
+          "classification": "object-permission-argument-unresolved",
+          "evidence": "def has_perms_owner_aware(user, perms, obj):",
+          "file": "src/documents/permissions.py",
+          "line": 624,
+          "status": "manual-review"
+        },
+        {
+          "classification": "inherited-permission-policy",
+          "evidence": "and has_perms_owner_aware(",
+          "file": "src/documents/serialisers.py",
+          "line": 2894,
+          "status": "manual-review"
+        },
+        {
+          "classification": "inherited-permission-policy",
+          "evidence": "if user and not has_perms_owner_aware(",
+          "file": "src/documents/views.py",
+          "line": 338,
+          "status": "manual-review"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "if request.user is not None and not has_perms_owner_aware(",
+          "file": "src/documents/views.py",
+          "line": 1258,
+          "status": "class-covered"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "if request.user is not None and not has_perms_owner_aware(",
+          "file": "src/documents/views.py",
+          "line": 1427,
+          "status": "class-covered"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "if request.user is not None and not has_perms_owner_aware(",
+          "file": "src/documents/views.py",
+          "line": 1556,
+          "status": "class-covered"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "if request.user is not None and not has_perms_owner_aware(",
+          "file": "src/documents/views.py",
+          "line": 1616,
+          "status": "class-covered"
+        },
+        {
+          "classification": "custom-permission-class",
+          "evidence": "if currentUser is not None and not has_perms_owner_aware(",
+          "file": "src/documents/views.py",
+          "line": 1864,
+          "status": "manual-review"
+        },
+        {
+          "classification": "custom-permission-class",
+          "evidence": "if currentUser is not None and not has_perms_owner_aware(",
+          "file": "src/documents/views.py",
+          "line": 1886,
+          "status": "manual-review"
+        },
+        {
+          "classification": "custom-permission-class",
+          "evidence": "if currentUser is not None and not has_perms_owner_aware(",
+          "file": "src/documents/views.py",
+          "line": 1929,
+          "status": "manual-review"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "if currentUser is not None and not has_perms_owner_aware(",
+          "file": "src/documents/views.py",
+          "line": 1977,
+          "status": "class-covered"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "or not has_perms_owner_aware(",
+          "file": "src/documents/views.py",
+          "line": 2166,
+          "status": "class-covered"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "if request.user is not None and not has_perms_owner_aware(",
+          "file": "src/documents/views.py",
+          "line": 2269,
+          "status": "class-covered"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "if request.user is not None and not has_perms_owner_aware(",
+          "file": "src/documents/views.py",
+          "line": 2357,
+          "status": "class-covered"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "if not has_perms_owner_aware(request.user, \"view_document\", document):",
+          "file": "src/documents/views.py",
+          "line": 2437,
+          "status": "class-covered"
+        },
+        {
+          "classification": "inherited-permission-policy",
+          "evidence": "if self.user is not None and has_perms_owner_aware(",
+          "file": "src/paperless_mail/serialisers.py",
+          "line": 148,
+          "status": "manual-review"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": ") or not has_perms_owner_aware(",
+          "file": "src/paperless_mail/views.py",
+          "line": 121,
+          "status": "class-covered"
+        }
+      ],
+      "total_matches": 17,
+      "total_matches_complete": true
+    },
+    "digest": "f332a693919ede652e6a53172310aa9e59c79f7bfefb7f165551d738f306678e",
+    "provenance": {
+      "ref": "6f7ed1d4a7f06c1373b84f8b606fd011e294c4b4",
+      "repo": "/tmp/paperless-adv/repo"
+    },
+    "truncation": {
+      "note": "",
+      "truncated": false
+    }
+  },
+  "unguarded-verb": {
+    "data": {
+      "pattern_status": "heuristic local syntax; composed means matching guard presence only; class-covered and manual-review require caller/dataflow/framework analysis; uncovered/not composed are candidates, not findings",
+      "sites": [
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "@action(methods=[\"get\"], detail=True, url_path=\"root\")",
+          "file": "src/documents/views.py",
+          "line": 1247,
+          "status": "class-covered"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "@action(methods=[\"get\"], detail=True, filter_backends=[])",
+          "file": "src/documents/views.py",
+          "line": 1481,
+          "status": "class-covered"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "@action(methods=[\"get\"], detail=True, filter_backends=[])",
+          "file": "src/documents/views.py",
+          "line": 1543,
+          "status": "class-covered"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "@action(",
+          "file": "src/documents/views.py",
+          "line": 1604,
+          "status": "class-covered"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "@action(methods=[\"get\"], detail=True, filter_backends=[])",
+          "file": "src/documents/views.py",
+          "line": 1790,
+          "status": "class-covered"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "@action(methods=[\"get\"], detail=True, filter_backends=[])",
+          "file": "src/documents/views.py",
+          "line": 1816,
+          "status": "class-covered"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "@action(methods=[\"get\"], detail=True)",
+          "file": "src/documents/views.py",
+          "line": 1841,
+          "status": "class-covered"
+        },
+        {
+          "classification": "custom-permission-class",
+          "evidence": "@action(",
+          "file": "src/documents/views.py",
+          "line": 1848,
+          "status": "manual-review"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "@action(methods=[\"get\"], detail=True, filter_backends=[])",
+          "file": "src/documents/views.py",
+          "line": 1972,
+          "status": "class-covered"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "@action(methods=[\"get\"], detail=True, name=\"Audit Trail\", filter_backends=[])",
+          "file": "src/documents/views.py",
+          "line": 2006,
+          "status": "class-covered"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "@action(",
+          "file": "src/documents/views.py",
+          "line": 2071,
+          "status": "class-covered"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "@action(",
+          "file": "src/documents/views.py",
+          "line": 2083,
+          "status": "class-covered"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "@action(methods=[\"post\"], detail=True, parser_classes=[parsers.MultiPartParser])",
+          "file": "src/documents/views.py",
+          "line": 2153,
+          "status": "class-covered"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "@action(",
+          "file": "src/documents/views.py",
+          "line": 2261,
+          "status": "class-covered"
+        },
+        {
+          "classification": "inherited-permission-policy",
+          "evidence": "@action(detail=False, methods=[\"GET\"], name=\"Get Next ASN\")",
+          "file": "src/documents/views.py",
+          "line": 2741,
+          "status": "manual-review"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "@action(methods=[\"post\"], detail=False)",
+          "file": "src/documents/views.py",
+          "line": 4215,
+          "status": "class-covered"
+        },
+        {
+          "classification": "custom-permission-class",
+          "evidence": "@action(",
+          "file": "src/documents/views.py",
+          "line": 4564,
+          "status": "manual-review"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "@action(methods=[\"get\"], detail=False)",
+          "file": "src/documents/views.py",
+          "line": 4591,
+          "status": "class-covered"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "@action(methods=[\"get\"], detail=False)",
+          "file": "src/documents/views.py",
+          "line": 4633,
+          "status": "class-covered"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "@action(methods=[\"get\"], detail=False)",
+          "file": "src/documents/views.py",
+          "line": 4661,
+          "status": "class-covered"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "@action(methods=[\"post\"], detail=False)",
+          "file": "src/documents/views.py",
+          "line": 4674,
+          "status": "class-covered"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "@action(detail=True, methods=[\"post\"])",
+          "file": "src/documents/views.py",
+          "line": 4841,
+          "status": "class-covered"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "@action(methods=[\"post\"], detail=False)",
+          "file": "src/paperless_mail/views.py",
+          "line": 97,
+          "status": "class-covered"
+        },
+        {
+          "classification": "framework-permission-reference-unverified",
+          "evidence": "@action(methods=[\"post\"], detail=True)",
+          "file": "src/paperless_mail/views.py",
+          "line": 170,
+          "status": "class-covered"
+        },
+        {
+          "classification": "custom-permission-class",
+          "evidence": "@action(",
+          "file": "src/paperless_mail/views.py",
+          "line": 219,
+          "status": "manual-review"
+        }
+      ],
+      "total_matches": 25,
+      "total_matches_complete": true
+    },
+    "digest": "26e8c1914b213ec079757d228753be7d29b6f138a3cecb7009333068f2c94356",
+    "provenance": {
+      "ref": "6f7ed1d4a7f06c1373b84f8b606fd011e294c4b4",
+      "repo": "/tmp/paperless-adv/repo"
+    },
+    "truncation": {
+      "note": "",
+      "truncated": false
+    }
+  },
+  "unscoped-queryset": {
+    "data": {
+      "pattern_status": "heuristic local syntax; composed means matching guard presence only; class-covered and manual-review require caller/dataflow/framework analysis; uncovered/not composed are candidates, not findings",
+      "sites": [
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "tag = Tag.objects.get(pk=obj.pk)",
+          "file": "src/documents/admin.py",
+          "line": 41,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "tag, _ = Tag.objects.get_or_create(",
+          "file": "src/documents/barcodes.py",
+          "line": 373,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "qs = Document.objects.filter(",
+          "file": "src/documents/bulk_edit.py",
+          "line": 79,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "Document.objects.filter(pk=doc_id).update(archive_serial_number=asn)",
+          "file": "src/documents/bulk_edit.py",
+          "line": 95,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "correspondent = Correspondent.objects.only(\"pk\").get(id=correspondent)",
+          "file": "src/documents/bulk_edit.py",
+          "line": 124,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "Document.objects.filter(Q(id__in=doc_ids) & ~Q(correspondent=correspondent))",
+          "file": "src/documents/bulk_edit.py",
+          "line": 127,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "storage_path = StoragePath.objects.only(\"pk\").get(id=storage_path)",
+          "file": "src/documents/bulk_edit.py",
+          "line": 144,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "Document.objects.filter(",
+          "file": "src/documents/bulk_edit.py",
+          "line": 147,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "document_type = DocumentType.objects.only(\"pk\").get(id=document_type)",
+          "file": "src/documents/bulk_edit.py",
+          "line": 166,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "Document.objects.filter(Q(id__in=doc_ids) & ~Q(document_type=document_type))",
+          "file": "src/documents/bulk_edit.py",
+          "line": 169,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "tag_obj = Tag.objects.get(pk=tag)",
+          "file": "src/documents/bulk_edit.py",
+          "line": 185,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "qs = Document.objects.filter(Q(id__in=doc_ids) & ~Q(tags__id=t.id)).only(\"pk\")",
+          "file": "src/documents/bulk_edit.py",
+          "line": 193,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "DocumentTagRelationship.objects.bulk_create(to_create)",
+          "file": "src/documents/bulk_edit.py",
+          "line": 202,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "tag_obj = Tag.objects.get(pk=tag)",
+          "file": "src/documents/bulk_edit.py",
+          "line": 214,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "qs = DocumentTagRelationship.objects.filter(",
+          "file": "src/documents/bulk_edit.py",
+          "line": 218,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "qs = Document.objects.filter(id__in=doc_ids).only(\"pk\")",
+          "file": "src/documents/bulk_edit.py",
+          "line": 239,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "add_tag_objects = Tag.objects.filter(pk__in=add_tags)",
+          "file": "src/documents/bulk_edit.py",
+          "line": 245,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "remove_tag_objects = Tag.objects.filter(pk__in=remove_tags)",
+          "file": "src/documents/bulk_edit.py",
+          "line": 252,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "DocumentTagRelationship.objects.filter(",
+          "file": "src/documents/bulk_edit.py",
+          "line": 259,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "DocumentTagRelationship.objects.filter(",
+          "file": "src/documents/bulk_edit.py",
+          "line": 267,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "DocumentTagRelationship.objects.bulk_create(",
+          "file": "src/documents/bulk_edit.py",
+          "line": 281,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "qs = Document.objects.filter(id__in=doc_ids).only(\"pk\")",
+          "file": "src/documents/bulk_edit.py",
+          "line": 300,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "custom_fields_by_id: dict[int, CustomField] = CustomField.objects.in_bulk(",
+          "file": "src/documents/bulk_edit.py",
+          "line": 310,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "Document.objects.defer(\"content\").in_bulk(affected_docs)",
+          "file": "src/documents/bulk_edit.py",
+          "line": 318,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "CustomFieldInstance.objects.update_or_create(",
+          "file": "src/documents/bulk_edit.py",
+          "line": 332,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "for doclink_being_removed_instance in CustomFieldInstance.objects.filter(",
+          "file": "src/documents/bulk_edit.py",
+          "line": 342,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "CustomFieldInstance.objects.filter(",
+          "file": "src/documents/bulk_edit.py",
+          "line": 356,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "Document.objects.filter(id__in=doc_ids, root_document__isnull=True)",
+          "file": "src/documents/bulk_edit.py",
+          "line": 373,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "Document.objects.filter(root_document_id__in=root_ids)",
+          "file": "src/documents/bulk_edit.py",
+          "line": 378,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "Document.objects.filter(id__in=delete_ids).delete(transaction_id=uuid.uuid4())",
+          "file": "src/documents/bulk_edit.py",
+          "line": 385,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "qs = Document.objects.filter(id__in=doc_ids).select_related(\"owner\")",
+          "file": "src/documents/bulk_edit.py",
+          "line": 428,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "for doc in Document.objects.select_related(\"root_document\").filter(",
+          "file": "src/documents/bulk_edit.py",
+          "line": 465,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "qs = Document.objects.select_related(\"root_document\").filter(id__in=doc_ids)",
+          "file": "src/documents/bulk_edit.py",
+          "line": 535,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "Document.objects.select_for_update()",
+          "file": "src/documents/bulk_edit.py",
+          "line": 642,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "Document.objects.bulk_update(",
+          "file": "src/documents/bulk_edit.py",
+          "line": 679,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "Document.objects.filter(pk=root_document.pk).update(**root_updates)",
+          "file": "src/documents/bulk_edit.py",
+          "line": 698,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "LogEntry.objects.log_create(",
+          "file": "src/documents/bulk_edit.py",
+          "line": 702,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "doc = Document.objects.select_related(\"root_document\").get(id=doc_ids[0])",
+          "file": "src/documents/bulk_edit.py",
+          "line": 753,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "doc = Document.objects.select_related(\"root_document\").get(id=doc_ids[0])",
+          "file": "src/documents/bulk_edit.py",
+          "line": 831,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "doc = Document.objects.select_related(\"root_document\").get(id=doc_ids[0])",
+          "file": "src/documents/bulk_edit.py",
+          "line": 895,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "doc = Document.objects.select_related(\"root_document\").get(id=doc_id)",
+          "file": "src/documents/bulk_edit.py",
+          "line": 1030,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "current_field_instance = CustomFieldInstance.objects.filter(",
+          "file": "src/documents/bulk_edit.py",
+          "line": 1137,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "for custom_field in CustomFieldInstance.objects.filter(",
+          "file": "src/documents/bulk_edit.py",
+          "line": 1153,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "CustomFieldInstance.objects.bulk_create(custom_field_instances_to_create)",
+          "file": "src/documents/bulk_edit.py",
+          "line": 1179,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "CustomFieldInstance.objects.bulk_update(",
+          "file": "src/documents/bulk_edit.py",
+          "line": 1180,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "Document.objects.filter(id__in=target_doc_ids).update(modified=timezone.now())",
+          "file": "src/documents/bulk_edit.py",
+          "line": 1184,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "CustomFieldInstance.objects.filter(document_id=target_doc_id, field=field)",
+          "file": "src/documents/bulk_edit.py",
+          "line": 1198,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "Document.objects.filter(id=target_doc_id).update(modified=timezone.now())",
+          "file": "src/documents/bulk_edit.py",
+          "line": 1208,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "doc = Document.objects.only(",
+          "file": "src/documents/caching.py",
+          "line": 245,
+          "status": "uncovered"
+        },
+        {
+          "classification": "no-local-owner-check",
+          "evidence": "docs_queryset = Document.objects.exclude(",
+          "file": "src/documents/classifier.py",
+          "line": 338,
+          "status": "uncovered"
+        }
+      ],
+      "total_matches": 459,
+      "total_matches_complete": false
+    },
+    "digest": "3a15c5e0952abea978af18c9ffc5459174d845f28cf8bec290e336f892119690",
+    "provenance": {
+      "ref": "6f7ed1d4a7f06c1373b84f8b606fd011e294c4b4",
+      "repo": "/tmp/paperless-adv/repo"
+    },
+    "truncation": {
+      "note": "git grep byte cap; total_matches is a lower bound; site list capped at 50; refine path_scope",
+      "truncated": true
+    }
+  }
+}

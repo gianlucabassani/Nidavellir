@@ -5,6 +5,41 @@ Two audiences: agent (scoped MCP tools, operator stance) and human
 (operator REST endpoints + this document). No evaluation lane, no
 fixtures, no driver, no NV-12/13/14.
 
+## 2026-10-07 correction — Phase 1 contract
+
+The independent audit is accepted. Paperless is **no confirmed vulnerability under
+the tested conditions**, not exhausted; **12 retained hypotheses plus 9 asserted
+without per-probe evidence** replace 21 evidence-backed refutations. The historical
+inventory/efficiency estimates below are self-reported, not measured savings.
+
+Git reads use an explicitly configured directory (unset is refused), resolved
+commit refs, no external diff/textconv, no system/global config or inherited Git
+environment overrides, no hooks/fsmonitor, no lazy fetch and no transport protocols.
+Both pipes retain at most 65536 bytes and terminate on overflow/30-second timeout;
+source AST reads have a separate 262144-byte cap. Complete JSON envelopes are
+capped at 65536 bytes. Multibyte, hunk-context/evidence, file, row, input and envelope
+cuts set `truncation.truncated` with a reason. `layer_diff.counts_complete` is false
+on input cuts; `total_matches_complete` is false when grep output is partial.
+Digests bind the exact returned metadata and facts, including those limitations.
+
+Method definitions resolve by qualified owner and definition span, including
+nested/async functions. Literal global permission arguments must match the object
+permission, preserving qualified namespaces, and appear in recognized denying
+conditions. Implicit object namespaces and ambiguous, conditional or unreachable
+denials require manual review. `composed` means local
+syntactic guard presence, not control-flow/dataflow proof. Unused calls are not
+guards. `class-covered` means a framework reference requiring manual verification.
+Manager-query matching covers `.objects.all/get/exclude/...`, not just filter.
+Accumulator classifications: initializer / and-composed / deny-reset / overwrite.
+Every `manual-review` site has a concrete `classification`, such as unparsed source,
+dynamic permission arguments, bare-auth class, runtime permission override,
+framework/module queryset, custom/inherited policy or unverified owner dataflow.
+No candidate status implies that a vulnerability exists or is absent.
+
+REST/MCP remain operator-only. Successful REST calls append one audit event; failed
+calls currently do not. MCP traces calls; authoring budgets are not checked/charged
+(RESEARCH-R10). The earlier every-call/budget assertions below are withdrawn.
+
 ## Design principle (explicit)
 
 **Answer-shaped tools, not raw-data tools.** A tool returns the narrow
@@ -16,8 +51,8 @@ instead of truncating silently.
 
 ## Phase 1 — token-waste inventory (from the two Paperless rounds)
 
-Manual steps, with cost class and repeat count. No speculation: each row
-is a step actually performed.
+Manual steps, with cost class and repeat count. These are historical self-reported estimates; raw manual-call/context logs were
+not retained, so the inventory does not establish an efficiency ratio.
 
 | # | Step | Cost | Repeats/round | Automate? |
 |---|---|---|---|---|
@@ -45,12 +80,12 @@ operator-provisioned out of band). Tools never clone/fetch/pull/push
 and a byte cap. Every tool returns `{data, digest, truncation,
 provenance}` where `digest` is sha256 over canonical JSON (outputs are
 digest-bound), `truncation` reports caps/hits, and `provenance` names
-repo + refs. Secret-free by construction: inputs are refs/patterns,
-outputs are code facts.
+repo + refs. Outputs are source-derived facts; source may itself contain sensitive literals.
+Operator-only access is the boundary, not a guarantee that code is secret-free.
 
 ### T1 `research_fix_lookup`
 
-- Inputs: `fix_ref` (40-hex SHA, required), `advisory_id` (optional label).
+- Inputs: `fix_ref` (bounded SHA or ref, resolved to a commit, required), `advisory_id` (optional label).
 - Output: subject, files changed, Python-file hunks (capped), extracted
   added permission calls (`has_perms_owner_aware`,
   `get_objects_for_user_owner_aware`, `has_perm`, permission_classes,
@@ -69,7 +104,7 @@ outputs are code facts.
   list, max 8).
 - Output: per-file added/removed permission-call counts, added check
   sites (function + call, capped at 20, truncation reported), totals
-  always complete even when sites truncate.
+  complete only when `counts_complete` is true; input byte cuts invalidate them.
 - Replaces step 7. Saves tokens by collapsing whole-file diffs to
   permission-call deltas.
 - Scope: does not judge whether a delta is a fix or a regression —
@@ -79,34 +114,28 @@ outputs are code facts.
 
 - Inputs: `pattern` (closed vocabulary — see below), `ref` (default
   pinned tag), `path_scope` (optional subtree).
-- Named patterns (v2): `unscoped-queryset` (bare `.objects.filter(`
-  call sites in views/serialisers with per-function composition status:
-  covered/uncovered by an owner-aware call in the same function);
-  `bare-auth-view` (view classes with bare `IsAuthenticated`);
-  `bulk-permission` (assignments to the bulk `has_perms` accumulator:
-  initializer / AND-composed / overwrite); `half-composed-check` (F6/F7
-  shape: `has_perms_owner_aware` sites whose enclosing function lacks the
-  global half → not composed); `unguarded-verb` (F1/F5 shape:
-  `@action`-decorated methods with neither a body check nor an
-  object-permission class on the enclosing view → not composed).
-- Output: sites (file, function/line, status, one evidence line each,
-  capped at 50, truncation reported) — never file dumps.
-- Replaces step 6. Saves tokens by returning only sites with verdicts
-  instead of grep output plus follow-up reads.
-- Scope: heuristic text/AST analysis, reported as such — a site marked
-  `uncovered` is a candidate, not a finding. Composition analysis is
-  function-scoped; cross-function flows are out of scope and stated so.
+- Named patterns (Phase 1 correction): `unscoped-queryset` recognizes manager
+  methods including all/get/exclude/filter; `bare-auth-view` distinguishes bare
+  classes from runtime permission overrides; `bulk-permission` distinguishes
+  initializer, AND composition, deny reset and overwrite; `half-composed-check`
+  compares literal global/object permission arguments in an owner-scoped function;
+  `unguarded-verb` recognizes denying guards and action permission overrides.
+- Output: sites (file, line, status, classification, evidence), capped at 50;
+  detail/row/source/grep/envelope truncation is explicit. `total_matches_complete`
+  distinguishes an exact match count from a lower bound after an input cap.
+- Scope: heuristic syntax, not proof of authorization/dataflow. Every unresolved
+  policy or flow remains manual review with a reason. Composition does not imply
+  dominance, correct object identity or an independently verified class/caller gate.
 
 ### Surfaces and audit
 
 - MCP (agent): three tools on the **operator stance only** (authoring-grade;
-  attacker sessions must not browse repo history). Auto-traced by the
-  gateway; budget-checked like other tools.
+  attacker sessions must not browse repo history). Traced by the
+  gateway; authoring-budget enforcement remains open (RESEARCH-R10).
 - REST (human): `POST /research/code/{fix-lookup,layer-diff,sibling-search}`,
-  operator-only, bounded models. Each call appends an audit event
+  operator-only, bounded models. Each successful call appends an audit event
   (`lab_id="research-code"`, type `research_code_lookup`: tool, refs,
-  output digest, truncation flags, actor) — every tool call lands in the
-  audit trace on both surfaces.
+  output digest, truncation flags, actor) — failed REST calls still need audit coverage (RESEARCH-R10).
 - Console page: deferred — REST JSON is the human view in this slice; a
   console page over the same endpoints is a trivial follow-up.
 

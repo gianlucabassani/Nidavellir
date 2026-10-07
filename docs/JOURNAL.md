@@ -3,6 +3,54 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-10-07 — Independent audit accepted; Phase 1 code-intel remediation
+
+**Outcome:** The independent audit and the operator's source reproductions are
+accepted. Retract "exhausted for fix-derived shapes": **no confirmed vulnerability
+under the tested conditions**. Replace "21 refuted" with **12 retained hypotheses
+plus 9 asserted without per-probe evidence**. Historical journal entries and
+verification artifacts remain historical, not current conclusions. Existing
+Paperless and evaluation evidence files are byte-identical (hash inventory in
+`docs/verification/research-audit-2026-10-07.json`). The −1.0 model-driven pair
+remains calibration/scoring-surface machinery, not discovery capability.
+
+Phase 1 changes only: Git suppresses external diff/textconv, hooks/fsmonitor,
+inherited Git overrides and system/global config; lazy fetch and all transports
+are disabled. Both pipes and whole JSON envelopes are byte-bounded; truncation
+is explicit for input, field, row and file caps. Layer counts become incomplete
+on a byte-cut diff. An unset checkout directory is refused. Owner/definition
+spans eliminate cross-class method-name unions; literal matching permission
+arguments and denying conditions replace call-name guesses. Manager queries
+include all/get/exclude; accumulator overwrites, initializers and deny resets
+are distinguished. Manual review always names the unresolved mechanism.
+Class/caller/dataflow enforcement remains unproven by these syntactic tools.
+
+**Files:** `research_code.py`; existing and new hardening tests; `ISSUES.md`,
+`ROADMAP.md`, `TODO.md`, code-intel spec; this entry; new audit, Phase 1 verification,
+source-scan and raw red/focused/release logs beside the historical artifacts.
+
+**Verification:** 13 targeted regression failures reproduced before implementation.
+Five additional review regressions reproduced before correction (permission namespace,
+conditional/unreachable denial, helper options); the independent reviewer rechecked
+the guard cases. The focused host run passed 29 tests (2 API tests deselected, one host dependency
+warning). Required `make release-check` exited 0 on pinned Python 3.11.14:
+Ruff clean; Bandit zero medium/high; SQLite **1030 passed, 4 skipped, 6 deselected**;
+PostgreSQL **1034 passed, 6 deselected**; migration/API/UI/MCP readiness smoke passed.
+Raw logs and source digests are retained in `research-phase1-2026-10-07.json`.
+The new read-only Paperless scan reports 459 manager-query matches as a **lower
+bound** after the input cap, only 50 returned sites, and concrete manual-review
+reasons. It is limited evidence, not a replacement exhaustion claim.
+
+**Unresolved / next step:** Phase 2 is deliberately not implemented in this unit:
+RESEARCH-R1/R4 reopened. The accepted M6 finding is correspondence: the script
+runs hardcoded probes independently of journal semantics, so replacing trash
+with account detail changes neither loose marker; structured execution binding
+must detect that substitution. Phase 3 grants/controls/mixed-mail rerun remains
+open (RESEARCH-R7). All-nine-fix coverage, failed-call audit/authoring budgets,
+missing historical probe/gate/determinism evidence and efficiency claims remain
+open (RESEARCH-R8–10). No mail probes or live fixtures were rerun. Complete
+Phase 2 before the Phase 3 re-recording; preserve the historical artifacts.
+
 ## 2026-10-06 — Fix-derived rules: full-tree measurement (read-only)
 
 Rule engine choice, stated: in-tree deterministic checks, not semgrep.

@@ -1,6 +1,6 @@
 # Nidavellir — ordered delivery checklist
 
-Updated 2026-10-05 after the paired BYO-agent run closed NV-09.
+Updated 2026-10-07 after the independent research audit and Phase 1 remediation.
 This is the canonical work queue. [ROADMAP.md](ROADMAP.md) retains product scope,
 design detail and legacy milestone mapping. Unchecked means unfinished.
 Verification history is in [docs/JOURNAL.md](docs/JOURNAL.md).
@@ -69,9 +69,6 @@ for both human and agent callers; API/GUI/MCP share the same service boundary.
   claims, requests, latency, available cost, uncertainty and infrastructure failures.
   **Depends:** NV-02, NV-04, NV-06.   **Accept:** compare builds A/B on matched conditions from
   the GUI/API and explain a change without conflating broken infrastructure with agent failure.
-  *Status 2026-10-06: durable `model-mcp/v1` trials proven live (two opencode-go
-  calibration smokes with transcripts + token usage retained, `cost_usd: null`);
-  NV07-R1 still needs the paired model-driven suite (see ISSUES.md).*
   *Closed 2026-10-06: model-driven paired suite complete (baseline full surface
   vs candidate without report_finding, 3 seeds, verified difference −1, zero
   infra-failed pairs, cost explicitly unavailable); NV07-R1 closed in ISSUES.md.*
@@ -111,6 +108,25 @@ for both human and agent callers; API/GUI/MCP share the same service boundary.
 **Exit:** repeatable independently validated research and a durable paired agent comparison
 work through the normal console/API. Use NV-09's evidence to decide expansion; preserve a
 focused maintenance scope if broader features do not improve actual research.
+
+## Audit remediation — phased before further Paperless conclusions
+
+- [x] **Phase 1 — Code-intel correctness.** Bound Git output, disable configured
+  helpers and transports, report all cuts/incomplete counts, use owner-scoped AST
+  definitions and permission arguments, broaden manager queries, classify review
+  reasons. Acceptance: scratch regressions plus pinned release gate; evidence
+  `docs/verification/research-phase1-2026-10-07.json`. Does not establish exhaustion.
+- [ ] **Phase 2 — Registration/execution correspondence (RESEARCH-R1/R4).** Bind
+  hypothesis IDs, target, requests/controls and probe-script digest; refuse mismatch
+  before stack work, retain both identities, test the original M6 substitution.
+- [ ] **Phase 3 — Mail isolation and atomicity (RESEARCH-R7).** Grant global mutation
+  permissions, prove member-owned mutation controls, test a genuinely mixed batch
+  with row-survival assertions; rerun into new artifacts. Depends on Phase 2.
+
+Accepted record: **no confirmed vulnerability under the tested conditions**;
+**12 retained hypotheses plus 9 asserted without per-probe evidence**. Historical
+artifacts stay unchanged. Coverage, historical gate/determinism/efficiency evidence,
+and code-intel audit/budget gaps remain open in ISSUES.md.
 
 ## P2 — research iteration driven by target needs
 

@@ -1,8 +1,8 @@
 # Nidavellir — open risk register
 
-Updated 2026-10-06: MODEL-R1 closed, NV07-R1 closed by the model-driven paired suite.
-RESEARCH-R1 and RESEARCH-R2 opened by verification of the three Paperless research
-rounds; RESEARCH-R3 opened deferred.
+Updated 2026-10-07 after the independent audit. MODEL-R1 and NV07-R1
+remain closed for calibration machinery only. RESEARCH-R1/R4 are reopened;
+mail probe validity, incomplete coverage and historical evidence gaps remain open.
 
 Known, currently-open risks and verification gaps. Each entry states what is
 actually true today, why it matters, and the concrete evidence that would close
@@ -43,9 +43,81 @@ NV-13 for local hypervisors; cloud providers remain deferred.
 
 ## Open — research lane discipline (opened 2026-10-06)
 
-R1, R2 and R4 closed 2026-10-06 (see Closed); R3 stays deferred by its own trigger.
+**Accepted retractions (2026-10-07):** the Paperless verdict is **no confirmed
+vulnerability under the tested conditions**, not "exhausted for fix-derived shapes".
+The count is **12 retained hypotheses plus 9 asserted without per-probe evidence**,
+not 21 evidence-backed refutations. The six H rows recur in the mail artifact;
+they must not be counted twice. Historical evidence files are unchanged.
+Accepted audit: `docs/verification/research-audit-2026-10-07.json`.
 
-### RESEARCH-R3 · Mail sink is embedded in the Paperless fixture · low
+### RESEARCH-R1 / RESEARCH-R4 · Pre-registration does not bind the run · high · reopened
+
+The ancestor check and two-substring check accept an unrelated CSS hypothesis
+with `mail-hunt` elsewhere, and accept result-bearing commit `109e89d` with tag
+`mail`. Tag and hypothesis text need not be in the same block. Neither target,
+hypothesis IDs, probe requests nor script digest is compared with execution.
+Registered M6 described trash listing/deletion; executed M6 read a mail account.
+IDs are only labels in prose and `record()`, so this substitution changed neither
+substring. The script executes all H/M probes regardless of the chosen tag.
+No historical pre-registration chronology is repaired by a future gate.
+
+**Closes when (Phase 2):** a structured registration binds target, hypothesis IDs,
+request/control definitions and probe-script digest; mismatches refuse before
+stack work; results retain the registration and execution identities. Regression
+coverage must include the original M6 substitution, not just missing markers.
+
+### RESEARCH-R7 · Mail denials do not isolate object protection · high · open
+
+M2/M4/M5 run without the member's mail mutation permissions and can be denied
+before the intended object check. M5 sends only one admin-owned mail ID, not a
+mixed batch; its control asserts listing status, not target-row survival. H2/H3
+and M2/M3/M5 classifiers can refute despite a failed recorded control. M1/M4
+observational controls are no longer mislabeled `held: false`, but that schema
+correction does not validate their inference. H5 lacks a mutation control.
+
+**Closes when (Phase 3):** grant the required global permissions while withholding
+foreign-object permission; demonstrate allowed member mutations; use a genuinely
+mixed M5 batch and check each target row survives. Re-run into new evidence
+artifacts with request/response/control observations; preserve old artifacts.
+
+### RESEARCH-R8 · Coverage and absence inference are incomplete · high · open
+
+The original 17/26/5/8/353 match counts reproduce, but only 50/353 queryset sites
+were classified. The omitted 303 include 44 `views.py` and all 33 mail matches.
+Rules do not encode all nine fix rows: serializer/viewset paths, privilege flag
+parsing, template context and check-before-mutation semantics lack complete
+coverage. The original method-name union and irrelevant/discarded `has_perm`
+false positives are corrected in Phase 1 (RESEARCH-R6); syntactic guard presence
+still does not prove dataflow dominance, class enforcement or caller safety.
+
+**Closes when:** each fix shape is tested against affected/fixed code and all
+residuals have retained evidence. A manual-review/heuristic-limit site remains
+unresolved, not zero actionable. New scans must not resurrect the exhaustion claim.
+
+### RESEARCH-R9 · Historical counts, determinism and efficiency lack retained proof · medium · open
+
+Nine initial endpoint refutations lack per-probe evidence. One retained fixture
+build has seven matching controls and a recomputable matrix digest; it cannot
+prove the asserted two-build determinism. Historical 977/981, 991/995 and
+1002/1006 release totals have no cited raw October gate output. They are unverified,
+not established fabrications. Six collect/derive calls and 416 output lines are
+supported; the manual ~600-line/~10-call baseline is hardcoded and the ~4× saving
+is unsubstantiated (600/416 is ~1.44 before unmeasured follow-up reads).
+
+**Closes when:** historical execution logs are located, or claims remain explicitly
+unverified. New reproducibility/verification results are dated separately and do
+not retroactively certify old runs.
+
+### RESEARCH-R10 · Code-intel audit and budget claims exceed implementation · medium · open
+
+Successful REST calls append one audit event; failures return before auditing.
+MCP wrappers trace calls but neither check nor charge a research budget. Digest
+binding and operator-only surfaces are present. The directory fallback is fixed
+in Phase 1, but checkout provisioning/ref immutability remains operator-owned.
+
+**Closes when:** failed admitted calls have metadata-only audit events, and the
+budget contract is either implemented with a defined authoring scope or explicitly
+withdrawn. No audit/budget implementation is included in Phase 1.
 
 ### RESEARCH-R3 · Mail sink is embedded in the Paperless fixture · low
 
@@ -66,24 +138,29 @@ contract. **Deliberately deferred — no extraction before a second consumer.**
 
 ## Closed
 
-### RESEARCH-R4 · Pre-reg check bound ordering, not content · closed 2026-10-06
+### RESEARCH-R5 · Code-intel helpers, egress and silent cuts · Phase 1 corrected 2026-10-07
 
-Any old ancestor sha satisfied the gate. Closed by content binding:
-`--require-prereg` now also takes `--round-tag`, and the gate requires
-the pre-reg commit to introduce the round's hypothesis block (tag +
-hypothesis marker in added JOURNAL lines). Proven both paths:
-scratch-repo tests accept the matching block and refuse
-unrelated/other-round/bogus commits, plus a live CLI refusal.
-Note: this exceeds the entry's minimal form (marker-carries-digests)
-with a stronger mechanical check instead.
+Previously Git inherited configured helpers and could lazy-fetch missing blobs;
+`layer_diff` silently cut at 65536 characters and claimed complete counts. Phase 1
+neutralizes external diff/textconv, hooks, fsmonitor and Git environment overrides;
+disables system/global config, lazy fetching and every transport; bounds both
+subprocess pipes and the JSON envelope. Input cuts report incomplete counts; field,
+row and file cuts are explicit. An unset RESEARCH_REPO_DIR is refused. Scratch
+regressions exercise configured diff/textconv and promisor helpers, multibyte caps,
+long evidence, site caps and source caps. Verification artifact:
+`docs/verification/research-phase1-2026-10-07.json`.
 
-### RESEARCH-R1 · Pre-registration ordering was not verifiable · closed 2026-10-06
+### RESEARCH-R6 · Rule false coverage and undifferentiated review · Phase 1 corrected 2026-10-07
 
-Pre-registration and results landed in the same commit, so ordering was
-prose, not history. Closed by the mechanical check:
-`probe-paperless-variants.py` requires `--require-prereg` and refuses
-before any stack work unless the sha is an ancestor of HEAD (proven by
-failing twice + an in-process pass). Next round records both ids.
+Method scopes resolve through qualified owner/definition spans. Global permission
+arguments must match the owner-check permission and occur in recognized denying
+conditions; unused calls do not guard actions. Manager queries include all/get/
+exclude and other methods. Every manual-review site carries a classification:
+unparsed source, dynamic permission, framework query, custom/inherited policy,
+or owner-check dataflow unverified. Accumulators distinguish initializer,
+AND composition, deny reset and overwrite. Class markers remain unresolved
+framework references. This corrects the reproduced mechanisms, not RESEARCH-R8's
+completeness gap. Verification artifact: `research-phase1-2026-10-07.json`.
 
 ### RESEARCH-R2 · Non-asserting controls read as `held: false` · closed 2026-10-06
 
@@ -92,7 +169,7 @@ M1/M4 observational controls carried `"held": false`. Closed by the
 re-emitted `paperless-mail-hunt-2026-10-06-corrected.json`
 (`controls_schema: assertive-v1`): all 11 control blocks changed schema
 (9 gained the flag, 2 dropped `held`), 12 verdicts
-identical, zero `held: false`. M1/M4 stay refuted. (Correction: this entry
+identical, zero `held: false`. Historical M1/M4 verdict labels remain unchanged; probe validity is open in RESEARCH-R7. (Correction: this entry
 first said only 2 blocks changed — the 9 asserting blocks changed too.)
 
 ### NV07-R1 · Only one deterministic driver has been exercised · closed 2026-10-06

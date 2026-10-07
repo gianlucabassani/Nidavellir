@@ -1,0 +1,25 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_______________ test_unreachable_denial_does_not_establish_guard _______________
+
+scratch = PosixPath('/tmp/pytest-of-prime/pytest-19/test_unreachable_denial_does_n0')
+
+    def test_unreachable_denial_does_not_establish_guard(scratch):
+        commit(scratch, """class View:
+        permission_classes = (IsAuthenticated,)
+        def update(self):
+            if not user.has_perm('documents.change_thing'):
+                return secrets()
+                raise Denied()
+            return has_perms_owner_aware(user, 'documents.change_thing', thing)
+    """)
+>       assert search(scratch, "half-composed-check")["data"]["sites"][0]["status"] == "manual-review"
+E       AssertionError: assert 'composed' == 'manual-review'
+E         
+E         - manual-review
+E         + composed
+
+tests/test_research_code_hardening.py:169: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_research_code_hardening.py::test_unreachable_denial_does_not_establish_guard
+1 failed, 21 deselected in 0.16s

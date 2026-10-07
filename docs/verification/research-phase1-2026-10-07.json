@@ -1,0 +1,75 @@
+{
+  "date": "2026-10-07",
+  "remaining": [
+    "Phase 2: structured registration binds IDs/target/request-control definitions/script digest, refuses mismatch before work and retains identities",
+    "Phase 3: grant global mail mutation permissions, prove allowed actor controls, genuinely mixed M5 batch with per-row survival and new live evidence",
+    "All-nine-fix positive/negative rule calibration and complete residual review",
+    "Failed REST call auditing and authoring budget enforcement",
+    "Historical nine-probe, gate, determinism and efficiency evidence gaps"
+  ],
+  "retractions": {
+    "hypotheses": "12 retained hypotheses plus 9 asserted without per-probe evidence",
+    "verdict": "no confirmed vulnerability under the tested conditions"
+  },
+  "schema": "nidavellir/research-phase1-verification/v1",
+  "scope": "Phase 1 correctness of code-intel tools; Phases 2 and 3 remain open",
+  "source_head_before": "1b772bb581b7141d17c9d49e602bc3f8d5c2b3e2",
+  "source_sha256": {
+    "cyber-range/services/scenario-orchestrator/research_code.py": "dddc8ffc130e12c4d29f02d7f176ae9d47e4213e06999fc56dd79db0a76ac6e1",
+    "tests/test_research_code.py": "52254187a49694e6cbd9df0cd5a464bb336c8f912ffed42e515937fd8d96fe66",
+    "tests/test_research_code_hardening.py": "8fe4b9df4b7c47a0d574c524d50dd777f34c37312ea914a86e4c75c47789fb2a"
+  },
+  "verification": {
+    "historical_artifacts_unchanged": true,
+    "host_focused": {
+      "authority": "host Python 3.14 supplementary only",
+      "command": "PYTHONDONTWRITEBYTECODE=1 timeout 45 .venv/bin/python -m pytest -o addopts='' -q -p no:cacheprovider tests/test_research_code.py tests/test_research_code_hardening.py -k 'not api'",
+      "deselected": 2,
+      "log": "research-phase1-2026-10-07-focused.log",
+      "passed": 29,
+      "warnings": 1
+    },
+    "paperless_source_scan": {
+      "artifact": "research-phase1-2026-10-07-scan.json",
+      "conclusion": "No exhaustion or zero-actionable inference; syntactic candidates only",
+      "queryset_sites_shown": 50,
+      "queryset_total": 459,
+      "queryset_total_complete": false,
+      "ref": "6f7ed1d4a7f06c1373b84f8b606fd011e294c4b4",
+      "tag_object": "a9c9ee3dbd062a9203cd0d057970282dc8e940f0"
+    },
+    "regression_red": {
+      "command": ".venv/bin/python -m pytest -o addopts= -q -p no:cacheprovider tests/test_research_code_hardening.py",
+      "log": "research-phase1-2026-10-07-red.log",
+      "result": "13 failed before implementation; failures match the accepted audit mechanisms"
+    },
+    "release_check": {
+      "bandit_high": 0,
+      "bandit_medium": 0,
+      "command": "make release-check",
+      "exit_code": 0,
+      "log": "research-phase1-2026-10-07-release.log",
+      "postgresql": {
+        "deselected": 6,
+        "passed": 1034
+      },
+      "python": "3.11.14",
+      "ruff": "passed",
+      "smoke": "migrations, API, UI and gateway ready",
+      "sqlite": {
+        "deselected": 6,
+        "passed": 1030,
+        "skipped": 4
+      }
+    },
+    "review_regressions": {
+      "independent_review": "Read-only reviewer confirmed three guard reproducers require manual review and valid matching direct guard remains composed; no important regression found.",
+      "logs": [
+        "research-phase1-2026-10-07-review-red.log",
+        "research-phase1-2026-10-07-terminal-red.log",
+        "research-phase1-2026-10-07-helper-red.log"
+      ],
+      "result": "Five further failures reproduced before corrections: permission namespace, conditional guard, unreachable denial, two helper options. All pass in final gate."
+    }
+  }
+}

@@ -46,8 +46,10 @@ validators and repeated experiments. Any MCP-capable bring-your-own client (open
 Claude Code, Codex; Bughunt as one example) drives the same scoped gateway and exchanges
 only synthetic versioned test/evidence manifests — never real campaign credentials.
 No client is a dependency. First direct runs with opencode and
-opencode-go/deepseek-v4.1-flash are recorded in `docs/verification/`; the agent-change
-comparison and the durable model-driven suite remain open.
+opencode-go/deepseek-v4.1-flash are recorded in `docs/verification/`; the paired BYO-agent and durable model-driven calibration comparisons are recorded.
+MODEL-R1/NV07-R1 closed on 2026-10-06 for machinery, not discovery capability.
+The 2026-10-07 research audit retracted Paperless exhaustion and reopened the
+pre-registration and mail-validity gaps in ISSUES.md.
 
 Preserve Docker-local as the supported implementation focus. Cloud parity, hosted concerns,
 and multi-agent breadth remain deferred; local VM intake requires a selected research need.
@@ -70,8 +72,9 @@ NV-09 fixtures, and a paired run (baseline vs the same harness with the scoped
 HTTP tool removed) detected the seeded regression with zero
 infrastructure-failed pairs
 (`docs/verification/byo-agent-pair-2026-10-05-ce132ac4.json`). The durable
-`model-mcp/v1` comparison (NV07-R1) and MODEL-R1 (custom connection headers)
-remain open under NV-07; NV06-R1 closed on 2026-10-05 when the generic
+`model-mcp/v1` calibration comparison (NV07-R1) and MODEL-R1 (custom connection
+headers) closed on 2026-10-06. The difference −1.0 comes from withholding
+`report_finding`, not a model capability comparison; NV06-R1 closed on 2026-10-05 when the generic
 `http_access_control` validator confirmed and refuted CVE-2026-26012 on pinned
 Vaultwarden 1.35.2/1.37.3 fixtures. NV-11–15 start only when a concrete
 research target selects them.
@@ -738,11 +741,13 @@ stranded evaluations, and paired comparison over matched observed starting
 state. Not yet recorded: explicit visibility labels and per-tool version
 pinning. Cost stays `null` unless a build announces it.
 
-### E2 — Generic external-agent drivers · not started
+### E2 — Generic external-agent drivers · partially shipped
 
-Only `scripted-mcp/v1` exists today: a fixed tool plan replayed identically per
-trial, sufficient to exercise the record and comparison machinery but not the
-conditions it is meant to describe (ISSUES.md NV07-R1).
+`scripted-mcp/v1` and `model-mcp/v1` exist. The model-driven paired calibration
+suite completed six trials over three seeds on 2026-10-06 (ISSUES.md NV07-R1).
+A withheld reporting tool creates a scoring-surface difference; this establishes
+operational comparison machinery, not held-out discovery capability. Broader
+external-agent driver shapes below remain planned.
 
 Support different agent shapes without embedding any agent's product logic:
 
