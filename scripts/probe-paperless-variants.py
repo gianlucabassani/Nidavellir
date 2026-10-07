@@ -7,12 +7,15 @@ confirmed / refuted / by-design / infrastructure-failure. Synthetic lab
 credentials only; local lab target only.
 
 Usage: python3 scripts/probe-paperless-variants.py --require-prereg <sha>
+       --round-tag <tag>
 (builds a keep-alive seeded stack, probes, tears everything down, prints
 a JSON result table)
 
-RESEARCH-R1: the round's journal pre-registration must already be
+RESEARCH-R1/R4: the round's journal pre-registration must already be
 committed; the script refuses to run unless <sha> is an ancestor of the
-current HEAD, so the ordering is provable from history, not prose.
+current HEAD *and* introduces the round's hypothesis block (matched by
+<tag>) in docs/JOURNAL.md, so ordering and correspondence are provable
+from history, not prose.
 """
 from __future__ import annotations
 
@@ -43,33 +46,49 @@ def status_of(call):
         return None, {"error": f"unparsable response: {type(exc).__name__}"}
 
 
-def check_prereg(prereg: str) -> None:
-    """Refuse to probe unless the pre-registration commit predates this run.
+def check_prereg(prereg: str, tag: str, root=ROOT) -> None:
+    """Refuse to probe unless the pre-registration binds ordering AND content.
 
-    Exits non-zero (before any stack work) unless <prereg> resolves and is
-    an ancestor of HEAD. Proved by invoking with a bogus sha.
+    Ordering: <prereg> resolves and is an ancestor of HEAD. Content: the
+    commit must introduce the round's hypothesis block in docs/JOURNAL.md —
+    added lines containing the round tag plus a hypothesis marker — so an
+    unrelated ancestor sha cannot satisfy the gate.
     """
+    import re as _re
+
     if not prereg or len(prereg) > 64:
         raise SystemExit("refusing to probe: --require-prereg <commit> is mandatory")
+    if not tag or not _re.fullmatch(r"[a-z0-9][a-z0-9-]{0,31}", tag):
+        raise SystemExit("refusing to probe: --round-tag must match [a-z0-9-]{1,32}")
     resolved = subprocess.run(
-        ["git", "-C", str(ROOT), "rev-parse", "--verify", prereg],
+        ["git", "-C", str(root), "rev-parse", "--verify", prereg],
         capture_output=True, text=True, check=False)
     if resolved.returncode:
         raise SystemExit(f"refusing to probe: unknown pre-registration {prereg!r}")
+    sha = resolved.stdout.strip()
     ancestor = subprocess.run(
-        ["git", "-C", str(ROOT), "merge-base", "--is-ancestor",
-         resolved.stdout.strip(), "HEAD"],
+        ["git", "-C", str(root), "merge-base", "--is-ancestor", sha, "HEAD"],
         capture_output=True, check=False)
     if ancestor.returncode:
         raise SystemExit(
             f"refusing to probe: {prereg!r} is not an ancestor of HEAD "
             "(commit the pre-registration first)")
-    print(f"pre-registration {resolved.stdout.strip()} verified as ancestor of HEAD",
+    shown = subprocess.run(
+        ["git", "-C", str(root), "show", sha, "--", "docs/JOURNAL.md"],
+        capture_output=True, text=True, check=False)
+    added = [line[1:] for line in shown.stdout.splitlines()
+             if line.startswith("+") and not line.startswith("+++")]
+    blob = "\n".join(added)
+    if tag not in blob or "hypothes" not in blob.lower():
+        raise SystemExit(
+            f"refusing to probe: {sha[:12]} does not introduce a hypothesis "
+            f"block for round {tag!r} in docs/JOURNAL.md")
+    print(f"pre-registration {sha[:12]} verified (ancestor, round {tag!r} block present)",
           flush=True)
 
 
-def main(prereg: str) -> None:
-    check_prereg(prereg)
+def main(prereg: str, tag: str) -> None:
+    check_prereg(prereg, tag)
     manifest = fixture.build(keep=True)
     base, tokens = manifest["base_url"], manifest["tokens"]
     A, B = tokens["A"], tokens["B"]
@@ -322,5 +341,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--require-prereg", required=True,
                         help="pre-registration commit sha (must predate this run)")
+    parser.add_argument("--round-tag", required=True,
+                        help="round tag the pre-registration commit must introduce")
     args = parser.parse_args()
-    sys.exit(main(args.require_prereg))
+    sys.exit(main(args.require_prereg, args.round_tag))

@@ -491,7 +491,8 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
         def research_sibling_search(pattern: str, ref: str | None = None,
                                     path_scope: list | None = None) -> dict:
             """Read-only named-pattern call-site search (unscoped-queryset |
-            bare-auth-view | bulk-permission) with composition status."""
+            bare-auth-view | bulk-permission | half-composed-check |
+            unguarded-verb) with composition status."""
             return tools.research_sibling_search(ctx(), pattern=pattern, ref=ref,
                                                  path_scope=path_scope)
 

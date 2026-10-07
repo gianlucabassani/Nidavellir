@@ -6342,7 +6342,8 @@ def research_layer_diff(req: ResearchLayerDiff,
 class ResearchSiblingSearch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    pattern: Literal["unscoped-queryset", "bare-auth-view", "bulk-permission"]
+    pattern: Literal["unscoped-queryset", "bare-auth-view", "bulk-permission",
+                     "half-composed-check", "unguarded-verb"]
     ref: str | None = Field(default=None, max_length=64)
     path_scope: list[str] | None = Field(default=None, max_length=8)
 

@@ -233,45 +233,62 @@ def _show_file(repo: Path, ref: str, path: str) -> str:
     return text
 
 
-def _function_calls(tree: ast.AST) -> dict[str, set[str]]:
-    """Map function name -> dotted call names used inside it."""
-    found: dict[str, set[str]] = {}
-    spans: dict[str, tuple[int, int]] = {}
+def _function_calls(tree: ast.AST):
+    """Call sets per function: union by name plus per-(class, method).
+
+    Returns (by_name, by_owner, spans) where spans maps a method name to
+    every (start, end) definition span (names repeat across classes).
+    """
+    by_name: dict[str, set[str]] = {}
+    by_owner: dict[tuple[str, str], set[str]] = {}
+    spans: dict[str, list[tuple[int, int]]] = {}
 
     class Visitor(ast.NodeVisitor):
         def __init__(self):
             self.stack: list[str] = []
+            self.owner: list[str] = []
+
+        def _record_call(self, name: str):
+            if self.stack:
+                by_name.setdefault(self.stack[-1], set()).add(name)
+                owner = self.owner[-1] if self.owner else ""
+                by_owner.setdefault((owner, self.stack[-1]), set()).add(name)
+
+        def visit_ClassDef(self, node):  # noqa: N802 - ast hook
+            self.owner.append(node.name)
+            self.generic_visit(node)
+            self.owner.pop()
 
         def visit_FunctionDef(self, node):  # noqa: N802 - ast hook
             self.stack.append(node.name)
-            found.setdefault(node.name, set())
-            spans[node.name] = (node.lineno, node.end_lineno or node.lineno)
+            spans.setdefault(node.name, []).append(
+                (node.lineno, node.end_lineno or node.lineno))
             self.generic_visit(node)
             self.stack.pop()
 
         def visit_Call(self, node):  # noqa: N802 - ast hook
-            if self.stack:
-                func = node.func
-                name = func.attr if isinstance(func, ast.Attribute) else \
-                    (func.id if isinstance(func, ast.Name) else "?")
-                found[self.stack[-1]].add(name)
+            func = node.func
+            name = func.attr if isinstance(func, ast.Attribute) else \
+                (func.id if isinstance(func, ast.Name) else "?")
+            self._record_call(name)
             self.generic_visit(node)
 
     Visitor().visit(tree)
-    return found, spans
+    return by_name, by_owner, spans
 
 
-def _enclosing(calls: dict[str, set[str]], spans: dict[str, tuple[int, int]],
+def _enclosing(by_name: dict[str, set[str]], spans: dict[str, list[tuple[int, int]]],
                lineno: int | None) -> set[str] | None:
     """Call set of the innermost function enclosing a line, else None."""
     if lineno is None:
         return None
-    best, best_span = None, None
-    for name, (start, end) in spans.items():
-        if start <= lineno <= end and (best_span is None or
-                                       (end - start) < (best_span[1] - best_span[0])):
-            best, best_span = name, (start, end)
-    return calls.get(best) if best else None
+    best, best_len = None, None
+    for name, ranges in spans.items():
+        for start, end in ranges:
+            if start <= lineno <= end and (best_len is None or
+                                           (end - start) < best_len):
+                best, best_len = name, end - start
+    return by_name.get(best) if best else None
 
 
 def _grep(repo: Path, ref: str, pattern: str, scope: list[str]) -> list[str]:
@@ -291,8 +308,13 @@ def sibling_search(repo: Path, ref: str, pattern: str,
         return _pattern_bare_auth_view(repo, sha, scope)
     if pattern == "bulk-permission":
         return _pattern_bulk_permission(repo, sha, scope)
+    if pattern == "half-composed-check":
+        return _pattern_half_composed_check(repo, sha, scope)
+    if pattern == "unguarded-verb":
+        return _pattern_unguarded_verb(repo, sha, scope)
     raise ResearchCodeError(
-        "unknown pattern (known: unscoped-queryset, bare-auth-view, bulk-permission)")
+        "unknown pattern (known: unscoped-queryset, bare-auth-view, "
+        "bulk-permission, half-composed-check, unguarded-verb)")
 
 
 def _evidence(repo: Path, sha: str, scope: list[str], needle: str,
@@ -316,7 +338,7 @@ def _evidence(repo: Path, sha: str, scope: list[str], needle: str,
     for path, group in sorted(by_file.items()):
         try:
             tree = ast.parse(_show_file(repo, sha, path))
-            calls, spans = _function_calls(tree)
+            calls, _, spans = _function_calls(tree)
         except (ResearchCodeError, SyntaxError):
             for site in group:
                 site["status"] = "unparsed"
@@ -329,7 +351,7 @@ def _evidence(repo: Path, sha: str, scope: list[str], needle: str,
             out.append({**site, "file": path})
     data = {"pattern_status": "heuristic function-scope analysis; "
             "uncovered means candidate, not finding",
-            "sites": [{k: v for k, v in site.items()} for site in out]}
+            "total_matches": len(raw), "sites": out}
     return _envelope(data, {"repo": str(repo), "ref": sha}, truncated,
                      "" if not truncated else
                      f"site list capped at {MAX_SITES}; refine path_scope")
@@ -368,3 +390,218 @@ def _pattern_bulk_permission(repo, sha, scope):
         return "uncovered"
 
     return _evidence(repo, sha, scope, r"has_perms\s*=", status)
+
+
+def _pattern_half_composed_check(repo, sha, scope):
+    """F6/F7 shape: where does the global half of the composition live?
+
+    For each `has_perms_owner_aware` site: a global `has_perm` in the same
+    function is `composed`; an object check under an object-permission
+    class with no global half in the function is `class-covered`
+    (composition lives one level up — the F6 gap looked exactly like
+    this before its fix); an object check under a bare-`IsAuthenticated`
+    class is `not composed`; anything else is `review`.
+    """
+    needle = "has_perms_owner_aware("
+    raw = _grep(repo, sha, needle, scope)
+    truncated = len(raw) > MAX_SITES
+    sites = []
+    for entry in raw[:MAX_SITES]:
+        parts = entry.split(":", 3)
+        if len(parts) != 4:
+            continue
+        _, path, lineno, text = parts
+        sites.append({"line": int(lineno) if lineno.isdigit() else None,
+                      "status": None, "evidence": text.strip()[:160],
+                      "_file": path})
+    by_file: dict[str, list[dict]] = {}
+    for site in sites:
+        by_file.setdefault(site.pop("_file"), []).append(site)
+    out = []
+    for path, group in sorted(by_file.items()):
+        try:
+            tree = ast.parse(_show_file(repo, sha, path))
+            by_name, by_owner, spans = _function_calls(tree)
+            class_perms = _class_permissions(tree)
+        except (ResearchCodeError, SyntaxError):
+            for site in group:
+                site["status"] = "unparsed"
+            out.extend({**s, "file": path} for s in group)
+            continue
+        # Map each method definition (by line) to its owning class.
+        methods: list[tuple[str, str, int]] = []
+
+        class OwnerVisitor(ast.NodeVisitor):
+            def __init__(self):
+                self.owner: list[str] = []
+
+            def visit_ClassDef(self, node):  # noqa: N802 - ast hook
+                self.owner.append(node.name)
+                self.generic_visit(node)
+                self.owner.pop()
+
+            def visit_FunctionDef(self, node):  # noqa: N802 - ast hook
+                if self.owner:
+                    methods.append((node.name, self.owner[-1], node.lineno))
+                self.generic_visit(node)
+
+        OwnerVisitor().visit(tree)
+        # Line -> innermost enclosing function name.
+        def enclosing_name(lineno):
+            best, best_len = None, None
+            for name, ranges in spans.items():
+                for start, end in ranges:
+                    if start <= lineno <= end and (best_len is None or
+                                                   (end - start) < best_len):
+                        best, best_len = name, end - start
+            return best
+
+        for site in group:
+            name = enclosing_name(site["line"]) if site["line"] else None
+            owner = ""
+            if name and site["line"]:
+                owned = [(n, o) for n, o, start in methods
+                         if n == name and start <= site["line"]]
+                if owned:
+                    owner = owned[-1][1]
+            used = by_owner.get((owner, name), set()) if name else set()
+            text = class_perms.get((owner, name), "") if name else ""
+            glob = "has_perm" in used
+            obj_class = any(m in text for m in _OBJECT_PERM_MARKERS)
+            bare = "IsAuthenticated" in text and not obj_class
+            if glob:
+                site["status"] = "composed"
+            elif obj_class:
+                site["status"] = "class-covered"
+            elif bare:
+                site["status"] = "not composed"
+            else:
+                site["status"] = "review"
+            out.append({**site, "file": path})
+    data = {"pattern_status": "heuristic function+class analysis; "
+            "class-covered/not composed are candidates, not findings",
+            "total_matches": len(raw), "sites": out}
+    return _envelope(data, {"repo": str(repo), "ref": sha}, truncated,
+                     "" if not truncated else
+                     f"site list capped at {MAX_SITES}; refine path_scope")
+
+
+def _class_permissions(tree: ast.AST) -> dict[tuple[str, str], str]:
+    """Map (class, method) -> source text of the class's permission_classes."""
+
+    class Visitor(ast.NodeVisitor):
+        def __init__(self):
+            self.perms: dict[tuple[str, str], str] = {}
+
+        def visit_ClassDef(self, node):  # noqa: N802 - ast hook
+            text = ""
+            for stmt in node.body:
+                if isinstance(stmt, ast.Assign) and any(
+                        isinstance(t, ast.Name) and t.id == "permission_classes"
+                        for t in stmt.targets):
+                    try:
+                        text = ast.unparse(stmt)
+                    except Exception:  # noqa: BLE001 - best effort
+                        text = "permission_classes = ..."
+            for stmt in node.body:
+                if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    if text:
+                        self.perms[(node.name, stmt.name)] = text
+            self.generic_visit(node)
+
+    visitor = Visitor()
+    visitor.visit(tree)
+    return visitor.perms
+
+
+_OBJECT_PERM_MARKERS = ("PaperlessObjectPermissions", "ViewDocumentsPermissions",
+                        "DeleteProcessedMailPermissions", "TrashPermissions")
+
+
+def _pattern_unguarded_verb(repo, sha, scope):
+    """F1/F5 shape: DRF verb with neither body check nor object-permission class.
+
+    For each `@action`-decorated method: a permission call in the body, or
+    an object-permission marker on the enclosing class, is `composed`; a
+    bare-`IsAuthenticated` class with no body check is `not composed`;
+    anything else (custom classes, decorators-only) is `review`.
+    """
+    needle = "@action"
+    raw = _grep(repo, sha, needle, scope)
+    truncated = len(raw) > MAX_SITES
+    sites = []
+    for entry in raw[:MAX_SITES]:
+        parts = entry.split(":", 3)
+        if len(parts) != 4:
+            continue
+        _, path, lineno, text = parts
+        sites.append({"line": int(lineno) if lineno.isdigit() else None,
+                      "status": None, "evidence": text.strip()[:160],
+                      "_file": path})
+    by_file: dict[str, list[dict]] = {}
+    for site in sites:
+        by_file.setdefault(site.pop("_file"), []).append(site)
+    out = []
+    for path, group in sorted(by_file.items()):
+        try:
+            tree = ast.parse(_show_file(repo, sha, path))
+            _, by_owner, _ = _function_calls(tree)
+            class_perms = _class_permissions(tree)
+        except (ResearchCodeError, SyntaxError):
+            for site in group:
+                site["status"] = "unparsed"
+            out.extend({**s, "file": path} for s in group)
+            continue
+        # Map decorator line -> following method definition (list: method
+        # names repeat across classes).
+        methods: list[tuple[str, str, int]] = []
+
+        class MethodVisitor(ast.NodeVisitor):
+            def __init__(self):
+                self.owner: list[str] = []
+
+            def visit_ClassDef(self, node):  # noqa: N802 - ast hook
+                self.owner.append(node.name)
+                self.generic_visit(node)
+                self.owner.pop()
+
+            def visit_FunctionDef(self, node):  # noqa: N802 - ast hook
+                for deco in node.decorator_list:
+                    src = ast.unparse(deco) if hasattr(ast, "unparse") else ""
+                    if "action" in src:
+                        methods.append((node.name,
+                                        self.owner[-1] if self.owner else "",
+                                        node.lineno))
+
+        MethodVisitor().visit(tree)
+        for site in group:
+            target = None
+            for name, owner, start in methods:
+                if site["line"] is not None and start >= site["line"] and (
+                        target is None or start < target[1]):
+                    target = (name, start, owner)
+            if target is None:
+                site["status"] = "review"
+            else:
+                name, _, owner = target
+                used = by_owner.get((owner, name), set())
+                class_text = class_perms.get((owner, name), "")
+                body_ok = any("owner_aware" in c or "permitted_" in c or c == "has_perm"
+                              for c in used)
+                class_ok = any(marker in class_text for marker in _OBJECT_PERM_MARKERS)
+                names = set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*",
+                                       class_text.split("=", 1)[-1]))
+                bare = names == {"IsAuthenticated"}
+                if body_ok or class_ok:
+                    site["status"] = "composed"
+                elif bare:
+                    site["status"] = "not composed"
+                else:
+                    site["status"] = "review"
+            out.append({**site, "file": path})
+    data = {"pattern_status": "heuristic decorator+class analysis; "
+            "not composed means candidate, not finding",
+            "total_matches": len(raw), "sites": out}
+    return _envelope(data, {"repo": str(repo), "ref": sha}, truncated,
+                     "" if not truncated else
+                     f"site list capped at {MAX_SITES}; refine path_scope")

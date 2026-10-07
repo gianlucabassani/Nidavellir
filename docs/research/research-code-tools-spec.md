@@ -79,12 +79,16 @@ outputs are code facts.
 
 - Inputs: `pattern` (closed vocabulary — see below), `ref` (default
   pinned tag), `path_scope` (optional subtree).
-- Named patterns (v1): `unscoped-queryset` (bare `.objects.filter(`
+- Named patterns (v2): `unscoped-queryset` (bare `.objects.filter(`
   call sites in views/serialisers with per-function composition status:
   covered/uncovered by an owner-aware call in the same function);
-  `bare-auth-view` (view classes with bare `IsAuthenticated`); 
-  `bulk-permission` (assignments to the bulk `has_perms` accumulator,
-  flagging overwrite vs AND-composition).
+  `bare-auth-view` (view classes with bare `IsAuthenticated`);
+  `bulk-permission` (assignments to the bulk `has_perms` accumulator:
+  initializer / AND-composed / overwrite); `half-composed-check` (F6/F7
+  shape: `has_perms_owner_aware` sites whose enclosing function lacks the
+  global half → not composed); `unguarded-verb` (F1/F5 shape:
+  `@action`-decorated methods with neither a body check nor an
+  object-permission class on the enclosing view → not composed).
 - Output: sites (file, function/line, status, one evidence line each,
   capped at 50, truncation reported) — never file dumps.
 - Replaces step 6. Saves tokens by returning only sites with verdicts

@@ -3,6 +3,49 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-10-06 — Fix-derived rules: full-tree measurement (read-only)
+
+Rule engine choice, stated: in-tree deterministic checks, not semgrep.
+Semgrep is installed locally and works offline with inline patterns, but
+it is an unpinned user-local binary outside the lockfile — depending on
+it would break gate reproducibility — and every verdict here needs
+custom function/class-scope composition analysis anyway, which is code
+regardless. Two patterns added (`half-composed-check` with a
+class-covered status so the F6 shape isn't masked; `unguarded-verb`
+with (class, method)-scoped attribution); `total_matches` now reported
+so coverage numbers hold even when site lists truncate.
+
+Coverage at v3.3.0 over `src/` (all via the tools, truncation flags clean
+except where noted):
+
+| pattern | total | composed | class-covered | not composed | review |
+|---|---|---|---|---|---|
+| half-composed-check | 17 | 3 | 12 | 0 | 2 |
+| unguarded-verb | 26 | 25 | — | 0 | 1 |
+| bulk-permission | 5 | 1 | — | 0 | 4 (initializers) |
+| bare-auth-view | 8 | — | — | 0 | 8 |
+| unscoped-queryset | 353 | 9 (sample) | — | 0 actionable | 41-flagged sample, truncated |
+
+Residuals hand-resolved: the unguarded `review` is Get-Next-ASN
+(inherited perms, aggregate number — by-design); bare-auth sites are
+GlobalSearch branches for models without object perms, the mail
+get_permissions reassignment mechanism, OauthCallbackView, and covered
+statistics/autocomplete; half-composed reviews are guard implementations
+themselves; the unscoped bulk_edit cluster is caller-gated (verified in
+the mixin) — the one place a sibling could hide behind the
+caller-analysis limit, stated not waved away.
+
+Verdict: confirms Paperless exhausted for fix-derived shapes — zero
+actionable sites, every residual resolves to by-design or heuristic
+limit. Target-versus-layer stands, now as measurement rather than 0/6
+anecdote.
+
+R4 rider: `--require-prereg` now also takes `--round-tag`; the gate
+requires the pre-reg commit to introduce the round's hypothesis block
+(tag + hypothesis marker in added JOURNAL lines). Proven: scratch-repo
+tests accept the matching block and refuse unrelated/other-round/bogus
+commits, plus a live CLI refusal on a bogus sha. Closing R4 in ISSUES.
+
 ## 2026-10-06 — UI split to its own track
 
 Operator-requested sequencing decision, no code change. UI, console and aesthetic work is

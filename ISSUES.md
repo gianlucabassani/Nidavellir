@@ -43,25 +43,9 @@ NV-13 for local hypervisors; cloud providers remain deferred.
 
 ## Open — research lane discipline (opened 2026-10-06)
 
-R1 and R2 closed 2026-10-06 (see Closed); R3 stays deferred by its own trigger.
+R1, R2 and R4 closed 2026-10-06 (see Closed); R3 stays deferred by its own trigger.
 
-### RESEARCH-R4 · Pre-reg check binds ordering, not content · medium
-
-**True today:** `--require-prereg` proves a *commit* predates the run, but
-nothing binds that commit's *content* to the run — any old ancestor sha
-(including one from an unrelated round) satisfies the check. Ordering is
-mechanical; correspondence is still prose.
-
-**Why it matters:** the failure mode R1 closed was silent reordering; the
-remaining failure mode is a mismatched pre-registration passing the gate
-unnoticed, which degrades the same fail-closed discipline one step
-removed.
-
-**Closes when:** the probe run records the pre-reg sha alongside the run's
-parameters, and a check (human or mechanical) confirms the recorded
-hypotheses match the pre-registration's. Minimal form: the attempt marker
-carries both the pre-reg sha and the setup manifest digest, and the
-journal result cites both.
+### RESEARCH-R3 · Mail sink is embedded in the Paperless fixture · low
 
 ### RESEARCH-R3 · Mail sink is embedded in the Paperless fixture · low
 
@@ -81,6 +65,17 @@ contract. **Deliberately deferred — no extraction before a second consumer.**
 ---
 
 ## Closed
+
+### RESEARCH-R4 · Pre-reg check bound ordering, not content · closed 2026-10-06
+
+Any old ancestor sha satisfied the gate. Closed by content binding:
+`--require-prereg` now also takes `--round-tag`, and the gate requires
+the pre-reg commit to introduce the round's hypothesis block (tag +
+hypothesis marker in added JOURNAL lines). Proven both paths:
+scratch-repo tests accept the matching block and refuse
+unrelated/other-round/bogus commits, plus a live CLI refusal.
+Note: this exceeds the entry's minimal form (marker-carries-digests)
+with a stronger mechanical check instead.
 
 ### RESEARCH-R1 · Pre-registration ordering was not verifiable · closed 2026-10-06
 

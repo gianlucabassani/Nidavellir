@@ -175,3 +175,61 @@ def test_research_api_returns_answers_and_audits(repo):
         lab_id="research-code", limit=10, types=("research_code_lookup",))
     assert events and events[0]["payload"]["digest"] == payload["digest"]
     assert "has_perms_owner_aware" not in json.dumps(events[0]["payload"])
+
+
+def test_half_composed_check_statuses(repo):
+    import research_code
+
+    _commit(repo, {"pkg/views.py": (
+        "from rest_framework.permissions import IsAuthenticated\n"
+        "class FullView:\n"
+        "    permission_classes = (IsAuthenticated, PaperlessObjectPermissions)\n"
+        "    def both(self):\n"
+        "        if not request.user.has_perm('documents.view_thing'):\n"
+        "            raise Denied()\n"
+        "        return has_perms_owner_aware(u, 'view_thing', o)\n"
+        "    def obj_only(self):\n"
+        "        return has_perms_owner_aware(u, 'view_thing', o)\n"
+        "class BareView:\n"
+        "    permission_classes = (IsAuthenticated,)\n"
+        "    def naked(self):\n"
+        "        return has_perms_owner_aware(u, 'view_thing', o)\n"
+        "value = has_perms_owner_aware(u, 'view_thing', o)\n")}, "views")
+    result = research_code.sibling_search(
+        repo, "HEAD", "half-composed-check", ["pkg/"])
+    by_line = {s["line"]: s["status"] for s in result["data"]["sites"]}
+    assert result["data"]["total_matches"] == 4
+    assert by_line[7] == "composed"
+    assert by_line[9] == "class-covered"
+    assert by_line[13] == "not composed"
+    assert by_line[14] == "review"
+
+
+def test_unguarded_verb_statuses(repo):
+    import research_code
+
+    _commit(repo, {"pkg/views.py": (
+        "from rest_framework.permissions import IsAuthenticated\n"
+        "from rest_framework.decorators import action\n"
+        "class GuardedView:\n"
+        "    permission_classes = (IsAuthenticated, PaperlessObjectPermissions)\n"
+        "    @action(methods=['get'], detail=True)\n"
+        "    def listed(self, request, pk=None):\n"
+        "        return has_perms_owner_aware(u, 'view_thing', o)\n"
+        "class BareView:\n"
+        "    permission_classes = (IsAuthenticated,)\n"
+        "    @action(methods=['post'], detail=True)\n"
+        "    def exposed(self, request, pk=None):\n"
+        "        return do_thing()\n"
+        "class CustomView:\n"
+        "    permission_classes = (IsAuthenticated, CustomPerm)\n"
+        "    @action(methods=['get'], detail=True)\n"
+        "    def maybe(self, request, pk=None):\n"
+        "        return do_other()\n")}, "verbs")
+    result = research_code.sibling_search(
+        repo, "HEAD", "unguarded-verb", ["pkg/"])
+    by_line = {s["line"]: s["status"] for s in result["data"]["sites"]}
+    assert result["data"]["total_matches"] == 3
+    assert by_line[5] == "composed"
+    assert by_line[10] == "not composed"
+    assert by_line[15] == "review"
