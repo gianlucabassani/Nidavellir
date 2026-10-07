@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% block title %}New engagement from target{% endblock %}
+{% block crumb %}Engagements <span class="sep">/</span> New from target{% endblock %}
+{% block head %}<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>{% endblock %}
+
+{% block content %}
+{% include "_engagement_context.html" %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Research</div>
+    <h1>New engagement from target</h1>
+    <div class="sub">Bring an authorized Git repository or public OCI image up as an immutable software-under-test arena, review its provenance and topology, then launch it in isolation.</div>
+  </div>
+</div>
+
+<!-- wizard step indicator -->
+<div class="wiz-stepper" id="wiz-steps">
+  <button class="wiz-step on" data-step="1">
+    <span class="wiz-step__num">1</span>
+    <span class="wiz-step__body">
+      <span class="wiz-step__title">Target</span>
+      <span class="wiz-step__desc">Artifact & machines</span>
+    </span>
+  </button>
+  <div class="wiz-step__line"></div>
+  <button class="wiz-step" data-step="2">
+    <span class="wiz-step__num">2</span>
+    <span class="wiz-step__body">
+      <span class="wiz-step__title">Setup consent</span>
+      <span class="wiz-step__desc">Safety & budgets</span>
+    </span>
+  </button>
+  <div class="wiz-step__line"></div>
+  <button class="wiz-step" data-step="3">
+    <span class="wiz-step__num">3</span>
+    <span class="wiz-step__body">
+      <span class="wiz-step__title">Review & launch</span>
+      <span class="wiz-step__desc">Validate topology</span>
+    </span>
+  </button>
+</div>
+
+<form method="POST" action="{{ url_for('build_sut') }}" id="wiz-form" enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if engagement_purpose %}<input type="hidden" name="engagement_purpose" value="{{ engagement_purpose.id }}">{% endif %}
+  {% if engagement_participant %}<input type="hidden" name="participant_mode" value="{{ engagement_participant.id }}">{% endif %}
+  {% if engagement_time_box %}<input type="hidden" name="engagement_time_box_seconds" value="{{ engagement_time_box }}">{% endif %}
+
+  <!-- STEP 1: TARGET -->
+  <section class="wiz-panel" data-step="1">
+    <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; gap:18px">
+      <div class="card card-pad">
+        <h3 style="font-size:15px; margin-bottom:4px">What are you standing up?</h3>
+        <p class="help" style="margin-bottom:16px">Git targets use an isolated writable checkout and setup phase. OCI targets run their native entrypoint from a registry-verified immutable digest. An optional Kali foothold joins the isolated segment.</p>
+        <div class="field"><label class="label">Instance name</label>
+          <input class="input mono" name="instance_id" id="wiz-name" placeholder="my-sut-arena" required
+                 pattern="[a-z0-9][a-z0-9-]{0,39}" title="Lowercase letters, digits and hyphens (max 40)"></div>
+        <div class="field"><label class="label">Target type</label>
+          <select class="select" name="target_type" id="wiz-target-type">
+            <option value="git">Git repository</option>
+            <option value="oci">OCI container image</option>
+            <option value="bundle">Local source bundle</option>
+          </select>
+        </div>
+        <div id="wiz-git-fields">
+          <div class="field"><label class="label">Repository</label>
+            <input class="input mono" name="repo" id="wiz-repo" placeholder="https://github.com/owner/project" required></div>
+          <div class="field"><label class="label">Ref <span class="faint">(tag / branch / commit)</span></label>
+            <input class="input mono" name="ref" id="wiz-ref" placeholder="main"></div>
+        </div>
+        <div id="wiz-oci-fields" hidden>
+          <div class="field"><label class="label">OCI image <span class="faint">(public registry in this phase)</span></label>
+            <input class="input mono" name="image" id="wiz-image" placeholder="nginx:1.27 or ghcr.io/owner/image@sha256:…"></div>
+          <div class="field"><label class="label">Runtime platform</label>
+            <select class="select mono" name="platform" id="wiz-platform">
+              <option value="linux/amd64">linux/amd64</option>
+              <option value="linux/arm64">linux/arm64</option>
+            </select>
+          </div>
+        </div>
+        <div id="wiz-bundle-fields" hidden>
+          <div class="field"><label class="label">Source archive <span class="faint">(.tar, .tar.gz, or .tgz · max 32 MiB)</span></label>
+            <input class="input mono" type="file" name="file" id="wiz-bundle"
+                   accept=".tar,.tar.gz,.tgz,application/x-tar,application/gzip"></div>
+          <input type="hidden" name="artifact_digest" id="wiz-artifact-digest">
+          <p class="help">The archive is validated without host extraction, stripped of links and special files, hashed, and stored immutably. Setup runs only inside the disposable target.</p>
+        </div>
+        <div class="grid cols-2" style="gap:14px">
+          <div class="field"><label class="label">Service ports</label><input class="input mono" name="ports" id="wiz-ports" placeholder="8000"></div>
+        </div>
+        <label class="check" style="margin:2px 0 4px"><input type="checkbox" name="include_attacker" id="wiz-atk" checked> Add a Kali attacker foothold for the engagement</label>
+        <div class="field" style="margin-top:14px"><label class="label">Authorization basis</label>
+          <select class="select" name="authorization_basis" id="wiz-auth-basis">
+            <option value="public_oss">Public open-source project</option>
+            <option value="owned">Product or artifact I own</option>
+            <option value="authorized_assessment">Explicitly authorized assessment</option>
+          </select>
+        </div>
+        <div class="field"><label class="label">Scope note <span class="faint">(optional)</span></label>
+          <input class="input" name="scope_note" id="wiz-scope-note"
+                 maxlength="500" placeholder="Ticket, agreement, program scope, or repository policy">
+        </div>
+        <label class="check" style="margin:2px 0 4px">
+          <input type="checkbox" name="authorization_confirmed" id="wiz-auth-confirmed" required>
+          I confirm this target is in scope and I am authorized to assess it.
+        </label>
+      </div>
+      <!-- context panel -->
+      <div class="card pad-0 wiz-ctx">
+        <div class="card-head"><span class="label">How it works</span></div>
+        <div class="card-pad">
+          <div class="wiz-ctx__hero">
+            <i class="fa-solid fa-code-branch"></i>
+          </div>
+          <div class="wiz-ctx__items">
+            <div class="wiz-ctx__item">
+              <i class="fa-solid fa-download" style="color:var(--accent)"></i>
+              <div><strong>Clone</strong><span class="muted"> — your repo is cloned into <code class="mono">/opt/sut</code> on a fresh Ubuntu box.</span></div>
+            </div>
+            <div class="wiz-ctx__item">
+              <i class="fa-solid fa-shield-halved" style="color:var(--defender)"></i>
+              <div><strong>Isolate</strong><span class="muted"> — the box sits on its own segment, network-isolated from the host.</span></div>
+            </div>
+            <div class="wiz-ctx__item">
+              <i class="fa-solid fa-laptop-code" style="color:var(--attacker)"></i>
+              <div><strong>Attack</strong><span class="muted"> — optionally a Kali foothold joins the segment for the engagement.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 2: SETUP CONSENT (load-bearing) -->
+  <section class="wiz-panel" data-step="2" hidden>
+    <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; gap:18px">
+      <div class="card card-pad">
+        <h3 style="font-size:15px; margin-bottom:4px">Setup phase — your consent</h3>
+        <p class="help" id="wiz-setup-help" style="margin-bottom:16px">Bringing a Git target up needs a configurator session on the victim. Nothing writes/configures the box without it, and it is time-boxed, step-budgeted, and its egress is revoked before the engagement.</p>
+        <div id="wiz-setup-controls">
+        <div class="field"><label class="label">Who configures it</label>
+          <select class="select" name="setup_mode" id="wiz-mode">
+            <option value="operator">You — operator shell (AI-optional)</option>
+            <option value="hitl">HITL — an agent (or your model) proposes, you approve each step</option>
+          </select></div>
+        <div class="grid cols-2" style="gap:14px">
+          <div class="field"><label class="label">Time-box (seconds)</label><input class="input mono" type="number" name="time_box_seconds" id="wiz-tb" value="1800" min="60"></div>
+          <div class="field"><label class="label">Step budget</label><input class="input mono" type="number" name="command_budget" id="wiz-budget" value="50" min="1"></div>
+        </div>
+        <label class="check" style="margin:2px 0 4px"><input type="checkbox" name="setup_egress" id="wiz-egress" checked> Open setup egress (victim can fetch dependencies during setup; revoked before the engagement)</label>
+        </div>
+      </div>
+      <!-- context panel -->
+      <div class="card pad-0 wiz-ctx">
+        <div class="card-head"><span class="label">Safety guarantees</span></div>
+        <div class="card-pad">
+          <div class="wiz-ctx__hero wiz-ctx__hero--shield">
+            <i class="fa-solid fa-shield-halved"></i>
+          </div>
+          <div class="wiz-ctx__items">
+            <div class="wiz-ctx__item">
+              <i class="fa-solid fa-clock" style="color:var(--warn)"></i>
+              <div><strong>Time-boxed</strong><span class="muted"> — the setup session auto-expires after the configured timeout.</span></div>
+            </div>
+            <div class="wiz-ctx__item">
+              <i class="fa-solid fa-list-ol" style="color:var(--accent)"></i>
+              <div><strong>Step-budgeted</strong><span class="muted"> — hard cap on the number of commands that can run.</span></div>
+            </div>
+            <div class="wiz-ctx__item">
+              <i class="fa-solid fa-ban" style="color:var(--danger)"></i>
+              <div><strong>Egress revoked</strong><span class="muted"> — network egress is cut before the engagement begins.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 3: REVIEW & LAUNCH -->
+  <section class="wiz-panel" data-step="3" hidden>
+    <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; gap:18px">
+      <div class="card card-pad">
+        <h3 style="font-size:15px; margin-bottom:4px">Review</h3>
+        <p class="help" style="margin-bottom:14px">The planned arena, validated without deploying. Launching the engagement provisions it and opens the setup session automatically.</p>
+        <div class="import-msg" id="wiz-msg" style="margin-bottom:12px"></div>
+        <dl class="wiz-recap" id="wiz-recap"></dl>
+      </div>
+      <div class="card pad-0">
+        <div class="card-head"><span class="label">Topology preview</span></div>
+        <div class="topo-preview topo-preview--tall" id="wiz-topo"></div>
+        <div class="topo-legend">
+          <span><i class="dotsq dotsq--danger"></i> foothold</span>
+          <span><i class="dotsq dotsq--warn"></i> target</span>
+          <span><i class="dashbox"></i> segment</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="wiz-nav">
+    <button type="button" class="btn" id="wiz-back" hidden><i class="fa-solid fa-arrow-left"></i> Back</button>
+    <span class="grow"></span>
+    <button type="button" class="btn btn-primary" id="wiz-next">Next <i class="fa-solid fa-arrow-right"></i></button>
+    <button type="submit" class="btn btn-primary" id="wiz-launch" hidden><i class="fa-solid fa-rocket"></i> Launch engagement</button>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}<script>Nidavellir.initWizard();</script>{% endblock %}

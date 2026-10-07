@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}Audit trail{% endblock %}
+{% block crumb %}Activity <span class="sep">/</span> Audit trail{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Audit trail</div>
+    <h1>Audit trail</h1>
+    <div class="sub">Append-only and attributed — split by who acted: agents, humans, or the system.</div>
+  </div>
+  <div class="head-actions"><span class="badge badge--idle">{{ events|length }} event{{ 's' if events|length != 1 }}</span></div>
+</div>
+
+<div class="toolbar">
+  <div class="seg" id="logs-seg" style="padding:3px">
+    <button class="on" data-f="all">All sources</button>
+    <button data-f="agent"><span class="dot" style="background:var(--attacker)"></span> Agents</button>
+    <button data-f="human"><span class="dot" style="background:var(--defender)"></span> Human</button>
+    <button data-f="system"><span class="dot" style="background:var(--muted)"></span> System</button>
+  </div>
+  <div style="position:relative; min-width:200px; flex:1; max-width:300px">
+    <i class="fa-solid fa-magnifying-glass" style="position:absolute; left:12px; top:11px; color:var(--faint); font-size:13px"></i>
+    <input class="input" id="logs-search" style="padding-left:34px" placeholder="Filter by arena or text…">
+  </div>
+</div>
+
+<div class="card pad-0">
+  {% if events %}
+  <div class="rows" id="logs-feed">
+    {% for e in events %}
+    <div class="log-row" data-src="{{ e.source }}"
+         data-search="{{ ((e.lab_id or '') ~ ' ' ~ (e.type or '') ~ ' ' ~ (e.actor or '')) | lower }}">
+      <span class="ts">{{ (e.ts or '')[11:19] or (e.ts or '') }}</span>
+      <span class="src src-{{ e.source }}">{{ e.source }}</span>
+      <span class="msg">{{ ui.event_badge(e.type) }} {{ ui.event_detail(e) }}</span>
+      <span class="arena">{{ (e.lab_id or '')[:8] }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="empty" id="logs-empty" hidden style="padding:30px">No events match this filter.</div>
+  {% else %}
+  <div class="empty"><i class="fa-solid fa-clock-rotate-left"></i>No events yet. Create an engagement to start the trail.</div>
+  {% endif %}
+</div>
+
+<p class="faint" style="margin-top:14px;font-size:12.5px">
+  <i class="fa-solid fa-circle-info"></i>
+  Live updates stream inside each engagement workspace; this cross-engagement view refreshes on load and filters client-side.
+</p>
+{% endblock %}
+
+{% block scripts %}<script>Nidavellir.initLogs();</script>{% endblock %}

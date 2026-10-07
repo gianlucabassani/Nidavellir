@@ -1,0 +1,860 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}{{ instance_name }}{% endblock %}
+{% block crumb %}<a href="{{ url_for('engagements') }}">Engagements</a> <span class="sep">/</span> {{ instance_name }}{% endblock %}
+{% block head %}<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="flexrow">
+      <h1 style="margin:0">{{ instance_name }}</h1>
+      <span id="lab-status">{{ ui.status_badge(state) }}</span>
+      {% if provider == 'mock' %}<span class="badge badge--warn" title="Simulated provider, no live target"><i class="fa-solid fa-flask"></i> simulated</span>{% endif %}
+      {% if engagement_intent %}
+      <span class="badge badge--accent" title="Immutable engagement intent">
+        <i class="fa-solid fa-crosshairs"></i> {{ engagement_intent.purpose | replace('_', ' ') }}
+      </span>
+      {% endif %}
+      {% if outputs.egress == 'blocked' %}
+      <span class="badge badge--ok" title="Arena has no internet egress (contained)"><i class="fa-solid fa-lock"></i> contained</span>
+      {% elif outputs.egress == 'open' %}
+      <span class="badge badge--warn" title="Arena can reach the internet"><i class="fa-solid fa-globe"></i> egress open</span>
+      {% endif %}
+    </div>
+    <div class="sub mono">{{ provider or '—' }} · {{ instance_id }}</div>
+  </div>
+  <div class="actions">
+    <a href="{{ url_for('engagements') }}" class="btn btn-ghost"><i class="fa-solid fa-arrow-left"></i> Back</a>
+    {% if budget.policy %}
+    <span class="badge badge--idle" title="Durable arena-wide action allowance">
+      Actions {{ budget.policy.remaining }}/{{ budget.policy.action_cap }} · {{ budget.arena.state }}
+    </span>
+    {% if state == 'active' and budget.arena.state == 'open' %}
+    <form method="post" action="{{ url_for('arena_stop_form', instance_id=instance_id) }}" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="reason" value="Operator stopped research from the workspace">
+      <button class="btn btn-danger">Stop research</button>
+    </form>
+    {% elif state == 'active' and budget.arena.state == 'stopped' %}
+    <form method="post" action="{{ url_for('arena_resume_form', instance_id=instance_id) }}" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="reason" value="Operator resumed research from the workspace">
+      <button class="btn btn-secondary">Resume research</button>
+    </form>
+    {% endif %}
+    {% endif %}
+    {% if lifecycle and lifecycle.classification.runtime_reset.status == 'eligible' and state in ('active', 'destroyed') %}
+    <form method="post" action="{{ url_for('reset_lab_form', instance_id=instance_id) }}" style="display:inline"
+          onsubmit="return confirm('Replace this arena from its immutable baseline? The current record and evidence will remain readable.')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-secondary"><i class="fa-solid fa-rotate"></i> Reset</button>
+    </form>
+    {% endif %}
+    {% if not read_only %}
+    <button onclick="destroyInstance('{{ instance_id }}')" class="btn btn-danger"><i class="fa-solid fa-trash-can"></i> Destroy</button>
+    {% endif %}
+  </div>
+</div>
+
+{% if provider == 'mock' %}
+<div class="notice flash--warning" style="margin-bottom:18px" id="mock-provider-notice">
+  <i class="fa-solid fa-flask ico" style="color:var(--warn)"></i>
+  <span><b>UI demonstration only.</b> This engagement uses the mock provider: nodes, addresses and command outputs are simulated. No vulnerable target is running, and this record cannot confirm a security finding.</span>
+</div>
+{% endif %}
+
+{% if read_only %}
+<div class="notice" style="margin-bottom:18px" id="readonly-notice">
+  <i class="fa-solid fa-box-archive ico muted"></i>
+  <span>This engagement is a <b>read-only record</b>. The arena is destroyed, so nothing can run against it —
+    findings, evidence, and the result stay available for review.</span>
+</div>
+{% endif %}
+
+{# ═══ Contextual workspace (ROADMAP C3): one surface per concern, only where it applies ═══ #}
+<nav class="ws-tabs seg" id="ws-tabs" role="tablist" aria-label="Engagement workspace">
+  {% for tab in tabs %}
+  <button type="button" role="tab" id="wstab-{{ tab.id }}" data-tab="{{ tab.id }}"
+          aria-controls="wspanel-{{ tab.id }}" aria-selected="{{ 'true' if loop.first else 'false' }}"
+          class="{{ 'on' if loop.first }}">
+    <i class="fa-solid {{ tab.icon }}"></i> {{ tab.label }}
+    {% if tab.count %}<span class="ws-tab-count">{{ tab.count }}</span>{% endif %}
+  </button>
+  {% endfor %}
+</nav>
+
+{# ── Overview: where the engagement stands right now ── #}
+<section class="ws-panel" id="wspanel-overview" role="tabpanel" aria-labelledby="wstab-overview" data-tab="overview">
+  {% if capabilities.operations %}
+  <div class="card card-pad" id="runtime-capabilities" style="margin-bottom:18px">
+    <h3>Runtime capabilities</h3>
+    <p class="muted">{{ capabilities.provider }} · {{ capabilities.arena_state }} ·
+      {{ capabilities.budget.remaining if capabilities.budget else '—' }} actions remaining ·
+      {{ capabilities.stop.arena.state if capabilities.stop.arena else 'no arena gate' }}</p>
+    <div class="flexrow" style="flex-wrap:wrap;gap:8px">
+      {% for name, op in capabilities.operations.items() %}
+      <span class="badge {{ 'badge--ok' if op.state == 'ready' else 'badge--idle' }}"
+            title="{{ op.reason }}">{{ name }}: {{ op.state }}</span>
+      {% endfor %}
+    </div>
+    {% if capabilities.operations.forward.state == 'ready' %}
+    <form method="post" action="{{ url_for('arena_forward_form', instance_id=instance_id) }}" class="flexrow" style="margin-top:12px;gap:8px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Foothold <select name="foothold" required>
+        {% for foothold in capabilities.footholds %}<option value="{{ foothold }}">{{ foothold }}</option>{% endfor %}
+      </select></label>
+      <label>Service <select name="service" required>
+        {% for target in capabilities.targets %}{% for service in target.forward_services %}
+        <option value="{{ target.node }}:{{ service }}">{{ target.node }} / {{ service }}</option>
+        {% endfor %}{% endfor %}
+      </select></label>
+      <button class="btn btn-secondary">Open 120-second forward</button>
+    </form>
+    {% endif %}
+    {% for forward in forwards %}
+    <div class="flexrow" style="margin-top:8px;gap:8px">
+      <span class="mono">{{ forward.id }}</span>
+      <span>{{ forward.target }} / {{ forward.service_id }} · {{ forward.state }} · expires {{ forward.expires_at }}</span>
+      {% if forward.state in ('open', 'connecting') %}
+      <form method="post" action="{{ url_for('arena_forward_revoke_form', instance_id=instance_id, forward_id=forward.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-danger btn-sm">Revoke</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
+    {% if forwards %}<p class="muted" style="margin-top:8px">Connect locally with
+      <code>python3 scripts/nv-forward-client.py --arena {{ instance_id }} --forward FORWARD_ID --listen-port 18080</code>.
+      Set <code>NIDAVELLIR_API_KEY</code> in the client environment.</p>{% endif %}
+  </div>
+  {% endif %}
+  {% if unhealthy %}
+  <div class="notice flash--warning" style="margin-bottom:16px">
+    <i class="fa-solid fa-triangle-exclamation ico" style="color:var(--warn)"></i>
+    <span>These nodes exited right after start: <b>{{ unhealthy | join(', ') }}</b>. Check the image / command (a target with no foreground service exits immediately).</span>
+  </div>
+  {% endif %}
+
+  <div class="ws-split">
+  <div class="ws-col">
+  <div class="card card-pad">
+    <div class="usage-summary">
+      <div class="usage-stat"><div class="usage-stat__n">{{ nodes|length }}</div><div class="usage-stat__l">nodes</div></div>
+      <div class="usage-stat"><div class="usage-stat__n">{{ findings|length }}</div><div class="usage-stat__l">findings</div></div>
+      {% if score and score.findings_submitted is defined %}
+      <div class="usage-stat"><div class="usage-stat__n" style="color:var(--ok)">{{ score.confirmed_findings }}</div><div class="usage-stat__l">confirmed</div></div>
+      {% endif %}
+      {% if score %}
+      <div class="usage-stat"><div class="usage-stat__n">{{ (score.progress_rate * 100) | round | int }}%</div><div class="usage-stat__l">progress</div></div>
+      {% endif %}
+    </div>
+    <dl class="kv" style="margin-top:16px">
+      <dt>Scenario</dt><dd class="mono">{{ scenario or '—' }}</dd>
+      {% if engagement_intent %}
+      <dt>Purpose</dt><dd>{{ engagement_intent.purpose | replace('_', ' ') }}{% if engagement_intent.source %} · from {{ engagement_intent.source }}{% endif %}</dd>
+      <dt>Participants</dt><dd>{{ (engagement_intent.participant_mode or 'operator') | replace('_', '-') }}</dd>
+      {% endif %}
+      <dt>Started</dt><dd class="mono">{{ created_at or '—' }}</dd>
+      <dt>Expires</dt><dd class="mono">{{ expires_at or '—' }}</dd>
+    </dl>
+  </div>
+
+  {% if is_sut %}
+  {# Setup is a phase of the engagement, not a permanent page block: it lives here
+     while the target is being brought up, and stays as a record afterwards. #}
+  <div class="card" id="configurator-card">
+    <div class="cfg-overview">
+      <span class="pos-ic"><i class="fa-solid fa-screwdriver-wrench"></i></span>
+      <div class="grow">
+        <div class="flexrow" style="gap:10px">
+          <b style="font-size:14px">Setup phase</b>
+          <span id="cfg-state" class="badge badge--idle">…</span>
+          {% if setup_steps %}<span class="chip-tag">{{ setup_steps|length }} step{{ 's' if setup_steps|length != 1 }} run</span>{% endif %}
+        </div>
+        <div class="muted" id="cfg-overview-summary" style="font-size:12.5px;margin-top:3px">Bring the software-under-test up on the victim before the engagement.</div>
+      </div>
+      {% if not read_only %}
+      <button class="btn btn-primary btn-sm" onclick="Nidavellir.openConfigurator()"><i class="fa-solid fa-sliders"></i> Open configurator</button>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+  </div>
+
+  <div class="ws-col">
+  <div class="card pad-0">
+    <div class="card-head"><h3><i class="fa-solid fa-server"></i> Nodes</h3>
+      <div class="spacer"></div><span class="muted" style="font-size:12px">{{ nodes|length }} node{{ 's' if nodes|length != 1 }}</span>
+    </div>
+    {% if nodes %}
+    <table class="table">
+      <thead><tr><th>Node</th><th>Private IP</th><th>State</th><th>Access</th></tr></thead>
+      <tbody>
+        {% for n in nodes %}
+        <tr>
+          <td>
+            <div class="flexrow">
+              {% if n.foothold %}<i class="fa-solid fa-user-ninja" style="color:var(--attacker)" title="foothold"></i>
+              {% elif n.url %}<i class="fa-solid fa-bullseye" style="color:var(--accent)" title="web target"></i>
+              {% else %}<i class="fa-solid fa-microchip muted"></i>{% endif %}
+              <b>{{ n.name }}</b>
+            </div>
+          </td>
+          <td class="mono">{{ n.ip or '—' }}</td>
+          <td>
+            {# A destroyed arena keeps its record, but must not claim the node is up. #}
+            {% if read_only %}<span class="badge badge--idle" title="Last recorded state before the arena was destroyed">{{ n.state }} · gone</span>
+            {% elif n.state == 'running' %}<span class="badge badge--ok">running</span>
+            {% else %}<span class="badge badge--danger">{{ n.state }}</span>{% endif %}
+          </td>
+          <td>
+            {% if n.url and not read_only and provider != 'mock' %}<a href="{{ n.url }}" target="_blank" class="btn btn-sm"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open</a>{% endif %}
+            {% if provider == 'mock' %}<span class="faint">simulated</span>{% elif read_only or (not n.url and not n.ssh) %}<span class="faint">—</span>{% endif %}
+          </td>
+        </tr>
+        {% if n.ssh and not read_only and provider != 'mock' %}
+        <tr><td colspan="4" style="padding-top:0">
+          <label class="label" style="margin-bottom:4px">Shell command</label>
+          <div class="copyfield">
+            <input class="input mono" value="{{ n.ssh }}" readonly id="ssh-{{ loop.index }}">
+            <button class="btn btn-sm" onclick="copyField('ssh-{{ loop.index }}')"><i class="fa-regular fa-copy"></i></button>
+          </div>
+        </td></tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty"><i class="fa-solid fa-circle-notch fa-spin"></i>Provisioning nodes…</div>
+    {% endif %}
+  </div>
+  </div>
+  </div>
+</section>
+
+{# ── Live: what is happening, as it happens ── #}
+<section class="ws-panel" id="wspanel-live" role="tabpanel" aria-labelledby="wstab-live" data-tab="live" hidden>
+  <div class="card pad-0" id="actionlog-card">
+    <div class="card-head">
+      <h3><i class="fa-solid fa-wave-square"></i> Live activity</h3>
+      <span class="muted" style="font-weight:400;font-size:12.5px">— every tool call &amp; finding, as it happens</span>
+      <div class="spacer"></div>
+      <span id="log-count" class="muted mono" style="font-size:12px"></span>
+      <a href="{{ url_for('audit_trail') }}" class="muted" style="font-size:12.5px;margin-left:12px">Full audit <i class="fa-solid fa-arrow-right"></i></a>
+    </div>
+    <div id="log-stream"><div class="empty" style="padding:24px"><i class="fa-solid fa-circle-notch fa-spin"></i>Waiting for activity…</div></div>
+  </div>
+</section>
+
+{# ── Target: what is under test, and whether it is provably the right thing ── #}
+{% if tabs | selectattr('id', 'equalto', 'target') | list %}
+<section class="ws-panel" id="wspanel-target" role="tabpanel" aria-labelledby="wstab-target" data-tab="target" hidden>
+  <div class="card pad-0" id="preflight-card" hidden>
+    <div class="card-head">
+      <h3><i class="fa-solid fa-clipboard-check"></i> Research preflight</h3>
+      <span class="muted" style="font-weight:400;font-size:12.5px">— identity, authorization, infrastructure and reset validity</span>
+      <div class="spacer"></div>
+      <span id="preflight-state" class="badge badge--idle">pending</span>
+    </div>
+    <div class="preflight-target">
+      <div><span class="label">Target</span><div id="preflight-source" class="mono"></div></div>
+      <div><span class="label">Pinned identity</span><div id="preflight-identity" class="mono"></div></div>
+      <div><span class="label">Platform</span><div id="preflight-platform" class="mono"></div></div>
+      <div><span class="label">Reset</span><div id="preflight-reset"></div></div>
+    </div>
+    <div id="preflight-checks" class="preflight-checks"></div>
+  </div>
+
+  {% if setup_steps %}
+  <div class="card pad-0">
+    <div class="card-head">
+      <h3><i class="fa-solid fa-terminal"></i> Setup record</h3>
+      <span class="muted" style="font-weight:400;font-size:12.5px">— the commands that brought this target up, with their real output</span>
+      <div class="spacer"></div>
+      <span class="muted" style="font-size:12px">{{ setup_steps|length }} step{{ 's' if setup_steps|length != 1 }}</span>
+    </div>
+    <div style="padding:12px 18px 18px;display:flex;flex-direction:column;gap:14px">
+      {% for s in setup_steps %}
+      <div>
+        <div class="mono" style="font-size:12.5px;margin-bottom:6px">
+          <i class="fa-solid {{ 'fa-circle-check' if s.ok else 'fa-circle-xmark' }}" style="color:{{ 'var(--ok)' if s.ok else 'var(--danger)' }}"></i>
+          <span class="muted">{{ s.node }}&nbsp;$</span> {{ s.command }}
+          <span class="faint">· exit {{ s.exit_code }}{% if s.via %} · {{ s.via }}{% endif %}</span>
+        </div>
+        {% if s.stdout %}<pre class="cfg-out">{{ s.stdout }}</pre>{% endif %}
+        {% if s.stderr %}<pre class="cfg-out" style="color:var(--danger)">{{ s.stderr }}</pre>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</section>
+{% endif %}
+
+{# ── Findings: what was reported, and the operator's authoritative verdict ── #}
+{% set fbench = score and score.mode == 'benchmark' %}
+<section class="ws-panel" id="wspanel-http" role="tabpanel" aria-labelledby="wstab-http" data-tab="http" hidden>
+  <div class="card pad-0" id="http-card" data-arena="{{ instance_id }}" data-readonly="{{ '1' if read_only else '' }}">
+    <div class="card-head"><h3><i class="fa-solid fa-paper-plane"></i> HTTP</h3>
+      <span class="muted" style="font-weight:400;font-size:12.5px">— arena-target requests only; every transaction is recorded and digest-addressed</span>
+      <div class="spacer"></div>
+      <button class="btn btn-sm" onclick="Nidavellir.httpToggleForm()"><i class="fa-solid fa-plus"></i> Send request</button>
+    </div>
+
+    <div id="http-form" hidden class="card-pad" style="display:grid;grid-template-columns:110px 1fr;gap:8px">
+      <select class="input" id="http-method">
+        {% for m in ['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS'] %}
+        <option>{{ m }}</option>
+        {% endfor %}
+      </select>
+      <input class="input mono" id="http-path" placeholder="/path — relative to the target; never a full URL" value="/">
+      <label class="label" style="align-self:center">Node</label>
+      <select class="input" id="http-node">
+        {% for n in nodes if not n.foothold and (n.ports or n.url) %}
+        <option value="{{ n.name }}">{{ n.name }}{% if n.ip %} · {{ n.ip }}{% endif %}</option>
+        {% endfor %}
+      </select>
+      <label class="label" style="align-self:center">Params</label>
+      <input class="input mono" id="http-params" placeholder="key=value&amp;key2=value2 (optional)">
+      <label class="label" style="align-self:center">Headers</label>
+      <textarea class="input mono" id="http-headers" rows="2" placeholder="X-Header: value — one per line (optional)" style="resize:vertical"></textarea>
+      <label class="label" style="align-self:start;padding-top:6px">Body</label>
+      <textarea class="input mono" id="http-body" rows="3" placeholder="text request body (optional)" style="resize:vertical"></textarea>
+      <div style="grid-column:1 / -1">
+        <button class="btn btn-primary btn-sm" onclick="Nidavellir.httpSend()">Send</button>
+        <span class="muted" id="http-err" style="margin-left:10px;font-size:12px"></span>
+      </div>
+    </div>
+
+    <div id="http-inspect" hidden class="card-pad" style="border-top:1px solid var(--line-soft)">
+      <div class="flexrow"><b id="http-inspect-title" class="mono" style="font-size:12.5px"></b>
+        <div class="spacer"></div>
+        <button class="btn btn-sm" onclick="Nidavellir.httpAttachFromInspect()" title="Fill the Findings form with this digest"><i class="fa-solid fa-paperclip"></i> Attach to finding</button>
+        <button class="btn btn-sm" onclick="document.getElementById('http-inspect').hidden=true"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <pre class="mono" id="http-inspect-request" style="white-space:pre-wrap;background:var(--surface-2);border:1px solid var(--line-soft);border-radius:6px;padding:10px;margin:10px 0 0;font-size:11.5px;max-height:220px;overflow:auto"></pre>
+      <pre class="mono" id="http-inspect-response" style="white-space:pre-wrap;background:var(--surface-2);border:1px solid var(--line-soft);border-radius:6px;padding:10px;margin:10px 0 0;font-size:11.5px;max-height:320px;overflow:auto"></pre>
+    </div>
+
+    <div id="http-list"><div class="card-pad muted" style="padding:18px">Loading…</div></div>
+    <div class="cfg-note" style="padding:11px 18px;border-top:1px solid var(--line-soft)">
+      <i class="fa-solid fa-shield-halved"></i> Requests resolve against this arena's own nodes only; redirects are reported, never followed.
+    </div>
+  </div>
+</section>
+
+{# ── Confined PoC: durable worker-owned Python jobs (NV-03) ── #}
+{% if tabs | selectattr('id', 'equalto', 'poc') | list %}
+<section class="ws-panel" id="wspanel-poc" role="tabpanel" aria-labelledby="wstab-poc" data-tab="poc" hidden>
+  <div class="card pad-0" id="poc-card" data-arena="{{ instance_id }}" data-readonly="{{ '1' if read_only else '' }}">
+    <div class="card-head">
+      <h3><i class="fa-solid fa-terminal"></i> Confined PoC</h3>
+      <span class="muted" style="font-weight:400;font-size:12.5px">— disposable networkless Python; optional fixed-target HTTP relay</span>
+      <div class="spacer"></div>
+      {% if not read_only %}<button class="btn btn-sm" onclick="Nidavellir.pocToggleForm()"><i class="fa-solid fa-plus"></i> New PoC</button>{% endif %}
+    </div>
+    {% if not read_only %}
+    <div id="poc-form" class="card-pad" hidden>
+      <label class="label" for="poc-source">Python source</label>
+      <textarea class="input mono" id="poc-source" rows="12" spellcheck="false" style="resize:vertical">import nidavellir
+
+response = nidavellir.request("/")
+print(response["status"])
+print(response["body"].decode("utf-8", "replace")[:1000])</textarea>
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:8px;margin-top:10px">
+        <label class="workspace-control"><span>Target</span>
+          <select class="input" id="poc-target">
+            <option value="">No network access</option>
+            {% for n in nodes %}{% if not n.foothold and (n.ports or n.url) %}<option value="{{ n.name }}">{{ n.name }}</option>{% endif %}{% endfor %}
+          </select>
+        </label>
+        <label class="workspace-control"><span>Timeout</span><input class="input" id="poc-timeout" type="number" min="1" max="120" value="30"></label>
+        <label class="workspace-control"><span>Memory MiB</span><input class="input" id="poc-memory" type="number" min="32" max="256" value="128"></label>
+        <label class="workspace-control"><span>PID limit</span><input class="input" id="poc-pids" type="number" min="8" max="128" value="32"></label>
+      </div>
+      <label class="label" for="poc-files" style="margin-top:10px">Foothold transfer files (comma-separated relative paths, optional)</label>
+      <input class="input mono" id="poc-files" placeholder="payload.bin, corpus/request.txt">
+      <div class="flexrow" style="margin-top:10px">
+        <button class="btn btn-primary btn-sm" onclick="Nidavellir.pocSubmit()"><i class="fa-solid fa-play"></i> Run confined</button>
+        <span class="muted" id="poc-err" style="font-size:12px"></span>
+      </div>
+    </div>
+    {% endif %}
+    <div id="poc-inspect" class="card-pad" hidden style="border-top:1px solid var(--line-soft)">
+      <div class="flexrow"><b id="poc-inspect-title" class="mono"></b><div class="spacer"></div>
+        <button class="btn btn-sm" onclick="document.getElementById('poc-inspect').hidden=true"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <pre class="mono" id="poc-inspect-output" style="white-space:pre-wrap;background:var(--surface-2);border:1px solid var(--line-soft);border-radius:6px;padding:10px;margin-top:10px;max-height:420px;overflow:auto"></pre>
+    </div>
+    <div id="poc-list"><div class="card-pad muted" style="padding:18px">Loading…</div></div>
+  </div>
+</section>
+{% endif %}
+
+<section class="ws-panel" id="wspanel-findings" role="tabpanel" aria-labelledby="wstab-findings" data-tab="findings" hidden>
+  <div class="card pad-0" id="findings-card" data-arena="{{ instance_id }}">
+    <div class="card-head"><h3><i class="fa-solid fa-bug"></i> Findings</h3>
+      <span class="muted" style="font-weight:400;font-size:12.5px">— submitted by the agent + operator entries; confirm or refute each</span>
+      <div class="spacer"></div><span class="muted" style="font-size:12px">{{ findings|length }}</span>
+      <button class="btn btn-sm" style="margin-left:12px" onclick="toggleManualFinding()"><i class="fa-solid fa-plus"></i> Add finding</button>
+    </div>
+
+    <div id="mf-form" hidden class="card-pad mf-form">
+      <input class="input" id="mf-title" placeholder="Title — e.g. SQL injection in login">
+      <input class="input" id="mf-cwe" placeholder="CWE — e.g. CWE-89">
+      <input class="input" id="mf-node" placeholder="Node — e.g. victim">
+      <input class="input" id="mf-evidence" placeholder="Evidence / notes (optional)" style="grid-column:1 / -1">
+      <textarea class="input" id="mf-poc" placeholder="PoC — reproducible command / request / steps a human can run to verify (optional)" rows="2" style="grid-column:1 / -1;font-family:var(--mono, monospace);resize:vertical"></textarea>
+      <input class="input mono" id="mf-artifact" placeholder="Evidence artifact digest (set by Export patch)" style="grid-column:1 / -1" readonly>
+      <input class="input mono" id="mf-transactions" placeholder="HTTP transaction digests (set by Attach to finding)" style="grid-column:1 / -1" readonly>
+      <div style="grid-column:1 / -1">
+        <button class="btn btn-primary btn-sm" onclick="addManualFinding()">Add</button>
+        <span class="muted" id="mf-err" style="margin-left:10px;font-size:12px"></span>
+      </div>
+    </div>
+
+    {% if findings %}
+    <table class="table">
+      <thead><tr><th>Title</th><th>CWE</th><th>Node</th><th>Source</th><th>Verified</th>{% if fbench %}<th>Matched</th>{% endif %}</tr></thead>
+      <tbody>
+        {% for f in findings %}
+        <tr>
+          <td><b>{{ f.title }}</b>
+            {% if f.evidence %}<div class="faint" style="font-size:11.5px;max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ f.evidence }}">{{ f.evidence }}</div>{% endif %}
+            {% if f.poc %}<details style="margin-top:6px">
+              <summary class="muted" style="cursor:pointer;font-size:11.5px"><i class="fa-solid fa-flask"></i> PoC — run to verify</summary>
+              <div style="position:relative;margin-top:6px">
+                <button class="btn btn-sm" style="position:absolute;top:6px;right:6px" title="Copy PoC" onclick="copyPoc(this)"><i class="fa-regular fa-copy"></i></button>
+                <pre class="mono" style="white-space:pre-wrap;background:var(--surface-2);border:1px solid var(--line-soft);border-radius:6px;padding:10px 10px;margin:0;font-size:11.5px;max-width:460px;overflow-x:auto">{{ f.poc }}</pre>
+              </div>
+            </details>{% endif %}
+            {% for artifact in f.evidence_artifacts or [] %}
+            <div style="margin-top:6px;font-size:11.5px">
+              <a class="mono" href="/api/arenas/{{ instance_id }}/evidence-artifacts/{{ artifact.digest }}">
+                <i class="fa-solid fa-paperclip"></i> {{ artifact.digest[-12:] }}.patch
+              </a>
+              <span class="faint"> · {{ artifact.bytes }} bytes</span>
+            </div>
+            {% endfor %}
+            {% for t in f.http_transactions or [] %}
+            <div style="margin-top:6px;font-size:11.5px">
+              <a class="mono" href="/arena/{{ instance_id }}#http" title="{{ t.digest }}">
+                <i class="fa-solid fa-paper-plane"></i> {{ t.method }} {{ t.path }} → {{ t.status }}
+              </a>
+              <span class="faint"> · {{ t.digest[-12:] }}{% if t.replay_of %} · replay{% endif %}</span>
+            </div>
+            {% endfor %}
+            {% if f.validation and f.validation.schema == 'nidavellir/validation-verdict/v1' %}
+            <details style="margin-top:8px;font-size:11.5px">
+              <summary>Independent validation · {{ f.validation.reason_code }}</summary>
+              <div class="mono">Validator {{ f.validation.validator_id }} v{{ f.validation.validator_version }} · recipe {{ (f.validation.recipe_digest or '')[-12:] }}</div>
+              {% if f.validation.action_digest %}<div>Action <a href="/arena/{{ instance_id }}#http" class="mono">{{ f.validation.action_digest[-12:] }}</a></div>{% endif %}
+              {% for label, digest in [('Effect', f.validation.observation_digest), ('Control', f.validation.control_digest)] %}
+              {% if digest %}<div>{{ label }} <a class="mono" href="/api/arenas/{{ instance_id }}/validation-evidence/{{ digest }}">{{ digest[-12:] }}</a></div>{% endif %}
+              {% endfor %}
+            </details>
+            {% endif %}
+          </td>
+          <td class="mono">{{ f.cwe or '—' }}</td>
+          <td class="mono">{{ f.node or '—' }}</td>
+          <td>{% if f.manual %}<span class="badge">operator</span>{% else %}<span class="badge badge--info">agent</span>{% endif %}</td>
+          <td style="white-space:nowrap">
+            {% set c = (f.validation or {}).confirmed %}
+            {% if c == true %}<span class="badge badge--ok"><i class="fa-solid fa-check"></i> confirmed</span>
+            {% elif c == false %}<span class="badge badge--warn">refuted</span>
+            {% elif f.validation and f.validation.verdict == 'infrastructure_failure' %}<span class="badge badge--warn">probe failure</span>
+            {% else %}<span class="badge badge--idle">inconclusive</span>{% endif %}
+            {% if f.manual_validation %}<span class="badge badge--info">manual {{ f.manual_validation.verdict }}</span>{% endif %}
+            <span style="margin-left:8px">
+              <button class="btn btn-sm" title="Confirm — this vuln is really there" onclick="verifyFinding('{{ f.finding_id }}','confirmed')"><i class="fa-solid fa-check"></i></button>
+              <button class="btn btn-sm" title="Refute — not a real finding" onclick="verifyFinding('{{ f.finding_id }}','refuted')"><i class="fa-solid fa-xmark"></i></button>
+            </span>
+          </td>
+          {% if fbench %}<td>{% if f.matched_vuln_id %}<span class="badge badge--accent">{{ f.matched_vuln_id }}</span>{% else %}<span class="faint">—</span>{% endif %}</td>{% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="card-pad muted" style="padding:18px">No findings yet — the connected agent's reports appear here, or add one manually with <b>Add finding</b>.</div>
+    {% endif %}
+    <div class="cfg-note" style="padding:11px 18px;border-top:1px solid var(--line-soft)">
+      <i class="fa-solid fa-eye-slash"></i> Match + verdict are operator-only — the agent gets a neutral ack. Manual confirmation requires an immutable evidence digest and is shown separately from automatic proof.
+    </div>
+  </div>
+
+  {% if score and score.manifest %}
+  <div class="card pad-0" id="challenges-panel">
+    <div class="card-head"><h3><i class="fa-solid fa-bullseye"></i> Challenges</h3>
+      <span class="muted" style="font-weight:400;font-size:12.5px">— ground truth, hidden by default (spoilers)</span>
+      <div class="spacer"></div>
+      <span class="muted mono" id="ch-summary" hidden style="font-size:12px">
+        {{ score.found|length }} / {{ score.total_vulnerabilities }} found · {{ score.points_earned }}/{{ score.points_total }} pts
+      </span>
+      <label class="check" style="margin:0 0 0 14px"><input type="checkbox" id="reveal-ch"
+        onchange="document.getElementById('ch-body').hidden=!this.checked;document.getElementById('ch-summary').hidden=!this.checked;">
+        <span>Reveal</span></label>
+    </div>
+    <div id="ch-body" hidden>
+    <div class="card-pad" style="padding-bottom:4px">
+      {% set pct = (score.found|length * 100 // score.total_vulnerabilities) if score.total_vulnerabilities else 0 %}
+      <div class="bar ok"><span style="width:{{ pct }}%"></span></div>
+    </div>
+    <table class="table">
+      <thead><tr><th>Status</th><th>Vulnerability</th><th>CWE</th><th>Node</th><th>Severity</th></tr></thead>
+      <tbody>
+        {% for v in score.manifest %}
+        {% set is_found = v.id in score.found %}
+        <tr {% if is_found %}style="background:var(--accent-soft)"{% endif %}>
+          <td>{% if is_found %}<span class="badge badge--ok"><i class="fa-solid fa-check"></i> found</span>
+              {% else %}<span class="badge badge--idle">open</span>{% endif %}</td>
+          <td><b>{{ v.title }}</b><div class="faint mono" style="font-size:11.5px">{{ v.id }}</div></td>
+          <td class="mono">{{ v.cwe or '—' }}</td>
+          <td class="mono">{{ v.node or 'any' }}</td>
+          <td>
+            {% if v.severity in ('critical', 'high') %}<span class="badge badge--danger">{{ v.severity }}</span>
+            {% elif v.severity == 'medium' %}<span class="badge badge--warn">{{ v.severity }}</span>
+            {% elif v.severity %}<span class="badge">{{ v.severity }}</span>
+            {% else %}<span class="faint">—</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="cfg-note" style="padding:11px 18px;border-top:1px solid var(--line-soft)">
+      <i class="fa-solid fa-eye-slash"></i> Operator view (the benchmark baseline) — hidden from the agent.
+      {{ score.findings_submitted }} finding{{ 's' if score.findings_submitted != 1 }} submitted.
+    </div>
+    </div>
+  </div>
+  {% endif %}
+</section>
+
+{# ── Evidence: the artifacts and observed signals a verdict can rest on ── #}
+{% if tabs | selectattr('id', 'equalto', 'evidence') | list %}
+<section class="ws-panel" id="wspanel-evidence" role="tabpanel" aria-labelledby="wstab-evidence" data-tab="evidence" hidden>
+  {% if evidence_artifacts %}
+  <div class="card pad-0" id="evidence-artifacts-card">
+    <div class="card-head"><h3><i class="fa-solid fa-paperclip"></i> Evidence artifacts</h3>
+      <span class="muted" style="font-weight:400;font-size:12.5px">— content-addressed patches attached to findings</span>
+      <div class="spacer"></div><span class="muted" style="font-size:12px">{{ evidence_artifacts|length }}</span>
+    </div>
+    <table class="table">
+      <thead><tr><th>Digest</th><th>Attached to</th><th>Size</th><th></th></tr></thead>
+      <tbody>
+        {% for artifact in evidence_artifacts %}
+        <tr>
+          <td class="mono" title="{{ artifact.digest }}">{{ artifact.digest[-16:] }}</td>
+          <td>{{ artifact.finding_title or artifact.finding_id or '—' }}</td>
+          <td class="mono">{{ artifact.bytes }} B</td>
+          <td><a class="btn btn-sm" href="/api/arenas/{{ instance_id }}/evidence-artifacts/{{ artifact.digest }}">
+            <i class="fa-solid fa-download"></i> Download</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="cfg-note" style="padding:11px 18px;border-top:1px solid var(--line-soft)">
+      <i class="fa-solid fa-fingerprint"></i> Each patch is verified by SHA-256; the audit trail records the digest, never the bytes.
+    </div>
+  </div>
+  {% endif %}
+
+  {% if monitor_signals %}
+  <div class="card pad-0" id="monitor-signals-card">
+    <div class="card-head"><h3><i class="fa-solid fa-heart-pulse"></i> Monitor signals</h3>
+      <span class="muted" style="font-weight:400;font-size:12.5px">— crashes, sanitizer aborts, unhandled 5xx and resource exhaustion observed on the target</span>
+      <div class="spacer"></div><span class="muted" style="font-size:12px">{{ monitor_signals|length }}</span>
+    </div>
+    <table class="table">
+      <thead><tr><th>Kind</th><th>Node</th><th>Severity</th><th>Summary</th><th>Observed</th></tr></thead>
+      <tbody>
+        {% for sig in monitor_signals %}
+        <tr>
+          <td><span class="badge badge--danger">{{ (sig.kind or '?') | replace('_', ' ') }}</span></td>
+          <td class="mono">{{ sig.node or '—' }}</td>
+          <td class="mono">{{ sig.severity or '—' }}</td>
+          <td class="mono" style="max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ sig.summary }}">{{ sig.summary or '—' }}</td>
+          <td class="mono faint">{{ sig.ts or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
+{% endif %}
+
+{# ── Changes: exactly what moved in the target's source ── #}
+{% if tabs | selectattr('id', 'equalto', 'changes') | list %}
+<section class="ws-panel" id="wspanel-changes" role="tabpanel" aria-labelledby="wstab-changes" data-tab="changes" hidden>
+  <!-- Shared change intelligence: the exact same bounded provider primitive exposed
+       to agents over MCP, rendered here for human review and evidence capture. -->
+  <div class="card pad-0" id="workspace-card" hidden>
+    <div class="card-head">
+      <h3><i class="fa-solid fa-code-compare"></i> Workspace changes</h3>
+      <span class="muted" style="font-weight:400;font-size:12.5px">— clean Git evidence from the isolated target</span>
+      <div class="spacer"></div>
+      <span id="workspace-count" class="badge badge--idle">0 files</span>
+    </div>
+    <div class="workspace-toolbar">
+      <label class="workspace-control"><span>Workspace</span>
+        <select class="input" id="workspace-node"></select>
+      </label>
+      <label class="workspace-control grow"><span>File</span>
+        <select class="input mono" id="workspace-path"><option value="">All tracked changes</option></select>
+      </label>
+      <label class="workspace-control workspace-base"><span>Baseline</span>
+        <input class="input mono" id="workspace-base" value="HEAD" maxlength="80">
+      </label>
+      <button class="btn btn-primary btn-sm workspace-refresh" id="workspace-refresh">
+        <i class="fa-solid fa-rotate"></i> Refresh
+      </button>
+      <label class="workspace-control" title="Only the selected untracked regular UTF-8 file is opened">
+        <span>Untracked content</span>
+        <input type="checkbox" id="workspace-include-untracked"> include selected
+      </label>
+      <button class="btn btn-sm" id="workspace-export">
+        <i class="fa-solid fa-file-export"></i> Export patch
+      </button>
+    </div>
+    <div id="workspace-meta" class="workspace-meta muted"></div>
+    <pre id="workspace-diff" class="workspace-diff"><span class="muted">Loading changes…</span></pre>
+    <div class="workspace-footer">
+      <span id="workspace-note" class="muted"></span>
+      <div class="spacer"></div>
+      <button class="btn btn-sm" id="workspace-more" hidden>Load next page</button>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+{# ── Agent: who may drive this arena, in which stance ── #}
+<section class="ws-panel" id="wspanel-agent" role="tabpanel" aria-labelledby="wstab-agent" data-tab="agent" hidden>
+  <!-- Agent positioning (all arenas): authorize a bring-your-own agent to drive this arena
+       in a stance. Authorization only — the operator then points their own agent app at the gateway. -->
+  <div class="card pad-0" id="positioning-card"
+       data-gateway="{{ gateway_url }}" data-arena="{{ instance_id }}">
+    <div class="card-head">
+      <h3><i class="fa-solid fa-chess"></i> Agent positioning</h3>
+      <span class="muted" style="font-weight:400;font-size:12.5px">— authorize a BYO agent to drive this arena (attacker · defender · MITM)</span>
+      <div class="spacer"></div>
+      <span id="pos-state" class="badge badge--idle">…</span>
+    </div>
+    <div id="pos-board"><div class="empty" style="padding:22px"><i class="fa-solid fa-circle-notch fa-spin"></i>Loading…</div></div>
+    <div id="pos-actions"></div>
+    <div id="pos-recipe"></div>
+  </div>
+</section>
+
+{# ── Trace: the attribution needed to make a result comparable ── #}
+{% if trace %}
+<section class="ws-panel" id="wspanel-trace" role="tabpanel" aria-labelledby="wstab-trace" data-tab="trace" hidden>
+  <div class="card pad-0 ws-narrow" id="trace-card">
+    <div class="card-head">
+      <h3><i class="fa-solid fa-route"></i> Run attribution</h3>
+      <span class="muted" style="font-weight:400;font-size:12.5px">— the identity a comparison needs: model, scaffold, stance, cost</span>
+      <div class="spacer"></div>
+      <a class="btn btn-sm" href="{{ url_for('arena_eval_export_proxy', instance_id=instance_id) }}" download="{{ instance_id }}-eval.json">
+        <i class="fa-solid fa-file-export"></i> Export eval row
+      </a>
+    </div>
+    <div class="card-pad">
+      <dl class="kv">
+        {% set meta = trace.metadata or {} %}
+        <dt>Model</dt><dd class="mono">{{ meta['gen_ai.request.model'] or 'not declared' }}</dd>
+        <dt>Provider</dt><dd class="mono">{{ meta['gen_ai.system'] or 'not declared' }}</dd>
+        <dt>Scaffold</dt><dd class="mono">{{ meta.scaffold or 'bring-your-own' }}</dd>
+        <dt>Stance</dt><dd class="mono">{{ meta.stance or '—' }}</dd>
+        <dt>Trace</dt><dd class="mono">{{ trace.source_trace_id or '—' }}</dd>
+      </dl>
+      <p class="cfg-note" style="margin:14px 0 0">
+        <i class="fa-solid fa-circle-info"></i> The exported row carries the OpenInference-aligned
+        input / expected_output / metadata shape with the embedded score, ready for an external eval store.
+        Attribution is self-declared by the connected agent; the arena identity and verdicts are not.
+      </p>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+{# ── Score: the verdict this engagement produced ── #}
+{% if score %}
+{% set prog = (score.progress_rate * 100) | round | int %}
+{% set is_bench = score.mode == 'benchmark' %}
+{% set has_activity = score.findings_submitted > 0 or score.signals.distinct_fault_sites > 0 %}
+<section class="ws-panel" id="wspanel-score" role="tabpanel" aria-labelledby="wstab-score" data-tab="score" hidden>
+  <div class="card pad-0">
+    <div class="card-head">
+      <h3><i class="fa-solid fa-flag-checkered"></i> Assessment</h3>
+      <span class="badge {{ 'badge--accent' if is_bench else 'badge--info' }}"
+            title="{{ 'Prepared lab: a hidden known-vuln list; agent submissions are matched + verified against it.' if is_bench else 'Software-under-test: no known-vuln list; the agent generates findings over MCP, verified by the crash oracle / validators.' }}">
+        {{ 'known-vuln lab' if is_bench else 'discovery · SUT' }}</span>
+      <div class="spacer"></div>
+      {% if has_activity %}
+      <span class="mono" style="font-size:20px;font-weight:700">{{ (score.score.value * 100) | round | int }}%</span>
+      <span class="badge {{ 'badge--ok' if score.tier in ('complete', 'substantial') else 'badge--idle' }}">{{ score.tier }}</span>
+      {% endif %}
+    </div>
+    <div class="card-pad">
+      <p class="cfg-note" style="margin:0">
+        {% if is_bench %}Findings are matched against a hidden known-vuln list (the agent never sees it) and then verified.
+        {% else %}No known-vuln list — the connected agent generates findings over MCP; the crash oracle and validators verify them.{% endif %}
+      </p>
+      {% if has_activity %}
+      <div class="usage-summary" style="margin-top:15px">
+        {% if is_bench %}
+        <div class="usage-stat"><div class="usage-stat__n">{{ score.found|length }}/{{ score.total_vulnerabilities }}</div><div class="usage-stat__l">claims</div></div>
+        <div class="usage-stat"><div class="usage-stat__n">{{ score.confirmed_points }}/{{ score.points_total }}</div><div class="usage-stat__l">verified points</div></div>
+        <div class="usage-stat"><div class="usage-stat__n">{{ score.points_earned }}/{{ score.points_total }}</div><div class="usage-stat__l">claim coverage</div></div>
+        {% else %}
+        <div class="usage-stat"><div class="usage-stat__n">{{ score.signals.distinct_fault_sites }}</div><div class="usage-stat__l">fault sites</div></div>
+        {% endif %}
+        <div class="usage-stat"><div class="usage-stat__n" style="color:var(--ok)">{{ score.confirmed_findings }}</div><div class="usage-stat__l">confirmed</div></div>
+        <div class="usage-stat"><div class="usage-stat__n">{{ score.findings_submitted }}</div><div class="usage-stat__l">submitted</div></div>
+      </div>
+      <div style="margin-top:16px">
+        <div class="flexrow" style="justify-content:space-between;margin-bottom:8px">
+          <span class="label" style="margin:0"><i class="fa-solid fa-bars-progress"></i> Progress</span>
+          <span class="mono" style="font-size:12.5px;font-weight:600">{{ prog }}%</span>
+        </div>
+        <div class="bar ok"><span style="width:{{ prog }}%"></span></div>
+        <div class="chips" style="margin-top:12px">
+          {% for m in score.milestones %}<span class="badge {{ 'badge--ok' if m.reached else 'badge--idle' }}" title="{{ m.detail }}">{% if m.reached %}<i class="fa-solid fa-check"></i> {% endif %}{{ m.id | replace('_', ' ') }}</span>{% endfor %}
+        </div>
+      </div>
+      {% if score.signals.counts %}
+      <div class="cfg-note" style="margin-top:15px"><i class="fa-solid fa-heart-pulse" style="color:var(--danger)"></i> Crash oracle — {% for k, n in score.signals.counts.items() %}<span class="mono">{{ k }} ×{{ n }}</span>{% if not loop.last %} · {% endif %}{% endfor %}</div>
+      {% endif %}
+      {% else %}
+      <div class="cfg-note" style="margin-top:14px;display:flex;align-items:center;gap:9px">
+        <i class="fa-solid fa-hourglass-half" style="color:var(--warn)"></i>
+        {% if is_bench %}No findings submitted yet — the connected agent's reports will be matched and scored here.
+        {% else %}No findings yet — the connected agent's reports and any crash-oracle signals will be scored here as it works.{% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+{# ── Infrastructure: the execution resource behind the engagement ── #}
+<section class="ws-panel" id="wspanel-infrastructure" role="tabpanel" aria-labelledby="wstab-infrastructure" data-tab="infrastructure" hidden>
+  <div class="ws-split ws-split--infra">
+  <div class="card pad-0">
+    <div class="card-head"><h3><i class="fa-solid fa-diagram-project"></i> Topology</h3>
+      <div class="spacer"></div>
+      <button class="btn btn-sm btn-ghost" onclick="Nidavellir.fit()"><i class="fa-solid fa-expand"></i> Fit</button>
+    </div>
+    <div id="topo"></div>
+  </div>
+
+  <div class="ws-col">
+  <div class="card pad-0">
+    <div class="card-head"><h3><i class="fa-solid fa-plug"></i> Published ports</h3>
+      <span class="muted" style="font-weight:400;font-size:12.5px">— host mappings for this arena</span>
+    </div>
+    {% set port_nodes = nodes | selectattr('ports') | list %}
+    {% if port_nodes %}
+    <table class="table">
+      <thead><tr><th>Node</th><th>Mappings</th></tr></thead>
+      <tbody>
+        {% for n in port_nodes %}
+        <tr>
+          <td><b>{{ n.name }}</b></td>
+          <td>
+            <div class="chips">
+              {% for cport, hport in n.ports.items() %}
+              <span class="chip-tag" title="container port {{ cport }} mapped to host">{{ cport }} &rarr; 127.0.0.1:{{ hport }}</span>
+              {% endfor %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="card-pad muted" style="padding:18px">No published ports — nodes are reachable inside the arena network only.</div>
+    {% endif %}
+  </div>
+
+  <div class="card card-pad">
+    <dl class="kv">
+      <dt>Provider</dt><dd class="mono">{{ provider or '—' }}</dd>
+      <dt>Arena id</dt><dd class="mono">{{ instance_id }}</dd>
+      <dt>Egress</dt><dd class="mono">{{ outputs.egress or 'blocked' }}</dd>
+      <dt>State</dt><dd class="mono">{{ state }}</dd>
+      {% if lifecycle and lifecycle.recipe %}
+      <dt>Recipe</dt><dd class="mono">{{ lifecycle.recipe.recipe_digest }}</dd>
+      <dt>Build reproducibility</dt><dd>{{ lifecycle.classification.build_reproducibility.status }} · {{ lifecycle.classification.build_reproducibility.reason }}</dd>
+      <dt>Reset</dt><dd>{{ lifecycle.classification.runtime_reset.status }} · {{ lifecycle.classification.runtime_reset.reason }}</dd>
+      {% if lifecycle.observation %}<dt>Observed baseline</dt><dd class="mono">{{ lifecycle.observation.observed_state_digest }}</dd>{% endif %}
+      {% if lifecycle.resets %}
+      <dt>Latest reset</dt><dd>
+        {% set latest_reset = lifecycle.resets[0] %}
+        {{ latest_reset.status }} · {{ latest_reset.stage }}
+        {% if latest_reset.replacement_id %}<a href="{{ url_for('arena_detail', instance_id=latest_reset.replacement_id) }}">replacement</a>{% endif %}
+      </dd>
+      {% endif %}
+      {% endif %}
+    </dl>
+  </div>
+  </div>
+  </div>
+</section>
+
+{% if is_sut and not read_only %}
+<!-- Configurator modal: choose how to configure (operator / agent-proposal / autonomous) + drive setup with a live console. -->
+<div class="modal" id="configurator-modal" hidden>
+  <div class="modal__backdrop" onclick="Nidavellir.closeConfigurator()"></div>
+  <div class="modal__card modal__card--wide">
+    <button class="modal__x" onclick="Nidavellir.closeConfigurator()"><i class="fa-solid fa-xmark"></i></button>
+    <div class="modal__head">
+      <span class="model-bubble" style="background:linear-gradient(150deg,var(--accent),var(--accent-deep));color:#1a1206"><i class="fa-solid fa-screwdriver-wrench"></i></span>
+      <div><div class="modal__title">Configurator</div><div class="modal__sub">choose how to set the target up, then bring it live on the victim</div></div>
+    </div>
+    <div id="cfg-board"><div class="empty" style="padding:22px"><i class="fa-solid fa-circle-notch fa-spin"></i>Loading…</div></div>
+    <div id="cfg-actions"></div>
+    {% if setup_steps %}
+    <div style="border-top:1px solid var(--line-soft)">
+      <div class="label" style="padding:14px 18px 2px"><i class="fa-solid fa-terminal"></i> Setup console · {{ setup_steps|length }} step{{ 's' if setup_steps|length != 1 }}, real output</div>
+      <div style="padding:12px 18px 18px;display:flex;flex-direction:column;gap:14px">
+        {% for s in setup_steps %}
+        <div>
+          <div class="mono" style="font-size:12.5px;margin-bottom:6px">
+            <i class="fa-solid {{ 'fa-circle-check' if s.ok else 'fa-circle-xmark' }}" style="color:{{ 'var(--ok)' if s.ok else 'var(--danger)' }}"></i>
+            <span class="muted">{{ s.node }}&nbsp;$</span> {{ s.command }}
+            <span class="faint">· exit {{ s.exit_code }}{% if s.via %} · {{ s.via }}{% endif %}</span>
+          </div>
+          {% if s.stdout %}<pre class="cfg-out">{{ s.stdout }}</pre>{% endif %}
+          {% if s.stderr %}<pre class="cfg-out" style="color:var(--danger)">{{ s.stderr }}</pre>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<script id="lab-data" type="application/json">{{ outputs | tojson | safe }}</script>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.body.dataset.instanceId = "{{ instance_id }}";
+  window.NIDAVELLIR_ARENA = {{ instance_id | tojson }};
+  Nidavellir.initWorkspaceTabs();
+  Nidavellir.initArena();
+  Nidavellir.initHttpWorkspace();
+  Nidavellir.initPocWorkspace();
+  if (document.getElementById("positioning-card")) {
+    Nidavellir.initEngagement(
+      {{ instance_id | tojson }},
+      {{ (state == 'active') | tojson }},
+      {{ is_sut | tojson }},
+      {{ gateway_url | tojson }}
+    );
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>Nidavellir · {% block title %}Console{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='anvil_logo.png') }}">
+  {% block head %}{% endblock %}
+</head>
+<body data-page="{{ active }}">
+<div class="app">
+
+  <!-- sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <a class="brand" href="{{ url_for('overview') }}">
+      <span class="mark" style="display:inline-block; width:36px; height:36px; margin-right:12px; border-radius:8px; overflow:hidden;"><img src="{{ url_for('static', filename='anvil_logo.png') }}" style="width:100%;height:100%;object-fit:cover;display:block;" alt="Logo"></span>
+      <span class="wordmark">Nidavellir<small>arena forge</small></span>
+    </a>
+
+    <nav class="nav" aria-label="Primary navigation">
+      <a class="nav-item {{ 'active' if active == 'overview' }}" href="{{ url_for('overview') }}" {{ 'aria-current="page"' | safe if active == 'overview' }}>
+        <span class="ico"><i class="fa-solid fa-house"></i></span><span class="nav-label">Home</span>
+      </a>
+
+      {# Compatibility routes are later steps of a journey that already owns a nav
+         item, so they highlight that item instead of leaving the group unmarked. #}
+      {% set nav_active = {'launch': 'engagement_new', 'wizard': 'engagement_new'}.get(active, active) %}
+      {% set nav_groups = [
+        ('engagements', 'fa-crosshairs', ['arenas', 'engagement_new', 'launch', 'wizard'], [
+          ('arenas', 'engagements', 'fa-layer-group', 'Engagements', ''),
+          ('engagement_new', 'new_engagement', 'fa-plus', 'New engagement', '')
+        ]),
+        ('evaluations', 'fa-chart-column', ['evaluations'], [
+          ('evaluations', 'evaluations', 'fa-chart-column', 'Overview', ''),
+          ('evaluation_builds', 'evaluations', 'fa-robot', 'Scripted builds', ''),
+          ('evaluation_challenges', 'evaluations', 'fa-cubes', 'Calibration challenges', ''),
+          ('evaluation_suites', 'evaluations', 'fa-layer-group', 'Suites', ''),
+          ('evaluation_runs', 'evaluations', 'fa-code-compare', 'Comparisons', '')
+        ]),
+        ('library', 'fa-book-open', ['scenarios', 'targets', 'agent_library'], [
+          ('scenarios', 'challenge_library', 'fa-cubes', 'Scenario catalog', ''),
+          ('targets', 'target_library', 'fa-bullseye', 'Targets', 'foundation'),
+          ('agent_library', 'agent_library', 'fa-robot', 'Agent builds', '')
+        ]),
+        ('activity', 'fa-wave-square', ['findings', 'evidence', 'agents', 'audit'], [
+          ('findings', 'findings_index', 'fa-bug', 'Findings', ''),
+          ('evidence', 'evidence_index', 'fa-box-archive', 'Evidence', ''),
+          ('agents', 'agent_activity', 'fa-satellite-dish', 'Agent activity', ''),
+          ('audit', 'audit_trail', 'fa-clock-rotate-left', 'Audit trail', '')
+        ]),
+        ('administration', 'fa-sliders', ['providers', 'security', 'settings'], [
+          ('providers', 'providers_capacity', 'fa-server', 'Providers & capacity', 'foundation'),
+          ('security', 'security', 'fa-shield-halved', 'Security', 'foundation'),
+          ('settings', 'administration_settings', 'fa-gear', 'Settings', '')
+        ])
+      ] %}
+      {% set nav_fragments = {
+        'evaluation_builds': '#builds',
+        'evaluation_challenges': '#challenges',
+        'evaluation_suites': '#suites',
+        'evaluation_runs': '#comparisons'
+      } %}
+      {% for group, icon, active_keys, items in nav_groups %}
+      <details class="nav-group" {{ 'open' if active in active_keys }}>
+        <summary class="nav-group__summary">
+          <span class="ico"><i class="fa-solid {{ icon }}"></i></span>
+          <span class="nav-label">{{ group | title }}</span>
+          <i class="fa-solid fa-chevron-down nav-group__chevron"></i>
+        </summary>
+        <div class="nav-group__items">
+          {% for key, ep, item_icon, label, tag in items %}
+          <a class="nav-item nav-item--child {{ 'active' if nav_active == key }}" href="{{ url_for(ep) }}{{ nav_fragments.get(key, '') }}" {{ 'aria-current="page"' | safe if nav_active == key }}>
+            <span class="ico"><i class="fa-solid {{ item_icon }}"></i></span>
+            <span class="nav-label">{{ label }}</span>
+            {% if tag %}<span class="tag">{{ tag }}</span>{% endif %}
+          </a>
+          {% endfor %}
+        </div>
+      </details>
+      {% endfor %}
+    </nav>
+
+    <div class="sidebar-foot">
+      <div class="userbox">
+        <a class="avatar" href="{{ url_for('profile') }}" title="Open profile">{{ (session.get('username') or 'op')[0] | upper }}</a>
+        <div class="grow">
+          <a class="who" href="{{ url_for('profile') }}">{{ session.get('username', 'operator') }}</a>
+          <div class="role">operator</div>
+        </div>
+        <form method="POST" action="{{ url_for('logout') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-ghost btn-sm" title="Log out" aria-label="Log out"><i class="fa-solid fa-right-from-bracket"></i></button>
+        </form>
+      </div>
+    </div>
+  </aside>
+  <button class="sidebar-scrim" id="sidebar-scrim" type="button" aria-label="Close navigation" onclick="Nidavellir.closeSidebar()"></button>
+
+  <!-- main -->
+  <div class="main">
+    <header class="topbar">
+      <button class="btn btn-ghost btn-sm menu-btn" id="sidebar-toggle" type="button"
+              aria-controls="sidebar" aria-expanded="true"
+              onclick="Nidavellir.toggleSidebar()" title="Collapse / expand navigation">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+      <div class="crumb"><span class="sep">Nidavellir</span> <span class="sep">/</span> <b>{% block crumb %}{% endblock %}</b></div>
+      <div class="spacer"></div>
+      <a class="btn btn-ghost btn-sm hide-sm" href="{{ url_for('royal_console') }}" title="Open the new Royal Command console">Royal Console ↗</a>
+      <details class="create-menu" id="create-menu">
+        <summary class="btn btn-primary btn-sm"><i class="fa-solid fa-plus"></i> <span class="create-label">Create</span></summary>
+        <div class="create-menu__panel">
+          <div class="create-menu__head">Create</div>
+          <a href="{{ url_for('new_engagement') }}">
+            <span class="create-menu__icon"><i class="fa-solid fa-crosshairs"></i></span>
+            <span><strong>New engagement</strong><small>Choose purpose, source, configuration, and safety policy</small></span>
+          </a>
+          <div class="create-menu__divider"></div>
+          <a href="{{ url_for('evaluations') }}#comparisons">
+            <span class="create-menu__icon"><i class="fa-solid fa-chart-column"></i></span>
+            <span><strong>Paired evaluation</strong><small>Compare registered scripted builds on a pinned suite</small></span>
+          </a>
+          <a href="{{ url_for('evaluations') }}#challenges">
+            <span class="create-menu__icon"><i class="fa-solid fa-cubes"></i></span>
+            <span><strong>Calibration challenge</strong><small>Pin an eligible source arena for repeatable trials</small></span>
+          </a>
+          <a href="{{ url_for('evaluations') }}#builds">
+            <span class="create-menu__icon"><i class="fa-solid fa-robot"></i></span>
+            <span><strong>Scripted agent build</strong><small>Register a fixed MCP tool plan, not a connected model</small></span>
+          </a>
+        </div>
+      </details>
+      <button class="iconbtn hide-sm" id="copilot-toggle" type="button"
+              title="Co-pilot — chat with your connected model about this arena"
+              onclick="Nidavellir.toggleCopilot()">
+        <i class="fa-solid fa-comments"></i><span>Co-pilot</span>
+      </button>
+      <div class="model-chip-wrap" id="model-chip-wrap">
+        <button class="model-chip" id="model-chip" type="button"
+                title="Model connection — hover to pick a provider, click to manage"
+                onclick="Nidavellir.openModelModal()">
+          <span class="model-chip__logo" id="model-chip-logo"></span>
+          <span class="model-chip__name" id="model-chip-name">Connect model</span>
+          <span class="dot" id="model-chip-dot"></span>
+        </button>
+        <div class="model-menu" id="model-menu" role="menu" aria-label="Pick a model provider">
+          <div class="model-menu__head">Connect a model</div>
+          <div class="model-menu__list" id="model-menu-list"></div>
+        </div>
+      </div>
+      <span class="badge badge--idle" id="orch-badge" title="Orchestrator API health">
+        <span class="dot" id="orch-dot"></span><span id="orch-text">checking…</span>
+      </span>
+    </header>
+
+    <main class="content {% block content_mod %}{% endblock %}">
+      <div class="flashes" id="flashes">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% for category, message in messages %}
+          <div class="flash flash--{{ category }}">
+            <i class="fa-solid {{ 'fa-circle-exclamation' if category in ('danger','warning') else 'fa-circle-info' }}"></i>
+            <span>{{ message }}</span>
+            <button class="x" type="button" aria-label="Dismiss notification" onclick="this.parentElement.remove()"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+          {% endfor %}
+        {% endwith %}
+      </div>
+
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+
+<!-- model connection: pick a provider + store the BYO key (driven by app.js) -->
+<div class="modal" id="model-modal" hidden>
+  <div class="modal__backdrop" onclick="Nidavellir.closeModelModal()"></div>
+  <div class="modal__card" role="dialog" aria-modal="true" aria-label="Connect model">
+    <button class="modal__x" type="button" onclick="Nidavellir.closeModelModal()" title="Close">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+    <div class="modal__head">
+      <span class="model-bubble" id="model-modal-logo"></span>
+      <div>
+        <div class="modal__title" id="model-modal-name">Connect a model</div>
+        <div class="modal__sub" id="model-modal-provider">Choose your provider</div>
+      </div>
+    </div>
+
+    <div class="model-pick" id="model-pick" role="group" aria-label="Provider"></div>
+
+    <form id="model-form" autocomplete="off" onsubmit="return Nidavellir.saveModel(event)">
+      <div class="field">
+        <label class="label" for="model-form-model">Model</label>
+        <input class="input mono" type="text" id="model-form-model" placeholder="model id" spellcheck="false">
+      </div>
+      <div class="field" style="margin-bottom:10px">
+        <label class="label" for="model-form-key">API key</label>
+        <input class="input mono" type="password" id="model-form-key" placeholder="paste your key" autocomplete="new-password">
+        <div class="help" id="model-form-keyhint">Encrypted at rest — never shown again.</div>
+      </div>
+      <div class="field" id="model-form-base-row" style="margin-bottom:10px" hidden>
+        <label class="label" for="model-form-base-url">Base URL <span class="faint">· optional</span></label>
+        <input class="input mono" type="text" id="model-form-base-url" placeholder="https://host/v1" spellcheck="false">
+        <div class="help">OpenAI-compatible endpoint — overrides the preset. Required for a custom / self-hosted host.</div>
+      </div>
+      <div class="model-form__err" id="model-form-err" hidden></div>
+      <div class="model-form__verify" id="model-form-verify" hidden></div>
+      <div class="model-form__actions">
+        <button type="submit" class="btn btn-primary" id="model-form-save">Connect</button>
+        <button type="button" class="btn" id="model-form-test" onclick="Nidavellir.testModel()">Test connection</button>
+        <button type="button" class="btn btn-danger" id="model-form-remove" hidden onclick="Nidavellir.removeModel()">Remove</button>
+      </div>
+    </form>
+
+    <dl class="kv" id="model-modal-kv"></dl>
+    <p class="modal__foot">
+      Your key is <strong>encrypted at rest</strong> and never returned in plaintext —
+      Nidavellir custodies it and provides the connection; the model stays yours
+      (bring-your-own). The connection waits in <strong>standby</strong> until a
+      scenario generator or an agent-mode arena needs it.
+    </p>
+  </div>
+</div>
+
+<!-- co-pilot: chat with the connected model, arena context injected (app.js) -->
+<aside class="copilot" id="copilot" hidden aria-label="Co-pilot">
+  <div class="copilot__head">
+    <span class="copilot__title"><i class="fa-solid fa-robot"></i> Co-pilot</span>
+    <span class="copilot__ctx" id="copilot-ctx">no arena</span>
+    <button class="copilot__x" type="button" onclick="Nidavellir.toggleCopilot()" title="Close">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  </div>
+  <div class="copilot__log" id="copilot-log">
+    <div class="copilot__hint">
+      Ask your connected model about this arena — it sees the scenario, topology,
+      setup state, and recent activity. Advise-only: it can't act, you drive the console.
+    </div>
+  </div>
+  <form class="copilot__form" id="copilot-form" onsubmit="return Nidavellir.sendCopilot(event)">
+    <textarea id="copilot-input" rows="2" placeholder="Ask about this arena…  (Enter to send, Shift+Enter for newline)"></textarea>
+    <button class="btn btn-primary btn-sm" type="submit" id="copilot-send">Send</button>
+  </form>
+</aside>
+
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

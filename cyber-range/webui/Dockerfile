@@ -1,3 +1,10 @@
+FROM node:22.16.0-bookworm-slim AS console-build
+WORKDIR /console
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY frontend/ ./
+RUN npm run build
+
 FROM python:3.11-slim
 
 # Metadata
@@ -14,6 +21,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . /app/webui
+COPY --from=console-build /static/console/ /app/webui/static/console/
 
 # Expose Flask port
 EXPOSE 5000

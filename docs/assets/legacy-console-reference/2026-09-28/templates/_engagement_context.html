@@ -1,0 +1,39 @@
+<div class="engagement-context">
+  <div>
+    <span class="label">Engagement setup · 2 of 3</span>
+    {% if engagement_purpose %}
+    <strong>{{ engagement_purpose.label }}</strong>
+    {% else %}
+    <strong>Purpose not selected</strong>
+    {% endif %}
+  </div>
+  <span class="engagement-context__sep"><i class="fa-solid fa-arrow-right"></i></span>
+  <div>
+    <span class="label">Source</span>
+    <strong>{{ engagement_source }}</strong>
+  </div>
+  {% if engagement_participant %}
+  <div>
+    <span class="label">Participants</span>
+    <strong>{{ engagement_participant.label }}</strong>
+  </div>
+  {% endif %}
+  {% if engagement_time_box %}
+  <div>
+    <span class="label">Time box</span>
+    <strong>{{ engagement_time_box_label }}</strong>
+  </div>
+  {% endif %}
+  <div class="spacer"></div>
+  <a href="{{ url_for('new_engagement', source=engagement_source | lower, purpose=engagement_purpose.id if engagement_purpose else '', participant_mode=engagement_participant.id if engagement_participant else '', engagement_time_box_seconds=engagement_time_box or '') }}" class="btn btn-sm btn-ghost">Change</a>
+</div>
+<div class="policy-review">
+  <span><i class="fa-solid fa-lock"></i> Runtime containment is provider-enforced</span>
+  {% if engagement_source == 'Target' %}
+  <span><i class="fa-solid fa-eye-slash"></i> Agent visibility is black-box; setup source is operator/configurator scoped</span>
+  {% else %}
+  <span><i class="fa-solid fa-eye"></i> Visibility and stance are challenge-defined and binding-enforced</span>
+  {% endif %}
+  <span><i class="fa-solid fa-wave-square"></i> Monitoring is automatic</span>
+  <span><i class="fa-solid fa-scale-balanced"></i> Scoring uses challenge ground truth when present, discovery signals otherwise</span>
+</div>

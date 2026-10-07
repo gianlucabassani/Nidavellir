@@ -103,9 +103,15 @@ No cloud account needed — the dev stack runs everything in Docker, mock mode p
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
-# Console: http://localhost:5000   (login: admin / nidavellir)
+# Console: http://localhost:5000   (login: admin / nidavellir; opens /console)
+# Legacy console: http://localhost:5000/?legacy=1
 # API:     http://localhost:8000   (header: X-API-Key: dev-insecure-key)
 ```
+
+The Royal Command console is the default UI: `/` opens `/console`. Set
+`WEBUI_DEFAULT_CONSOLE=false` on the WebUI service to serve the legacy home at
+`/` again. Legacy routes stay mounted in either setting, and the console footer
+links to the legacy home at `/?legacy=1`.
 
 To run **real container arenas** on the local Docker daemon, set `RANGE_PROVIDER=docker-local`
 and `MOCK_MODE=false` on the worker (see `docker-compose.dev.yml`). For OpenStack/AWS, configure

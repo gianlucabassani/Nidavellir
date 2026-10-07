@@ -3,6 +3,122 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-10-07 — Reconcile Royal Command PR with current main
+
+**Outcome:** Opened [PR #2](https://github.com/gianlucabassani/Nidavellir/pull/2)
+and recorded the focused Standards/Spec review. GitHub reported merge conflicts
+because `main` had advanced with the research track. Merged `main` (`2f3b2a0`)
+into the UI branch; only `ISSUES.md` and this journal required manual resolution.
+Preserved every dated entry from both branches, ordered by date, and kept the
+current research risk register plus open UI-R1. Reviewed BFF code, the forward
+browser component and WebUI tests are byte-identical to the reviewed head.
+
+**Files:** `ISSUES.md`, `docs/JOURNAL.md` and updated UI verification records;
+other incoming changes are the existing main research work, preserved as-is.
+
+**Verification:** Combined-tree `make release-check` passed on Python 3.11.14:
+Ruff clean, Bandit zero medium/high findings, SQLite 1094 passed (4 skipped,
+6 deselected), PostgreSQL 1098 passed (6 deselected), migration/API/UI/gateway
+readiness smoke. TypeScript, Prettier and Vite passed. Checked all 53 UI-branch
+journal entries and all 63 main entries survive, and the reviewed BFF/component/
+test files did not change. UI diff against `main` passes whitespace checks;
+existing main evidence logs remain unmodified.
+
+**Unresolved risks / next concrete step:** Publish the reconciliation and merge
+PR #2 after remote CI passes. UI-R1 remains open for the accepted legacy parity,
+live operations, session/CSRF/reconnect journeys and accessibility evidence.
+No mock arena or reference artifact was removed.
+
+## 2026-10-07 — Prepare Royal Command merge and fix focused review findings
+
+**Outcome:** Committed the previously uncommitted work as three phase commits:
+Release G (`94cfb4e`), Release H (`dc93f04`) and approved default cutover
+(`95b03f4`). ADR-0017 now records the operator-approved 2026-10-07 default
+switch and explicitly retains the unrecorded security/reconnect browser journeys
+and formal accessibility review as open items. Independent Standards and Spec
+reviews found four unique P2 defects in the new BFF/trace/forward paths; all were
+fixed and re-reviewed with no remaining blocker in that focused scope. Trace
+now uses the actual export keys and type-filtered event presence queries.
+Forward reads fail visibly; retries preserve a browser action key and reuse the
+service's existing idempotency/budget contract. UI-R1 remains open.
+
+**Files:** `cyber-range/webui/app.py`, `frontend/src/arena/record.tsx`,
+`tests/test_webui.py`, `scripts/ui-forward-retry-check.cjs`, ADR-0017,
+`ISSUES.md`, cutover evidence and
+`docs/verification/ui-merge-review-2026-10-07.md`, plus this journal.
+
+**Verification:** Regressions failed before fixes and passed afterwards; full
+WebUI tests passed in pinned Python 3.11. Browser retry regression passed with
+all API calls intercepted; Release H smoke passed 25/25 with mutations refused.
+TypeScript, Prettier and Vite passed. Final corrected `make release-check` passed
+on Python 3.11.14: Ruff clean, Bandit zero medium/high findings, SQLite 980 passed
+(4 skipped, 6 deselected), PostgreSQL 984 passed (6 deselected), migration and
+API/UI/gateway readiness smoke. `git diff --check` passed.
+
+**Unresolved risks / next concrete step:** Publish the review-fix commit and open
+the PR against `main`; check remote CI before merge. The focused review does not
+claim exhaustive review of the entire console branch. Complete UI-R1 separately:
+legacy-only setup output/custom topology/non-Docker launches, real-service
+forward/archive/list-destroy journeys, session expiry/CSRF denial/reconnect and
+formal accessibility evidence. The mock review arena and rejected reference
+artifacts remain untouched.
+
+## 2026-10-07 — Royal Command console becomes the default UI
+
+**Outcome:** The operator reviewed Releases G–H and approved them ("Overall approved"). `WEBUI_DEFAULT_CONSOLE` now defaults to true in `app.py` and `docker-compose.yml`, so `/` (and the post-login landing page) opens `/console`. Setting it to false restores the legacy home. The console footer's "Legacy console" link uses `/?legacy=1`, which bypasses the redirect so the legacy home stays reachable. Follow-up fixes:
+- **Research layout:** the cards are now two independent columns (01/03/05 and 02/04/06), so right-hand cards no longer leave gaps waiting on taller left-hand cards; one-column order is preserved with `order`.
+- **Topology draw-in:** it now uses a fixed long dash. With `pathLength`-relative dashes the edges could stay dotted.
+
+**Incident:** during the first fallback drill the WebUI container was recreated with plain `docker compose up -d webui`. That dropped the `docker-compose.dev.yml` bind-mount, so the console served the Sep 29 image (old N logo and topology), the operator saw a stale UI, and the first drill result was invalid. The container was recreated with the dev override, the mount was verified, and the drill was re-run. No source or data was lost; arenas were untouched (`--no-deps`).
+
+**Files:** `cyber-range/webui/app.py`, `docker-compose.yml`, `cyber-range/webui/frontend/src/{main.tsx,styles.css,research/index.tsx}`, `tests/test_webui.py`, `README.md`, `cyber-range/webui/frontend/README.md`, `docs/UI_REBUILD_PLAN.md`, `ISSUES.md`.
+
+**Verification:**
+- **Tests:** a new WebUI test for the legacy escape failed first, then passed. A fresh-interpreter test asserts the default is the console when the variable is unset. The legacy-home tests pin the switch to false explicitly. The full `tests/test_webui.py` passes.
+- **Live fallback drill (dev stack, bind-mount verified):** with false, `/` → 200 legacy; with true, `/` → 302 `/console`, `/?legacy=1` → 200 and `/console` → 200. Login lands on `/console`.
+- **Browser checks:** Release B/D/G/H, the stepper check, Prettier and `git diff --check` pass. The pinned gate for Release H passed earlier today; this change only touches the default switch, tests and frontend layout.
+
+**Unresolved risks / next step:** UI-R1 stays open for the items it still names: setup command output, the custom topology builder and non-Docker-local launches still use legacy pages; forwards, archive removal and destroy-from-list have not been exercised against the live service; a formal accessibility review has not been recorded. Commit the branch as whole-phase commits when the operator asks.
+
+## 2026-10-07 — Release H: complete console menus, Forge FX and sign-in
+
+**Outcome:** Operator asked for refinement, FX, quality and personality, and for every menu to be completed before a manual review that may make `/console` the default. Parity gaps were inventoried against the legacy pages first. New console-native views:
+- **Arena:** Score & trace (assessment with mode/progress/confirmed/fault sites, milestones and signal counts; ground-truth Challenges hidden behind an explicit Reveal; self-declared run attribution with the eval-export link) and Service forwards (open a 120-second lease from a foothold, list and revoke leases, local client command). The Access tab gains the agent connect recipe with copy buttons.
+- **All arenas** (`/console/arenas`): All/Live/Archived filters, search, destroy (live) and remove/clear archive (terminal records), each behind the in-page confirm dialog.
+- **All evaluations** (`/console/evaluations`): every comparison with builds, suite and a state filter. Both pages are in the Library menu, and every former `/engagements` and `/evaluations` link now points at them.
+- **Research home:** a Host & arenas capacity panel. Activity gains verdict and source filter chips.
+- **Sign-in:** the Flask login page is now a Forge plate with the same form contract (username, password, CSRF token, `next` handling).
+- **FX:** topology edges draw in from the foothold, panels and step rails enter in sequence, controls press, gold buttons get a brass sheen, the live dot pulses, and loading uses Forge-shaped skeletons. All of it is off under reduced motion.
+- **Smaller changes:** the arena header's "Open all arena controls" became a subtle "Legacy arena page" link, because setup command output, the custom topology builder and non-Docker-local launches remain legacy-only. The Cyber Range Purpose hint now states that purpose is recorded for audit only and does not change scoring, containment or limits (verified in `api.py` and `scoring.py`).
+
+**New BFF routes:** `GET /api/console/arenas/<id>/score|trace`, `GET/POST /api/console/arenas/<id>/forwards`, `POST …/forwards/<fid>/revoke`, `POST /api/console/archive/<id>/delete`, `POST /api/console/archive/clear`, `gateway_url` in the arena projection, page routes `/console/arenas` and `/console/evaluations`. Each whitelists fields (the score test asserts private explanation text and manifest flags do not leave the server), validates slugs, and relies on CSRF and the orchestrator's own checks. The service only deletes destroyed or failed records.
+
+**Files:** `cyber-range/webui/app.py`, `templates/login.html`, `frontend/src/{main.tsx,ui.tsx,types.ts,styles.css}`, `src/arena/{record.tsx,index.tsx,navigation.tsx,access.tsx}`, `src/shared/lists.tsx`, `src/research/index.tsx`, `src/activity/index.tsx`, `src/range/new.tsx`, `src/benchmark/{index,new}.tsx`, `src/range/index.tsx`, `tests/test_webui.py`, `scripts/ui-release-h-check.cjs`, `scripts/inventory-webui-routes.py`, `docs/UI_ROUTE_ACTION_MATRIX.md`.
+
+**Verification:** Four new WebUI tests failed first, then passed; the full `tests/test_webui.py` passes. `scripts/ui-release-h-check.cjs` passes 25/25 on the live dev stack against both an active mock arena and an archived record. Every destructive or lease POST is intercepted and refused, and the run asserts none were sent. Release B–G, stepper, assistant/rail smoke, TypeScript, Prettier and Vite pass. Live renders at 1440 Day/Night and 390 showed no overflow or console errors. The pinned `make release-check` passed on Python 3.11.14: Ruff and Bandit clean, 970 SQLite tests (4 skipped, 6 deselected), 974 PostgreSQL tests (6 deselected), and migration/API/UI/gateway smoke.
+
+**Unresolved risks / next step:** Forwards, archive removal and destroy-from-list were not exercised against the service (by design during review). Score/Challenges were exercised against a mock arena's real projection only. Setup command output and custom/non-Docker launches still need the legacy page. `WEBUI_DEFAULT_CONSOLE` remains off pending the operator's manual review; UI-R1 remains open.
+
+## 2026-10-07 — Release G (cont.): Forge map on Research, intake stepper, purpose meanings
+
+**Outcome:** Operator requests during live review. The Research home "Active session" panel now draws the same Forge `SegmentMap` as the Arena page from the arena projection (`/api/console/arenas/<id>`), replacing the icon-only mini topology. `/console/research/new` is a three-step Forge stepper (Target → Consent & limits → Review & launch) with a brass step rail, a navy "How it works" plate per step, per-step validation, Back/Next, and a review step showing the pinned identity and the Forge map of the previewed topology before Launch. The intake request, preview, pinning and launch logic are unchanged; the single-page form remains at `?layout=form` for A/B comparison. On Cyber Range → Launch, Purpose keeps its names (operator choice) but "Research" is labelled "Manual research" and each option shows its service meaning. A mock-provider arena `forge-review` (2d68afe3) was launched on the dev stack for browsing; no containers were created.
+
+**Files:** `cyber-range/webui/frontend/src/research/{index.tsx,new.tsx}`, `src/range/new.tsx`, `src/arena/forge.tsx` (exported `stationDetail`), `src/styles.css`, `scripts/ui-release-g-stepper-check.cjs`.
+
+**Verification:** `scripts/ui-release-g-stepper-check.cjs` 15/15 (mocked preview; launch never clicked). It found two defects before passing: hidden step groups still displayed (`display: grid` beat `[hidden]`), and native form validation silently blocked Next on a hidden required checkbox (stepper form is now `noValidate` with per-step validation). Release B–G checks, assistant/rail smoke, TypeScript, Prettier, Vite and `git diff --check` pass. The live Research render was checked without mocks at 1440 Day/Night (map) and 1024/390 (station-list fallback, as on the Arena page).
+
+**Unresolved risks / next step:** The stepper was not exercised with a real Git/OCI/bundle preview or launch. The Cyber Range launch preview still uses its narrower panel and falls back to the station list. Awaiting operator approval; UI-R1 remains open.
+
+## 2026-10-07 — Release G: workflow pass inside the approved Forge look
+
+**Outcome:** Applied the functional findings of the 2026-10-07 legacy-vs-Royal-Command audit without palette, bar, typography or surface changes. Arena tool row: tools that cannot use the selected station are dashed and muted with no launch arrow (still openable to read records); ready tools keep a brass edge. The assistant launcher loads the model connection on mount and shows a status dot (accessible name stays "Research assistant"; state is in its description and tooltip); the footer reserves space so the page end is clear of the launcher. Revoke (Agent access) and Finish setup use a new in-page `ConfirmDialog` instead of `window.confirm`. Research home gains a "05 / Activity" panel (latest attributed events, All/Agents/Human/System filter, newest first), and its Needs review / findings / Proof desk links open console routes instead of legacy pages. Benchmark home gains a Builds → Challenges → Suite → Compare step strip marking the first unmet step. Status pills no longer stretch in grid cells; counts and station facts use tabular figures. Token `--purple` (now brown) renamed `--accent`; z-index values use a named scale. Awaiting the operator's manual approval. The warm-charcoal Night proposal (A/B "B") was rejected by the operator as out of tune; instead, Night keeps its navy page and the Forge plates (Arena workbench, Research featured, Benchmark latest) get a brass edge and deeper drop, applied live in `/console` for in-browser review. Moving the phone launcher into the bar remains a proposal only.
+
+**Files:** `cyber-range/webui/frontend/src/{ui.tsx,styles.css}`, `src/arena/{forge.tsx,forge.css,navigation.css,setup.tsx,access.tsx}`, `src/research/index.tsx`, `src/benchmark/index.tsx`, `src/shared/{assistant.tsx,assistant.css}`, `scripts/ui-release-g-check.cjs`, renders `docs/assets/ui-concepts/renders/release-2026-10-07g-*.png` (incl. `proposal-nightB-*`). Viewable mock: https://claude.ai/artifact/CRLacLB7eURYyEaEYLSgBx (private).
+
+**Verification:** `scripts/ui-release-g-check.cjs` failed 11/20 against the previous build, then passed 23/23 three runs in a row. Release B (17/17), C (23/23), D (22/22), E (20/20), F (10/10), the assistant/rail smoke, TypeScript, Prettier, Vite and `git diff --check` pass. All projections were mocked; no lifecycle, revoke, setup or model request reached the service. Frontend-only; `make release-check` was not rerun (Release D remains the backend evidence).
+
+**Unresolved risks / next step:** On phones the fixed launcher can still overlay content mid-scroll. "View all" sessions/evaluations and "Open all arena controls" still go to legacy pages. The Benchmark step strip repeats the Registry panel counts; consider trimming one after review. UI-R1 remains open.
+
 ## 2026-10-07 — Phase 2 registration/execution correspondence
 
 **Outcome:** RESEARCH-R1/R4 close for the new structured gate, not historical
@@ -1197,6 +1313,595 @@ same BYO-agent pair with one deliberate agent/build change and record the
 detected regression, then decide whether custom connection headers belong on
 the platform path.
 
+## 2026-10-02 — Release F: tidy tool row and lifecycle text, monitor signals
+
+**Outcome:** Addressed the operator's polish notes: the loose "Tools for <station>" caption is gone; tool buttons show a short status ("Use api", "Unavailable here", "No web service", "Attacker station", "Archived record") at equal widths on desktop, with the full reason in the tooltip and accessible name. The reset reason no longer sits loose beside the lifecycle buttons; Arena actions shows Reset as unavailable with a readable reason ("Unavailable: missing immutable inputs or readiness policy"), including on archived records. Added a collapsible "Monitor signals" row above the event trace using the service's recorded monitor signals (count, latest summary; expanded list with time, severity and node; explicit empty and unavailable states). No "Run preflight" action was added: the preflight endpoint returns the recorded setup preflight, not a live check, so a button would misrepresent it. Awaiting the operator's manual approval.
+
+**Files:** `cyber-range/webui/frontend/src/arena/{forge.tsx,forge.css}`, `scripts/ui-release-f-check.cjs`, updated `scripts/ui-release-{c,d}-check.cjs`, renders `docs/assets/ui-concepts/renders/release-2026-10-02f-*.png`.
+
+**Verification:** `scripts/ui-release-f-check.cjs` failed first (no reset explanation in the menu), then passed 10/10 with mocked arena and evidence projections. Release B–E checks, the assistant/rail smoke, TypeScript, Prettier and Vite pass. Frontend-only; the Release D pinned gate remains the backend evidence.
+
+**Unresolved risks / next step:** Monitor signals were shown with mocked data; the dev stack's records have none. Candidates next: assistant panel docking, or the Cyber Range preview using the station facts. UI-R1 remains open.
+
+## 2026-10-02 — Release E: explicit target handoff from the map to tools
+
+**Outcome:** In the Forge inspector, each tool that can use the selected station offers a named link ("Use api in HTTP", "Use db in PoC"); ineligible tools and the attacker station get none. Following it opens the tool with `?target=<station>` and preselects that station in HTTP, Browser or PoC, with a "Target from map" notice. A station the tool cannot use is refused with a reason and is not silently swapped. Changing the target by hand removes the map origin from the URL and the notice. Nothing is submitted by the handoff; the service still authorizes every request. Roles that are acronyms display in capitals (API, DNS, LDAP…). After operator feedback about empty space, the per-station tool list moved out of the inspector into the workbench row ("Tools for api": each tool shows "Use api" or why it cannot be used), and the map height now follows its stations: the panel shrank from 510 to 378 px (archived record) and 560 to 437 px (mock pivot), and the empty band under the workbenches fell from about 130 px to at most 36 px. Approved by the operator on 2026-10-02; the "Tools for <station>" label and the loose reset reason were flagged as unpolished and are addressed in Release F.
+
+**Files:** `cyber-range/webui/frontend/src/arena/{target.tsx,forge.tsx,forge.css,http.tsx,browser.tsx,poc.tsx}`, `src/styles.css`, `scripts/ui-release-e-check.cjs`, renders `docs/assets/ui-concepts/renders/release-2026-10-02e-*.png`.
+
+**Verification:** `scripts/ui-release-e-check.cjs` failed first (no handoff link), then passed 16/16 three runs in a row after its mock was changed to fetch the base record once (a first run had failed on a fetch racing navigation). Its new empty-space checks failed at 148/126 px before the layout fix and pass now (20/20). It asserts no HTTP, Browser or PoC request is sent. Release B/C/D checks, the assistant/rail smoke, TypeScript, Prettier and Vite pass. Frontend-only change; the last pinned gate (Release D) remains the backend evidence.
+
+**Unresolved risks / next step:** Exercised with mocked active records only; a live Docker-local handoff and request remain unexercised. UI-R1 remains open.
+
+## 2026-10-02 — Release D: topology adapts to the spawned scenario
+
+**Outcome:** The arena projection now carries tester-facing station facts from the pinned lifecycle recipe, status outputs and capability manifest: role, image and pin status, declared ports, networks, private IP, readiness, a published URL for live records only, and per-arena HTTP/Browser/PoC/file/forward/exec/setup/observe availability with the service's reason. SSH commands, environment key names and credentials stay server-side. The Forge map uses a new layered layout (`topology/layout.ts`): columns alternate stations and networks by hop from the attacker foothold, so pivots and hosts on several networks read left to right; stations keep a fixed size, wide arenas scroll inside the panel with a "Map continues" cue, and column labels distinguish pivot from target columns. Station boxes show role and ports. The inspector shows those facts plus "Tools for this station" with the reason each tool can or cannot be used. Reset reasons are readable text. Approved by the operator on 2026-10-02 ("Continue").
+
+**Files:** `cyber-range/webui/app.py`, `tests/test_webui.py`, `cyber-range/webui/frontend/src/topology/{layout.ts,SegmentMap.tsx}`, `src/arena/{forge.tsx,forge.css}`, `src/types.ts`, `src/styles.css`, `scripts/ui-release-d-check.cjs`, renders `docs/assets/ui-concepts/renders/release-2026-10-02d-*.png`.
+
+**Verification:** Two new WebUI projection tests failed first, then passed. `scripts/ui-release-d-check.cjs` passes 22/22 against mocked 6-station (three networks, a bridging host, an unlinked station) and 14-station arenas plus the real record. Note: this browser check was written after the frontend change, so it was not observed failing first. Release B/C checks, the assistant/rail smoke, TypeScript, Prettier and Vite pass. The pinned `make release-check` passed: 966 SQLite tests (4 skipped, 6 deselected), 970 PostgreSQL tests (6 deselected) and smoke.
+
+**Unresolved risks / next step:** Only mocked multi-network arenas were rendered; a real Docker-local multi-segment scenario is still unexercised. The Cyber Range preview uses the same layout without the new station facts. Selecting a station does not yet hand its target to HTTP/Browser/PoC. UI-R1 remains open.
+
+## 2026-10-02 — Release C: Forge is the single Arena home
+
+**Outcome:** `/console/arena/<id>` now opens the Forge view with the Prepare / Investigate / Record rail on every tool; the old Overview grid, the long tab strip, the "Forge preview" tab and the `layout=forge` switch are gone (`?tab=forge` still works). Content that only the Overview had moved into Forge: recent findings with verdicts and the PoC job count in the record row, the reason a reset is unavailable, and the lifecycle result with the "Open replacement arena" link, now shown as a status row above any Arena view. The disabled "Fuzz · planned" tile was dropped. The Arena actions menu closes after an action is chosen. 58 CSS selectors used only by the removed views were deleted. Approved by the operator on 2026-10-02.
+
+**Files:** `cyber-range/webui/frontend/src/arena/{index,forge,navigation,setup}.tsx`, `arena/forge.css`, `main.tsx`, `styles.css`, `scripts/ui-release-c-check.cjs`, renders `docs/assets/ui-concepts/renders/release-2026-10-02c-*.png`.
+
+**Verification:** `scripts/ui-release-c-check.cjs` failed first (no rail on the plain Arena URL), then passed 23/23 using mocked arena records and a mocked reset response (no lifecycle request reached the service). Release B checks (17/17), the assistant/rail smoke, TypeScript, Prettier and Vite pass.
+
+**Unresolved risks / next step:** "Open all arena controls" still links to the legacy arena page (needed until UI-R1 parity). Mocked active renders reuse the archived record's station states. Next: Release D, adaptive topology with clear scenario information for the tester.
+
+## 2026-10-02 — Release B: readable topology, truthful assistant status, compact launcher
+
+**Outcome:** Functional fixes within the approved look. Topology stations are drawn at a fixed 184×70 px with 14 px names; only the column spacing follows the available width (540–1000 px, centred above). Below 540 px the panel shows the readable network list and station buttons instead of shrinking or scrolling. The assistant status line now reports the connection (checking, unavailable, "Connect a model to ask questions.", "Ready for your question.") instead of saying "Ready when a model is connected" while connected. Below 1280 px the closed launcher is a 44 px icon button with the same accessible name; wider screens keep the labelled button. Topology counts pluralize. Approved by the operator on 2026-10-02.
+
+**Files:** `cyber-range/webui/frontend/src/topology/SegmentMap.tsx`, `src/styles.css`, `src/shared/assistant.tsx`, `src/shared/assistant.css`, `scripts/ui-release-b-check.cjs`, renders `docs/assets/ui-concepts/renders/release-2026-10-02b-*.png`.
+
+**Verification:** `scripts/ui-release-b-check.cjs` failed 5/17 before the change (station 134 px wide at 1024 vs 266 px at 1920, 11 px names, wrong connected status, full-width launcher at 1024/390), then passed 17/17. `scripts/ui-assistant-rail-smoke.cjs`, TypeScript, Prettier and Vite pass. Model responses were mocked; no provider was contacted and nothing was launched.
+
+**Unresolved risks / next step:** Only two-node archived records exist on the dev stack, so N-node layout is still the two-column recipe view; the layered topology and target handoff remain planned. The open assistant panel still overlays the inspector at desktop widths. UI-R1 remains open.
+
+## 2026-10-02 — Release A: anvil brand, centred workspaces, no mock strip
+
+**Outcome:** On the restored Royal Command look: removed the global mock-mode strip (mock state stays labelled on the Cyber Range notice, arena subtitle and intake form). Replaced the "N" tile with the anvil emblem, using a new transparent, cropped copy `cyber-range/webui/static/anvil_emblem.png` (the original `anvil_logo.png` is unchanged). Centred Research, Benchmark and Cyber Range on the bar at 1180 px and wider; the compact and phone layouts keep their existing grouping. Approved by the operator on 2026-10-02 after manual review.
+
+**Files:** `cyber-range/webui/frontend/src/main.tsx`, `src/styles.css`, `cyber-range/webui/static/anvil_emblem.png`, renders `docs/assets/ui-concepts/renders/release-2026-10-02a-*.png`.
+
+**Verification:** TypeScript, Prettier and Vite pass; `scripts/ui-assistant-rail-smoke.cjs` passes. Chromium measured the workspace group centred within 2 px of the bar centre at 1440, 1280 and 1200 px in Day and Night, with no document overflow at 1440/1280/1200/1024/390.
+
+**Unresolved risks / next step:** UI-R1 remains open. Each further release pauses for manual approval.
+
+## 2026-10-02 — Forge foundations attempt rejected and reverted
+
+**Outcome:** Implemented checkpoint C1 of the UI audit (cool navy-tinted Day tokens, Geist and runic fonts, a refitted 56 px bar, theme-locked Forge surfaces, removal of numbered labels and decoration). The operator rejected it: it looked worse than before, the bar lost its character, and making Forge surfaces follow the light theme removed the navy-on-stone contrast that made the console look good. The frontend was restored to its pre-C1 state. The only change kept is the shared-resource links (Targets, Agents, Evidence, Activity), now always in a **Library** dropdown instead of inline links. The legacy backup is untouched.
+
+**Lesson for later work:** keep the navy Forge plate on the warm stone Day page, the brass-boxed active workspace and the existing bar proportions. Propose further visual changes as side-by-side A/B renders before applying them.
+
+**Files:** `cyber-range/webui/frontend/src/main.tsx` and `styles.css` (Library menu). Rejected attempt kept for reference: [plan](superpowers/plans/2026-10-02-ui-forge-foundations.md), [verification](verification/ui-forge-foundations-2026-10-02.md), `scripts/ui-foundation-smoke.cjs` (encodes the rejected direction; not a gate) and `foundation-*-2026-10-02.png` renders.
+
+**Verification:** After the revert, TypeScript, Prettier, Vite and `scripts/ui-assistant-rail-smoke.cjs` pass. The pinned `make release-check` passed during the attempt (964 SQLite, 968 PostgreSQL); the revert changed frontend files only.
+
+**Unresolved risks / next step:** UI-R1 remains open. The audit's functional findings (topology scaling, target handoff, assistant status line and overlap, setup history) still stand; visual direction needs operator selection from A/B renders first.
+
+## 2026-10-01 — Restore the research assistant and contextual Arena navigation
+
+**Outcome:** Restored a global React Research assistant with inline BYO model connection, masked status, arena-aware streamed chat, stop/clear controls and conversation continuity across same-arena tools. Reused the existing Flask/service credential and chat boundaries. Added Prepare/Investigate/Record category navigation to the Forge preview, keyboard/hover/click flyouts, responsive category navigation, and compact setup-phase rendering. Fixed route reconciliation when returning to an already-selected primary workspace. The prototype remains opt-in; the wider rollout awaits review.
+
+**Files:** `cyber-range/webui/frontend/src/shared/assistant.tsx`, `assistant.css`, `arena/navigation.tsx`, `navigation.css`, `arena/index.tsx`, `arena/setup.tsx`, `arena/forge.css`, `main.tsx`, `scripts/ui-assistant-rail-smoke.cjs`, [verification and renders](verification/ui-assistant-navigation-2026-10-01.md), and this journal.
+
+**Verification:** TypeScript, Prettier, Vite, browser-script syntax and `git diff --check` passed. Browser tests used synthetic credentials, mocked model replies and mocked setup states; verified connection form/key clearing/CSRF, text escaping, failed-turn recovery, same-arena chat continuity, keyboard dismissal, setup phases/defaults, and navigation/assistant reflow at 1024, 760, 390 and 320 px. The final pinned release gate on 2026-09-30 passed Ruff, source-only Bandit, 964 SQLite tests (4 skipped, 6 deselected), 968 PostgreSQL tests (6 deselected), and smoke. The restarted session completed the interrupted browser check without repeating model writes or infrastructure operations.
+
+**Unresolved risks / next step:** No real provider was contacted; real model streaming/cancellation remains unverified here. Chat history is memory-only and clears on refresh or changed arena context. Setup/lifecycle mutations were not exercised by this visual checkpoint. Keep UI-R1 open and await operator review before extending the approved shell to the remaining workspaces.
+
+## 2026-09-30 — Refine Forge proportions around researcher tasks
+
+**Outcome:** The approval preview now uses a slim wrapping arena summary, a shorter topology canvas and a compact station inspector. Removed the duplicate workbench banner, desktop station buttons when graph selection is available, and planned Fuzz controls. HTTP/Browser/PoC are grouped below the canvas; Findings and Evidence share a record row. Station metadata and event trace expand on demand. Reset/Destroy are grouped in Arena actions while Stop/Resume stays visible for active records, using the existing confirmation flow.
+
+**Files:** `cyber-range/webui/frontend/src/arena/forge.tsx`, `forge.css`, `topology/SegmentMap.tsx`, revised renders and recording linked in [prototype review](verification/ui-forge-prototype-2026-09-30.md), and this journal.
+
+**Verification:** TypeScript, Prettier, Vite and `git diff --check` passed. Chromium verified keyboard/pointer station selection, trace expansion, reduced motion, and no document overflow with station selection at 1024, 760, 390 and 320 px. The final pinned release gate passed Ruff, source-only Bandit, both SQLite and PostgreSQL suites (968 PostgreSQL tests passed, 6 deselected), and smoke.
+
+**Unresolved risks / next step:** The preview remains an archived mock record and does not verify live lifecycle operations. UI-R1 stays open. Await visual approval of these revised proportions before extending this design across the other workspaces.
+
+## 2026-09-30 — Deliver the first interactive Forge Arena approval checkpoint
+
+**Outcome:** Added an opt-in `tab=forge` Arena composition: one connected topology/inspector surface, selectable stations, compact tool strip, evidence summary and collapsible event trace. Restored the original emblem inside the workbench. Selection, hover, focus and trace motion respect reduced motion. Existing lifecycle confirmations and tool routes are reused; selection does not silently scope tool operations. The existing overview remains available for comparison. Work stops at the operator's requested approval boundary before redesigning the other sections.
+
+**Files:** `cyber-range/webui/frontend/src/arena/forge.tsx`, `forge.css`, `arena/index.tsx`, `topology/SegmentMap.tsx`, [prototype evidence](verification/ui-forge-prototype-2026-09-30.md), day/night/phone renders, interaction recording and this journal.
+
+**Verification:** TypeScript, Prettier, Vite and `git diff --check` passed. Chromium verified pointer and keyboard station selection, trace expansion, reduced motion and no desktop JavaScript errors; station selection and no document overflow passed at 1024, 760, 390 and 320 px. The pinned release gate passed Ruff, source-only Bandit, 964 SQLite tests (4 skipped, 6 deselected), 968 PostgreSQL tests (6 deselected) and smoke.
+
+**Unresolved risks / next step:** The captured environment is an archived mock arena. Live lifecycle operations were not exercised in this visual checkpoint. UI-R1 remains open; await the operator's visual approval, then extend the approved composition across the remaining workspaces and verify their full workflows.
+
+## 2026-09-30 — Make topology and workspace navigation legible
+
+**Outcome:** The opt-in console now renders an attacker–network–target SVG topology from operator-safe declared segment membership in Cyber Range and arena overview. Archived arena stations report archived state. The Range preview is the primary work surface beside its scenario catalog. Shared Targets, Agents, Evidence and Activity access moved into the command bar, with a narrower-screen Tools menu; the profile menu holds only account and platform settings. Day surfaces use warm stone, brass and royal navy while the night option remains.
+
+**Files:** `cyber-range/webui/app.py`, `cyber-range/webui/frontend/src/topology/SegmentMap.tsx`, arena and Range components, `cyber-range/webui/frontend/src/main.tsx`, `cyber-range/webui/frontend/src/styles.css`, `tests/test_webui.py`, [render review](verification/ui-topology-polish-2026-09-30.md) and this journal.
+
+**Verification:** TypeScript, Prettier and production Vite build passed. The pinned `make release-check` passed Ruff, source-only Bandit, 964 SQLite tests (4 skipped, 6 deselected), 968 PostgreSQL tests (6 deselected) and smoke. Chromium showed no document overflow or JavaScript errors on Research, Benchmark, Cyber Range and Arena at 390 and 320 px. The linked review contains desktop and phone renders.
+
+**Unresolved risks / next step:** UI-R1 stays open: inspect the new composition with researchers, manually review accessibility, exercise failure and denial states, complete route/action parity and the default/fallback drill. The captured arena is archived mock data; retain `/console` as opt-in until cutover criteria pass.
+
+## 2026-09-29 — Exercise live Research and Benchmark console journeys
+
+**Outcome:** Chromium completed a Docker-local source-bundle Research path from
+upload and immutable review through setup, a succeeded confined PoC, finding,
+teardown and archived inspection. A separate isolated stack completed a
+three-pair, six-trial scripted calibration Benchmark comparison through the
+React registry and comparison screens. The live Research run exposed an arena
+event `type` filter gap; the service now applies it before limiting results.
+The disposable NV-02 stack's zero-minute stuck reaper was raised to five
+minutes. Benchmark result labels and number precision were made readable, and
+phone metrics now stack as cards.
+
+**Files:** `cyber-range/services/scenario-orchestrator/api.py`,
+`docker-compose.nv02.yml`, `tests/test_api.py`,
+`cyber-range/webui/frontend/src/benchmark/detail.tsx`,
+`cyber-range/webui/frontend/src/styles.css`,
+`docs/verification/ui-research-benchmark-live-2026-09-29.md`, new live renders,
+`docs/UI_REBUILD_PLAN.md`, `ISSUES.md` and this journal.
+
+**Verification:** The live Research PoC reached `succeeded`. The Benchmark
+comparison completed six trials with three matched pairs, zero infrastructure
+failures and a +1 verified difference labeled with a degenerate interval.
+Chromium found no page overflow or JavaScript exceptions for the live archive
+and result at 1440, 1024, 390 and 320 px. All tested arenas had zero labeled
+containers and networks after teardown; both isolated stacks and volumes were
+removed. The final pinned `make release-check` passed Ruff, source-only Bandit,
+963 SQLite tests (4 skipped, 6 deselected), 967 PostgreSQL tests (6
+deselected), and migration/API/UI/gateway smoke. TypeScript, Prettier, Vite
+build and `git diff --check` also passed.
+
+**Unresolved risks / next step:** UI-R1 remains open for route/action parity,
+browser failure/denial states, manual accessibility and researcher observation,
+and the fallback drill. Keep `/console` opt-in until those cutover gates pass.
+
+**Cutover preparation:** `WEBUI_DEFAULT_CONSOLE=true` now redirects the legacy
+home route to `/console`, while `false` restores the original home and all
+legacy routes remain mounted. The switch is disabled by default. A WebUI
+test covers both states and the retained `/engagements` route; a live
+deployment fallback drill remains open.
+
+## 2026-09-29 — Carry Research setup consent into the workbench
+
+**Outcome:** The opt-in setup workbench now receives the reviewed mode, time
+box, command budget and egress choice from the arena's setup prearm record.
+Its start form uses those values when the operator has not edited them. A
+finished setup shows a retained-record state instead of offering another
+start action. The browser projection excludes the prearm artifact and other
+private event fields.
+
+**Files:** `cyber-range/webui/app.py`,
+`cyber-range/webui/frontend/src/arena/setup.tsx`, `tests/test_webui.py` and
+this journal.
+
+**Verification:** TypeScript, Prettier, Vite build and `git diff --check`
+passed. The pinned `make release-check` gate passed Ruff, source-only Bandit,
+962 SQLite tests (4 skipped, 6 deselected), 966 PostgreSQL tests (6 deselected),
+migration and API/UI/gateway smoke. The projection test checks planned values,
+finished state and private-field omission.
+
+**Unresolved risks / next step:** A complete Docker-local Research bundle
+intake, setup and finding journey still needs Chromium evidence. UI-R1 remains
+open. The new console remains opt-in at `/console`; the legacy layout remains
+the default until the migration acceptance gates pass.
+
+## 2026-09-29 — Label mock Research intake accurately
+
+**Outcome:** The opt-in Research intake now names the mock simulator when the
+development stack runs with `MOCK_MODE`, while the Docker-local wording remains
+for a real provider. This removes a misleading provider claim in the target
+review form.
+
+**Files:** `cyber-range/webui/frontend/src/research/new.tsx` and this journal.
+
+**Verification:** TypeScript, Prettier, the Vite production build and the
+packaged WebUI Docker build passed.
+Chromium on the running mock development stack displayed the simulator wording
+and the `MOCK` label on `/console/research/new`; a visible-control name scan
+of 12 console routes found no unnamed controls. The earlier pinned Python
+release gate remains the most recent backend gate; this edit is frontend-only.
+
+**Unresolved risks / next step:** A Docker-local Research intake and setup
+journey is still needed under UI-R1. Keep the new console opt-in until the
+remaining parity, accessibility and fallback checks pass.
+
+## 2026-09-29 — Verify Docker-local Cyber Range UI and repair HTTP ledger
+
+**Outcome:** An isolated PostgreSQL-backed Docker-local stack completed a
+React Cyber Range journey from scenario import through launch, HTTP request,
+linked finding, reset, retained original record and replacement teardown.
+The live run exposed a mismatch between HTTP list manifests and full envelopes
+that crashed the HTTP tab when a transaction existed. The ledger now renders
+manifests and retrieves an envelope only when inspecting or replaying. The
+live render also exposed naive UTC timestamps displayed as local time; the
+shared date formatter now shows expiry and observation in one time zone. The
+fixture scenario was deleted and the isolated stack was removed.
+
+**Files:** `frontend/src/arena/http.tsx`, `frontend/src/{types.ts,ui.tsx}`,
+`docs/verification/ui-docker-local-2026-09-29.md`, the live arena render,
+`docs/assets/ui-concepts/README.md`, `docs/UI_REBUILD_PLAN.md`, `ISSUES.md`
+and this journal.
+
+**Verification:** Chromium used the packaged WebUI against the real worker and
+Docker provider. The original and replacement arena reached `active`; the
+original retained its finding after reset, the replacement reached
+`destroyed`, and both IDs had zero labelled containers/networks. `npm run
+check`, Vite production build and isolated packaged WebUI rebuild passed after
+the ledger and time fixes. The final live render showed observation at 9:47 AM
+and expiry at 10:47 AM for the one-hour arena. The isolated Compose project
+and volumes were removed; its
+`compose ps` is empty. The earlier pinned Python release gate passed before
+the frontend-only ledger fix. See the dated verification note for IDs and
+scope.
+
+**Unresolved risks / next step:** UI-R1 remains open. Run the Docker-local
+Research and Benchmark browser paths and complete parity, accessibility,
+usability and fallback evidence before default cutover.
+
+## 2026-09-29 — Show live Benchmark trial progress and failures
+
+**Outcome:** The opt-in Benchmark evaluation detail now refreshes while a
+queued/running suite progresses, stops polling after completion, and shows
+trial counts, build side, challenge identity and bounded operational failure
+reasons. A completed run with no matched pair now explains why no difference
+is reported. The projection remains operator-only and excludes private truth,
+trial transcripts and worker claims.
+
+**Files:** `cyber-range/webui/app.py`,
+`frontend/src/benchmark/detail.tsx`, `frontend/src/{types.ts,ui.tsx,styles.css}`,
+`tests/test_webui.py`, `docs/UI_REBUILD_PLAN.md`, the evaluation progress and
+failure renders, `docs/verification/ui-evaluation-progress-2026-09-29.md`,
+the render gallery and this journal.
+
+**Verification:** `npm run check`, Vite production build, packaged WebUI Docker
+build and `git diff --check` passed. Pinned `make release-check` passed: Ruff
+and Bandit clean; SQLite 962 passed, four skipped and six integration
+deselections; PostgreSQL 966 passed, six integration deselections; migration,
+API, UI and gateway smoke passed. Chromium fixture responses verified the
+running-to-complete refresh in two reads, a visible infrastructure failure,
+and no document overflow at 1440, 390 or 320 px. A control-name scan of 12
+main routes found no visible unnamed interactive controls; it is not a WCAG
+audit.
+
+**Unresolved risks / next step:** UI-R1 remains open. A real Docker-local
+paired evaluation through the new UI and full parity, accessibility, usability
+and fallback evidence remain prerequisites for default cutover.
+
+## 2026-09-29 — Add Royal Command scenario library and import review
+
+**Outcome:** The opt-in Cyber Range now has a searchable scenario library with
+topology review and an authoring screen for pasted v3 specs, offline or
+repository Vulhub sources, and model-generated drafts. Import requires a valid
+preview of the current source; editing disables the save action until the
+operator validates again. Generated drafts remain editable and comparable with
+their original text. Imported packs can be deleted after confirmation. The
+older aesthetic remains in its dated backup, and the default layout remains
+unchanged.
+
+**Files:** `cyber-range/webui/frontend/src/range/{library,import,topology}.tsx`,
+`frontend/src/{api.ts,main.tsx,types.ts,styles.css}`,
+`cyber-range/webui/app.py`, `tests/test_webui.py`, the route inventory and
+generator, `docs/UI_REBUILD_PLAN.md`, the scenario review renders,
+`docs/verification/ui-scenario-authoring-2026-09-29.md`, and this journal.
+
+**Verification:** The pinned `make release-check` passed: Ruff and Bandit
+clean; SQLite 962 passed with four PostgreSQL-specific skips and six
+integration deselections; PostgreSQL 966 passed with six integration
+deselections; migration/API/UI/gateway smoke passed. Chromium on the running
+`MOCK_MODE` development stack completed preview/import/topology/delete for a
+temporary v3 pack and validated an offline Vulhub Compose preview. Editing the
+reviewed source disabled import. Reflow checks found no document overflow on
+the import screen at 1440, 1024, 390 or 320 px and on the library at 1024,
+390 or 320 px. The temporary registration was removed. The packaged WebUI
+Docker image built with its pinned Node stage.
+
+**Unresolved risks / next step:** UI-R1 remains open. Prove the complete
+Docker-local Research, Benchmark and Cyber Range journeys, including scenario
+launch/reset/archive, and finish old action/deep-link parity, accessibility
+and usability review, and the fallback drill before switching the default.
+
+## 2026-09-28 — Add arena browser and transfer workspaces
+
+**Outcome:** Added isolated browser visits and bounded foothold file transfer
+to the opt-in Royal Command arena. Browser responses show escaped DOM, title,
+byte count, truncation and digest. Uploads produce a digest receipt and a link
+that preloads the uploaded path into the PoC form. Downloads assemble bounded
+chunks and verify the complete SHA-256 digest before offering a file. Narrow
+same-origin BFF routes retain the orchestrator's node, path and access checks;
+the browser never receives an orchestrator key. Fixed login redirects so
+protected console links keep their query string, including intake source
+links, while rejecting external redirect targets. The arena's active tab now
+scrolls into view on small screens. The dated legacy aesthetic reference
+remains saved and the new console remains opt-in. A shell-wide status strip,
+Cyber Range forms and arena views now label `MOCK_MODE` simulation explicitly,
+so a simulated launch is not presented as Docker-local infrastructure evidence.
+
+**Files:** `cyber-range/webui/app.py`, `frontend/src/arena/{browser,transfer,index,poc}.tsx`,
+`frontend/src/styles.css`, `tests/test_webui.py`, `docs/UI_ROUTE_ACTION_MATRIX.md`,
+`docs/UI_REBUILD_PLAN.md`, `docs/assets/ui-concepts/README.md`, the Browser and
+Transfer renders, `docs/verification/ui-royal-command-2026-09-28.md`,
+`ISSUES.md`, and this journal.
+
+**Verification:** Focused BFF tests covered CSRF, bounds, response projection
+and redirect safety. Fixture-backed Chromium checked Browser and Transfer
+actions at 1440, 390 and 320 px, including escaped DOM, digest-mismatch
+rejection and PoC prefill. A separate disposable mock API database served
+Research, Benchmark, Cyber Range, Targets and Settings in Chromium and
+accepted a real source-bundle upload/preview; it had no worker, so no launch
+or arena lifecycle was claimed. `npm run check`, the packaged WebUI Docker
+build and `git diff --check` passed. The final pinned `make release-check`
+passed: Ruff and Bandit clean; SQLite 962 passed, four PostgreSQL-only skips
+and six integration deselections; PostgreSQL 966 passed with six integration
+deselections; migration/API/UI/gateway smoke passed.
+
+The running development SQLite schema was compared with a fresh Alembic `0009`
+database. Only two nullable columns and the version table differed; indexes
+matched. The repair was rehearsed on a disposable SQLite copy, including
+integrity and authenticated API reads. Services were stopped, a fresh backup
+was saved at `/tmp/nv-ui-development-backup-2026-09-28.db` with mode 0600,
+the two columns were added and Alembic stamped `0009`; integrity passed and
+both existing deployments remained. Services restarted. Chromium loaded
+Research, Benchmark, Cyber Range, Targets and Settings from the running Compose
+stack; their BFF data requests returned HTTP 200.
+
+Chromium then launched `ui-smoke-20260928` through the React Cyber Range form
+in that mock stack, opened the arena plus Browser and Transfer tabs with HTTP
+200 data requests, and destroyed it through the React confirmation dialog.
+The retained record reported `destroyed`; this tested the simulated UI path,
+not Docker-local node/browser/file execution. The live console bundle was
+rebuilt in its mounted development source after the UI changes. Chromium
+confirmed the simulation labels on Cyber Range and the retained arena.
+
+**Unresolved risks / next step:** UI-R1 now tracks the remaining live-journey
+proof. Live Docker-local Browser/Transfer and end-to-end Research, Benchmark
+and Cyber Range tasks,
+exact legacy action/deep-link parity, accessibility/usability review and a
+fallback drill remain required before switching the default layout. Verify the
+browser task paths and record the result in `docs/verification/`.
+
+## 2026-09-28 — Expand Royal Command coverage and preserve the prior console
+
+**Outcome:** Extended the opt-in React console with source-bundle upload, digest
+review and launch; an HTTP capture/replay workspace; Benchmark build/challenge/suite
+registry; shared Targets, Agents, Activity, Settings and Profile screens; and arena
+Setup, Agent Access, Infrastructure and source diff views. Source diff can export a
+content-addressed patch and prefill its digest in a finding. The arena now listens
+to its existing SSE stream for state/activity refresh, with a bounded polling
+fallback during reconnect. React code is split into feature folders, shared UI,
+types and a same-origin request client. The older Jinja aesthetic is saved under
+`docs/assets/legacy-console-reference/2026-09-28/` with desktop/phone fixture
+captures and a SHA-256 manifest, before any default-layout switch.
+
+**Files:** `cyber-range/webui/frontend/src/{activity,arena,benchmark,range,research,shared}/`,
+`src/{main,api,types,ui,styles}` under that frontend, `cyber-range/webui/app.py`,
+`tests/test_webui.py`, `docs/UI_REBUILD_PLAN.md`,
+`docs/UI_ROUTE_ACTION_MATRIX.md`, `ISSUES.md`, `docs/assets/ui-concepts/README.md`, the new
+review renders, and the dated legacy reference.
+
+**Verification:** Focused WebUI tests, Ruff, TypeScript/Prettier and Vite build
+passed. `make release-check` passed on Python 3.11.14 with Ruff and Bandit clean,
+SQLite unit tests passing (four PostgreSQL-specific skips), PostgreSQL 963 passed
+and six integration deselections, plus migration/API/UI/gateway readiness smoke.
+The packaged WebUI Docker build passed. Fixture-backed Chromium exercised the
+source-bundle upload/review/launch, setup step, agent grant/pause, HTTP replay,
+registry submissions and source diff/patch/finding attachment; shared and arena
+screens were checked at 1440, 390 and 320 px without horizontal overflow.
+`git diff --check` passed. Browser renders and all legacy backup screenshots use
+fixture data; none prove a live arena workflow.
+
+A read-only browser check of the running development Compose stack reached the
+new `/console` shell but Research data returned 503. Orchestrator logs show its
+persistent SQLite database lacks `model_connections.base_url`; `alembic current`
+reported no revision. This pre-existing local schema mismatch prevents live UI
+journey verification on that stack. The running database was not changed.
+
+**Unresolved risks / next step:** Royal Command remains opt-in at `/console`.
+Browser/transfer tools, old deep links and action/state parity, accessible keyboard
+and assistive-tech review, representative researcher observation, real Docker-local
+journeys, and the cutover/fallback drill remain open. Verify those against the
+route/action matrix before defaulting to the new layout. Keep NV06-R1, NV07-R1
+and INFRA-R1 open until their own evidence closes them.
+
+## 2026-09-28 — Restore `/console` in the development stack
+
+**Outcome:** The development WebUI enabled Werkzeug's interactive debugger,
+whose default `/console` path intercepted the opt-in Royal Command UI and
+showed a debugger PIN prompt. The Flask development reloader now runs without
+that debugger, so `/console` reaches the React shell. The README names the
+opt-in URL, and the dev Compose comments describe the revised behavior.
+
+**Files:** `cyber-range/webui/app.py`, `docker-compose.dev.yml`, `README.md`.
+
+**Verification:** Restarted the running dev WebUI container. An authenticated
+request to `/console` returned HTTP 200 with the React root and no debugger
+page. Focused WebUI tests, Ruff and `git diff --check` passed.
+
+**Unresolved risks / next step:** The React console remains opt-in. Complete
+the parity and real Docker-local journey checks described below before a
+default switch.
+
+## 2026-09-28 — Royal Command Docker-local launch review
+
+**Outcome:** Added an opt-in React launch review at `/console/arenas/new`, linked
+from the Cyber Range catalog. It uses the registered scenario topology, collects
+arena name, purpose, participant and time box, and submits through a CSRF-protected
+Flask BFF. The BFF checks the current catalog, permits only container/any
+scenarios for this path, explicitly selects `docker-local`, and returns the
+orchestrator's arena UUID. The browser opens that arena's real workspace record.
+The legacy launch page remains for other launch and import modes. Saved review
+renders now cover Research day/night, Benchmark, Cyber Range, arena workspace,
+new arena, comparison, result and mobile stop confirmation. All render data is
+declared as fixture data.
+The arena workspace also projects reset eligibility and exposes confirmed
+reset/destroy requests through the existing service rules; reset results link
+to the replacement arena while the original evidence record remains intact.
+Research target intake now offers Git and public OCI preview/launch in React.
+The preview projects a narrow topology and immutable commit or digest; launch
+requires that pinned identity, current authorization confirmation and bounded
+setup consent. Source bundles still link to the legacy wizard.
+The arena now has an opt-in React PoC view at `?tab=poc` using the existing
+confined-job BFF endpoints: source, target relay and limits, submit/cancel,
+polling, bounded output, digest and cleanup inspection. The service still
+enforces execution access and confinement; archived arenas show job records
+without an enabled submission form.
+Findings now have a React report/review view. A narrow BFF projection keeps
+hidden scenario match data out of the browser while showing reported evidence,
+PoC steps, attached digests and independent validation reason. Operators can
+record findings and append a confirm/refute verdict; confirmation requires an
+immutable evidence digest, and the UI labels manual confirmation separately.
+An Evidence tab now inventories attached artifacts, independent effect/control
+traces, linked HTTP transactions and monitor signals. Artifact and validation
+links use existing arena-scoped proxy routes. The source records remain owned
+by the service, including after arena teardown.
+
+**Files:** `cyber-range/webui/app.py`, `cyber-range/webui/frontend/src/main.tsx`,
+`cyber-range/webui/frontend/src/styles.css`, `tests/test_webui.py`,
+`docs/UI_ROUTE_ACTION_MATRIX.md`, `docs/UI_REBUILD_PLAN.md`,
+`docs/assets/ui-concepts/README.md` and
+`docs/assets/ui-concepts/renders/royal-command-new-arena.png`, the updated arena
+render, destroy confirmation, Git intake, OCI intake, PoC workspace, findings
+finding confirmation and evidence workspace renders.
+
+**Verification:** Focused WebUI tests, Ruff, TypeScript/Prettier, Vite build and
+the reproducible multi-stage WebUI Docker build passed. `make release-check`
+passed on Python 3.11.14 against this slice: Ruff and source Bandit clean
+(zero medium/high), SQLite 954 passed/4 skipped/6 deselected, PostgreSQL 958
+passed/6 deselected, and migration/API/UI/gateway readiness smoke passed.
+Headless Chromium
+inspected the launch page at 1440, 390 and 320 px without page overflow. With
+local fixture responses, scenario, Git and OCI launch submissions reached the
+arena workspace. The PoC view was inspected at 1440, 390 and 320 px without
+page overflow; fixture-backed submit and result inspection worked. Findings
+and evidence were inspected at 1440, 390 and 320 px without page overflow;
+the evidence render uses local fixture records. This does
+not establish a real Docker-local deploy or a
+complete end-to-end research journey. Accessibility audit remains open.
+
+**Unresolved risks / next step:** Migrate source-bundle intake and HTTP tools;
+verify PoC and finding paths with a real Docker-local
+arena, then complete action/state parity and verify a
+real Docker-local run before changing the default console.
+
+## 2026-09-28 — NV-09 scope clarified against current bughunt state
+
+**Outcome:** No code change. Gianluca flagged that bughunt is mostly deterministic
+pipelines (BH-01/03/04 — enumeration/baseline/worker/backup); the only agentic
+component is Hermes/Claude Code + MCP driving active testing against target webapps.
+Cross-checked with `@bughuntmanager` against bughunt's current authoritative
+PLAN.md/TODO.md (checkpoint 2026-09-15) — an earlier grep had hit a stale copy under
+`dev/history/2026-09-10-before-agent-driven/TODO.md`. Confirmed: BH-13/BH-14B/BH-15
+("Hermes execution/evaluation") name the agentic layer only. Bughunt D021 states the
+deterministic pipelines run independent of Nidavellir/Hermes by design; D017 states the
+BH-13/NV-09 manifest exchanges synthetic scenario/target + evidence, never live campaign
+credentials. Bughunt's 2026-09-10 proposal names the first concrete vertical slice: one
+synthetic SPA, two accounts, one owned object, one cross-account comparison, one restart;
+broad autonomous crawling explicitly excluded from that slice.
+
+**Files:** `TODO.md` (NV-09 entry), `ROADMAP.md` (BH-13/NV-09 integration paragraph) —
+scope clarification only, no change to dependencies or accept criteria.
+
+**Verification:** Confirmed via direct message from `@bughuntmanager`, citing bughunt
+D017, D021, TODO.md:178 and the 2026-09-10 agent-workflow proposal. Not independently
+re-read against the bughunt repo from this session.
+
+**Unresolved risks / next step:** NV-09 itself is still not started (depends on NV-02-06,
+first NV-08 fixture, NV-07). Next concrete step unchanged: pick the first vertical-slice
+fixture (bughunt's synthetic-SPA slice is the named candidate) and scope the joint
+manifest fields before any implementation work.
+
+## 2026-09-27 — Royal Command React console, opt-in first slice
+
+**Outcome:** Selected Royal Command after operator review and started the real
+same-origin React/TypeScript/Vite console at `/console`. Research, Benchmark and
+Cyber Range dashboards read narrow authenticated Flask projections; a new
+`/console/arena/<id>` overview reads real arena state, budget, nodes, events,
+finding and PoC counts. The arena overview can stop or resume the research
+gate through a CSRF-protected BFF request and a named confirmation dialog;
+the service still decides whether the transition is permitted. Benchmark now
+configures and submits matched comparisons through a CSRF-protected BFF action;
+`/console/evaluations/<id>`
+reads paired differences, challenge attribution, uncertainty and trial links.
+The interface uses larger operating cards, responsive
+navigation and a persisted day/night preference. Rune-like SVG marks identify
+the three workspaces; the arena Fuzz control is disabled because NV-12 remains
+planned. Existing Flask actions remain linked while parity is migrated.
+ADR-0017 records the rendering change and preserves ADR-0012 service boundaries.
+The generated first-pass matrix inventories Flask route/method operations.
+
+**Files:** `cyber-range/webui/frontend/`, `cyber-range/webui/app.py`,
+`cyber-range/webui/templates/console.html`, WebUI Dockerfile/.dockerignore,
+`.gitignore`, `tests/test_webui.py`, `docs/adr/0017-react-operator-console-rendering.md`,
+`docs/UI_ROUTE_ACTION_MATRIX.md`, `scripts/inventory-webui-routes.py`, the
+Royal Command prototype and `docs/UI_REBUILD_PLAN.md`.
+
+**Verification:** TypeScript/Vite build passed locally. A clean multi-stage
+WebUI Docker build reproduced the assets. Focused WebUI tests passed, including
+session protection, backend failure and projection redaction. Ruff and
+`git diff --check` passed. Headless Chromium inspected loaded fixture-backed
+Research, Benchmark, Cyber Range and arena views at 1440, 1024, 390 and 320 px,
+plus evaluation detail and comparison setup at 1440, 390 and 320 px; no
+horizontal overflow was found, and a night-theme render was inspected. The
+fixture-backed comparison form submitted and opened the result route. These
+screenshots used fixture data and are visual evidence only. No authenticated
+Docker-local research journey, accessibility audit,
+researcher observation or pinned `make release-check` was run for this UI slice.
+
+**Unresolved risks / next step:** `/console` is opt-in. Creation, live tools,
+PoC, findings, build/challenge/suite registration, broader Cyber Range lifecycle, SSE and
+shared resource editing still use legacy pages. Finish the per-action/state
+matrix, migrate complete journeys, test session expiry/CSRF/reconnect, then run
+the required live and release gates before a default switch. NV06-R1, NV07-R1
+and INFRA-R1 remain open.
+
+## 2026-09-27 — New Royal Research dashboard concepts for review
+
+**Outcome:** Replaced the visual direction of the rejected Atelier/Instrument
+prototypes with two new clickable Research dashboards: Royal Command and Forge
+Canvas. Both use a light surface with Nidavellir's ink, violet and gold identity.
+They present an active session, pending finding, evidence and session history,
+and expose a local import → PoC → finding → archived-record demonstration.
+These are visual prototypes with declared mock data; no backend route, product
+feature, React shell or roadmap checklist item changed.
+
+**Files:** the new HTML, CSS, JavaScript and README in
+docs/assets/ui-concepts/, plus this journal. Earlier prototype files are
+retained as rejected comparison material.
+
+**Verification:** Headless Firefox renders were inspected at 1440, 390 and
+320 px for the dashboard concepts, plus desktop PoC and finding screens.
+JavaScript syntax, HTML IDs/routes and documentation whitespace checks passed.
+No authenticated browser journey, accessibility audit, user task observation,
+backend test, Docker-local gate or pinned release gate was run for these
+documentation-only prototypes.
+
+**Unresolved risks / next step:** Operator visual feedback must choose or revise
+one direction. The phase-0 route/action matrix, three full journeys, measured
+baseline, new rendering ADR and typed BFF contracts remain open. NV06-R1,
+NV07-R1 and INFRA-R1 are unchanged.
+
+## 2026-09-27 — Console rebuild implementation guide
+
+**Outcome:** Reworked the console plan around Research → Benchmark → Cyber Range,
+with a light default theme, direct action labels, current capability states,
+complete workspace journeys, shared resources, migration phases and UI parity
+criteria. The plan requires a new ADR superseding only ADR-0012's Flask/Jinja
+rendering choice. This is documentation only; no React UI, product feature or
+roadmap checklist item was completed.
+
+**Files:** `docs/UI_REBUILD_PLAN.md` and this journal.
+
+**Verification:** Cross-checked README, ROADMAP, TODO, ISSUES, relevant ADRs,
+current Flask routes and recent journal evidence; checked documentation diff
+for whitespace. No application tests or live gates were run for this edit.
+
+**Unresolved risks / next step:** NV06-R1, NV07-R1, INFRA-R1 and NV-09 remain
+open. Inventory every current route/action, review two Research concepts, then
+write the replacement rendering ADR and typed BFF contracts before frontend
+implementation.
 ## 2026-09-27 — NV-10 encrypted research and evaluation recovery
 
 **Outcome:** Implemented an offline, versioned AES-GCM recovery bundle for all
@@ -1285,33 +1990,6 @@ billing are also unknown. The safer diagnostic passed the pinned release gate.
 NV07-R1 still requires a successful model-driven durable trial
 and a repeated suite showing variability and token/cost attribution. NV-09
 remains calibration evidence only and has no maintained Bughunt adapter.
-
-## 2026-09-28 — NV-09 scope clarified against current bughunt state
-
-**Outcome:** No code change. Gianluca flagged that bughunt is mostly deterministic
-pipelines (BH-01/03/04 — enumeration/baseline/worker/backup); the only agentic
-component is Hermes/Claude Code + MCP driving active testing against target webapps.
-Cross-checked with `@bughuntmanager` against bughunt's current authoritative
-PLAN.md/TODO.md (checkpoint 2026-09-15) — an earlier grep had hit a stale copy under
-`dev/history/2026-09-10-before-agent-driven/TODO.md`. Confirmed: BH-13/BH-14B/BH-15
-("Hermes execution/evaluation") name the agentic layer only. Bughunt D021 states the
-deterministic pipelines run independent of Nidavellir/Hermes by design; D017 states the
-BH-13/NV-09 manifest exchanges synthetic scenario/target + evidence, never live campaign
-credentials. Bughunt's 2026-09-10 proposal names the first concrete vertical slice: one
-synthetic SPA, two accounts, one owned object, one cross-account comparison, one restart;
-broad autonomous crawling explicitly excluded from that slice.
-
-**Files:** `TODO.md` (NV-09 entry), `ROADMAP.md` (BH-13/NV-09 integration paragraph) —
-scope clarification only, no change to dependencies or accept criteria.
-
-**Verification:** Confirmed via direct message from `@bughuntmanager`, citing bughunt
-D017, D021, TODO.md:178 and the 2026-09-10 agent-workflow proposal. Not independently
-re-read against the bughunt repo from this session.
-
-**Unresolved risks / next step:** NV-09 itself is still not started (depends on NV-02-06,
-first NV-08 fixture, NV-07). Next concrete step unchanged: pick the first vertical-slice
-fixture (bughunt's synthetic-SPA slice is the named candidate) and scope the joint
-manifest fields before any implementation work.
 
 ## 2026-09-27 — Synthetic NV-09 SPA gate and NV07-R1 model smoke preparation
 

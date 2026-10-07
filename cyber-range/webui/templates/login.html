@@ -4,44 +4,95 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nidavellir · Sign in</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='anvil_logo.png') }}">
+  <script>
+    // Same day/night preference the console stores; storage may be unavailable.
+    try { if (localStorage.getItem("nidavellir-theme") === "night") document.documentElement.dataset.theme = "night"; } catch (e) {}
+  </script>
+  <style>
+    /* Forge sign-in: navy plate on the warm stone page, brass accents. */
+    :root {
+      --page: #ebe9e4; --ink: #202b3b; --muted: #606a75; --line: #cfc6b7;
+      --plate: #16223a; --plate-2: #273249; --plate-line: #3a4a66; --plate-ink: #edf1f8;
+      --plate-muted: #acb9cb; --brass: #e4b965; --brass-edge: #8f7954; --danger: #ffb4b4;
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+    }
+    :root[data-theme="night"] { --page: #171c31; --ink: #f1eef7; --muted: #b8bdd0; --line: #434a62; --brass-edge: #b08f55; }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0; display: grid; place-items: center; min-height: 100dvh; padding: 24px 16px;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse 68% 42% at 50% -12%, color-mix(in srgb, var(--brass) 14%, transparent), transparent 78%),
+        repeating-linear-gradient(90deg, transparent 0 79px, color-mix(in srgb, var(--line) 24%, transparent) 80px),
+        var(--page);
+    }
+    .plate {
+      position: relative; width: min(420px, 100%); padding: 34px 32px 28px;
+      color: var(--plate-ink); border: 1px solid var(--brass-edge);
+      background: radial-gradient(circle at 88% 12%, #c39c4f26, transparent 34%),
+        repeating-linear-gradient(135deg, transparent 0 27px, #dfc28808 28px),
+        linear-gradient(125deg, var(--plate), var(--plate-2));
+      box-shadow: 0 24px 60px #0b142340;
+      clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
+      animation: enter 320ms ease-out both;
+    }
+    .plate::before { content: ""; position: absolute; top: -1px; left: -1px; width: 48px; height: 3px; background: var(--brass); }
+    .brand { display: flex; align-items: center; gap: 14px; margin-bottom: 26px; }
+    .brand img { width: 56px; height: 56px; }
+    .brand strong { display: block; font-size: 15px; font-weight: 900; letter-spacing: .1em; }
+    .brand small { display: block; margin-top: 3px; color: var(--brass); font-size: 10px; font-weight: 800; letter-spacing: .22em; }
+    .eyebrow { color: #dfbd77; font-size: 10px; font-weight: 800; letter-spacing: .14em; }
+    h1 { margin: 6px 0 4px; font-size: 26px; letter-spacing: -.04em; }
+    .sub { margin: 0 0 22px; color: var(--plate-muted); font-size: 13px; line-height: 1.5; }
+    form { display: grid; gap: 14px; }
+    label { display: grid; gap: 6px; font-size: 11px; font-weight: 800; color: var(--plate-muted); }
+    input[type="text"], input[type="password"] {
+      width: 100%; padding: 12px; border: 1px solid var(--plate-line); background: #0e1929;
+      color: var(--plate-ink); font: inherit; font-size: 14px;
+      transition: border-color 160ms ease;
+    }
+    input:focus-visible, button:focus-visible { outline: 2px solid #f4ce84; outline-offset: 2px; }
+    input:hover { border-color: #52617a; }
+    button {
+      position: relative; overflow: hidden; margin-top: 6px; padding: 13px 16px; border: 0;
+      background: var(--brass); color: #292137; font: inherit; font-size: 13px; font-weight: 800; cursor: pointer;
+      transition: transform 160ms ease, box-shadow 160ms ease;
+    }
+    button:hover { transform: translateY(-2px); box-shadow: 0 8px 18px #0005; }
+    button:active { transform: translateY(1px); }
+    .flash { display: flex; gap: 8px; margin-bottom: 14px; padding: 10px 12px; border: 1px solid #a74b5d; background: #3a1f2b; color: var(--danger); font-size: 12px; }
+    .foot { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--plate-line); color: var(--plate-muted); font-size: 11px; line-height: 1.5; }
+    @keyframes enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { .plate { animation: none; } button { transition: none; } }
+  </style>
 </head>
 <body>
-<div class="auth">
-  <div class="auth-card">
-    <div class="auth-brand">
-      <span class="mark"><img src="{{ url_for('static', filename='anvil_logo.png') }}" style="width:100%;height:100%;object-fit:cover;display:block;" alt="Logo"></span>
-      Nidavellir
+  <main class="plate" aria-labelledby="signin-title">
+    <div class="brand">
+      <img src="{{ url_for('static', filename='anvil_emblem.png') }}" alt="">
+      <span><strong>NIDAVELLIR</strong><small>FORGE</small></span>
     </div>
-    <div class="auth-sub">Agentic arena forge · operator console</div>
-
-    <div class="flashes">
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% for category, message in messages %}
-        <div class="flash flash--{{ category }}">
-          <i class="fa-solid fa-circle-exclamation"></i><span>{{ message }}</span>
-        </div>
-        {% endfor %}
-      {% endwith %}
-    </div>
-
+    <span class="eyebrow">OPERATOR CONSOLE</span>
+    <h1 id="signin-title">Sign in</h1>
+    <p class="sub">Isolated arenas for vulnerability research and agent evaluation.</p>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+      <div class="flash flash--{{ category }}" role="alert"><span>{{ message }}</span></div>
+      {% endfor %}
+    {% endwith %}
     <form method="POST">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="field">
-        <label class="label">Username</label>
-        <input class="input" type="text" name="username" autofocus required>
-      </div>
-      <div class="field">
-        <label class="label">Password</label>
-        <input class="input" type="password" name="password" required>
-      </div>
-      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">
-        <i class="fa-solid fa-arrow-right-to-bracket"></i> Sign in
-      </button>
+      <label>Username
+        <input type="text" name="username" autocomplete="username" autofocus required>
+      </label>
+      <label>Password
+        <input type="password" name="password" autocomplete="current-password" required>
+      </label>
+      <button type="submit">Sign in</button>
     </form>
-  </div>
-</div>
+    <p class="foot">Use the operator credentials configured for this deployment.</p>
+  </main>
 </body>
 </html>

@@ -48,3 +48,6 @@ htmlcov/
 /AGENT.md
 /.agent/
 /.lab.yaml
+
+# Built operator console assets (reproduced from frontend/package-lock.json)
+/cyber-range/webui/static/console/

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Evaluation {{ record.id[:8] }}{% endblock %}
+{% block crumb %}<a href="{{ url_for('evaluations') }}">Evaluations</a> <span class="sep">/</span> {{ record.id[:8] }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><div class="eyebrow">Paired comparison · {{ record.id[:8] }}</div><h1>Evaluation result</h1><div class="sub">Candidate minus baseline, using observed-state-matched trials.</div></div>
+  <div class="head-actions"><span class="badge {{ 'badge--ok' if record.state == 'completed' else 'badge--warn' }}">{{ record.state }}</span><a class="btn" href="{{ url_for('evaluations') }}"><i class="fa-solid fa-arrow-left"></i> Workbench</a></div>
+</div>
+
+<div class="eval-notice" role="note"><i class="fa-solid fa-shield-halved"></i><div><strong>Evidence scope: {{ record.comparison.evidence_scope }}</strong><span>Labels: {{ record.comparison.leakage_labels|join(', ') or 'unknown' }}. Calibration results do not establish held-out capability. Infrastructure failures are reported separately, not scored as agent misses.</span></div></div>
+
+<div class="eval-result-grid">
+  <div class="eval-result-stat"><strong>{{ record.comparison.matched_pairs }}</strong><span>Matched pairs</span></div>
+  <div class="eval-result-stat"><strong>{{ record.comparison.infrastructure_failed_pairs }}</strong><span>Infrastructure-failed pairs</span></div>
+  <div class="eval-result-stat"><strong>{{ record.comparison.differences.verified.mean if record.comparison.differences.verified.mean is not none else '—' }}</strong><span>Verified difference · {{ record.comparison.differences.verified.interval_status }}</span></div>
+</div>
+
+<div class="card pad-0" style="margin-bottom:18px">
+  <div class="card-head"><h2>Paired differences</h2><span class="spacer"></span><span class="label">Candidate − baseline</span></div>
+  <div class="table-wrap"><table><thead><tr><th>Metric</th><th>Mean difference</th><th>Matched pairs</th><th>Bootstrap 95%</th><th>Interval status</th></tr></thead><tbody>
+    {% for metric, value in record.comparison.differences.items() %}
+    <tr><td>{{ metric|replace('_', ' ')|title }}</td><td class="mono">{{ value.mean if value.mean is not none else 'Unknown' }}</td><td>{{ value.pairs }}</td><td class="mono">{{ value.bootstrap_95 or 'Unknown' }}</td><td><span class="badge {{ 'badge--ok' if value.interval_status == 'supported' else 'badge--idle' }}">{{ value.interval_status or 'unlabelled' }}</span></td></tr>
+    {% endfor %}
+  </tbody></table></div>
+  <div class="eval-table-foot">A constant difference is <code>degenerate</code>, not a supported uncertainty interval. Observed verified range: {{ record.comparison.verified_difference_range or 'Unknown' }}.</div>
+</div>
+
+<section class="eval-section"><div class="eval-section__head"><div><div class="eyebrow">Attribution</div><h2>By challenge</h2><p>Find which challenge changed rather than relying on the pooled number.</p></div></div>
+  <div class="grid cols-2">
+    {% for challenge_id, summary in record.comparison.by_challenge.items() %}
+    <div class="card card-pad eval-challenge-result"><div class="flexrow"><strong class="grow">{{ summary.name or challenge_id }}</strong><span class="badge {{ 'badge--warn' if summary.leakage_label == 'calibration' else 'badge--def' }}">{{ summary.leakage_label }}</span></div><div class="eval-result-grid"><div class="eval-result-stat"><strong>{{ summary.differences.verified.mean if summary.differences.verified.mean is not none else '—' }}</strong><span>Verified difference</span></div><div class="eval-result-stat"><strong>{{ summary.matched_pairs }}</strong><span>Matched pairs</span></div><div class="eval-result-stat"><strong>{{ summary.infrastructure_failed_pairs }}</strong><span>Infra failures</span></div></div><div class="muted">Interval: {{ summary.differences.verified.interval_status }}</div></div>
+    {% else %}<div class="card card-pad muted">No per-challenge comparison available yet.</div>{% endfor %}
+  </div>
+</section>
+
+<section class="eval-section"><div class="eval-section__head"><div><div class="eyebrow">Inspection</div><h2>Matched trials</h2><p>Each row uses the same challenge and seed; unmatched conditions stay visible.</p></div></div>
+  <div class="card pad-0"><div class="table-wrap"><table><thead><tr><th>Challenge</th><th>Seed</th><th>Match</th><th>Baseline</th><th>Candidate</th></tr></thead><tbody>
+    {% for pair in record.comparison.pairs %}<tr><td class="mono">{{ pair.challenge_id[:8] }}<br><small>{{ pair.leakage_label }}</small></td><td>{{ pair.seed }}</td><td><span class="badge {{ 'badge--ok' if pair.matched else 'badge--warn' }}">{{ 'matched' if pair.matched else 'unmatched' }}</span></td><td>{{ pair.baseline_state }}{% if pair.baseline %}<br><small>verified {{ pair.baseline.verified }} · false claims {{ pair.baseline.false_claims }} · {{ pair.baseline.requests }} requests · {{ pair.baseline.latency_seconds }}s</small>{% endif %}</td><td>{{ pair.candidate_state }}{% if pair.candidate %}<br><small>verified {{ pair.candidate.verified }} · false claims {{ pair.candidate.false_claims }} · {{ pair.candidate.requests }} requests · {{ pair.candidate.latency_seconds }}s</small>{% endif %}</td></tr>{% else %}<tr><td colspan="5">Trials have not produced pairs yet.</td></tr>{% endfor %}
+  </tbody></table></div></div>
+</section>
+
+<section class="eval-section"><div class="eval-section__head"><div><div class="eyebrow">Evidence</div><h2>Arena records</h2><p>Open a trial's arena to review its trace, findings, score and retained evidence.</p></div></div>
+  <div class="card eval-list">{% for trial in record.trials %}<div class="eval-list__row"><i class="fa-solid fa-box-archive"></i><div class="grow"><strong>Seed {{ trial.seed }} · {{ trial.state }}</strong><small>{{ trial.error or 'No trial error' }}</small></div>{% if trial.arena_id %}<a class="btn btn-sm" href="{{ url_for('arena_detail', instance_id=trial.arena_id) }}">Open arena <i class="fa-solid fa-arrow-right"></i></a>{% endif %}</div>{% else %}<div class="eval-empty">No trial records yet.</div>{% endfor %}</div>
+</section>
+{% endblock %}

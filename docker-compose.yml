@@ -288,6 +288,8 @@ services:
       WEBUI_USERNAME: ${WEBUI_USERNAME:-admin}
       WEBUI_PASSWORD: ${WEBUI_PASSWORD:-nidavellir}
       WEBUI_MAX_UPLOAD_BYTES: ${WEBUI_MAX_UPLOAD_BYTES:-35651584}
+      # / opens the Royal Command console; false restores the legacy home.
+      WEBUI_DEFAULT_CONSOLE: ${WEBUI_DEFAULT_CONSOLE:-true}
     networks:
       - nidavellir-network
     healthcheck:
