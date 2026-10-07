@@ -4346,14 +4346,15 @@ body {
 }
 
 /* ---- Forge FX: one orchestrated entrance, tactile controls, live pulse ---- */
-/* Topology edges draw in from the foothold. */
+/* A dash longer than any edge draws the line in; it stays solid whether or
+   not the browser scales dashes by pathLength. */
 .topology-edge {
-  stroke-dasharray: 1;
+  stroke-dasharray: 2400;
   animation: topology-edge-draw 620ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 @keyframes topology-edge-draw {
   from {
-    stroke-dashoffset: 1;
+    stroke-dashoffset: 2400;
     opacity: 0.2;
   }
   to {
@@ -4891,4 +4892,54 @@ body {
 }
 .access-grid .access-connect {
   grid-column: 1 / -1;
+}
+
+/* Research: two independent columns, so a short card never waits for the
+   taller card beside it. On one column the cards keep their reading order. */
+.research-col {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  min-width: 0;
+}
+.research-col > .panel {
+  min-height: 0;
+  animation: forge-enter 280ms ease-out both;
+}
+.research-col-side > .panel:nth-child(1) {
+  animation-delay: 55ms;
+}
+.research-col > .panel:nth-child(2) {
+  animation-delay: 110ms;
+}
+.research-col > .panel:nth-child(3) {
+  animation-delay: 165ms;
+}
+@media (max-width: 860px) {
+  .research-col {
+    display: contents;
+  }
+  .research-grid .featured {
+    order: 1;
+  }
+  .research-grid .review-panel {
+    order: 2;
+  }
+  .research-grid .sessions-panel {
+    order: 3;
+  }
+  .research-grid .evidence-panel {
+    order: 4;
+  }
+  .research-grid .research-activity {
+    order: 5;
+  }
+  .research-grid .research-capacity {
+    order: 6;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .research-col > .panel {
+    animation: none;
+  }
 }

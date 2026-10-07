@@ -1,6 +1,6 @@
 # ADR-0017: React rendering for the operator console
 
-- **Status:** Accepted for staged implementation
+- **Status:** Accepted — default cutover approved 2026-10-07; verification follow-ups open
 - **Date:** 2026-09-27
 - **Deciders:** Nidavellir operator
 - **Supersedes:** ADR-0012 section 5's Flask/Jinja rendering and no-build-tool choice only
@@ -69,10 +69,21 @@ ADR changes rendering and frontend tooling only.
 - Switch every route at once: this would retire working deep links before parity
   is demonstrated.
 
-## Verification before default cutover
+## Default cutover and verification boundary
 
-Complete the phase-0 route/action inventory, build each full journey, verify
-keyboard and 320–1440 px reflow, exercise session expiry/CSRF/denial/reconnect,
-run pinned `make release-check` and relevant Docker-local gates, and drill the
-legacy switch. Record dated browser and accessibility evidence. This ADR does
-not itself establish UI parity or feature completion.
+The operator approved Releases G–H after manual review ("Overall approved"),
+and the default changed to `/console` on 2026-10-07. The pinned release gate,
+legacy fallback drill and browser checks at 320–1440 px are recorded. See
+[cutover evidence](../verification/ui-default-cutover-2026-10-07.md).
+
+Two verification items from the original pre-cutover checklist remain open:
+
+- Record the session-expiry, CSRF-denial and reconnect browser journeys in
+  `docs/verification/`.
+- Record a formal accessibility review, including keyboard use and reflow.
+
+UI-R1 remains open for these items, remaining route/action parity and live
+service verification. The approved default switch does not establish full
+UI parity or feature completion. `WEBUI_DEFAULT_CONSOLE=false` restores the
+legacy home, `/?legacy=1` reaches it while the console is default, and legacy
+routes remain mounted.

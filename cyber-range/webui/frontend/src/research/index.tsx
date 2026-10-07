@@ -41,6 +41,7 @@ export function Research() {
         refresh={refresh}
       />
       <div className="research-grid">
+        <div className="research-col research-col-main">
           <Panel
             eyebrow="01 / CURRENT WORK"
             title="Active session"
@@ -86,6 +87,50 @@ export function Research() {
             )}
           </Panel>
           <Panel
+            eyebrow="03 / RECORDS"
+            title="Recent sessions"
+            className="sessions-panel"
+            aside={
+              <a className="subtle-link" href="/console/arenas">
+                View all
+              </a>
+            }
+          >
+            {value.sessions.length ? (
+              <div className="session-table">
+                <div className="table-labels">
+                  <span>SESSION</span>
+                  <span>STATUS</span>
+                  <span>SCENARIO</span>
+                  <span />
+                </div>
+                {value.sessions.slice(0, 6).map((item) => (
+                  <a
+                    key={item.id}
+                    className="session-row"
+                    href={`/console/arena/${encodeURIComponent(item.id)}`}
+                  >
+                    <span className="session-name">
+                      <strong>{item.name}</strong>
+                      <small>{item.id.slice(0, 8)}</small>
+                    </span>
+                    <Status value={item.status} />
+                    <span className="row-scenario">{item.scenario}</span>
+                    <span aria-hidden="true">↗</span>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <Empty
+                title="No session records"
+                detail="Created and archived research will be listed here."
+              />
+            )}
+          </Panel>
+          <LiveActivity />
+        </div>
+        <div className="research-col research-col-side">
+          <Panel
             eyebrow="02 / DECISIONS"
             title="Needs review"
             className="review-panel"
@@ -130,47 +175,6 @@ export function Research() {
             </div>
           </Panel>
           <Panel
-            eyebrow="03 / RECORDS"
-            title="Recent sessions"
-            className="sessions-panel"
-            aside={
-              <a className="subtle-link" href="/console/arenas">
-                View all
-              </a>
-            }
-          >
-            {value.sessions.length ? (
-              <div className="session-table">
-                <div className="table-labels">
-                  <span>SESSION</span>
-                  <span>STATUS</span>
-                  <span>SCENARIO</span>
-                  <span />
-                </div>
-                {value.sessions.slice(0, 6).map((item) => (
-                  <a
-                    key={item.id}
-                    className="session-row"
-                    href={`/console/arena/${encodeURIComponent(item.id)}`}
-                  >
-                    <span className="session-name">
-                      <strong>{item.name}</strong>
-                      <small>{item.id.slice(0, 8)}</small>
-                    </span>
-                    <Status value={item.status} />
-                    <span className="row-scenario">{item.scenario}</span>
-                    <span aria-hidden="true">↗</span>
-                  </a>
-                ))}
-              </div>
-            ) : (
-              <Empty
-                title="No session records"
-                detail="Created and archived research will be listed here."
-              />
-            )}
-          </Panel>
-          <Panel
             eyebrow="04 / EVIDENCE"
             title="Proof desk"
             className="evidence-panel"
@@ -193,8 +197,8 @@ export function Research() {
               </a>
             </div>
           </Panel>
-        <LiveActivity />
-        <Capacity />
+          <Capacity />
+        </div>
       </div>
     </>
   );

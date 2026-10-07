@@ -317,7 +317,7 @@ function App() {
       <ResearchAssistant arenaId={arenaId} />
       <footer className="site-footer">
         <span>NIDAVELLIR FORGE / OPERATOR CONSOLE</span>
-        <a href="/">Legacy console</a>
+        <a href="/?legacy=1">Legacy console</a>
       </footer>
     </>
   );

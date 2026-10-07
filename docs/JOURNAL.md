@@ -3,6 +3,23 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-10-07 — Royal Command console becomes the default UI
+
+**Outcome:** The operator reviewed Releases G–H and approved them ("Overall approved"). `WEBUI_DEFAULT_CONSOLE` now defaults to true in `app.py` and `docker-compose.yml`, so `/` (and the post-login landing page) opens `/console`. Setting it to false restores the legacy home. The console footer's "Legacy console" link uses `/?legacy=1`, which bypasses the redirect so the legacy home stays reachable. Follow-up fixes:
+- **Research layout:** the cards are now two independent columns (01/03/05 and 02/04/06), so right-hand cards no longer leave gaps waiting on taller left-hand cards; one-column order is preserved with `order`.
+- **Topology draw-in:** it now uses a fixed long dash. With `pathLength`-relative dashes the edges could stay dotted.
+
+**Incident:** during the first fallback drill the WebUI container was recreated with plain `docker compose up -d webui`. That dropped the `docker-compose.dev.yml` bind-mount, so the console served the Sep 29 image (old N logo and topology), the operator saw a stale UI, and the first drill result was invalid. The container was recreated with the dev override, the mount was verified, and the drill was re-run. No source or data was lost; arenas were untouched (`--no-deps`).
+
+**Files:** `cyber-range/webui/app.py`, `docker-compose.yml`, `cyber-range/webui/frontend/src/{main.tsx,styles.css,research/index.tsx}`, `tests/test_webui.py`, `README.md`, `cyber-range/webui/frontend/README.md`, `docs/UI_REBUILD_PLAN.md`, `ISSUES.md`.
+
+**Verification:**
+- **Tests:** a new WebUI test for the legacy escape failed first, then passed. A fresh-interpreter test asserts the default is the console when the variable is unset. The legacy-home tests pin the switch to false explicitly. The full `tests/test_webui.py` passes.
+- **Live fallback drill (dev stack, bind-mount verified):** with false, `/` → 200 legacy; with true, `/` → 302 `/console`, `/?legacy=1` → 200 and `/console` → 200. Login lands on `/console`.
+- **Browser checks:** Release B/D/G/H, the stepper check, Prettier and `git diff --check` pass. The pinned gate for Release H passed earlier today; this change only touches the default switch, tests and frontend layout.
+
+**Unresolved risks / next step:** UI-R1 stays open for the items it still names: setup command output, the custom topology builder and non-Docker-local launches still use legacy pages; forwards, archive removal and destroy-from-list have not been exercised against the live service; a formal accessibility review has not been recorded. Commit the branch as whole-phase commits when the operator asks.
+
 ## 2026-10-07 — Release H: complete console menus, Forge FX and sign-in
 
 **Outcome:** Operator asked for refinement, FX, quality and personality, and for every menu to be completed before a manual review that may make `/console` the default. Parity gaps were inventoried against the legacy pages first. New console-native views:

@@ -56,6 +56,17 @@ all six trials completed, with zero infrastructure failures. See
 filtering gap and disposable-stack reaper timeout were fixed during this work.
 All tested arena resources and both disposable stacks were removed.
 
+On 2026-10-07 (Releases G–H) the console gained native Score/Challenges, run
+attribution, service forwards, the agent connect recipe, All arenas (destroy,
+remove, clear archive), All evaluations, capacity, Activity filters, a Forge
+sign-in page and a stepped research intake. Remaining legacy-only surfaces:
+setup command output, the custom topology builder and non-Docker-local
+launches. Forwards, archive removal and destroy-from-list have browser and
+unit coverage with mocked service calls only. The operator approved the console
+after manual review on 2026-10-07 and it is now the default UI; the live fallback
+drill passed both ways (`WEBUI_DEFAULT_CONSOLE=false` restores the legacy home,
+`/?legacy=1` reaches it while the console is default).
+
 **Why it matters:** successful read-only pages and a clean release gate do not
 prove launch, arena operations, evidence retention or Docker-local task parity.
 

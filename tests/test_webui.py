@@ -14,6 +14,9 @@ import pytest
 pytest.importorskip("flask_wtf")
 
 os.environ.setdefault("ORCHESTRATOR_URL", "http://127.0.0.1:9")  # closed port
+# Most tests exercise the legacy home at /; the cutover tests set the switch
+# explicitly (and check the unset default in a fresh interpreter).
+os.environ["WEBUI_DEFAULT_CONSOLE"] = "false"
 
 _WEBUI = Path(__file__).resolve().parent.parent / "cyber-range" / "webui"
 sys.path.insert(0, str(_WEBUI))
@@ -70,6 +73,8 @@ def test_console_default_switch_keeps_legacy_fallback(client, monkeypatch):
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/console")
     assert client.get("/engagements").status_code == 200
+    # The console footer's "Legacy console" link must still reach the old home.
+    assert client.get("/?legacy=1").status_code == 200
     monkeypatch.setattr(webui_module, "CONSOLE_DEFAULT", False)
     assert client.get("/").status_code == 200
 
@@ -2483,3 +2488,14 @@ def test_console_archive_delete_and_clear_require_csrf_and_report_service_result
     cleared = client.post("/api/console/archive/clear", headers=headers)
     assert cleared.status_code == 200 and cleared.get_json() == {"deleted": 3}
     assert calls[0].endswith("/deployments/arena-1") and calls[1].endswith("/deployments")
+
+
+def test_console_is_the_default_ui_when_the_switch_is_unset():
+    import subprocess
+
+    env = {key: value for key, value in os.environ.items() if key != "WEBUI_DEFAULT_CONSOLE"}
+    result = subprocess.run(
+        [sys.executable, "-c", "import app; print(app.CONSOLE_DEFAULT)"],
+        cwd=_WEBUI, env=env, capture_output=True, text=True, timeout=60, check=True,
+    )
+    assert result.stdout.strip().splitlines()[-1] == "True"

@@ -14,8 +14,10 @@ legacy console reference is saved. Isolated Docker-local browser journeys for
 Cyber Range, source-bundle Research and scripted calibration Benchmark passed
 on 2026-09-29. Route/action parity, failure-state coverage, accessibility and
 usability review, the live fallback drill and the default switch remain open.
-`WEBUI_DEFAULT_CONSOLE` now provides a reversible root-route switch, disabled
-by default; legacy routes remain mounted in both settings.
+On 2026-10-07 the operator approved the console after manual review and it
+became the default (`WEBUI_DEFAULT_CONSOLE` defaults to true; false restores the
+legacy home). The live fallback drill passed both ways. Legacy routes remain
+mounted in both settings.
 
 ## Goal and product boundaries
 

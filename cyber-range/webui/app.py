@@ -25,7 +25,9 @@ from flask_wtf import CSRFProtect
 
 app = Flask(__name__)
 CONSOLE_SIMULATION_MODE = os.getenv("MOCK_MODE", "false").lower() in ("1", "true", "yes")
-CONSOLE_DEFAULT = os.getenv("WEBUI_DEFAULT_CONSOLE", "false").lower() in ("1", "true", "yes")
+# The Royal Command console (/console) is the default UI; set
+# WEBUI_DEFAULT_CONSOLE=false to serve the legacy home at / again.
+CONSOLE_DEFAULT = os.getenv("WEBUI_DEFAULT_CONSOLE", "true").lower() in ("1", "true", "yes")
 app.config["MAX_CONTENT_LENGTH"] = int(
     os.getenv("WEBUI_MAX_UPLOAD_BYTES", str(34 * 1024 * 1024))
 )
@@ -584,7 +586,7 @@ def logout():
 def overview():
     """Home, composed from the product objects an operator actually acts on:
     live engagements, findings waiting on a verdict, and anything needing attention."""
-    if CONSOLE_DEFAULT:
+    if CONSOLE_DEFAULT and request.args.get("legacy") != "1":
         return redirect("/console")
     deployments, ok = _deployments()
     scenarios = _scenarios()
@@ -656,7 +658,7 @@ def overview():
 @app.route("/console/evaluations/new")
 @app.route("/console/evaluations/<evaluation_id>")
 def royal_console(instance_id=None, evaluation_id=None):
-    """Opt-in React shell while legacy task routes retain full action parity."""
+    """The default React console; legacy task routes stay mounted for fallback."""
     manifest_path = Path(app.static_folder) / "console" / ".vite" / "manifest.json"
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
