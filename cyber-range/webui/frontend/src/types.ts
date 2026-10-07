@@ -128,6 +128,7 @@ export type ArenaData = {
   scenario: string;
   provider: string;
   simulation_mode: boolean;
+  gateway_url?: string;
   expires_at: string | null;
   observed_at: string;
   budget: { remaining: number | null; cap: number | null; gate: string | null };

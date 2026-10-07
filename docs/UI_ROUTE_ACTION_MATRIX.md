@@ -5,17 +5,18 @@ This is the first pass of phase 0. It records every Flask route and HTTP
 method; it does **not** prove React action/state parity. The status column
 states the present migration boundary, not a completed replacement.
 
-**Current inventory:** 133 route/method operations. Re-run the script after route changes.
+**Current inventory:** 142 route/method operations. Re-run the script after route changes.
 
 | Current URL | Method | Handler | Workspace / destination | Auth | CSRF | Contract | Deep link | Migration status |
 |---|---|---|---|---|---|---|---|---|
 | `/favicon.ico` | GET | `favicon` | Public support → `current path` | Public | — | Flask page / form | Preserve current URL | Keep |
-| `/login` | GET | `login` | Session → `/login` | Public | — | Flask page / form | Preserve current URL | Legacy until login parity |
-| `/login` | POST | `login` | Session → `/login` | Public | Required | Flask page / form | Preserve current URL | Legacy until login parity |
-| `/logout` | POST | `logout` | Session → `/logout` | Operator session | Required | Flask page / form | Preserve current URL | Legacy until login parity |
+| `/login` | GET | `login` | Session → `/login` | Public | — | Flask page / form | Preserve current URL | Keep (Forge-styled Flask page) |
+| `/login` | POST | `login` | Session → `/login` | Public | Required | Flask page / form | Preserve current URL | Keep (Forge-styled Flask page) |
+| `/logout` | POST | `logout` | Session → `/logout` | Operator session | Required | Flask page / form | Preserve current URL | Keep (Forge-styled Flask page) |
 | `/` | GET | `overview` | Research / home → `/console?workspace=research` | Operator session | — | Flask page / form | Preserve current URL | Legacy page retained |
 | `/console` | GET | `royal_console` | New console → `/console` | Operator session | — | Flask page / form | New route | Implemented projection/shell |
 | `/console/arena/<instance_id>` | GET | `royal_console` | New console → `/console` | Operator session | — | Flask page / form | New route | Implemented projection/shell |
+| `/console/arenas` | GET | `royal_console` | New console → `/console` | Operator session | — | Flask page / form | New route | Implemented projection/shell |
 | `/console/arenas/new` | GET | `royal_console` | New console → `/console` | Operator session | — | Flask page / form | New route | Implemented projection/shell |
 | `/console/scenarios` | GET | `royal_console` | New console → `/console` | Operator session | — | Flask page / form | New route | Implemented projection/shell |
 | `/console/scenarios/import` | GET | `royal_console` | New console → `/console` | Operator session | — | Flask page / form | New route | Implemented projection/shell |
@@ -26,6 +27,7 @@ states the present migration boundary, not a completed replacement.
 | `/console/library/agents` | GET | `royal_console` | New console → `/console` | Operator session | — | Flask page / form | New route | Implemented projection/shell |
 | `/console/settings` | GET | `royal_console` | New console → `/console` | Operator session | — | Flask page / form | New route | Implemented projection/shell |
 | `/console/profile` | GET | `royal_console` | New console → `/console` | Operator session | — | Flask page / form | New route | Implemented projection/shell |
+| `/console/evaluations` | GET | `royal_console` | New console → `/console` | Operator session | — | Flask page / form | New route | Implemented projection/shell |
 | `/console/evaluations/new` | GET | `royal_console` | New console → `/console` | Operator session | — | Flask page / form | New route | Implemented projection/shell |
 | `/console/evaluations/<evaluation_id>` | GET | `royal_console` | New console → `/console` | Operator session | — | Flask page / form | New route | Implemented projection/shell |
 | `/api/console/arenas` | POST | `console_arena_create` | New console → `/console` | Operator session | Required | JSON / stream proxy | New route | Implemented projection/shell |
@@ -36,6 +38,13 @@ states the present migration boundary, not a completed replacement.
 | `/api/console/arenas/<instance_id>` | GET | `console_arena` | New console → `/console` | Operator session | — | JSON / stream proxy | New route | Implemented projection/shell |
 | `/api/console/arenas/<instance_id>/setup` | GET | `console_arena_setup` | New console → `/console` | Operator session | — | JSON / stream proxy | New route | Implemented projection/shell |
 | `/api/console/arenas/<instance_id>/findings` | GET | `console_arena_findings` | New console → `/console` | Operator session | — | JSON / stream proxy | New route | Implemented projection/shell |
+| `/api/console/arenas/<instance_id>/score` | GET | `console_arena_score` | New console → `/console` | Operator session | — | JSON / stream proxy | New route | Implemented projection/shell |
+| `/api/console/arenas/<instance_id>/trace` | GET | `console_arena_trace` | New console → `/console` | Operator session | — | JSON / stream proxy | New route | Implemented projection/shell |
+| `/api/console/arenas/<instance_id>/forwards` | GET | `console_arena_forwards` | New console → `/console` | Operator session | — | JSON / stream proxy | New route | Implemented projection/shell |
+| `/api/console/arenas/<instance_id>/forwards` | POST | `console_arena_forwards` | New console → `/console` | Operator session | Required | JSON / stream proxy | New route | Implemented projection/shell |
+| `/api/console/arenas/<instance_id>/forwards/<forward_id>/revoke` | POST | `console_arena_forward_revoke` | New console → `/console` | Operator session | Required | JSON / stream proxy | New route | Implemented projection/shell |
+| `/api/console/archive/<instance_id>/delete` | POST | `console_archive_delete` | New console → `/console` | Operator session | Required | JSON / stream proxy | New route | Implemented projection/shell |
+| `/api/console/archive/clear` | POST | `console_archive_clear` | New console → `/console` | Operator session | Required | JSON / stream proxy | New route | Implemented projection/shell |
 | `/api/console/arenas/<instance_id>/evidence` | GET | `console_arena_evidence` | New console → `/console` | Operator session | — | JSON / stream proxy | New route | Implemented projection/shell |
 | `/api/console/arenas/<instance_id>/lifecycle` | POST | `console_arena_lifecycle` | New console → `/console` | Operator session | Required | JSON / stream proxy | New route | Implemented projection/shell |
 | `/api/console/arenas/<instance_id>/research-gate` | POST | `console_research_gate` | New console → `/console` | Operator session | Required | JSON / stream proxy | New route | Implemented projection/shell |
@@ -154,10 +163,14 @@ read-only paths have browser tests at 1440, 1024, 390 and 320 px.
 Current React coverage: authenticated Research, Benchmark and Cyber Range
 indexes; Git, OCI and source-bundle intake; arena overview, setup, agent
 bindings, HTTP, isolated browser visits, foothold transfer, PoC, findings,
-evidence and infrastructure; comparison creation, build/challenge/suite
+evidence, infrastructure, score/challenges, run attribution, service
+forwards and the agent connect recipe; All arenas (destroy, remove and
+clear archive) and All evaluations; comparison creation, build/challenge/suite
 registration and evaluation results; scenario library, spec/Vulhub/model
 preview and import, launch and arena lifecycle; shared Targets, Agents,
-Activity, Settings and Profile views. These use narrow BFF projections and
+Activity (verdict/source filters), capacity, Settings and Profile views.
+Still legacy-only: setup command output, custom topology builder and
+non-Docker-local launches. These use narrow BFF projections and
 keep `/console` opt-in. The operation rows remain an inventory, not proof
 of old action/state parity. Exact old deep links, protected downloads,
 full live journeys and accessibility review remain open.

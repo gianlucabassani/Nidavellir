@@ -4344,3 +4344,551 @@ body {
   flex-direction: row;
   align-items: center;
 }
+
+/* ---- Forge FX: one orchestrated entrance, tactile controls, live pulse ---- */
+/* Topology edges draw in from the foothold. */
+.topology-edge {
+  stroke-dasharray: 1;
+  animation: topology-edge-draw 620ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes topology-edge-draw {
+  from {
+    stroke-dashoffset: 1;
+    opacity: 0.2;
+  }
+  to {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+.research-grid > .panel:nth-child(3),
+.benchmark-grid > .panel:nth-child(3),
+.range-grid > .panel:nth-child(3) {
+  animation-delay: 110ms;
+}
+.research-grid > .panel:nth-child(4),
+.benchmark-grid > .panel:nth-child(4),
+.range-grid > .panel:nth-child(4) {
+  animation-delay: 165ms;
+}
+.research-grid > .panel:nth-child(n + 5),
+.benchmark-grid > .panel:nth-child(n + 5),
+.range-grid > .panel:nth-child(n + 5) {
+  animation-delay: 220ms;
+}
+.workflow-steps li,
+.intake-steps li {
+  animation: forge-enter 260ms ease-out both;
+}
+.workflow-steps li:nth-child(2),
+.intake-steps li:nth-child(2) {
+  animation-delay: 45ms;
+}
+.workflow-steps li:nth-child(3),
+.intake-steps li:nth-child(3) {
+  animation-delay: 90ms;
+}
+.workflow-steps li:nth-child(4) {
+  animation-delay: 135ms;
+}
+.button:active:not(:disabled),
+.compact-row:active,
+.forge-toolbelt > a:active,
+.workflow-steps a:active {
+  transform: translateY(1px);
+  transition-duration: 60ms;
+}
+/* A brass sheen crosses gold buttons on hover. */
+.button-gold {
+  position: relative;
+  overflow: hidden;
+}
+.button-gold::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    110deg,
+    transparent 30%,
+    #fff6 50%,
+    transparent 70%
+  );
+  transform: translateX(-120%);
+  pointer-events: none;
+}
+.button-gold:hover:not(:disabled)::after {
+  transform: translateX(120%);
+  transition: transform 620ms ease;
+}
+.live-dot.live {
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 55%, transparent);
+  animation: live-pulse 2.4s ease-out infinite;
+}
+@keyframes live-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 55%, transparent);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+/* Loading: Forge-shaped placeholders instead of a bare message. */
+.forge-skeleton {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(260px, 0.92fr);
+  gap: 18px;
+}
+.forge-skeleton span {
+  display: block;
+  min-height: 190px;
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(
+        100deg,
+        transparent 20%,
+        color-mix(in srgb, var(--gold) 14%, transparent) 50%,
+        transparent 80%
+      )
+      0 0 / 220% 100%,
+    var(--surface);
+  animation: forge-shimmer 1.6s linear infinite;
+}
+.forge-skeleton span:first-child {
+  min-height: 300px;
+  border-color: #7b6950;
+  background:
+    linear-gradient(100deg, transparent 20%, #c39c4f22 50%, transparent 80%) 0
+      0 / 220% 100%,
+    linear-gradient(125deg, #172339, #273249);
+}
+@keyframes forge-shimmer {
+  to {
+    background-position:
+      -220% 0,
+      0 0;
+  }
+}
+@media (max-width: 760px) {
+  .forge-skeleton {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .topology-edge,
+  .workflow-steps li,
+  .intake-steps li,
+  .live-dot.live,
+  .forge-skeleton span {
+    animation: none;
+  }
+  .topology-edge {
+    stroke-dasharray: none;
+  }
+  .button-gold::after {
+    display: none;
+  }
+}
+
+/* Arena record: score, ground truth, attribution, forwards. */
+.record-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+.record-score {
+  grid-column: 1 / -1;
+}
+.score-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0 22px;
+  border: 1px solid var(--line-soft);
+}
+.score-strip > div {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+}
+.score-strip > div + div {
+  border-left: 1px solid var(--line-soft);
+}
+.score-strip small,
+.record-facts dt {
+  color: var(--subtle);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+.score-strip strong {
+  font-size: 22px;
+  letter-spacing: -0.03em;
+  text-transform: capitalize;
+  font-variant-numeric: tabular-nums;
+}
+.score-strip strong span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.score-meter {
+  margin: 14px 22px 0;
+}
+.score-meter svg {
+  display: block;
+  width: 100%;
+  height: 6px;
+}
+.score-meter-track {
+  fill: var(--surface-soft);
+}
+.score-meter-fill {
+  fill: var(--gold);
+}
+.score-milestones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 22px 0;
+  padding: 0;
+  list-style: none;
+}
+.score-milestones li {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+.score-milestones li.reached {
+  border-color: var(--success);
+  color: var(--success);
+}
+.score-milestones i {
+  font-style: normal;
+}
+.score-signals {
+  margin: 14px 22px 18px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.reveal-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.challenge-list {
+  display: grid;
+  margin: 0 22px 18px;
+}
+.challenge-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.challenge-row:last-child {
+  border-bottom: 0;
+}
+.challenge-row.found {
+  background: color-mix(in srgb, var(--success) 6%, transparent);
+}
+.challenge-row strong {
+  display: block;
+  font-size: 12px;
+}
+.challenge-row small {
+  color: var(--muted);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+.challenge-row b {
+  color: var(--accent);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.record-facts {
+  display: grid;
+  margin: 0 22px 8px;
+}
+.record-facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.record-facts dd {
+  margin: 0;
+  font: 12px monospace;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+.forward-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+}
+.forward-form button {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+.panel-foot code {
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 900px) {
+  .record-grid {
+    grid-template-columns: 1fr;
+  }
+  .score-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .score-strip > div:nth-child(3) {
+    border-left: 0;
+  }
+  .score-strip > div:nth-child(n + 3) {
+    border-top: 1px solid var(--line-soft);
+  }
+}
+@media (max-width: 600px) {
+  .forward-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* All arenas list */
+.arena-list {
+  margin: 0 22px 18px;
+}
+.arena-list-labels,
+.arena-list-row {
+  display: grid;
+  grid-template-columns:
+    minmax(170px, 1.4fr) minmax(90px, 0.6fr) minmax(130px, 1fr)
+    minmax(90px, 0.6fr) minmax(120px, 0.8fr) auto;
+  gap: 14px;
+  align-items: center;
+}
+.arena-list-labels {
+  min-height: 36px;
+  color: var(--subtle);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+.arena-list-row {
+  min-height: 58px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12px;
+}
+.arena-list-row .session-name {
+  color: inherit;
+  text-decoration: none;
+}
+.arena-list-row .session-name strong {
+  display: block;
+}
+.arena-list-row .session-name small,
+.row-provider,
+.row-expires {
+  color: var(--muted);
+  font-size: 11px;
+}
+.arena-list-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+}
+.danger-link {
+  border: 0;
+  background: none;
+  color: var(--danger);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.evaluation-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+}
+@media (max-width: 900px) {
+  .arena-list-labels {
+    display: none;
+  }
+  .arena-list-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 10px 0;
+  }
+  .arena-list-row .row-scenario,
+  .arena-list-row .row-provider,
+  .arena-list-row .row-expires {
+    grid-column: 1;
+  }
+  .arena-list-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+
+/* Research capacity */
+.capacity-gauges {
+  display: grid;
+  gap: 16px;
+  margin: 0 22px;
+}
+.capacity-gauge > div {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 7px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.capacity-gauge strong {
+  font-variant-numeric: tabular-nums;
+}
+.capacity-gauge svg {
+  display: block;
+  width: 100%;
+  height: 5px;
+}
+.capacity-track {
+  fill: var(--surface-soft);
+}
+.capacity-fill {
+  fill: var(--success);
+}
+.capacity-gauge.warm .capacity-fill {
+  fill: var(--gold);
+}
+.capacity-gauge.high .capacity-fill {
+  fill: var(--danger);
+}
+.capacity-gauge small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.capacity-counts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 18px 22px 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--line-soft);
+}
+.capacity-counts strong {
+  display: block;
+  font-size: 20px;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.capacity-counts span {
+  color: var(--muted);
+  font-size: 10px;
+}
+@media (max-width: 1000px) {
+  .research-grid .research-activity {
+    grid-column: auto;
+  }
+}
+
+/* Filter chips (Activity) */
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 22px 14px;
+}
+.filter-chips button {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    color 160ms ease;
+}
+.filter-chips button:hover {
+  border-color: var(--accent);
+}
+.filter-chips button[aria-pressed="true"] {
+  border-color: var(--gold);
+  background: var(--bar);
+  color: var(--gold);
+}
+.filter-chips b {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Copyable commands and agent connect steps */
+.copy-field {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  margin-top: 8px;
+}
+.copy-field code {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.copy-field button {
+  flex: none;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--accent);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.copy-field button:hover {
+  border-color: var(--accent);
+}
+.connect-steps {
+  display: grid;
+  gap: 16px;
+  margin: 0 22px 20px;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.connect-steps li::marker {
+  color: var(--accent);
+  font-weight: 800;
+}
+.connect-steps code {
+  font-size: 11px;
+}
+.access-grid .access-connect {
+  grid-column: 1 / -1;
+}

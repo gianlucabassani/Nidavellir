@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { ForwardsWorkbench, ScoreWorkbench } from "./record";
 import type { ArenaData } from "../types";
 import {
   useWorkspaceData,
@@ -121,8 +122,12 @@ export function ArenaWorkspace({ id }: { id: string }) {
         subtitle={`${value.scenario} · ${value.simulation_mode ? "mock simulation" : value.provider} · ${readOnly ? "retained record" : "live workspace"}`}
         observed={value.observed_at}
         action={
-          <a className="button button-outline" href={legacy}>
-            Open all arena controls ↗
+          <a
+            className="subtle-link"
+            href={legacy}
+            title="Setup command output and custom-topology controls remain on the legacy page"
+          >
+            Legacy arena page ↗
           </a>
         }
         refresh={refresh}
@@ -191,6 +196,10 @@ export function ArenaWorkspace({ id }: { id: string }) {
             <FindingsWorkbench arena={value} />
           ) : activeTab === "evidence" ? (
             <EvidenceWorkbench arena={value} />
+          ) : activeTab === "score" ? (
+            <ScoreWorkbench arena={value} />
+          ) : activeTab === "forwards" ? (
+            <ForwardsWorkbench arena={value} />
           ) : (
             <ForgeOverview
               arena={value}

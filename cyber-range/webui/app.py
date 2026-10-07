@@ -641,6 +641,7 @@ def overview():
 
 @app.route("/console")
 @app.route("/console/arena/<instance_id>")
+@app.route("/console/arenas")
 @app.route("/console/arenas/new")
 @app.route("/console/scenarios")
 @app.route("/console/scenarios/import")
@@ -651,6 +652,7 @@ def overview():
 @app.route("/console/library/agents")
 @app.route("/console/settings")
 @app.route("/console/profile")
+@app.route("/console/evaluations")
 @app.route("/console/evaluations/new")
 @app.route("/console/evaluations/<evaluation_id>")
 def royal_console(instance_id=None, evaluation_id=None):
@@ -936,6 +938,7 @@ def console_arena(instance_id):
         "scenario": status.get("scenario") or "Custom target",
         "provider": outputs.get("provider") or status.get("provider") or "unknown",
         "simulation_mode": CONSOLE_SIMULATION_MODE,
+        "gateway_url": GATEWAY_PUBLIC_URL,
         "expires_at": status.get("expires_at"),
         "observed_at": datetime.now().astimezone().isoformat(),
         "budget": {"remaining": policy.get("remaining"), "cap": policy.get("action_cap"),
@@ -1049,6 +1052,129 @@ def console_arena_findings(instance_id):
                           "status": transaction.get("status")}
                          for transaction in item.get("http_transactions") or []],
     } for item in findings]})
+
+
+_CONSOLE_SLUG = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")
+
+
+@app.route("/api/console/arenas/<instance_id>/score")
+def console_arena_score(instance_id):
+    """Operator scorecard (ADR-0009). The manifest is ground truth: the console
+    hides it behind an explicit reveal; only listed fields leave the server."""
+    data, ok = _api_get(f"/arenas/{instance_id}/score")
+    if not ok or not isinstance(data, dict):
+        return jsonify({"score": None})
+    found = [item for item in data.get("found") or [] if isinstance(item, str)]
+    signals = data.get("signals") or {}
+    return jsonify({"score": {
+        "mode": data.get("mode"),
+        "value": (data.get("score") or {}).get("value"),
+        "tier": data.get("tier"),
+        "progress_rate": data.get("progress_rate"),
+        "milestones": [{"id": item.get("id"), "reached": item.get("reached") is True,
+                        "detail": item.get("detail")}
+                       for item in data.get("milestones") or [] if isinstance(item, dict)],
+        "signals": {"distinct_fault_sites": signals.get("distinct_fault_sites"),
+                    "counts": signals.get("counts") or {}},
+        "confirmed_findings": data.get("confirmed_findings"),
+        "findings_submitted": data.get("findings_submitted"),
+        "total_vulnerabilities": data.get("total_vulnerabilities"),
+        "found": found,
+        "points_earned": data.get("points_earned"),
+        "points_total": data.get("points_total"),
+        "manifest": [{"id": item.get("id"), "title": item.get("title"),
+                      "cwe": item.get("cwe"), "node": item.get("node"),
+                      "severity": item.get("severity"), "found": item.get("id") in found}
+                     for item in data.get("manifest") or [] if isinstance(item, dict)],
+    }})
+
+
+@app.route("/api/console/arenas/<instance_id>/trace")
+def console_arena_trace(instance_id):
+    """Self-declared run attribution; only present once an agent has worked the arena."""
+    events = _events(instance_id, limit=200)
+    agent_types = {"agent_session", "agent_exec", "agent_binding", "agent_setup_step"}
+    if not any(event.get("type") in agent_types for event in events):
+        return jsonify({"trace": None})
+    data, ok = _api_get(f"/arenas/{instance_id}/eval-export")
+    if not ok or not isinstance(data, dict):
+        return jsonify({"trace": None})
+    meta = data.get("metadata") or {}
+    return jsonify({"trace": {
+        "model": meta.get("gen_ai.request.model"), "provider": meta.get("gen_ai.system"),
+        "scaffold": meta.get("scaffold"), "stance": meta.get("stance"),
+        "trace_id": data.get("source_trace_id"),
+        "export": f"/api/arenas/{instance_id}/eval-export",
+    }})
+
+
+@app.route("/api/console/arenas/<instance_id>/forwards", methods=["GET", "POST"])
+def console_arena_forwards(instance_id):
+    """Short-lived service forwards from a foothold; the service enforces policy."""
+    if request.method == "POST":
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            return jsonify({"error": "Expected a JSON forward request"}), 422
+        fields = [body.get(key) for key in ("foothold", "target", "service_id")]
+        if not all(isinstance(value, str) and _CONSOLE_SLUG.fullmatch(value) for value in fields):
+            return jsonify({"error": "Choose a foothold and a declared service"}), 422
+        data, code = _api_post(f"/arenas/{instance_id}/forwards", {
+            "foothold": fields[0], "target": fields[1], "service_id": fields[2],
+            "lifetime_seconds": 120, "idempotency_key": uuid.uuid4().hex,
+        })
+        return jsonify(data or {}), code
+    capabilities = _api_get(f"/arenas/{instance_id}/capabilities")[0] or {}
+    forwards = (_api_get(f"/arenas/{instance_id}/forwards")[0] or {}).get("forwards") or []
+    operation = (capabilities.get("operations") or {}).get("forward") or {}
+    return jsonify({
+        "state": operation.get("state") or "unknown",
+        "reason": operation.get("reason") or "",
+        "footholds": [item for item in capabilities.get("footholds") or [] if isinstance(item, str)],
+        "services": [{"target": target.get("node"), "service": service}
+                     for target in capabilities.get("targets") or [] if isinstance(target, dict)
+                     for service in target.get("forward_services") or []],
+        "forwards": [{key: item.get(key) for key in
+                      ("id", "target", "service_id", "state", "expires_at")}
+                     for item in forwards if isinstance(item, dict)],
+    })
+
+
+@app.route("/api/console/arenas/<instance_id>/forwards/<forward_id>/revoke", methods=["POST"])
+def console_arena_forward_revoke(instance_id, forward_id):
+    if not _CONSOLE_SLUG.fullmatch(forward_id):
+        return jsonify({"error": "Unknown forward"}), 422
+    data, code = _api_post(f"/arenas/{instance_id}/forwards/{forward_id}/revoke")
+    return jsonify(data or {}), code
+
+
+def _console_delete(path):
+    """DELETE on the orchestrator, normalized to (json, status) for the console."""
+    try:
+        response = requests.delete(f"{API_URL}{path}", headers=API_HEADERS, timeout=10)
+    except requests.RequestException:
+        return {"error": "Orchestrator unavailable"}, 503
+    try:
+        body = response.json()
+    except ValueError:
+        body = {}
+    if response.status_code != 200:
+        detail = body.get("detail") if isinstance(body, dict) else None
+        return {"error": detail if isinstance(detail, str) and detail
+                else f"Delete failed (HTTP {response.status_code})"}, response.status_code
+    return body if isinstance(body, dict) else {}, 200
+
+
+@app.route("/api/console/archive/<instance_id>/delete", methods=["POST"])
+def console_archive_delete(instance_id):
+    """Remove one retained record; the service refuses records that are still live."""
+    data, code = _console_delete(f"/deployments/{instance_id}")
+    return jsonify(data), code
+
+
+@app.route("/api/console/archive/clear", methods=["POST"])
+def console_archive_clear():
+    data, code = _console_delete("/deployments")
+    return jsonify({"deleted": data.get("deleted", 0)} if code == 200 else data), code
 
 
 @app.route("/api/console/arenas/<instance_id>/evidence")

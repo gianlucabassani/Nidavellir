@@ -134,7 +134,7 @@ export function Research() {
             title="Recent sessions"
             className="sessions-panel"
             aside={
-              <a className="subtle-link" href="/engagements">
+              <a className="subtle-link" href="/console/arenas">
                 View all
               </a>
             }
@@ -194,6 +194,7 @@ export function Research() {
             </div>
           </Panel>
         <LiveActivity />
+        <Capacity />
       </div>
     </>
   );
@@ -320,5 +321,102 @@ function FeaturedTopology({ id }: { id: string }) {
         />
       </div>
     </div>
+  );
+}
+
+type Usage = {
+  ok: boolean;
+  cpu: number | null;
+  mem: number | null;
+  disk: number | null;
+  uptime: string | null;
+  mem_used_gb: number | null;
+  mem_total_gb: number | null;
+  containers: number;
+  networks: number;
+  active_arenas: number;
+};
+
+function Gauge({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: number | null;
+  detail?: string;
+}) {
+  const level =
+    value == null ? "" : value >= 85 ? "high" : value >= 65 ? "warm" : "";
+  return (
+    <div className={`capacity-gauge ${level}`}>
+      <div>
+        <span>{label}</span>
+        <strong>{value == null ? "—" : `${value}%`}</strong>
+      </div>
+      <svg viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true">
+        <rect className="capacity-track" width="100" height="4" />
+        <rect className="capacity-fill" width={value ?? 0} height="4" />
+      </svg>
+      {detail && <small>{detail}</small>}
+    </div>
+  );
+}
+
+// Host load as the console process sees it, plus the live arena footprint.
+function Capacity() {
+  const { value, error } = useWorkspaceData<Usage>("/api/system-usage");
+  return (
+    <Panel
+      eyebrow="06 / CAPACITY"
+      title="Host & arenas"
+      className="research-capacity"
+    >
+      {error ? (
+        <Empty title="Capacity unavailable" detail={error} />
+      ) : !value ? (
+        <Empty title="Reading capacity" detail="Sampling host load." />
+      ) : (
+        <>
+          <div className="capacity-gauges">
+            <Gauge label="CPU load" value={value.cpu} />
+            <Gauge
+              label="Memory"
+              value={value.mem}
+              detail={
+                value.mem_used_gb != null && value.mem_total_gb != null
+                  ? `${value.mem_used_gb} of ${value.mem_total_gb} GB`
+                  : undefined
+              }
+            />
+            <Gauge label="Disk" value={value.disk} />
+          </div>
+          <div className="capacity-counts">
+            <div>
+              <strong>{value.active_arenas}</strong>
+              <span>live arenas</span>
+            </div>
+            <div>
+              <strong>{value.containers}</strong>
+              <span>stations</span>
+            </div>
+            <div>
+              <strong>{value.networks}</strong>
+              <span>arena networks</span>
+            </div>
+            <div>
+              <strong>{value.uptime || "—"}</strong>
+              <span>uptime</span>
+            </div>
+          </div>
+          <div className="panel-foot">
+            <span>
+              Sampled from the console host. Station counts come from live arena
+              outputs.
+            </span>
+          </div>
+        </>
+      )}
+    </Panel>
   );
 }

@@ -77,7 +77,10 @@ export function NewComparison() {
         subtitle="Choose two pinned builds and one versioned suite."
         observed={value.observed_at}
         action={
-          <a className="button button-outline" href="/evaluations">
+          <a
+            className="button button-outline"
+            href="/console/benchmark/registry"
+          >
             Manage registry ↗
           </a>
         }
@@ -184,7 +187,10 @@ export function NewComparison() {
             failures remain separate from agent outcomes.
           </p>
           <div className="panel-foot">
-            <a className="inline-action" href="/evaluations#builds">
+            <a
+              className="inline-action"
+              href="/console/benchmark/registry?kind=builds"
+            >
               Register material ↗
             </a>
           </div>

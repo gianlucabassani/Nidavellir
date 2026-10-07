@@ -20,6 +20,7 @@ const categories = [
       { tab: "browser", label: "Browser" },
       { tab: "poc", label: "Confined PoC" },
       { tab: "transfer", label: "File transfer" },
+      { tab: "forwards", label: "Service forwards" },
     ],
   },
   {
@@ -29,6 +30,7 @@ const categories = [
     items: [
       { tab: "findings", label: "Findings" },
       { tab: "evidence", label: "Evidence" },
+      { tab: "score", label: "Score & trace" },
     ],
   },
 ];

@@ -22,6 +22,8 @@ export function Activity() {
       : "findings",
   );
   const [query, setQuery] = useState("");
+  const [verdict, setVerdict] = useState("all");
+  const [source, setSource] = useState("all");
   const { value, error, loading, refresh } = useWorkspaceData<ActivityData>(
     "/api/console/activity",
   );
@@ -36,8 +38,11 @@ export function Activity() {
   if (!value) return null;
   const filter = (text: string) =>
     text.toLowerCase().includes(query.trim().toLowerCase());
-  const findings = value.findings.filter((item) =>
-    filter(`${item.title} ${item.arena_name} ${item.verdict}`),
+  const verdicts = [...new Set(value.findings.map((item) => item.verdict))];
+  const findings = value.findings.filter(
+    (item) =>
+      (verdict === "all" || item.verdict === verdict) &&
+      filter(`${item.title} ${item.arena_name} ${item.verdict}`),
   );
   const artifacts = value.artifacts.filter((item) =>
     filter(`${item.finding_title} ${item.arena_name} ${item.digest}`),
@@ -45,8 +50,33 @@ export function Activity() {
   const signals = value.signals.filter((item) =>
     filter(`${item.summary} ${item.kind} ${item.arena_name}`),
   );
-  const audit = value.audit.filter((item) =>
-    filter(`${item.type} ${item.actor} ${item.arena_name}`),
+  const audit = value.audit.filter(
+    (item) =>
+      (source === "all" || item.source === source) &&
+      filter(`${item.type} ${item.actor} ${item.arena_name}`),
+  );
+  const chips = (
+    label: string,
+    options: string[],
+    current: string,
+    set: (next: string) => void,
+    count: (option: string) => number,
+  ) => (
+    <nav className="filter-chips" aria-label={label}>
+      {["all", ...options].map((option) => (
+        <button
+          key={option}
+          type="button"
+          aria-pressed={current === option}
+          onClick={() => set(option)}
+        >
+          {option === "all"
+            ? "All"
+            : option[0].toUpperCase() + option.slice(1).replaceAll("_", " ")}
+          <b>{count(option)}</b>
+        </button>
+      ))}
+    </nav>
   );
   return (
     <>
@@ -111,6 +141,16 @@ export function Activity() {
           title="Reported findings"
           aside={<span className="tiny-tag">{findings.length} SHOWN</span>}
         >
+          {chips(
+            "Filter findings by verdict",
+            verdicts,
+            verdict,
+            setVerdict,
+            (option) =>
+              value.findings.filter(
+                (item) => option === "all" || item.verdict === option,
+              ).length,
+          )}
           {findings.length ? (
             <div className="activity-list">
               {findings.map((item, index) => (
@@ -232,6 +272,16 @@ export function Activity() {
           title="Audit trail"
           aside={<span className="tiny-tag">LATEST 200</span>}
         >
+          {chips(
+            "Filter audit events by source",
+            ["agent", "human", "system"],
+            source,
+            setSource,
+            (option) =>
+              value.audit.filter(
+                (item) => option === "all" || item.source === option,
+              ).length,
+          )}
           {audit.length ? (
             <div className="activity-list">
               {audit.map((item, index) => (

@@ -191,9 +191,16 @@ export function PageHead({
 
 export function Loading() {
   return (
-    <div className="message-panel" role="status">
-      <strong>Loading workspace</strong>
-      <p>Fetching current records from Nidavellir.</p>
+    <div role="status">
+      <span className="visually-hidden">
+        Loading workspace: fetching current records from Nidavellir.
+      </span>
+      <div className="forge-skeleton" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+        <span />
+      </div>
     </div>
   );
 }
@@ -261,5 +268,36 @@ export function ConfirmDialog({
         </button>
       </div>
     </dialog>
+  );
+}
+
+// A command the operator copies; falls back to selecting the text.
+export function CopyField({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  const field = useRef<HTMLElement>(null);
+  return (
+    <div className="copy-field">
+      <code ref={field}>{value}</code>
+      <button
+        type="button"
+        aria-label={`Copy ${label}`}
+        onClick={() => {
+          navigator.clipboard
+            ?.writeText(value)
+            .then(() => {
+              setCopied(true);
+              window.setTimeout(() => setCopied(false), 1400);
+            })
+            .catch(() => {
+              const range = document.createRange();
+              if (field.current) range.selectNodeContents(field.current);
+              window.getSelection()?.removeAllRanges();
+              window.getSelection()?.addRange(range);
+            });
+        }}
+      >
+        {copied ? "Copied" : "Copy"}
+      </button>
+    </div>
   );
 }

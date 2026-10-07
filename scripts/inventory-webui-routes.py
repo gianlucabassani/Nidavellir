@@ -20,7 +20,7 @@ def classify(path):
     if path == "/" or path == "/arenas":
         return "Research / home", "/console?workspace=research", "Legacy page retained"
     if path in ("/login", "/logout"):
-        return "Session", path, "Legacy until login parity"
+        return "Session", path, "Keep (Forge-styled Flask page)"
     if path.startswith(("/evaluations", "/api/model-connection")):
         return "Benchmark / settings", "/console?workspace=benchmark", "Legacy action linked"
     if path.startswith(("/api/targets/", "/api/setup/")):
@@ -91,10 +91,14 @@ def main():
         "Current React coverage: authenticated Research, Benchmark and Cyber Range",
         "indexes; Git, OCI and source-bundle intake; arena overview, setup, agent",
         "bindings, HTTP, isolated browser visits, foothold transfer, PoC, findings,",
-        "evidence and infrastructure; comparison creation, build/challenge/suite",
+        "evidence, infrastructure, score/challenges, run attribution, service",
+        "forwards and the agent connect recipe; All arenas (destroy, remove and",
+        "clear archive) and All evaluations; comparison creation, build/challenge/suite",
         "registration and evaluation results; scenario library, spec/Vulhub/model",
         "preview and import, launch and arena lifecycle; shared Targets, Agents,",
-        "Activity, Settings and Profile views. These use narrow BFF projections and",
+        "Activity (verdict/source filters), capacity, Settings and Profile views.",
+        "Still legacy-only: setup command output, custom topology builder and",
+        "non-Docker-local launches. These use narrow BFF projections and",
         "keep `/console` opt-in. The operation rows remain an inventory, not proof",
         "of old action/state parity. Exact old deep links, protected downloads,",
         "full live journeys and accessibility review remain open.",

@@ -123,7 +123,7 @@ export function Benchmark() {
           title="Recent comparisons"
           className="comparisons-panel"
           aside={
-            <a className="subtle-link" href="/evaluations">
+            <a className="subtle-link" href="/console/evaluations">
               View all
             </a>
           }

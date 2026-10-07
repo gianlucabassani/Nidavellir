@@ -2371,3 +2371,115 @@ def test_http_transaction_proxies_forward_to_the_orchestrator(
     assert replayed.status_code == 200
     assert seen_post[-1][0].endswith("/replay")
     assert seen_post[-1][1] == {"params": {"q": "1"}}
+
+
+def test_console_arena_score_projects_scorecard_and_handles_absence(client, monkeypatch):
+    import app as webui_module
+
+    assert _login(client).status_code == 302
+    monkeypatch.setattr(webui_module, "_api_get", lambda path, timeout=5: (None, False))
+    assert client.get("/api/console/arenas/arena-1/score").get_json() == {"score": None}
+    monkeypatch.setattr(webui_module, "_api_get", lambda path, timeout=5: ({
+        "mode": "benchmark", "score": {"value": 0.5, "explanation": "private"},
+        "tier": "partial", "progress_rate": 0.5,
+        "milestones": [{"id": "foothold", "reached": True, "detail": "shell", "secret": 1}],
+        "signals": {"distinct_fault_sites": 1, "counts": {"crash": 2}, "raw": ["x"]},
+        "confirmed_findings": 1, "findings_submitted": 2,
+        "total_vulnerabilities": 2, "found": ["v1"], "points_earned": 10, "points_total": 30,
+        "manifest": [{"id": "v1", "title": "IDOR", "cwe": "CWE-639", "node": "api",
+                      "severity": "high", "flag": "do-not-leak"}],
+    }, True))
+    score = client.get("/api/console/arenas/arena-1/score").get_json()["score"]
+    assert score["mode"] == "benchmark" and score["value"] == 0.5
+    assert score["milestones"] == [{"id": "foothold", "reached": True, "detail": "shell"}]
+    assert score["signals"] == {"distinct_fault_sites": 1, "counts": {"crash": 2}}
+    assert score["manifest"] == [{"id": "v1", "title": "IDOR", "cwe": "CWE-639",
+                                  "node": "api", "severity": "high", "found": True}]
+    assert "do-not-leak" not in str(score) and "private" not in str(score)
+
+
+def test_console_arena_trace_reports_self_declared_attribution(client, monkeypatch):
+    import app as webui_module
+
+    assert _login(client).status_code == 302
+    monkeypatch.setattr(webui_module, "_events", lambda *args, **kwargs: [])
+    assert client.get("/api/console/arenas/arena-1/trace").get_json() == {"trace": None}
+    monkeypatch.setattr(webui_module, "_events", lambda *args, **kwargs: [
+        {"type": "agent_session", "payload": {}}])
+    monkeypatch.setattr(webui_module, "_api_get", lambda path, timeout=5: ({
+        "source_trace_id": "t-1", "input": "hidden",
+        "metadata": {"gen_ai.request.model": "m", "gen_ai.system": "p",
+                     "scaffold": "s", "stance": "attacker", "api_key": "no"}}, True))
+    trace = client.get("/api/console/arenas/arena-1/trace").get_json()["trace"]
+    assert trace == {"model": "m", "provider": "p", "scaffold": "s", "stance": "attacker",
+                     "trace_id": "t-1", "export": "/api/arenas/arena-1/eval-export"}
+
+
+def test_console_arena_forwards_list_open_and_revoke(client, monkeypatch):
+    import app as webui_module
+
+    token = _csrf_token(client)
+    assert _login(client).status_code == 302
+    headers = {"X-CSRFToken": token}
+
+    def api_get(path, timeout=5):
+        if path.endswith("/capabilities"):
+            return {"operations": {"forward": {"state": "ready", "reason": ""}},
+                    "footholds": ["kali"],
+                    "targets": [{"node": "api", "forward_services": ["http"]}]}, True
+        if path.endswith("/forwards"):
+            return {"forwards": [{"id": "f1", "target": "api", "service_id": "http",
+                                  "state": "open", "expires_at": "soon", "token": "x"}]}, True
+        return None, False
+
+    monkeypatch.setattr(webui_module, "_api_get", api_get)
+    listed = client.get("/api/console/arenas/arena-1/forwards").get_json()
+    assert listed["state"] == "ready" and listed["footholds"] == ["kali"]
+    assert listed["services"] == [{"target": "api", "service": "http"}]
+    assert listed["forwards"] == [{"id": "f1", "target": "api", "service_id": "http",
+                                   "state": "open", "expires_at": "soon"}]
+    path = "/api/console/arenas/arena-1/forwards"
+    body = {"foothold": "kali", "target": "api", "service_id": "http"}
+    assert client.post(path, json=body).status_code == 400
+    assert client.post(path, json={**body, "target": "../x"}, headers=headers).status_code == 422
+    calls = []
+    monkeypatch.setattr(webui_module, "_api_post", lambda target, payload=None: (
+        calls.append((target, payload)) or {"id": "f2"}, 200))
+    assert client.post(path, json=body, headers=headers).status_code == 200
+    target, payload = calls[0]
+    assert target == "/arenas/arena-1/forwards"
+    assert payload["lifetime_seconds"] == 120 and payload["target"] == "api"
+    assert len(payload["idempotency_key"]) == 32
+    assert client.post(path + "/f1/revoke", headers=headers).status_code == 200
+    assert calls[1] == ("/arenas/arena-1/forwards/f1/revoke", None)
+
+
+def test_console_archive_delete_and_clear_require_csrf_and_report_service_result(client, monkeypatch):
+    import app as webui_module
+
+    token = _csrf_token(client)
+    assert _login(client).status_code == 302
+    headers = {"X-CSRFToken": token}
+    assert client.post("/api/console/archive/arena-1/delete").status_code == 400
+    calls = []
+
+    class Response:
+        def __init__(self, status, body):
+            self.status_code, self._body = status, body
+
+        def json(self):
+            return self._body
+
+    def delete(url, headers=None, timeout=None):
+        calls.append(url)
+        if url.endswith("/deployments"):
+            return Response(200, {"deleted": 3})
+        return Response(409, {"detail": "Arena is still active"})
+
+    monkeypatch.setattr(webui_module.requests, "delete", delete)
+    refused = client.post("/api/console/archive/arena-1/delete", headers=headers)
+    assert refused.status_code == 409
+    assert refused.get_json() == {"error": "Arena is still active"}
+    cleared = client.post("/api/console/archive/clear", headers=headers)
+    assert cleared.status_code == 200 and cleared.get_json() == {"deleted": 3}
+    assert calls[0].endswith("/deployments/arena-1") and calls[1].endswith("/deployments")

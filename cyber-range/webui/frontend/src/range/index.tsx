@@ -198,7 +198,7 @@ export function Range() {
             />
           )}
           <div className="panel-foot">
-            <a className="inline-action" href="/engagements">
+            <a className="inline-action" href="/console/arenas">
               View all arena records ↗
             </a>
           </div>

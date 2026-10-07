@@ -20,6 +20,7 @@ import { TargetsLibrary } from "./shared/targets";
 import { Profile } from "./shared/profile";
 import { Settings } from "./shared/settings";
 import { ResearchAssistant } from "./shared/assistant";
+import { AllArenas, AllEvaluations } from "./shared/lists";
 
 function workspaceFromUrl(): Workspace {
   const value = new URLSearchParams(window.location.search).get("workspace");
@@ -49,6 +50,8 @@ function App() {
       )
     : null;
   const newComparison = window.location.pathname === "/console/evaluations/new";
+  const allEvaluations = window.location.pathname === "/console/evaluations";
+  const allArenas = window.location.pathname === "/console/arenas";
   const benchmarkRegistry =
     window.location.pathname === "/console/benchmark/registry";
   const activity = window.location.pathname === "/console/activity";
@@ -72,9 +75,9 @@ function App() {
   const activeWorkspace: Workspace | null =
     activity || agentsLibrary || targetsLibrary || settingsPage || profilePage
       ? null
-      : evaluationId || newComparison || benchmarkRegistry
+      : evaluationId || newComparison || benchmarkRegistry || allEvaluations
         ? "benchmark"
-        : newResearch
+        : newResearch || allArenas
           ? "research"
           : newArena || scenarioLibrary || scenarioImport
             ? "range"
@@ -85,6 +88,12 @@ function App() {
     activity &&
     new URLSearchParams(window.location.search).get("section") === "evidence";
   const sharedTools = [
+    { label: "All arenas", href: "/console/arenas", active: allArenas },
+    {
+      label: "All evaluations",
+      href: "/console/evaluations",
+      active: allEvaluations,
+    },
     {
       label: "Targets",
       href: "/console/library/targets",
@@ -269,6 +278,10 @@ function App() {
       >
         {arenaId ? (
           <ArenaWorkspace key={arenaId} id={arenaId} />
+        ) : allArenas ? (
+          <AllArenas />
+        ) : allEvaluations ? (
+          <AllEvaluations />
         ) : newResearch ? (
           <NewResearch />
         ) : newArena ? (
