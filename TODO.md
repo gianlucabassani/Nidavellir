@@ -154,6 +154,21 @@ multi-agent red-vs-blue, defender scoring and VNC remain deferred. Local VM work
 and requires a selected research target; cloud apply is not its prerequisite. No GPU-heavy
 workloads or local model training are required for the personal Docker path.
 
+## Separate track: operator UI
+
+UI, console and aesthetic work is **off the main delivery order** and out of the research
+and evaluation passes. It lives on its own branch, `ui/royal-command` (1 commit; 30 behind
+`main` — merge `main` in before resuming). Belongs to that track, not to a research pass:
+
+- the console rebuild described in [`docs/UI_REBUILD_PLAN.md`](docs/UI_REBUILD_PLAN.md);
+- the deferred human view for the research code-intel tools — a console page over
+  `POST /research/code/*`, which currently exposes REST JSON as the operator view.
+
+Rules: a research or evaluation pass does not include UI work; when a pass needs a human
+view it uses the existing REST/JSON output. No NV id is assigned to UI work and none
+should be added until the track is explicitly scheduled. Backend changes required by the
+UI stay limited to the presentation/BFF contract that exposes existing data and actions.
+
 ## Implemented foundations — preserve, then reverify
 
 - [x] Dynamic nodes/segments and Docker provider; immutable Git/OCI/source-bundle intake.

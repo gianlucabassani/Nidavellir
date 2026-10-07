@@ -3,6 +3,17 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-10-06 — UI split to its own track
+
+Operator-requested sequencing decision, no code change. UI, console and aesthetic work is
+removed from the main delivery order and from research/evaluation passes; it lives on
+`ui/royal-command` (which needs `main` merged in — it is 30 behind). The deferred console
+page over `POST /research/code/*` belongs to that track, not to a research pass. Recorded
+in `TODO.md` ("Separate track: operator UI") so the next session does not re-mix them.
+
+**Files:** `TODO.md`, `docs/JOURNAL.md`. **Verification:** documentation only; no code
+changed, so the green gate stands.
+
 ## 2026-10-06 — Hygiene: mechanical pre-reg gate (R1) + assertive controls (R2)
 
 R1: `probe-paperless-variants.py` takes mandatory `--require-prereg
