@@ -1,0 +1,42 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+__________________ test_permission_namespace_is_not_discarded __________________
+
+scratch = PosixPath('/tmp/pytest-of-prime/pytest-15/test_permission_namespace_is_n0')
+
+    def test_permission_namespace_is_not_discarded(scratch):
+        commit(scratch, """class View:
+        permission_classes = (IsAuthenticated,)
+        def update(self):
+            if not user.has_perm('unrelated.change_thing'):
+                raise Denied()
+            return has_perms_owner_aware(user, 'documents.change_thing', thing)
+    """)
+>       assert search(scratch, "half-composed-check")["data"]["sites"][0]["status"] != "composed"
+E       AssertionError: assert 'composed' != 'composed'
+
+tests/test_research_code_hardening.py:134: AssertionError
+_______________ test_conditional_denial_does_not_establish_guard _______________
+
+scratch = PosixPath('/tmp/pytest-of-prime/pytest-15/test_conditional_denial_does_n0')
+
+    def test_conditional_denial_does_not_establish_guard(scratch):
+        commit(scratch, """class View:
+        permission_classes = (IsAuthenticated,)
+        def update(self):
+            if not user.has_perm('documents.change_thing') and feature_flag:
+                raise Denied()
+            return has_perms_owner_aware(user, 'documents.change_thing', thing)
+    """)
+        site = search(scratch, "half-composed-check")["data"]["sites"][0]
+>       assert site["status"] == "manual-review"
+E       AssertionError: assert 'composed' == 'manual-review'
+E         
+E         - manual-review
+E         + composed
+
+tests/test_research_code_hardening.py:146: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_research_code_hardening.py::test_permission_namespace_is_not_discarded
+FAILED tests/test_research_code_hardening.py::test_conditional_denial_does_not_establish_guard
+2 failed, 17 deselected in 0.18s

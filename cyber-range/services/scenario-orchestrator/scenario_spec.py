@@ -27,7 +27,9 @@ which schema the scenario was authored in.
 from __future__ import annotations
 
 import ipaddress
+import json
 import re
+from typing import Any
 from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -275,13 +277,31 @@ class Vulnerability(BaseModel):
     # adapter uses a target-local observer; never include these fields in the
     # public topology or participant brief.
     validator: str | None = None
-    validation_config: dict[str, str] = Field(default_factory=dict)
+    # Operator-owned probe/observer declaration for the chosen validator. Values
+    # may be nested (e.g. the generic HTTP access-control plan) and are always
+    # re-validated by the validator itself; keep the whole object small.
+    validation_config: dict[str, Any] = Field(default_factory=dict)
     marker: str | None = None
 
     @field_validator("id")
     @classmethod
     def _id_is_slug(cls, v: str) -> str:
         return _check_slug(v, "vulnerability id")
+
+    @field_validator("validation_config")
+    @classmethod
+    def _bounded_validation_config(cls, v: dict) -> dict:
+        if len(v) > 32:
+            raise ValueError("validation_config has too many keys")
+        if any(not isinstance(key, str) or len(key) > 64 for key in v):
+            raise ValueError("validation_config keys must be short strings")
+        try:
+            encoded = json.dumps(v)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("validation_config must be JSON-serializable") from exc
+        if len(encoded) > 8192:
+            raise ValueError("validation_config is too large")
+        return v
 
     @field_validator("cwe")
     @classmethod

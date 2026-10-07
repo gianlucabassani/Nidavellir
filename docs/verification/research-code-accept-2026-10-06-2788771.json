@@ -1,0 +1,309 @@
+{
+  "calls": [
+    {
+      "digest": "75cca5e845a4cf35",
+      "output_lines": 37,
+      "path": "/research/code/fix-lookup",
+      "truncated": false
+    },
+    {
+      "digest": "dc1ab5bc059720a7",
+      "output_lines": 42,
+      "path": "/research/code/fix-lookup",
+      "truncated": false
+    },
+    {
+      "digest": "ed8980654749160d",
+      "output_lines": 42,
+      "path": "/research/code/fix-lookup",
+      "truncated": false
+    },
+    {
+      "digest": "1b4aae14c252500e",
+      "output_lines": 214,
+      "path": "/research/code/sibling-search",
+      "truncated": false
+    },
+    {
+      "digest": "e15cfa5b764364c0",
+      "output_lines": 46,
+      "path": "/research/code/sibling-search",
+      "truncated": false
+    },
+    {
+      "digest": "6782165e05241649",
+      "output_lines": 35,
+      "path": "/research/code/layer-diff",
+      "truncated": false
+    }
+  ],
+  "created_at": "2026-10-06T16:28:37.732575+00:00",
+  "fix_rows": [
+    {
+      "advisory_id": "GHSA-7qqc-wrcw-2fj9",
+      "check_line": "added has_perms_owner_aware gate in MailAccountViewSet (src/paperless_mail/views.py)",
+      "fix_ref": "65ca78e9e757",
+      "subject": "Security: fix/GHSA-7qqc-wrcw-2fj9"
+    },
+    {
+      "advisory_id": "GHSA-96jx-fj7m-qh6x",
+      "check_line": "added get_objects_for_user_owner_aware gate in GlobalSearchView (src/documents/views.py)",
+      "fix_ref": "9e9fc6213c63",
+      "subject": "Resolve GHSA-96jx-fj7m-qh6x"
+    },
+    {
+      "advisory_id": null,
+      "check_line": "added permitted_object_ids gate in ProcessedMailViewSet (src/paperless_mail/views.py)",
+      "fix_ref": "c28c532bef74",
+      "subject": "Fix: check bulk mail delete permissions for the whole batch up front (#13620)"
+    }
+  ],
+  "mail_fix_diff": {
+    "src/paperless_mail/views.py": {
+      "added": 1,
+      "removed": 0
+    }
+  },
+  "manual_baseline": {
+    "git_invocations": 10,
+    "hunk_lines_read": "~600 plus follow-up file reads",
+    "note": "observed cost of the manual mail-adjacent collect in the variant-hunt round (same three fixes plus sibling greps)"
+  },
+  "repo": "/tmp/paperless-adv/repo",
+  "schema": "nidavellir/research-code-acceptance/v1",
+  "sibling_candidates": {
+    "bulk_permission": [
+      {
+        "evidence": "has_perms = (",
+        "file": "src/documents/views.py",
+        "line": 2989,
+        "status": "review"
+      },
+      {
+        "evidence": "has_perms = has_perms and user_is_owner_of_all_documents",
+        "file": "src/documents/views.py",
+        "line": 3023,
+        "status": "covered"
+      },
+      {
+        "evidence": "has_perms = False",
+        "file": "src/documents/views.py",
+        "line": 3037,
+        "status": "review"
+      },
+      {
+        "evidence": "has_perms = False",
+        "file": "src/documents/views.py",
+        "line": 3059,
+        "status": "review"
+      },
+      {
+        "evidence": "has_perms = (",
+        "file": "src/documents/views.py",
+        "line": 5081,
+        "status": "review"
+      }
+    ],
+    "bulk_truncated": false,
+    "mail_unscoped": [
+      {
+        "evidence": "processed_uids_qs = ProcessedMail.objects.filter(",
+        "file": "src/paperless_mail/mail.py",
+        "line": 807,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "already_processed = ProcessedMail.objects.filter(",
+        "file": "src/paperless_mail/mail.py",
+        "line": 861,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "MailRule.objects.filter(maximum_age__gt=32767).update(maximum_age=32767)",
+        "file": "src/paperless_mail/migrations/0002_optimize_integer_field_sizes.py",
+        "line": 10,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "MailRule.objects.filter(order__gt=32767).exists()",
+        "file": "src/paperless_mail/migrations/0002_optimize_integer_field_sizes.py",
+        "line": 20,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "or MailRule.objects.filter(",
+        "file": "src/paperless_mail/migrations/0002_optimize_integer_field_sizes.py",
+        "line": 21,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "MailRule.objects.filter(pk=rule_id).update(order=index)",
+        "file": "src/paperless_mail/migrations/0002_optimize_integer_field_sizes.py",
+        "line": 28,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "MailAccount.objects.filter(pk__in=account_ids)",
+        "file": "src/paperless_mail/tasks.py",
+        "line": 33,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "if not MailRule.objects.filter(account=account, enabled=True).exists():",
+        "file": "src/paperless_mail/tasks.py",
+        "line": 38,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "self.assertFalse(ProcessedMail.objects.filter(id=pm_unowned.id).exists())",
+        "file": "src/paperless_mail/tests/test_api.py",
+        "line": 835,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "self.assertFalse(ProcessedMail.objects.filter(id=pm_owned.id).exists())",
+        "file": "src/paperless_mail/tests/test_api.py",
+        "line": 836,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "self.assertFalse(ProcessedMail.objects.filter(id=pm_granted.id).exists())",
+        "file": "src/paperless_mail/tests/test_api.py",
+        "line": 837,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "self.assertTrue(ProcessedMail.objects.filter(id=pm_forbidden.id).exists())",
+        "file": "src/paperless_mail/tests/test_api.py",
+        "line": 838,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "self.assertTrue(ProcessedMail.objects.filter(id=pm_forbidden.id).exists())",
+        "file": "src/paperless_mail/tests/test_api.py",
+        "line": 849,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "self.assertFalse(ProcessedMail.objects.filter(pk=mail.pk).exists())",
+        "file": "src/paperless_mail/tests/test_api.py",
+        "line": 883,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "self.assertTrue(ProcessedMail.objects.filter(id=pm_owned.id).exists())",
+        "file": "src/paperless_mail/tests/test_api.py",
+        "line": 909,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "self.assertTrue(ProcessedMail.objects.filter(id=pm_forbidden.id).exists())",
+        "file": "src/paperless_mail/tests/test_api.py",
+        "line": 910,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "ProcessedMail.objects.filter(rule=rule).count(),",
+        "file": "src/paperless_mail/tests/test_mail.py",
+        "line": 246,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "ProcessedMail.objects.filter(",
+        "file": "src/paperless_mail/tests/test_mail.py",
+        "line": 410,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "ProcessedMail.objects.filter(",
+        "file": "src/paperless_mail/tests/test_mail.py",
+        "line": 850,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "processed_mails = ProcessedMail.objects.filter(",
+        "file": "src/paperless_mail/tests/test_mail.py",
+        "line": 1866,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "*Permission.objects.filter(codename__in=[\"add_mailaccount\"]),",
+        "file": "src/paperless_mail/tests/test_mail.py",
+        "line": 2192,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "MailAccount.objects.filter(imap_server=\"imap.gmail.com\").exists(),",
+        "file": "src/paperless_mail/tests/test_mail_oauth.py",
+        "line": 133,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "MailAccount.objects.filter(imap_server=\"outlook.office365.com\").exists(),",
+        "file": "src/paperless_mail/tests/test_mail_oauth.py",
+        "line": 143,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "MailAccount.objects.filter(imap_server=\"imap.gmail.com\").exists(),",
+        "file": "src/paperless_mail/tests/test_mail_oauth.py",
+        "line": 175,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "MailAccount.objects.filter(",
+        "file": "src/paperless_mail/tests/test_mail_oauth.py",
+        "line": 185,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "*Permission.objects.filter(",
+        "file": "src/paperless_mail/tests/test_mail_oauth.py",
+        "line": 206,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "MailAccount.objects.filter(imap_server=\"imap.gmail.com\").exists(),",
+        "file": "src/paperless_mail/tests/test_mail_oauth.py",
+        "line": 219,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "MailAccount.objects.filter(imap_server=\"outlook.office365.com\").exists(),",
+        "file": "src/paperless_mail/tests/test_mail_oauth.py",
+        "line": 222,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "MailAccount.objects.filter(imap_server=\"imap.gmail.com\").exists(),",
+        "file": "src/paperless_mail/tests/test_mail_oauth.py",
+        "line": 240,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "MailAccount.objects.filter(imap_server=\"outlook.office365.com\").exists(),",
+        "file": "src/paperless_mail/tests/test_mail_oauth.py",
+        "line": 243,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "MailAccount.objects.filter(imap_server=\"imap.gmail.com\").exists(),",
+        "file": "src/paperless_mail/tests/test_mail_oauth.py",
+        "line": 261,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "MailAccount.objects.filter(imap_server=\"outlook.office365.com\").exists(),",
+        "file": "src/paperless_mail/tests/test_mail_oauth.py",
+        "line": 264,
+        "status": "uncovered"
+      },
+      {
+        "evidence": "mails = ProcessedMail.objects.filter(id__in=mail_ids)",
+        "file": "src/paperless_mail/views.py",
+        "line": 230,
+        "status": "covered"
+      }
+    ]
+  }
+}

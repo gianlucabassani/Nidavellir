@@ -1,0 +1,98 @@
+{
+  "audited_head": "1b772bb",
+  "date": "2026-10-07",
+  "findings": [
+    {
+      "disposition": "Phase 1 corrected",
+      "finding": "helpers/egress and silent caps",
+      "id": "RESEARCH-R5",
+      "severity": "high"
+    },
+    {
+      "disposition": "Phase 1 corrected; no completeness claim",
+      "finding": "cross-class call union, name-only guards and review classification",
+      "id": "RESEARCH-R6",
+      "severity": "high"
+    },
+    {
+      "disposition": "open",
+      "finding": "exhaustion inference and omitted sites",
+      "id": "RESEARCH-R8",
+      "severity": "high"
+    },
+    {
+      "disposition": "Phase 3 open",
+      "finding": "mail global denial, singleton M5, controls not enforced",
+      "id": "RESEARCH-R7",
+      "severity": "high"
+    },
+    {
+      "disposition": "Phase 2 open",
+      "finding": "registration does not describe execution; M6 substitution",
+      "id": "RESEARCH-R1/R4",
+      "severity": "high"
+    },
+    {
+      "disposition": "open",
+      "finding": "nine missing probes; unsupported historical gates/determinism/efficiency",
+      "id": "RESEARCH-R9",
+      "severity": "medium"
+    },
+    {
+      "disposition": "open",
+      "finding": "failed-call audit and authoring budgets absent",
+      "id": "RESEARCH-R10",
+      "severity": "medium"
+    }
+  ],
+  "historical_artifacts": {
+    "docs/verification/nv07-r1-setup-2026-09-27-06bf7006.json": "6fd8c197f6ea0b8eecf701dd01539bcc9c4152dca115f6637adb033f85439454",
+    "docs/verification/nv07-r1-setup-2026-09-27-e513c3d9-attempt.json": "ef3f1c56dd5d122853ac5b3f9ef2c3d2bfe757a1850cbff724128bb90c8eda35",
+    "docs/verification/nv07-r1-setup-2026-09-27-e513c3d9.json": "28acda35d70350f68eb0fff0a20549a925a1b9bea5f8fec8513caecd401e1a88",
+    "docs/verification/nv07-r1-setup-2026-10-06-0bae0c65-attempt.json": "a4012c9cdd95294be063539bd11cdc4c8f67bae140fe867c9a292f4dc399cbe6",
+    "docs/verification/nv07-r1-setup-2026-10-06-0bae0c65.json": "12fb7edcd87beeed2d1568c117b08f2bb4f73dc67c3c88dba592a9726a69a34b",
+    "docs/verification/nv07-r1-setup-2026-10-06-297d09b5-attempt.json": "7a8e9ad789d78df77cf2e7ab7d8b262437cf66f502594a418089c9eacb7ff719",
+    "docs/verification/nv07-r1-setup-2026-10-06-297d09b5.json": "69b4381fb0548b70eb6b53a99aae09f9f01306d4716f104635cd1b408c663e05",
+    "docs/verification/nv07-r1-setup-2026-10-06-8063d12f-attempt.json": "4b8e59fabb82098808f8bc875decced09d7a2d57d8c12601c93f1cd97ba54b8e",
+    "docs/verification/nv07-r1-setup-2026-10-06-8063d12f.json": "c983bca7a0cece6fb0a49314798ad76d79458dac5c29b5303e04d2cc39ee2c12",
+    "docs/verification/nv07-r1-setup-2026-10-06-8fb67a0e-attempt.json": "30ea0681f9fc4469fb7f48c0ebdf339e62c875387083c14df23ac02ab23d771e",
+    "docs/verification/nv07-r1-setup-2026-10-06-8fb67a0e.json": "59acb3885fc484df7ed480d118f25c9524c78c705b895a1a6ec067e2a691dc57",
+    "docs/verification/nv07-r1-setup-2026-10-06-92b249bf-attempt.json": "4e4cf0c2c168be13886696eca5b8544cd30a54c91af61ba76213645a0a9e30da",
+    "docs/verification/nv07-r1-setup-2026-10-06-92b249bf.json": "813ff3783f42ca2be09fadea2268858a6e1a03d20ff06c45a2a5c41a8253b113",
+    "docs/verification/nv07-r1-setup-2026-10-06-e7f3ba95-attempt.json": "6e5bc5998eba66cefa4dab2274125e0ee07b5e4fc0830056d126917bb0f62921",
+    "docs/verification/nv07-r1-setup-2026-10-06-e7f3ba95.json": "b1f410864cef49244c695d9416e0ef29add43f4bd81457d778b7e253f419d6be",
+    "docs/verification/nv07-r1-setup-2026-10-06-f191b848-attempt.json": "170ec08958e284d6e87a476033f7d139aecc84a65ee08075d89382a890e5e9c7",
+    "docs/verification/nv07-r1-setup-2026-10-06-f191b848.json": "fc90ace9521d4f836fb2feec258db6e80abe8842fcd853ee9e86fb69c1b0aedb",
+    "docs/verification/nv07-r1-smoke-2026-09-27-e513c3d9.json": "15e3b592503b2f7eb7569a9a37466a9710d243a01e054c0e2c5a8985f5436ce3",
+    "docs/verification/nv07-r1-smoke-2026-10-06-0bae0c65.json": "c9d8d08254689f124d114a03160935cc37b77de037e55c85fc6cce4fd17a4d4e",
+    "docs/verification/nv07-r1-smoke-2026-10-06-297d09b5.json": "6079ed037d7710b92ff19456378757717c2c6bc8d62d545fabdbc81993747258",
+    "docs/verification/nv07-r1-smoke-2026-10-06-8063d12f.json": "1f6807901fb01db78b082dc870442f2a92fd6c80b147efdb127b5048ccc5893b",
+    "docs/verification/nv07-r1-smoke-2026-10-06-8fb67a0e.json": "3f5e20db3c8c21aeab924e0fb46c79240c12259ca2809f1adca466514019178b",
+    "docs/verification/nv07-r1-smoke-2026-10-06-92b249bf.json": "6b869e657b3a7002ba937cfd2f55ff4e7caa56d67a90859015b8b3b13a6d19c9",
+    "docs/verification/nv07-r1-smoke-2026-10-06-e7f3ba95.json": "ee5cd8f54a77c320c9580238e3ead1b827125aa387cdcbc5c1d06d6a17981f13",
+    "docs/verification/nv07-r1-smoke-2026-10-06-f191b848.json": "6ec42943264ac13f8d154709cf002ae35c8c9cdfa87a9351dda6ee479bf76421",
+    "docs/verification/nv07-suite-setup-2026-10-06-fd02d7f6-attempt.json": "28cd5f366911a3640053d507c087ce54742a8cb510f2f4ecd87ddfa26da190ea",
+    "docs/verification/nv07-suite-setup-2026-10-06-fd02d7f6.json": "aa03e37ce70b7a1abec3ed5b181a4018d3876cf34902f47472b4cf1e64d05a4d",
+    "docs/verification/nv07-suite-suite-2026-10-06-fd02d7f6.json": "7c58f8a408316d44fedf35ada689d25fd9d3481768681598eba23c180fe8ed86",
+    "docs/verification/paperless-fixture-3.3.0.json": "18cfdbaa3707764e399c019369fda7214023e280b0e75a06caf936a96c2b5a62",
+    "docs/verification/paperless-mail-hunt-2026-10-06-corrected.json": "b6b0b6fe19b18122646ef67ab9d87e947180155afe688500e46c445f4c3e64c9",
+    "docs/verification/paperless-mail-hunt-2026-10-06.json": "f1b9a0fdd4e003d6e0b9c320b5b6593820791c9fdd485a0685b85cdff42dd617",
+    "docs/verification/paperless-variants-2026-10-06.json": "c85e4fdd022a64481503410409b636f182108779eee7fde64d09f11d72e52eb1",
+    "docs/verification/research-code-accept-2026-10-06-2788771.json": "6f3e49639bb2375f10b421523b233e8a04aed359729ef9fdd3bd28dec5ea8954"
+  },
+  "operator_acceptance": "Audit accepted in full; mechanisms independently reproduced by operator.",
+  "phase_scope": "Phase 1 only. Phase 2 and Phase 3 remain open; no mail rerun.",
+  "retractions": {
+    "count": "12 retained hypotheses plus 9 asserted without per-probe evidence",
+    "verdict": "no confirmed vulnerability under the tested conditions"
+  },
+  "schema": "nidavellir/research-audit-correction/v1",
+  "surviving_claims": [
+    "original coverage counts reproduce as syntax counts, not reviewed coverage",
+    "canonical output digests and operator-only surfaces exist",
+    "MODEL-R1 bounds, credential deny set, encryption, forwarding and digest pinning",
+    "paired calibration suite: six completed trials, three matched pairs, difference -1.0, degenerate; not capability evidence",
+    "11 corrected control blocks, 9 asserting and 2 observational; 12 unchanged historical verdict labels"
+  ],
+  "weakest_load_bearing_claim": "Paperless exhausted for fix-derived shapes (retracted)"
+}

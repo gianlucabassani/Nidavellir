@@ -233,6 +233,10 @@ class ModelConnection(Base):
     # Per-connection OpenAI-compatible base URL (OpenRouter/HF/vLLM/self-hosted) —
     # overrides the provider preset + NIDAVELLIR_MODEL_BASE_URL. Non-secret (P3-4).
     base_url: Mapped[str | None] = mapped_column(Text)
+    # Operator-approved static request headers (MODEL-R1), Fernet-encrypted JSON
+    # exactly like encrypted_key. Values never leave the database in clear;
+    # only sorted header names + a digest are surfaced (see _mc_masked).
+    encrypted_headers: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(
         Text, nullable=False, default="standby", server_default="standby"
     )

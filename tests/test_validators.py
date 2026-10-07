@@ -3,7 +3,16 @@ M2 deterministic-validator tests (ROADMAP M2 item 6, ADR-0009).
 
 Covers the pure "perfect verification" framework (`validators.validate_finding`
 / `correlate_crash`) with injected effect functions — no arena, no network.
+The generic HTTP access-control probe is exercised against a loopback server.
 """
+import http.server
+import json
+import subprocess
+import sys
+import threading
+
+import pytest
+
 import validators
 
 
@@ -198,6 +207,105 @@ def test_caller_marker_cannot_confirm():
         http_fn=lambda *_: {"status": 200, "body": "FAKE"},
     )
     assert r.confirmed is None
+
+
+# --- generic HTTP access control ---------------------------------------------
+
+def _http_acl_config(**overrides):
+    config = {
+        "actor": "B", "owner": "A", "base_url": "http://127.0.0.1:9",
+        "actor_headers": {"Authorization": "Bearer actor"},
+        "owner_headers": {"Authorization": "Bearer owner"},
+        "action": {"method": "GET", "path": "/api/objects/restricted"},
+        "control": {"method": "GET", "path": "/api/objects/shared"},
+        "forbidden_marker": "restricted-marker",
+    }
+    config.update(overrides)
+    return config
+
+
+def test_http_access_control_config_rejects_unsafe_input():
+    for bad in (
+        _http_acl_config(base_url="file:///etc/passwd"),
+        _http_acl_config(base_url="http://user:pass@127.0.0.1"),
+        _http_acl_config(action={"method": "GET", "path": "api/x"}),
+        _http_acl_config(action={"method": "TRACE", "path": "/x"}),
+        _http_acl_config(forbidden_marker=""),
+        _http_acl_config(extra="nope"),
+        _http_acl_config(actor_headers={}),
+        _http_acl_config(actor_headers={"X-Test": "a\nInjected: 1"}),
+    ):
+        with pytest.raises(ValueError):
+            validators.normalize_http_access_control_config(bad)
+
+
+def test_http_access_control_verdicts():
+    action = {"digest": "sha256:abc"}
+    confirmed = {"owner": {"status": 200, "marker": True},
+                 "actor": {"status": 200, "marker": True},
+                 "control": {"status": 200, "marker": False}}
+    denied = {**confirmed, "actor": {"status": 403, "marker": False}}
+    assert validators.validate_http_access_control(
+        action, confirmed, actor="B", owner="A"
+    ).to_dict()["verdict"] == "confirmed"
+    assert validators.validate_http_access_control(
+        action, denied, actor="B", owner="A"
+    ).to_dict()["verdict"] == "refuted"
+    assert validators.validate_http_access_control(
+        action, {**confirmed, "owner": {"status": 200, "marker": False}},
+        actor="B", owner="A"
+    ).to_dict()["verdict"] == "infrastructure_failure"
+    assert validators.validate_http_access_control(
+        action, {**confirmed, "control": {"status": 403, "marker": False}},
+        actor="B", owner="A"
+    ).to_dict()["verdict"] == "infrastructure_failure"
+    assert validators.validate_http_access_control(
+        None, None, actor="B", owner="A"
+    ).to_dict()["verdict"] == "inconclusive"
+    assert validators.validate_http_access_control(
+        action, None, actor="B", owner="A"
+    ).to_dict()["verdict"] == "infrastructure_failure"
+
+
+class _AclHandler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):  # noqa: N802 - http.server API
+        auth = self.headers.get("Authorization")
+        restricted = self.path.startswith("/api/objects/restricted")
+        shared = self.path.startswith("/api/objects/shared")
+        body = b"denied"
+        if restricted and auth == "Bearer owner":
+            body = b"restricted-marker"
+        elif restricted and auth == "Bearer actor":
+            body = b"restricted-marker"  # the vulnerable effect under test
+        elif shared and auth == "Bearer actor":
+            body = b"shared"
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args):  # keep the test output clean
+        return
+
+
+def test_http_access_control_probe_runs_and_verdicts():
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _AclHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        config = validators.normalize_http_access_control_config(
+            _http_acl_config(base_url=f"http://127.0.0.1:{server.server_port}"))
+        source = validators.http_access_control_probe_source(config)
+        output = subprocess.run([sys.executable, "-c", source], capture_output=True,
+                                text=True, timeout=30, check=True).stdout
+        probe = json.loads(output)
+        result = validators.validate_http_access_control(
+            {"digest": "sha256:abc"}, probe, actor="B", owner="A")
+        assert result.to_dict()["verdict"] == "confirmed"
+        assert result.reason_code == "unauthorized_disclosure"
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
 
 
 def test_authorization_effect_uses_observer_not_response_text():

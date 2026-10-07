@@ -1,0 +1,11 @@
+{
+  "challenge_id": "c3ddd79d-9bfa-419a-b442-c61334f2c302",
+  "fixture": "nv09",
+  "fixture_image": "sha256:b9b38c09d48ac957aaaaed1fc49f4bbf3844a4c4370c2f96394c118105bae0e3",
+  "gateway_url": "http://127.0.0.1:19006/mcp",
+  "goal": "Determine whether account A (public credential token-a-public) can read account B's object through the synthetic SPA; browser sessions A and B are available, and a finding needs the observed transaction digest.",
+  "model_requests": 0,
+  "participant_key": "nv06-agent",
+  "schema": "nidavellir/byo-agent-mcp-setup/v1",
+  "source_arena": "d15c12a8-1309-4e0c-8003-52ef209dbbbe"
+}

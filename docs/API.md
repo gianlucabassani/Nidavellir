@@ -824,6 +824,9 @@ first-class evidence. The manifest is operator-only and never shown to an agent.
   versioned four-way verdict with the pinned recipe/target identity, action,
   effect and control digests, reason code and timestamp. Probe failures earn no
   credit. The operator can review each immutable observation after teardown.
+  An optional **`variant_of`** (a 12-hex finding id from any arena) links this
+  report to a reference finding; both share a `research_key` and can be read as
+  one affected-versus-fixed group. An unknown id is rejected with `422`.
 - `POST /arenas/{instance_id}/findings/manual` — an **operator-entered** finding
   (a vuln a human found, or one to put on the record). Same body + manifest match +
   verification as `report_finding`, but flagged `manual` and attributed to the
@@ -840,6 +843,33 @@ first-class evidence. The manifest is operator-only and never shown to an agent.
     "evidence_digest": "sha256:0123..." }
   → { "verified": true, "finding_id": "7097421dd9fc", "verdict": "confirmed" }
   ```
+- `GET /findings/{finding_id}` — the **affected-versus-fixed group** for a
+  finding and every variant linked to it. **operator/admin only** (`403` for an
+  `agent` key); unknown id `404`. Each member carries its arena, title, CWE,
+  report time, the stored verdict, and a whitelisted target **identity** from
+  the pinned lifecycle recipe (scenario, provider, recipe digest, per-node image
+  pins — never environment values or validation plans). A member whose arena has
+  no recipe reports `identity.known: false`.
+  ```json
+  { "schema": "nidavellir/finding-group/v1",
+    "research_key": "7097421dd9fc", "reference_finding_id": "7097421dd9fc",
+    "members": [ { "finding_id": "7097421dd9fc", "arena_id": "…",
+                   "identity": {"known": true, "scenario": "…",
+                                "provider": "docker-local",
+                                "recipe_digest": "sha256:…", "images": {"…": {"…"}}},
+                   "verdict": {"verdict": "confirmed", "…": "…"} } ],
+    "comparison": { "outcome": "disappeared_under_controls",
+                    "validator_comparable": true, "identity_match": "different_recipe",
+                    "counts": {"confirmed": 1, "refuted": 1,
+                               "inconclusive": 0, "infrastructure_failure": 0} } }
+  ```
+  `outcome` is evidence-derived: `disappeared_under_controls` needs the
+  reference confirmed and a variant refuted under the same validator version
+  (a refuted verdict already implies its healthy controls passed);
+  `still_observed` when a variant is confirmed; `inconclusive` on
+  infrastructure failure or mixed validator versions; `unknown` with fewer than
+  two members, without the reference verdict, or when any identity is unknown.
+  The response never asserts that a version "is fixed".
 - `GET /arenas/{instance_id}/score[?mode=benchmark|discovery]` — the structured,
   Inspect-style **scorecard**. **operator/admin only**. Mode auto-selects on the
   manifest's presence (overridable via `?mode=`). Carries the typed `score`

@@ -35,6 +35,7 @@ import config
 import dockerfile_synth
 import evidence_artifact
 import eval_export
+import eval_model_driver
 import generator
 import http_transactions
 import helper_jobs
@@ -42,11 +43,13 @@ import image_check
 import images
 import lifecycle_manifest
 import model_chat
+import model_headers
 import model_verify
 import netguard
 import oci_intake
 import poc_execution
 import repo_introspect
+import research_code
 import research_session
 import scenarios
 import scoring
@@ -3739,6 +3742,12 @@ class ModelConnectionRequest(BaseModel):
     # preset + NIDAVELLIR_MODEL_BASE_URL. Required for `custom`/`local`; optional
     # for named OpenAI-compatible providers.
     base_url: str | None = Field(default=None, max_length=512)
+    # Operator-approved static request headers (MODEL-R1) for gateways that
+    # reject the default request shape. None keeps stored headers, {} clears
+    # them. Values are encrypted at rest and never returned (only sorted
+    # names + a digest are surfaced). `Authorization` and friends are refused:
+    # the driver's own credential always wins.
+    extra_headers: dict | None = Field(default=None)
 
     @field_validator("provider")
     @classmethod
@@ -3749,6 +3758,16 @@ class ModelConnectionRequest(BaseModel):
                 f"(known: {', '.join(MODEL_PROVIDERS)})"
             )
         return value.lower()
+
+    @field_validator("extra_headers")
+    @classmethod
+    def _valid_headers(cls, value: dict | None) -> dict | None:
+        if value is None:
+            return None
+        try:
+            return model_headers.normalize_extra_headers(value)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
 
 
 @app.put("/agent/model")
@@ -3773,6 +3792,7 @@ def set_model_connection(
     masked = db.upsert_model_connection(
         principal.name, req.provider, req.model, req.api_key,
         base_url=req.base_url, keep_key=keep_key,
+        extra_headers=req.extra_headers,
     )
     # Only the non-secret provider/model are logged — never the key.
     logger.info(
@@ -3800,10 +3820,23 @@ def remove_model_connection(principal: Principal = Depends(require_principal)):
 class ModelVerifyRequest(BaseModel):
     # All optional: with provider+api_key, verify the supplied credential
     # (pre-save "test"); with an empty body, verify the operator's stored one.
+    # extra_headers follows the same validator as stored connections; when
+    # verifying the stored credential, supplied headers override stored ones.
     provider: str | None = Field(default=None, max_length=32)
     model: str | None = Field(default=None, max_length=128)
     api_key: str | None = Field(default=None, max_length=512)
     base_url: str | None = Field(default=None, max_length=512)
+    extra_headers: dict | None = Field(default=None)
+
+    @field_validator("extra_headers")
+    @classmethod
+    def _valid_headers(cls, value: dict | None) -> dict | None:
+        if value is None:
+            return None
+        try:
+            return model_headers.normalize_extra_headers(value)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
 
 
 @app.post("/agent/model/verify")
@@ -3819,13 +3852,17 @@ def verify_model_connection(
     if req.api_key and req.provider:
         provider, model, api_key = req.provider.lower(), req.model or "", req.api_key
         base_url = req.base_url
+        headers = req.extra_headers or {}
     else:
         cred = db.get_decrypted_model_credential(principal.name)
         if not cred:
             raise HTTPException(status_code=404, detail="no model connection to verify")
         provider, model, api_key = cred["provider"], cred["model"], cred["api_key"]
         base_url = cred.get("base_url")
-    return model_verify.verify_credential(provider, model, api_key, base_url=base_url)
+        headers = req.extra_headers if req.extra_headers is not None else cred.get(
+            "extra_headers") or {}
+    return model_verify.verify_credential(provider, model, api_key, base_url=base_url,
+                                           headers=headers)
 
 
 # --- Co-pilot chat (operator's connected model + arena context) -------------
@@ -5063,6 +5100,90 @@ def _finding_events(instance_id: str) -> list[dict]:
     return db.list_events(lab_id=instance_id, limit=None, types=("finding",))
 
 
+def _find_finding_event(finding_id: str) -> dict | None:
+    """Newest finding event with this id across all arenas (events are newest-first)."""
+    for event in db.list_events(limit=None, types=("finding",)):
+        if (event.get("payload") or {}).get("finding_id") == finding_id:
+            return event
+    return None
+
+
+_FINDING_VERDICT_KEYS = ("verdict", "reason_code", "validator_id",
+                         "validator_version", "action_digest",
+                         "observation_digest", "control_digest")
+
+
+def _finding_target_identity(arena_id: str) -> dict:
+    """Whitelisted, operator-safe target identity for one arena."""
+    try:
+        recipe = db.get_lifecycle_recipe(arena_id)
+    except (ValueError, RuntimeError):
+        logger.warning("[%s] lifecycle recipe unreadable; identity unknown", arena_id)
+        recipe = None
+    if not recipe:
+        return {"known": False, "scenario": None, "provider": None,
+                "recipe_digest": None, "images": {}}
+    images = {}
+    for node in recipe.get("nodes") or []:
+        source = node.get("source") or {}
+        images[node.get("name")] = {
+            "image": node.get("image"),
+            "image_pinned": bool(node.get("image_pinned")),
+            "source_repo": source.get("repo"),
+            "source_ref": source.get("ref"),
+        }
+    return {"known": True, "scenario": recipe.get("scenario_name"),
+            "provider": recipe.get("effective_provider"),
+            "recipe_digest": recipe.get("recipe_digest"), "images": images}
+
+
+def _finding_member_view(event: dict) -> dict:
+    payload = event.get("payload") or {}
+    verdict = payload.get("validation") or {}
+    identity = _finding_target_identity(event.get("lab_id"))
+    return {"finding_id": payload.get("finding_id"), "arena_id": event.get("lab_id"),
+            "scenario": identity.get("scenario"), "title": payload.get("title"),
+            "cwe": payload.get("cwe"), "reported_at": event.get("ts"),
+            "actor": event.get("actor"), "variant_of": payload.get("variant_of"),
+            "verdict": {key: verdict.get(key) for key in _FINDING_VERDICT_KEYS},
+            "identity": identity}
+
+
+def _finding_group_outcome(members: list[dict]) -> dict:
+    counts = {"confirmed": 0, "refuted": 0, "inconclusive": 0,
+              "infrastructure_failure": 0}
+    validators = set()
+    for member in members:
+        verdict = member["verdict"]
+        counts[verdict["verdict"] if verdict.get("verdict") in counts
+               else "inconclusive"] += 1
+        if verdict.get("verdict"):
+            validators.add((verdict.get("validator_id"),
+                            verdict.get("validator_version")))
+    comparable = len(validators) <= 1
+    digests = {member["identity"]["recipe_digest"] for member in members}
+    if any(not member["identity"]["known"] for member in members):
+        identity_match = "unknown"
+    else:
+        identity_match = "same_recipe" if len(digests) == 1 else "different_recipe"
+    reference, variants = members[0], members[1:]
+    reference_verdict = reference["verdict"].get("verdict")
+    if len(members) < 2 or reference_verdict is None \
+            or any(not member["identity"]["known"] for member in members):
+        outcome = "unknown"
+    elif not comparable or counts["infrastructure_failure"]:
+        outcome = "inconclusive"
+    elif any(m["verdict"].get("verdict") == "confirmed" for m in variants):
+        outcome = "still_observed"
+    elif reference_verdict == "confirmed" and any(
+            m["verdict"].get("verdict") == "refuted" for m in variants):
+        outcome = "disappeared_under_controls"
+    else:
+        outcome = "inconclusive"
+    return {"outcome": outcome, "validator_comparable": comparable,
+            "identity_match": identity_match, "counts": counts}
+
+
 def _arena_manifest(record: dict) -> list[dict]:
     """Return truth pinned at deployment; consult the mutable registry only for
     legacy records predating lifecycle recipes."""
@@ -5243,13 +5364,13 @@ def _validate_finding(record: dict, req: "FindingRequest", vuln: dict | None) ->
     return result.to_dict()
 
 
-def _target_local_json(record: dict, node: str, source: str) -> dict:
+def _target_local_json(record: dict, node: str, source: str, timeout: int = 5) -> dict:
     """Run a fixed, bounded observer command inside the owned target container."""
     if resolve_provider_name(record.get("effective_provider") or record.get("provider")) != "docker-local":
         raise RuntimeError("target-local observer requires docker-local")
     command = "python -c " + shlex.quote(source)
     result = Orchestrator(provider_name="docker-local").exec_in_node(
-        record["id"], node, command, timeout=5
+        record["id"], node, command, timeout=timeout
     )
     if not result.get("success") or result.get("exit_code") != 0:
         raise RuntimeError("target-local observer unavailable")
@@ -5414,6 +5535,86 @@ def _validate_grant_finding(record: dict, req: "FindingRequest", vuln: dict,
             "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
+def _validate_http_access_control_finding(record: dict, req: "FindingRequest", vuln: dict,
+                                          *, finding_id: str, actor: str,
+                                          manual: bool) -> dict:
+    """Verify a linked action against a generic, operator-declared HTTP probe.
+
+    The plan names an unprivileged actor and a privileged owner, one request
+    under test, one control request, and an operator-owned marker. The platform
+    issues all three probes itself from inside the arena node; a confirmed
+    verdict needs the owner to observe the marker, the actor's control request
+    to succeed without it, and the actor's request under test to disclose it.
+    """
+    action_digest = req.transaction_digests[0] if req.transaction_digests else None
+    action = probe = None
+    observation_digest = control_digest = None
+    foothold = req.node
+    try:
+        config_values = dict(vuln.get("validation_config") or {})
+        if not config_values.get("base_url"):
+            outputs = record.get("outputs") or {}
+            if isinstance(outputs, str):
+                outputs = json.loads(outputs)
+            target = _victim_internal_target(outputs, req.node)
+            if target is None:
+                raise ValueError("no victim web service for the probe")
+            config_values["base_url"] = f"http://{target[0]}:{target[1]}"
+            _, footholds = setup_phase.derive_nodes_footholds(outputs)
+            if not footholds:
+                raise ValueError("no foothold node for the probe")
+            foothold = sorted(footholds)[0]
+        config = validators.normalize_http_access_control_config(config_values)
+    except (ValueError, json.JSONDecodeError) as exc:
+        logger.warning("[%s] invalid http_access_control config: %s", record["id"], exc)
+        result = validators.ValidationResult(
+            None, validators.HTTP_ACCESS_CONTROL, "invalid validator configuration",
+            verdict="infrastructure_failure", reason_code="invalid_validator_config")
+        config = None
+    else:
+        result = None
+    if config is not None and action_digest:
+        tx_manifest, envelope = http_transactions.get(record["id"], action_digest)
+        tx_req = envelope.get("request") or {}
+        if (tx_req.get("node") == req.node
+                and (tx_req.get("method") or "GET").upper() == config["action"]["method"]
+                and tx_req.get("path") == config["action"]["path"]
+                and (manual or tx_manifest.get("actor") == actor)):
+            action = {"digest": action_digest}
+    if config is not None and action is not None:
+        try:
+            probe = _target_local_json(
+                record, foothold,
+                validators.http_access_control_probe_source(config), timeout=15)
+            observation_digest = validation_evidence.record(
+                record["id"], {"schema": "nidavellir/validation-observation/v1",
+                               "kind": validators.HTTP_ACCESS_CONTROL,
+                               "data": probe.get("actor")})
+            control_digest = validation_evidence.record(
+                record["id"], {"schema": "nidavellir/validation-observation/v1",
+                               "kind": "healthy_control",
+                               "data": {"owner": probe.get("owner"),
+                                        "control": probe.get("control")}})
+        except (RuntimeError, ValueError, OSError, json.JSONDecodeError) as exc:
+            logger.warning("[%s] http access-control probe failed: %s", record["id"],
+                           type(exc).__name__)
+            probe = None
+    if result is None:
+        result = validators.validate_http_access_control(
+            action, probe, actor=config["actor"], owner=config["owner"],
+            disclosure_status=config["disclosure_status"],
+            denied_statuses=tuple(config["denied_statuses"]))
+    recipe = db.get_lifecycle_recipe(record["id"]) or {}
+    return {**result.to_dict(), "schema": "nidavellir/validation-verdict/v1",
+            "finding_id": finding_id, "arena_id": record["id"],
+            "recipe_digest": recipe.get("recipe_digest"),
+            "target_identity_digest": lifecycle_manifest.digest(recipe.get("nodes") or {}),
+            "validator_id": validators.HTTP_ACCESS_CONTROL,
+            "validator_version": 1, "action_digest": action_digest,
+            "observation_digest": observation_digest, "control_digest": control_digest,
+            "timestamp": datetime.now(timezone.utc).isoformat()}
+
+
 @app.get("/scenarios/{scenario_id}/vulnerabilities")
 def reveal_vulnerabilities(
     scenario_id: str, principal: Principal = Depends(require_principal)
@@ -5453,6 +5654,16 @@ class FindingRequest(BaseModel):
     # R1 slice 6: content-addressed HTTP transaction records attachable as
     # evidence — verified against this arena's store at submission time.
     transaction_digests: list[str] = Field(default_factory=list, max_length=10)
+    # Affected-versus-fixed linkage: the finding id this report is a variant of.
+    # The group read resolves the shared research key from the referenced event.
+    variant_of: str | None = Field(default=None, max_length=32)
+
+    @field_validator("variant_of")
+    @classmethod
+    def _variant_id_shape(cls, v: str | None) -> str | None:
+        if v is not None and not re.fullmatch(r"[0-9a-f]{12}", v):
+            raise ValueError("variant_of must be a 12-hex finding id")
+        return v
 
 
 @app.post("/arenas/{instance_id}/findings")
@@ -5529,6 +5740,14 @@ def _record_finding(instance_id, record, req: "FindingRequest", *, actor: str,
             "replay_of": tx_manifest.get("replay_of"),
         })
 
+    research_key = None
+    if req.variant_of:
+        referenced = _find_finding_event(req.variant_of)
+        if referenced is None:
+            raise HTTPException(status_code=422, detail="unknown variant_of finding")
+        research_key = ((referenced.get("payload") or {}).get("research_key")
+                        or req.variant_of)
+
     finding_id = uuid.uuid4().hex[:12]
     if matched_vuln and validators.method_for(
         {"cwe": req.cwe}, matched_vuln
@@ -5541,6 +5760,13 @@ def _record_finding(instance_id, record, req: "FindingRequest", *, actor: str,
         {"cwe": req.cwe}, matched_vuln
     ) == validators.SINGLE_USE_GRANT_EFFECT:
         validation = _validate_grant_finding(
+            record, req, matched_vuln, finding_id=finding_id,
+            actor=actor, manual=manual,
+        )
+    elif matched_vuln and validators.method_for(
+        {"cwe": req.cwe}, matched_vuln
+    ) == validators.HTTP_ACCESS_CONTROL:
+        validation = _validate_http_access_control_finding(
             record, req, matched_vuln, finding_id=finding_id,
             actor=actor, manual=manual,
         )
@@ -5565,6 +5791,8 @@ def _record_finding(instance_id, record, req: "FindingRequest", *, actor: str,
             "validation": validation,
             "manual": manual,
             "actor": actor,
+            "variant_of": req.variant_of,
+            "research_key": research_key or finding_id,
         },
         actor=actor,
     )
@@ -5592,6 +5820,27 @@ def add_manual_finding(
         raise HTTPException(status_code=404, detail="Arena not found")
     finding_id = _record_finding(instance_id, record, req, actor=principal.name, manual=True)
     return {"recorded": True, "finding_id": finding_id, "manual": True}
+
+
+@app.get("/findings/{finding_id}")
+def get_finding_group(finding_id: str,
+                      principal: Principal = Depends(require_principal)):
+    """Operator-only cross-arena view of a finding and its linked variants."""
+    _require_operator(principal)
+    event = _find_finding_event(finding_id)
+    if event is None:
+        raise HTTPException(status_code=404, detail="finding not found")
+    root = (event.get("payload") or {}).get("research_key") or finding_id
+    members = []
+    for candidate in db.list_events(limit=None, types=("finding",)):
+        payload = candidate.get("payload") or {}
+        if payload.get("research_key") == root or payload.get("finding_id") == root:
+            members.append(_finding_member_view(candidate))
+    members.sort(key=lambda member: (member["finding_id"] != root,
+                                     member["reported_at"] or ""))
+    return {"schema": "nidavellir/finding-group/v1", "research_key": root,
+            "reference_finding_id": root, "members": members,
+            "comparison": _finding_group_outcome(members)}
 
 
 @app.post("/arenas/{instance_id}/findings/{finding_id}/verify")
@@ -5820,8 +6069,14 @@ class AgentBuildCreate(BaseModel):
     driver: Literal["scripted-mcp/v1", "model-mcp/v1"] = "scripted-mcp/v1"
     plan: list[dict] | None = None
     goal: str | None = Field(default=None, max_length=500)
-    max_model_calls: int = Field(default=8, ge=1, le=8)
+    max_model_calls: int = Field(default=8, ge=1, le=12)
     max_output_tokens: int = Field(default=512, ge=64, le=512)
+    # Build variation for paired comparisons (e.g. tool-surface ablation):
+    # model-driver tools withheld from this build. Unknown names, disabling
+    # get_briefing (orientation is required for a fair trial), or emptying
+    # the whole surface are all refused. Stored in config, so the build
+    # digest pins the exact surface each side ran with.
+    disabled_tools: list[str] | None = Field(default=None, max_length=8)
 
 
 @app.post("/agent-builds", status_code=201)
@@ -5834,11 +6089,20 @@ def create_agent_build(req: AgentBuildCreate,
         connection = db.get_model_connection(principal.name)
         if not connection:
             raise HTTPException(status_code=409, detail="operator model connection required")
+        disabled = sorted(set(req.disabled_tools or []))
+        unknown = [name for name in disabled if name not in eval_model_driver.TOOLS]
+        if unknown:
+            raise HTTPException(status_code=422, detail=f"unknown model tool(s): {', '.join(unknown)}")
+        if "get_briefing" in disabled:
+            raise HTTPException(status_code=422, detail="get_briefing cannot be disabled")
+        if len(disabled) >= len(eval_model_driver.TOOLS):
+            raise HTTPException(status_code=422, detail="cannot disable every model tool")
         config = {"connection_owner": principal.name, "provider": connection["provider"],
                   "model": connection["model"], "base_url": connection.get("base_url"),
+                  "headers_digest": connection.get("headers_digest"),
                   "goal": req.goal.strip(), "max_model_calls": req.max_model_calls,
                   "max_output_tokens": req.max_output_tokens, "deadline_seconds": 600,
-                  "scaffold": "model-mcp/v1"}
+                  "disabled_tools": disabled, "scaffold": "model-mcp/v1"}
         digest = "sha256:" + hashlib.sha256(json.dumps({"name": req.name,
             "version": req.version, "config": config}, sort_keys=True,
             separators=(",", ":")).encode()).hexdigest()
@@ -5976,7 +6240,7 @@ class EvaluationSmokeCreate(BaseModel):
     challenge_id: str
     build_id: str
     seed: int = 1
-    action_cap: int = Field(default=8, ge=1, le=8)
+    action_cap: int = Field(default=8, ge=1, le=12)
     deadline_seconds: int = Field(default=600, ge=60, le=600)
 
 
@@ -6016,6 +6280,86 @@ def get_evaluation(evaluation_id: str,
     record["kind"] = "single_trial_smoke" if len(record["runs"]) == 1 else "paired"
     record["comparison"] = experiments.compare(record)
     return record
+
+
+# --- Research code-intel (variant-hunt collect+derive) -----------------------
+# Answer-shaped, read-only queries over the operator-provisioned pinned
+# repository (RESEARCH_REPO_DIR). Operator-only on both surfaces; every
+# call appends an audit event carrying refs + output digest (never code).
+
+
+def _research_audit(principal: Principal, tool: str, detail: dict, result: dict) -> None:
+    db.record_event("research-code", "research_code_lookup",
+                    {"tool": tool, **detail, "digest": result["digest"],
+                     "truncated": result["truncation"]["truncated"]},
+                    actor=principal.name)
+
+
+class ResearchFixLookup(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    fix_ref: str = Field(min_length=4, max_length=64)
+    advisory_id: str | None = Field(default=None, max_length=32)
+
+
+@app.post("/research/code/fix-lookup")
+def research_fix_lookup(req: ResearchFixLookup,
+                        principal: Principal = Depends(require_principal)):
+    """Fix commit -> patch facts + deterministic one-line check summary."""
+    _require_operator(principal)
+    try:
+        result = research_code.fix_lookup(
+            research_code.repo_root(), req.fix_ref, req.advisory_id)
+    except research_code.ResearchCodeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    _research_audit(principal, "fix_lookup", {"fix_ref": req.fix_ref}, result)
+    return result
+
+
+class ResearchLayerDiff(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    from_ref: str = Field(min_length=1, max_length=64)
+    to_ref: str = Field(min_length=1, max_length=64)
+    paths: list[str] | None = Field(default=None, max_length=8)
+
+
+@app.post("/research/code/layer-diff")
+def research_layer_diff(req: ResearchLayerDiff,
+                       principal: Principal = Depends(require_principal)):
+    """Permission-call delta between two pins over a bounded path set."""
+    _require_operator(principal)
+    try:
+        result = research_code.layer_diff(
+            research_code.repo_root(), req.from_ref, req.to_ref, req.paths)
+    except research_code.ResearchCodeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    _research_audit(principal, "layer_diff",
+                    {"from_ref": req.from_ref, "to_ref": req.to_ref}, result)
+    return result
+
+
+class ResearchSiblingSearch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    pattern: Literal["unscoped-queryset", "bare-auth-view", "bulk-permission",
+                     "half-composed-check", "unguarded-verb"]
+    ref: str | None = Field(default=None, max_length=64)
+    path_scope: list[str] | None = Field(default=None, max_length=8)
+
+
+@app.post("/research/code/sibling-search")
+def research_sibling_search(req: ResearchSiblingSearch,
+                            principal: Principal = Depends(require_principal)):
+    """Named-pattern call-site search with per-site composition status."""
+    _require_operator(principal)
+    try:
+        result = research_code.sibling_search(
+            research_code.repo_root(), req.ref or "HEAD", req.pattern, req.path_scope)
+    except research_code.ResearchCodeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    _research_audit(principal, "sibling_search", {"pattern": req.pattern}, result)
+    return result
 
 
 if __name__ == "__main__":

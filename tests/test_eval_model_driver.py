@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 
+import pytest
 from fastapi.testclient import TestClient
 
 import api
@@ -54,16 +55,51 @@ def test_model_trial_injects_scope_and_keeps_neutral_ack():
     assert "neutral" in prompts[1] and "confirmed" not in prompts[1]
 
 
-def test_invalid_model_tool_never_reaches_mcp():
+def test_single_invalid_tool_is_fed_back_and_continues():
     session = Session()
-    build = {"config": {"goal": "Test", "max_model_calls": 1,
+    build = {"config": {"goal": "Test", "max_model_calls": 3,
+                        "max_output_tokens": 128, "deadline_seconds": 600}}
+    prompts = []
+    calls = [0]
+
+    def decide(_connection, prompt, _tokens, _timeout):
+        prompts.append(prompt)
+        calls[0] += 1
+        if calls[0] == 1:
+            return ({"tool": "run_command", "args": {"command": "id"}},
+                    {"input_tokens": 1, "output_tokens": 1, "cost_usd": None})
+        if calls[0] == 2:
+            return ({"tool": "report_finding", "args": {"title": "claim", "node": "target"}},
+                    {"input_tokens": 1, "output_tokens": 1, "cost_usd": None})
+        return None, {"input_tokens": 1, "output_tokens": 1, "cost_usd": None}
+
+    result = asyncio.run(driver.run(session, "arena", build, {},
+        lambda response: response.structuredContent, decide=decide))
+    # one wobble does not void the trial: the model is told and continues
+    assert result["termination"] == "model_end_turn"
+    assert session.calls == [("report_finding", {"title": "claim", "node": "target",
+                              "arena_id": "arena"})]
+    rejected = result["transcript"][0]
+    assert rejected["ok"] is False and "available tools" in rejected["error"]
+    assert len(rejected["error"]) <= 200
+    assert "available tools" in prompts[1]
+
+
+def test_repeated_invalid_tool_terminates_protocol_error():
+    session = Session()
+    build = {"config": {"goal": "Test", "max_model_calls": 3,
                         "max_output_tokens": 128, "deadline_seconds": 600}}
     result = asyncio.run(driver.run(session, "arena", build, {},
         lambda response: response.structuredContent,
         decide=lambda *_: ({"tool": "run_command", "args": {"command": "id"}},
                            {"input_tokens": 1, "output_tokens": 1, "cost_usd": None})))
+    # two in a row: the model is not learning, end the trial as agent failure
     assert result["termination"] == "model_protocol_error"
     assert session.calls == []
+    assert len(result["transcript"]) == 2
+    assert all(entry["ok"] is False for entry in result["transcript"])
+    assert all("available tools" in entry["error"] for entry in result["transcript"])
+    assert all(len(entry["error"]) <= 200 for entry in result["transcript"])
 
 
 def test_anthropic_response_usage_and_one_tool():
@@ -132,9 +168,305 @@ def test_model_build_pins_connection_without_credential(monkeypatch):
     assert build["config"]["max_model_calls"] == 8
     assert "key_last4" not in str(build)
     assert client.post("/agent-builds", json={"name": "bad", "version": "v1",
-        "driver": "model-mcp/v1", "goal": "test", "max_model_calls": 9}).status_code == 422
+        "driver": "model-mcp/v1", "goal": "test", "max_model_calls": 13}).status_code == 422
     assert client.post("/agent-builds", json={"name": "bad", "version": "v1",
         "driver": "model-mcp/v1", "goal": "test", "cost_budget_usd": 1}).status_code == 422
+
+
+# --- MODEL-R1: extra_headers passthrough ----------------------------------
+
+def _openai_ok(payload):
+    class HTTP:
+        status_code = 200
+
+        def json(self):
+            return payload
+    return HTTP()
+
+
+def test_post_sends_extra_headers_openai_path():
+    seen = {}
+
+    def transport(url, *, headers, json, timeout, allow_redirects):
+        seen.update(url=url, headers=headers)
+        return _openai_ok({"choices": [{"message": {"tool_calls": [{"function": {
+            "name": "get_briefing", "arguments": "{}"}}]}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1}})
+
+    action, _ = driver._post({
+        "provider": "openai", "model": "gpt-4o", "api_key": "fake-key",
+        "extra_headers": {"User-Agent": "opencode-test/1.0",
+                          "x-opencode-session": "sess-123"}},
+        "synthetic task", 128, 5, transport)
+    assert action == {"tool": "get_briefing", "args": {}}
+    assert seen["headers"]["User-Agent"] == "opencode-test/1.0"
+    assert seen["headers"]["x-opencode-session"] == "sess-123"
+    assert seen["headers"]["Authorization"] == "Bearer fake-key"
+
+
+def test_post_sends_extra_headers_anthropic_path():
+    seen = {}
+
+    def transport(url, *, headers, json, timeout, allow_redirects):
+        seen.update(url=url, headers=headers)
+
+        class HTTP:
+            status_code = 200
+
+            def json(self):
+                return {"content": [{"type": "tool_use", "name": "get_briefing",
+                                     "input": {}}],
+                        "usage": {"input_tokens": 1, "output_tokens": 1}}
+        return HTTP()
+
+    action, _ = driver._post({
+        "provider": "anthropic", "model": "mock-haiku", "api_key": "fake-key",
+        "extra_headers": {"User-Agent": "opencode-test/1.0",
+                          "x-opencode-session": "sess-123"}},
+        "synthetic task", 128, 5, transport)
+    assert action == {"tool": "get_briefing", "args": {}}
+    assert seen["headers"]["User-Agent"] == "opencode-test/1.0"
+    assert seen["headers"]["x-opencode-session"] == "sess-123"
+    assert seen["headers"]["x-api-key"] == "fake-key"
+
+
+def test_post_authorization_cannot_be_overridden():
+    seen = {}
+
+    def transport(url, *, headers, json, timeout, allow_redirects):
+        seen["headers"] = headers
+        return _openai_ok({"choices": [{"message": {"tool_calls": [{"function": {
+            "name": "get_briefing", "arguments": "{}"}}]}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1}})
+
+    # Even if extra_headers smuggled Authorization past validation, the
+    # driver's own credential always wins.
+    driver._post({
+        "provider": "openai", "model": "gpt-4o", "api_key": "real-key",
+        "extra_headers": {"Authorization": "Bearer evil"}},
+        "synthetic task", 128, 5, transport)
+    assert seen["headers"]["Authorization"] == "Bearer real-key"
+
+
+def test_model_build_pins_headers_digest(monkeypatch):
+    import hashlib
+    import json as _json
+
+    db = Database()
+    key = auth.generate_api_key()
+    owner = f"model-headers-{uuid.uuid4().hex}"
+    db.create_api_key(auth.hash_api_key(key), name=owner, role="operator")
+    client = TestClient(api.app)
+    client.headers["X-API-Key"] = key
+    headers = {"User-Agent": "opencode-test/1.0", "x-opencode-session": "s"}
+    digest = "sha256:" + hashlib.sha256(_json.dumps(
+        headers, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    monkeypatch.setattr("database.Database.get_model_connection", lambda self, owner: {
+        "provider": "custom", "model": "m", "key_last4": None,
+        "base_url": "http://vllm.internal:8000/v1",
+        "header_names": sorted(headers), "headers_digest": digest})
+    response = client.post("/agent-builds", json={
+        "name": f"model-headers-build-{uuid.uuid4().hex}", "version": "v1",
+        "driver": "model-mcp/v1", "goal": "Test synthetic ownership"})
+    assert response.status_code == 201, response.text
+    build = response.json()
+    assert build["config"]["headers_digest"] == digest
+    assert "opencode-test" not in str(build)
+
+
+def test_model_trial_rejects_headers_digest_drift():
+    connection = {"provider": "custom", "model": "m",
+                  "base_url": "http://vllm.internal:8000/v1",
+                  "extra_headers": {"User-Agent": "opencode-test/1.0"}}
+    config = {"provider": "custom", "model": "m",
+              "base_url": "http://vllm.internal:8000/v1",
+              "headers_digest": "sha256:" + "0" * 64}
+    with pytest.raises(RuntimeError, match="headers_digest"):
+        experiments.check_model_connection(connection, config)
+    # matching digest passes silently
+    import model_headers
+    config["headers_digest"] = model_headers.extra_headers_digest(
+        connection["extra_headers"])
+    experiments.check_model_connection(connection, config)
+    # a model drift names the model field
+    with pytest.raises(RuntimeError, match="model"):
+        experiments.check_model_connection(connection, {**config, "model": "other"})
+
+
+# --- topology orientation (class-C root cause) ------------------------------
+
+def test_topology_offered_with_no_model_args():
+    schemas = driver._schemas()
+    assert "get_topology" in schemas
+    assert schemas["get_topology"]["required"] == []
+    assert schemas["get_topology"]["properties"] == {}
+    # arena_id is driver-injected; the model must not supply it or anything else
+    with pytest.raises(driver.ModelProtocolError):
+        driver._valid_action({"tool": "get_topology",
+                              "args": {"arena_id": "arena"}})
+    with pytest.raises(driver.ModelProtocolError):
+        driver._valid_action({"tool": "get_topology",
+                              "args": {"node": "target"}})
+
+
+def test_topology_call_routed_recorded_and_fed_back():
+    session = Session()
+    build = {"config": {"goal": "Test", "max_model_calls": 3,
+                        "max_output_tokens": 128, "deadline_seconds": 600}}
+    prompts = []
+    calls = [0]
+    topology = {"arena_id": "arena", "nodes": [
+        {"node": "target", "url": "http://10.0.0.3:8080",
+         "state": "active", "foothold": False}]}
+
+    class TopoResponse:
+        isError = False
+        structuredContent = topology
+
+    def decide(_connection, prompt, _tokens, _timeout):
+        prompts.append(prompt)
+        calls[0] += 1
+        if calls[0] == 1:
+            return {"tool": "get_topology", "args": {}}, {
+                "input_tokens": 1, "output_tokens": 1, "cost_usd": None}
+        return None, {"input_tokens": 1, "output_tokens": 1, "cost_usd": None}
+
+    async def call_tool(name, arguments):
+        session.calls.append((name, arguments))
+        return TopoResponse()
+
+    session.call_tool = call_tool
+    result = asyncio.run(driver.run(session, "arena", build, {},
+        lambda response: response.structuredContent, decide=decide))
+    assert ("get_topology", {"arena_id": "arena"}) in session.calls
+    # tool + ok only: no topology content (and no truth) lands in evidence
+    assert result["transcript"][0] == {"tool": "get_topology", "ok": True}
+    # the agent actually receives names/URLs in the next turn's history
+    assert "target" in prompts[1] and "http://10.0.0.3:8080" in prompts[1]
+
+
+def test_failed_call_retains_truncated_error_text():
+    session = Session()
+    build = {"config": {"goal": "Test", "max_model_calls": 1,
+                        "max_output_tokens": 128, "deadline_seconds": 600}}
+
+    class FailResponse:
+        isError = True
+        structuredContent = {"error": "unknown node(s) ['nope']; arena nodes: ['target']"}
+
+    async def call_tool(name, arguments):
+        session.calls.append((name, arguments))
+        return FailResponse()
+
+    session.call_tool = call_tool
+    result = asyncio.run(driver.run(session, "arena", build, {},
+        lambda response: response.structuredContent,
+        decide=lambda *_: ({"tool": "http_request",
+                            "args": {"node": "nope", "path": "/"}},
+                           {"input_tokens": 1, "output_tokens": 1, "cost_usd": None})))
+    entry = result["transcript"][-1]
+    assert entry["ok"] is False
+    assert "unknown node" in entry["error"]
+    assert len(entry["error"]) <= 200
+
+
+# --- disabled_tools build variation --------------------------------------
+
+def test_disabled_tool_neither_offered_nor_accepted():
+    seen = {}
+
+    def transport(url, *, headers, json, timeout, allow_redirects):
+        seen["tools"] = [t["function"]["name"] for t in json["tools"]]
+        return _openai_ok({"choices": [{"message": {"tool_calls": [{"function": {
+            "name": "get_briefing", "arguments": "{}"}}]}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1}})
+
+    conn = {"provider": "openai", "model": "gpt-4o", "api_key": "k",
+            "disabled_tools": ["report_finding"]}
+    action, _ = driver._post(conn, "task", 128, 5, transport)
+    assert action == {"tool": "get_briefing", "args": {}}
+    assert "report_finding" not in seen["tools"]
+    assert "get_briefing" in seen["tools"]
+
+
+def test_disabled_tool_call_rejected_with_filtered_list():
+    session = Session()
+    build = {"config": {"goal": "Test", "max_model_calls": 2,
+                        "max_output_tokens": 128, "deadline_seconds": 600,
+                        "disabled_tools": ["report_finding"]}}
+    prompts = []
+
+    def decide(_connection, prompt, _tokens, _timeout):
+        prompts.append(prompt)
+        if len(prompts) == 1:
+            return ({"tool": "report_finding",
+                     "args": {"title": "x", "node": "target"}},
+                    {"input_tokens": 1, "output_tokens": 1, "cost_usd": None})
+        return None, {"input_tokens": 1, "output_tokens": 1, "cost_usd": None}
+
+    result = asyncio.run(driver.run(session, "arena", build, {},
+        lambda response: response.structuredContent, decide=decide))
+    assert session.calls == []
+    assert result["termination"] == "model_end_turn"
+    assert "report_finding" not in prompts[1]
+    assert "get_briefing" in prompts[1]
+
+
+def test_disabled_tools_validation_at_build(monkeypatch):
+    db = Database()
+    key = auth.generate_api_key()
+    db.create_api_key(auth.hash_api_key(key), name="op-disabled-tools",
+                      role="operator")
+    client = TestClient(api.app)
+    client.headers["X-API-Key"] = key
+    monkeypatch.setattr("database.Database.get_model_connection", lambda self, owner: {
+        "provider": "custom", "model": "m", "key_last4": None,
+        "base_url": "http://vllm.internal:8000/v1",
+        "header_names": [], "headers_digest": None})
+
+    def build(payload):
+        return client.post("/agent-builds", json={
+            "name": f"build-{uuid.uuid4().hex}", "version": "v1",
+            "driver": "model-mcp/v1", "goal": "Test synthetic ownership",
+            **payload})
+
+    base = {}
+    full = build(base)
+    assert full.status_code == 201, full.text
+    assert full.json()["config"]["disabled_tools"] == []
+    assert build({"disabled_tools": ["report_finding"]}).status_code == 201
+    assert build({"disabled_tools": ["nope"]}).status_code == 422
+    assert build({"disabled_tools": ["get_briefing"]}).status_code == 422
+    assert build({"disabled_tools": ["get_briefing", "browser_visit", "http_request",
+                                      "report_finding", "get_topology"]}).status_code == 422
+
+
+def test_build_digest_pins_disabled_surface(monkeypatch):
+    db = Database()
+    key = auth.generate_api_key()
+    db.create_api_key(auth.hash_api_key(key), name="op-disabled-digest",
+                      role="operator")
+    client = TestClient(api.app)
+    client.headers["X-API-Key"] = key
+    monkeypatch.setattr("database.Database.get_model_connection", lambda self, owner: {
+        "provider": "custom", "model": "m", "key_last4": None,
+        "base_url": None, "header_names": [], "headers_digest": None})
+    first, second = None, None
+    for disabled in ([], ["report_finding"]):
+        response = client.post("/agent-builds", json={
+            "name": f"digest-build-{uuid.uuid4().hex}", "version": "v1",
+            "driver": "model-mcp/v1", "goal": "Same goal",
+            **({"disabled_tools": disabled} if disabled else {})})
+        assert response.status_code == 201, response.text
+        if first is None:
+            first = response.json()
+        else:
+            second = response.json()
+    assert first["digest"] != second["digest"]
+    # same owner, same goal: configs provably identical apart from the toggle
+    assert {k: v for k, v in first["config"].items() if k != "disabled_tools"} == {
+        k: v for k, v in second["config"].items() if k != "disabled_tools"}
+    assert second["config"]["disabled_tools"] == ["report_finding"]
 
 
 def test_single_trial_smoke_is_durable_and_unpaired(monkeypatch):
@@ -163,7 +495,7 @@ def test_single_trial_smoke_is_durable_and_unpaired(monkeypatch):
     assert record["comparison"]["matched_pairs"] == 0
     assert queued == [record["id"]]
     assert client.post("/evaluation-smokes", json={"build_id": build["id"],
-        "challenge_id": challenge["id"], "action_cap": 9}).status_code == 422
+        "challenge_id": challenge["id"], "action_cap": 13}).status_code == 422
     assert client.post("/evaluation-smokes", json={"build_id": build["id"],
         "challenge_id": challenge["id"], "token_budget": 100}).status_code == 422
     assert experiments.compare(record)["evidence_scope"] == "calibration_or_unknown"

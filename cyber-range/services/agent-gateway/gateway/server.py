@@ -318,20 +318,23 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
                            payload: str | None = None, oast_token: str | None = None,
                            poc: str | None = None,
                            evidence_artifact_digests: list[str] | None = None,
-                           transaction_digests: list[str] | None = None) -> dict:
+                           transaction_digests: list[str] | None = None,
+                           variant_of: str | None = None) -> dict:
             """Report a discovered vulnerability (the engagement goal). Include the
             `cwe` (e.g. 'CWE-89') and `node` so it can be scored. To have the finding
             PROVEN (not just claimed), also pass the verification inputs: `path` +
             `param` + `payload` for a reflected-XSS / SQLi vector, or `oast_token`
             for an out-of-band callback. Always include a `poc` — a short,
             reproducible proof a human can run to verify it (a curl/HTTP request, a
-            shell command, or numbered steps, with the observed result)."""
+            shell command, or numbered steps, with the observed result). When this
+            run confirms the same issue on another build, pass `variant_of` with
+            the reference finding id so the operator can compare the two."""
             return tools.report_finding(
                 ctx(), arena_id=arena_id, title=title, cwe=cwe, node=node,
                 evidence=evidence, path=path, param=param, payload=payload,
                 oast_token=oast_token, poc=poc,
                 evidence_artifact_digests=evidence_artifact_digests,
-                transaction_digests=transaction_digests,
+                transaction_digests=transaction_digests, variant_of=variant_of,
             )
 
     elif stance is Stance.defender:
@@ -470,6 +473,28 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
             """Persist a reviewed v3 spec as a reusable pack (use after
             scaffold_scenario). Returns the registered scenario id."""
             return tools.import_scenario(ctx(), spec=spec, scenario_id=id, overwrite=overwrite)
+
+        @mcp.tool()
+        def research_fix_lookup(fix_ref: str, advisory_id: str | None = None) -> dict:
+            """Read-only fix-commit intel over the pinned research repo: patch
+            facts + a one-line check summary. Bounded, digest-bound."""
+            return tools.research_fix_lookup(ctx(), fix_ref=fix_ref, advisory_id=advisory_id)
+
+        @mcp.tool()
+        def research_layer_diff(from_ref: str, to_ref: str,
+                                paths: list | None = None) -> dict:
+            """Read-only permission-call delta between two pinned refs."""
+            return tools.research_layer_diff(ctx(), from_ref=from_ref, to_ref=to_ref,
+                                             paths=paths)
+
+        @mcp.tool()
+        def research_sibling_search(pattern: str, ref: str | None = None,
+                                    path_scope: list | None = None) -> dict:
+            """Read-only named-pattern call-site search (unscoped-queryset |
+            bare-auth-view | bulk-permission | half-composed-check |
+            unguarded-verb) with composition status."""
+            return tools.research_sibling_search(ctx(), pattern=pattern, ref=ref,
+                                                 path_scope=path_scope)
 
     return mcp
 

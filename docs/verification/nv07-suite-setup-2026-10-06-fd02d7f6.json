@@ -1,0 +1,45 @@
+{
+  "build_digests": {
+    "baseline": "sha256:a06afd9dfebb4df6d977c5037f4e59e626eb941cb1209ee3b35441b4ab31c59e",
+    "candidate": "sha256:4f0b669952340c5118496ddde4934a675b61a9b1569e31bb5ec32adc68f854b4"
+  },
+  "build_ids": {
+    "baseline": "60c39cd1-c70e-4644-a005-f8e7da7ee143",
+    "candidate": "c248c6d7-58e6-481a-963a-aad7a63d0ccd"
+  },
+  "challenge_id": "667c5203-5ce3-4a29-9d13-d3bb9a1fe965",
+  "challenge_label": "calibration",
+  "connection": {
+    "encrypted_at_rest": true,
+    "header_names": [
+      "User-Agent",
+      "x-opencode-session"
+    ],
+    "headers_digest": "e0bc4bcf073231ffdbd27a3c084c0c0063ba47853cfae475bc64bb9dabe08163",
+    "model": "deepseek-v4.1-flash",
+    "provider": "custom",
+    "status": "standby"
+  },
+  "fixture_image": "sha256:3d895c419214c084c91d6c39be7dc60cda8c9f9837a42b7affc148e1975c13a2",
+  "model_requests": 0,
+  "proposed_evaluation": {
+    "action_cap": 12,
+    "baseline_id": "60c39cd1-c70e-4644-a005-f8e7da7ee143",
+    "candidate_id": "c248c6d7-58e6-481a-963a-aad7a63d0ccd",
+    "deadline_seconds": 600,
+    "seeds": [
+      1,
+      2,
+      3
+    ],
+    "suite_id": "fc69707e-9c01-4543-a8d3-1c5ba0e16b1e"
+  },
+  "schema": "nidavellir/nv07-suite-setup/v1",
+  "source_arena": "6aea86c7-bec5-4f8e-a9a5-3df75b76f645",
+  "spend_bound": {
+    "max_model_turns": 72,
+    "seeds": 3,
+    "sides": 2
+  },
+  "suite_id": "fc69707e-9c01-4543-a8d3-1c5ba0e16b1e"
+}

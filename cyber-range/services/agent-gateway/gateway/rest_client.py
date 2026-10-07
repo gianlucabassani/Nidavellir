@@ -252,14 +252,16 @@ class RestClient:
                        param: str | None = None, payload: str | None = None,
                        oast_token: str | None = None, poc: str | None = None,
                        evidence_artifact_digests: list[str] | None = None,
-                       transaction_digests: list[str] | None = None) -> dict:
+                       transaction_digests: list[str] | None = None,
+                       variant_of: str | None = None) -> dict:
         body: dict = {"title": title}
         # Only send set fields; path/param/payload/oast_token are the optional
         # verification inputs that let the orchestrator ACTIVELY confirm a finding;
         # `poc` is the reproducible proof a human can run to verify.
         for key, val in (("cwe", cwe), ("node", node), ("evidence", evidence),
                          ("path", path), ("param", param), ("payload", payload),
-                         ("oast_token", oast_token), ("poc", poc)):
+                         ("oast_token", oast_token), ("poc", poc),
+                         ("variant_of", variant_of)):
             if val:
                 body[key] = val
         if evidence_artifact_digests:
@@ -378,3 +380,28 @@ class RestClient:
         if scenario_id:
             body["id"] = scenario_id
         return self._request("POST", "/scenarios", api_key, json=body)
+
+    # --- research code-intel (variant-hunt collect+derive, read-only) --------
+
+    def research_fix_lookup(self, api_key: str, fix_ref: str,
+                            advisory_id: str | None = None) -> dict:
+        body = {"fix_ref": fix_ref}
+        if advisory_id:
+            body["advisory_id"] = advisory_id
+        return self._request("POST", "/research/code/fix-lookup", api_key, json=body)
+
+    def research_layer_diff(self, api_key: str, from_ref: str, to_ref: str,
+                            paths: list | None = None) -> dict:
+        body = {"from_ref": from_ref, "to_ref": to_ref}
+        if paths:
+            body["paths"] = paths
+        return self._request("POST", "/research/code/layer-diff", api_key, json=body)
+
+    def research_sibling_search(self, api_key: str, pattern: str, ref: str | None = None,
+                                path_scope: list | None = None) -> dict:
+        body = {"pattern": pattern}
+        if ref:
+            body["ref"] = ref
+        if path_scope:
+            body["path_scope"] = path_scope
+        return self._request("POST", "/research/code/sibling-search", api_key, json=body)

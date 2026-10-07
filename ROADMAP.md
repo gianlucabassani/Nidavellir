@@ -25,28 +25,33 @@
 [TODO.md](TODO.md) is the canonical ordered checklist with stable NV task IDs,
 dependencies and acceptance criteria. This roadmap retains product/design detail;
 S/C/R/D/E/P labels below are subject areas, not a competing execution order.
-The operator requested this reorganization after reviewing both Nidavellir and Bughunt.
-NV-01–08 and NV-10 have completed their accepted gates; NV-09 is next. Open risks and
-verification gaps are tracked in [ISSUES.md](ISSUES.md).
+The operator requested this reorganization after reviewing the delivery state.
+NV-01–10 have completed their accepted gates; P2 work starts when a concrete research
+target selects it. Open risks and verification gaps are tracked in [ISSUES.md](ISSUES.md).
 
 1. **P0 / NV-01–05:** restore a repeatable Python 3.11 release gate; prove pinned target
    lifecycle/reset; complete confined PoC execution, durable budgets/stop and scoped access.
 2. **P1 / NV-06–10:** strengthen independent validation; persist experiments and paired
-   trials; maintain a small challenge library; prove usefulness with a Bughunt workflow;
-   restore research/evaluation records on a clean installation.
+   trials; maintain a small challenge library; prove usefulness with a real BYO-agent
+   workflow; restore research/evaluation records on a clean installation.
 3. **P2 / NV-11–15:** affected-versus-fixed replay, targeted variant/fuzzing work,
    binary/local VM intake and research campaign/disclosure output as concrete targets need
    them; held-out comparison and active episodes follow suitable evidence.
 
 Discovery and evaluation remain first-class objectives. One local calibration workflow
 can prove operational usefulness before a broad discovery toolkit or private corpus
-exists. Calibration must not be advertised as held-out capability evidence. Bughunt owns
-live bounty campaigns; Nidavellir owns controlled environments, independent validators
-and repeated experiments. BH-13/NV-09 exchange synthetic versioned test/evidence manifests,
-not real campaign credentials. Integration remains planned. Scope is bughunt's agentic
-layer only (Hermes/Claude Code + MCP active testing, BH-13/BH-14B/BH-15) — bughunt's
-deterministic pipelines (enumeration/baseline/worker/backup) run independent of
-Nidavellir/Hermes by design (bughunt D021) and are not part of this manifest.
+exists. Calibration must not be advertised as held-out capability evidence. Live bounty
+campaigns are a separate product; Nidavellir owns controlled environments, independent
+validators and repeated experiments. Any MCP-capable bring-your-own client (opencode,
+Claude Code, Codex; Bughunt as one example) drives the same scoped gateway and exchanges
+only synthetic versioned test/evidence manifests — never real campaign credentials.
+No client is a dependency. First direct runs with opencode and
+opencode-go/deepseek-v4.1-flash are recorded in `docs/verification/`; the paired BYO-agent and durable model-driven calibration comparisons are recorded.
+MODEL-R1/NV07-R1 closed on 2026-10-06 for machinery, not discovery capability.
+The 2026-10-07 research audit retracted Paperless exhaustion and reopened the
+pre-registration and mail-validity gaps in ISSUES.md. Phase 2 on 2026-10-07
+closes the new structured registration gate; historical chronology is not repaired,
+and Phase 3 control validity remains open.
 
 Preserve Docker-local as the supported implementation focus. Cloud parity, hosted concerns,
 and multi-agent breadth remain deferred; local VM intake requires a selected research need.
@@ -57,20 +62,24 @@ count. The authoritative product boundary is
 [`docs/VISION.md`](docs/VISION.md). Architecture
 decisions live in [`docs/adr/`](docs/adr/).
 
-### Next to build — NV-09, Bughunt integration and usefulness proof
+### Current status — NV-09 complete, P2 on demand
 
-NV-08 now has versioned authorization and single-use-grant calibration
-challenges with independent effect/control validators. A five-seed paired suite
-detected a deliberately broken grant step with zero infrastructure-failed
-pairs; per-challenge and pooled intervals are explicitly labelled. These
+NV-08's versioned authorization and single-use-grant calibration challenges
+with independent effect/control validators remain the scripted baseline; their
 synthetic results validate the workbench, not held-out capability.
 
-NV-09 joins a selected Bughunt workflow to Nidavellir's pinned target,
-agent build, budgets, controls, observation digests and reset/repeat record.
-The joint manifest must use synthetic identities and show whether the workflow
-is useful to an operator, as specified in [TODO.md](TODO.md). NV07-R1 still
-needs a permitted model-driven suite; NV06-R1 still needs a non-synthetic
-target. Neither is implied by NV-08's scripted calibration gate.
+NV-09's synthetic-SPA slice is proven end to end with a real BYO agent:
+opencode + deepseek-v4.1-flash passed independent validation on the NV-06 and
+NV-09 fixtures, and a paired run (baseline vs the same harness with the scoped
+HTTP tool removed) detected the seeded regression with zero
+infrastructure-failed pairs
+(`docs/verification/byo-agent-pair-2026-10-05-ce132ac4.json`). The durable
+`model-mcp/v1` calibration comparison (NV07-R1) and MODEL-R1 (custom connection
+headers) closed on 2026-10-06. The difference −1.0 comes from withholding
+`report_finding`, not a model capability comparison; NV06-R1 closed on 2026-10-05 when the generic
+`http_access_control` validator confirmed and refuted CVE-2026-26012 on pinned
+Vaultwarden 1.35.2/1.37.3 fixtures. NV-11–15 start only when a concrete
+research target selects them.
 
 ---
 
@@ -734,11 +743,13 @@ stranded evaluations, and paired comparison over matched observed starting
 state. Not yet recorded: explicit visibility labels and per-tool version
 pinning. Cost stays `null` unless a build announces it.
 
-### E2 — Generic external-agent drivers · not started
+### E2 — Generic external-agent drivers · partially shipped
 
-Only `scripted-mcp/v1` exists today: a fixed tool plan replayed identically per
-trial, sufficient to exercise the record and comparison machinery but not the
-conditions it is meant to describe (ISSUES.md NV07-R1).
+`scripted-mcp/v1` and `model-mcp/v1` exist. The model-driven paired calibration
+suite completed six trials over three seeds on 2026-10-06 (ISSUES.md NV07-R1).
+A withheld reporting tool creates a scoring-surface difference; this establishes
+operational comparison machinery, not held-out discovery capability. Broader
+external-agent driver shapes below remain planned.
 
 Support different agent shapes without embedding any agent's product logic:
 

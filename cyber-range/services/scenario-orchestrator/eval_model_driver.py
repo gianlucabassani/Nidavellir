@@ -15,6 +15,7 @@ from model_verify import ANTHROPIC_BASE, openai_base
 
 TOOLS = {
     "get_briefing": {"properties": {}, "required": []},
+    "get_topology": {"properties": {}, "required": []},
     "browser_visit": {"properties": {
         "node": {"type": "string"}, "path": {"type": "string"},
         "params": {"type": "object"}, "wait_ms": {"type": "integer"}},
@@ -35,21 +36,34 @@ class ModelProtocolError(ValueError):
     """A model chose an invalid action; the trial completed with agent failure."""
 
 
-def _schemas():
+def _schemas(tools=None):
+    tools = TOOLS if tools is None else tools
     return {name: {"type": "object", "properties": item["properties"],
                    "required": item["required"], "additionalProperties": False}
-            for name, item in TOOLS.items()}
+            for name, item in tools.items()}
 
 
 def _post(connection, prompt, max_output_tokens, timeout, transport=requests.post):
-    """One provider call; return one tool decision and reported usage, if any."""
+    """One provider call; return one tool decision and reported usage, if any.
+
+    The connection's operator-approved static ``extra_headers`` (MODEL-R1)
+    are merged into the request. Driver-managed credentials always win: a
+    smuggled ``Authorization`` / ``x-api-key`` can never override them."""
     provider = connection["provider"]
     model = connection["model"]
-    schemas = _schemas()
+    extra = {name: value for name, value in (connection.get("extra_headers") or {}).items()
+             if name.lower() not in ("authorization", "x-api-key")}
+    # The build's pinned surface travels on the connection mapping: a build
+    # with disabled tools must not be *offered* them either, not merely
+    # rejected on use. run() injects the build's list here.
+    disabled = connection.get("disabled_tools") or []
+    schemas = _schemas({name: spec for name, spec in TOOLS.items()
+                        if name not in disabled})
     if provider == "anthropic":
         base = (connection.get("base_url") or ANTHROPIC_BASE).rstrip("/")
         url = base + "/messages"
-        headers = {"x-api-key": connection["api_key"], "anthropic-version": "2023-06-01"}
+        headers = {**extra, "x-api-key": connection["api_key"],
+                   "anthropic-version": "2023-06-01"}
         body = {"model": model, "max_tokens": max_output_tokens,
                 "messages": [{"role": "user", "content": prompt}],
                 "tools": [{"name": name, "description": f"Scoped arena {name} action",
@@ -81,7 +95,8 @@ def _post(connection, prompt, max_output_tokens, timeout, transport=requests.pos
         # Gemini's OpenAI compatibility maps this to a disabled thinking budget.
         # A short smoke should spend its bounded output on tool decisions.
         body["reasoning_effort"] = "none"
-    response = transport(url, headers={"Authorization": "Bearer " + connection["api_key"]},
+    response = transport(url, headers={**extra,
+                          "Authorization": "Bearer " + connection["api_key"]},
                          json=body, timeout=timeout, allow_redirects=False)
     if response.status_code != 200:
         raise RuntimeError(f"model provider returned HTTP {response.status_code}")
@@ -106,11 +121,12 @@ def _post(connection, prompt, max_output_tokens, timeout, transport=requests.pos
     return {"tool": function.get("name"), "args": args}, measured
 
 
-def _valid_action(action):
-    if not isinstance(action, dict) or action.get("tool") not in TOOLS:
+def _valid_action(action, tools=None):
+    tools = TOOLS if tools is None else tools
+    if not isinstance(action, dict) or action.get("tool") not in tools:
         raise ModelProtocolError("model chose an unavailable tool")
     args = action.get("args")
-    schema = TOOLS[action["tool"]]
+    schema = tools[action["tool"]]
     if not isinstance(args, dict) or "arena_id" in args or not set(schema["required"]) <= args.keys():
         raise ModelProtocolError("model tool arguments violate the scoped contract")
     if not args.keys() <= schema["properties"].keys():
@@ -119,13 +135,24 @@ def _valid_action(action):
 
 
 async def run(session, arena_id, build, connection, decode, *, decide=_post):
-    """Execute at most the pinned number of model turns over scoped MCP."""
+    """Execute at most the pinned number of model turns over scoped MCP.
+
+    An off-schema tool call is fed back to the model ("rejected ...;
+    available tools: ...") and the turn continues: one wobble is correctable
+    noise, and voiding the trial on it would make comparisons measure schema
+    compliance instead of agent behaviour. Only a repeated violation (two in
+    a row — the model is not learning) or the turn/deadline budget ends the
+    trial as a protocol failure.
+    """
     config = build["config"]
     deadline = time.monotonic() + config["deadline_seconds"]
+    disabled = config.get("disabled_tools") or []
+    active = {name: spec for name, spec in TOOLS.items() if name not in disabled}
     history = []
     transcript = []
     usage = []
     termination = "model_call_limit"
+    violations = 0
     for _ in range(config["max_model_calls"]):
         remaining = deadline - time.monotonic()
         if remaining <= 0:
@@ -138,20 +165,37 @@ async def run(session, arena_id, build, connection, decode, *, decide=_post):
                   + config["goal"] + "\nRecent tool history:\n" +
                   json.dumps(history[-8:], separators=(",", ":"))[-6000:])
         try:
-            decision, measured = decide(connection, prompt, config["max_output_tokens"],
+            decision, measured = decide({**connection, "disabled_tools": disabled},
+                                        prompt, config["max_output_tokens"],
                                         min(30, remaining))
             usage.append(measured)
             if decision is None:
                 termination = "model_end_turn"
                 break
-            tool, args = _valid_action(decision)
-        except ModelProtocolError:
-            termination = "model_protocol_error"
-            break
+            tool, args = _valid_action(decision, active)
+            violations = 0
+        except ModelProtocolError as exc:
+            violations += 1
+            feedback = (f"tool call rejected ({exc}); available tools: "
+                        + ", ".join(sorted(active)))[:1200]
+            history.append({"action": {"tool": "rejected", "args": {}},
+                            "ok": False, "result": feedback})
+            transcript.append({"tool": "rejected", "ok": False,
+                               "error": feedback[:200]})
+            if violations >= 2:
+                termination = "model_protocol_error"
+                break
+            continue
         args = {**args, "arena_id": arena_id}
         response = await session.call_tool(tool, arguments=args)
         value = decode(response)
         entry = {"tool": tool, "ok": not response.isError}
+        if response.isError:
+            # Retain the failure text (truncated) so the next failure is
+            # diagnosable without another run. Gateway errors are fixed
+            # platform strings (names/digests, never values); evidence is
+            # grepped for key/session material before it is committed.
+            entry["error"] = json.dumps(value, default=str)[:200]
         if tool == "http_request":
             entry["transaction_digest"] = value.get("transaction_digest")
         elif tool == "browser_visit":

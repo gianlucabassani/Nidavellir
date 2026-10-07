@@ -1,0 +1,11 @@
+{
+  "setup": "nv07-r1-setup-2026-10-06-0bae0c65.json",
+  "request": {
+    "action_cap": 12,
+    "build_id": "1f0074e5-7fbb-4c67-bd39-c5b3c8428984",
+    "challenge_id": "70ab720e-2471-44ed-8fb7-d5a01c5bfeae",
+    "deadline_seconds": 600,
+    "seed": 1
+  },
+  "started_at": "2026-10-06T16:26:31.113405"
+}

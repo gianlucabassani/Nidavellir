@@ -4,6 +4,9 @@ key). Security-by-design contract: the key is encrypted at rest, never returned
 in plaintext, operator-only (agents can't manage it), and a blank key on update
 keeps the stored one.
 """
+import hashlib
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -170,14 +173,119 @@ def test_custom_provider_is_keyless_with_base_url(operator):
     assert r.status_code == 200 and r.json()["base_url"] == "http://vllm.internal:8000/v1"
 
 
-# --- verification ping ------------------------------------------------------
+# --- MODEL-R1: extra_headers ---------------------------------------------
+
+def _digest(headers):
+    return hashlib.sha256(
+        json.dumps(headers, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+HEADERS = {"User-Agent": "opencode-test/1.0", "x-opencode-session": "sess-123"}
+
+
+def test_extra_headers_masked_names_and_digest_no_values(operator):
+    r = operator.put("/agent/model", json={
+        "provider": "custom", "model": "m", "api_key": "",
+        "base_url": "http://vllm.internal:8000/v1",
+        "extra_headers": HEADERS})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["header_names"] == ["User-Agent", "x-opencode-session"]
+    assert body["headers_digest"] == _digest(HEADERS)
+    assert "opencode-test" not in r.text and "sess-123" not in r.text
+
+    g = operator.get("/agent/model").json()
+    assert g["header_names"] == ["User-Agent", "x-opencode-session"]
+    assert g["headers_digest"] == _digest(HEADERS)
+    assert "opencode-test" not in str(g) and "sess-123" not in str(g)
+
+    from database import Database
+    cred = Database().get_decrypted_model_credential("op-mc")
+    assert cred["extra_headers"] == HEADERS
+
+
+def test_extra_headers_blank_keeps_stored_and_empty_clears(operator):
+    operator.put("/agent/model", json={
+        "provider": "custom", "model": "m", "api_key": "",
+        "base_url": "http://vllm.internal:8000/v1",
+        "extra_headers": HEADERS})
+    # blank update (no extra_headers key) keeps stored headers
+    r = operator.put("/agent/model", json={
+        "provider": "custom", "model": "m2", "api_key": "",
+        "base_url": "http://vllm.internal:8000/v1"})
+    assert r.status_code == 200
+    assert r.json()["header_names"] == ["User-Agent", "x-opencode-session"]
+    # explicit {} clears them
+    r = operator.put("/agent/model", json={
+        "provider": "custom", "model": "m2", "api_key": "",
+        "base_url": "http://vllm.internal:8000/v1",
+        "extra_headers": {}})
+    assert r.status_code == 200
+    assert r.json()["header_names"] == []
+    assert r.json()["headers_digest"] is None
+
+
+def test_extra_headers_no_headers_means_empty(operator):
+    r = operator.put("/agent/model", json={
+        "provider": "openai", "model": "gpt-4o", "api_key": "sk-no-headers"})
+    assert r.status_code == 200
+    assert r.json()["header_names"] == []
+    assert r.json()["headers_digest"] is None
+
+
+def test_extra_headers_rejections(operator):
+    bad_many = {f"X-H-{i}": "v" for i in range(17)}
+    cases = [
+        {"X-Bad": "a\r\nb"},  # CRLF injection
+        {"X-Bad": "a\nb"},
+        bad_many,  # >16
+        {"Authorization": "Bearer evil"},  # reserved
+        {"authorization": "Bearer evil"},  # reserved, case-insensitive
+        {"X-Api-Key": "k"},  # reserved
+        {"Host": "evil.example"},  # reserved
+        {"X-Dup": "a", "x-dup": "b"},  # case-duplicate
+        {"Bad Name!": "v"},  # illegal name chars
+        {"X-Big": "v" * 1025},  # value too long
+    ]
+    for headers in cases:
+        r = operator.put("/agent/model", json={
+            "provider": "custom", "model": "m", "api_key": "",
+            "base_url": "http://vllm.internal:8000/v1",
+            "extra_headers": headers})
+        assert r.status_code == 422, (headers, r.text)
+
+
+def test_extra_headers_encrypted_at_rest(operator, monkeypatch):
+    import crypto
+    from cryptography.fernet import Fernet
+    from database import Database
+    from models import ModelConnection
+
+    monkeypatch.setenv("SECRETS_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    crypto.reset_default_cipher()
+    try:
+        operator.put("/agent/model", json={
+            "provider": "custom", "model": "m", "api_key": "",
+            "base_url": "http://vllm.internal:8000/v1",
+            "extra_headers": HEADERS})
+        db = Database()
+        with db._session() as s:  # noqa: SLF001 - test reaches into storage on purpose
+            row = s.get(ModelConnection, "op-mc")
+            assert row.encrypted_headers is not None
+            assert "opencode-test" not in row.encrypted_headers
+            assert "sess-123" not in row.encrypted_headers
+        assert db.get_decrypted_model_credential("op-mc")["extra_headers"] == HEADERS
+    finally:
+        monkeypatch.delenv("SECRETS_ENCRYPTION_KEY", raising=False)
+        crypto.reset_default_cipher()
 
 def test_verify_supplied_key(operator, monkeypatch):
     import model_verify
 
     seen = {}
 
-    def fake(provider, model, api_key, base_url=None):
+    def fake(provider, model, api_key, base_url=None, headers=None):
         seen.update(provider=provider, model=model, api_key=api_key)
         return {"verified": True, "detail": "ok", "checked": True}
 
@@ -196,7 +304,7 @@ def test_verify_uses_stored_decrypted_key_when_body_empty(operator, monkeypatch)
     operator.put("/agent/model", json={"provider": "openai", "model": "gpt-4o", "api_key": "sk-stored-9"})
     captured = {}
 
-    def fake(provider, model, api_key, base_url=None):
+    def fake(provider, model, api_key, base_url=None, headers=None):
         captured.update(provider=provider, api_key=api_key)
         return {"verified": True, "detail": "ok", "checked": True}
 

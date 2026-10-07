@@ -1,0 +1,28 @@
+{
+  "build_digest": "sha256:3e846599526d183a15b1a34aad437aaab5e1deb78c261f1c76530f06aa2a33f8",
+  "build_id": "bbcd96c1-89b4-4cba-b84d-dabf6df2aca6",
+  "challenge_id": "e479a461-f841-46eb-8920-d7df579416ab",
+  "challenge_label": "calibration",
+  "connection": {
+    "encrypted_at_rest": true,
+    "header_names": [
+      "User-Agent",
+      "x-opencode-session"
+    ],
+    "headers_digest": "e0bc4bcf073231ffdbd27a3c084c0c0063ba47853cfae475bc64bb9dabe08163",
+    "model": "deepseek-v4.1-flash",
+    "provider": "custom",
+    "status": "standby"
+  },
+  "fixture_image": "sha256:3d895c419214c084c91d6c39be7dc60cda8c9f9837a42b7affc148e1975c13a2",
+  "model_requests": 0,
+  "proposed_request": {
+    "action_cap": 12,
+    "build_id": "bbcd96c1-89b4-4cba-b84d-dabf6df2aca6",
+    "challenge_id": "e479a461-f841-46eb-8920-d7df579416ab",
+    "deadline_seconds": 600,
+    "seed": 1
+  },
+  "schema": "nidavellir/nv07-r1-smoke-setup/v1",
+  "source_arena": "cf934867-dfc8-40ab-810a-ee265c007439"
+}

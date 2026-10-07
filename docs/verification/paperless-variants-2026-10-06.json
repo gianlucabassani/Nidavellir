@@ -1,0 +1,85 @@
+{
+  "hypotheses": [
+    {
+      "actor_status": 404,
+      "controls": {
+        "owner_read_link": {
+          "expected": 200,
+          "held": true,
+          "status": 200
+        }
+      },
+      "expected": "denied 403/404 (PaperlessObjectPermissions on ShareLink.owner)",
+      "id": "H1",
+      "provenance": "GHSA-386h-chg4-cfw9 / b010f65ae (detail vs fixed create)",
+      "verdict": "refuted"
+    },
+    {
+      "actor_status": 403,
+      "controls": {
+        "owner_versions_intact": {
+          "expected": 200,
+          "held": true,
+          "status": 200
+        }
+      },
+      "expected": "denied 403 (object gate after global gate)",
+      "id": "H2",
+      "provenance": "8aab34ea7 versions global-check (object branch untested)",
+      "verdict": "refuted"
+    },
+    {
+      "actor_status": 403,
+      "controls": {
+        "restricted_unmoved": {
+          "expected": 200,
+          "held": true,
+          "status": 200
+        }
+      },
+      "expected": "denied 403 and restricted perms unchanged",
+      "id": "H3",
+      "provenance": "GHSA-w47q-3m69-84v8 class via bulk path (ownership check)",
+      "verdict": "refuted"
+    },
+    {
+      "actor_status": 403,
+      "controls": {
+        "shared_survives": {
+          "expected": 200,
+          "held": true,
+          "status": 200
+        }
+      },
+      "expected": "denied 403 and document survives",
+      "id": "H4",
+      "provenance": "8aab34ea7 delete-perm gating (documents bulk path)",
+      "verdict": "refuted"
+    },
+    {
+      "actor_status": {
+        "groups": 403,
+        "is_superuser": 403
+      },
+      "controls": {},
+      "expected": "both denied 403; groups unchanged",
+      "id": "H5",
+      "provenance": "GHSA-59xh-5vwx-4c4q / 06b2d5102 (groups vs fixed flags)",
+      "verdict": "refuted"
+    },
+    {
+      "actor_status": 403,
+      "controls": {
+        "admin_status": {
+          "expected": 200,
+          "held": true,
+          "status": 200
+        }
+      },
+      "expected": "member gated (403/404) or 200 with stats only, no user-scoped data",
+      "id": "H6",
+      "provenance": "81795bc93 bare-auth views (system status content)",
+      "verdict": "refuted"
+    }
+  ]
+}

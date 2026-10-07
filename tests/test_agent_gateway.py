@@ -139,13 +139,15 @@ class _FakeRestClient:
 
     def report_finding(self, api_key, arena_id, title, cwe=None, node=None, evidence=None,
                        path=None, param=None, payload=None, oast_token=None, poc=None,
-                       evidence_artifact_digests=None, transaction_digests=None):
+                       evidence_artifact_digests=None, transaction_digests=None,
+                       variant_of=None):
         self.calls.append(("report_finding", api_key, arena_id, title, cwe, node))
         self.last_finding = {"title": title, "cwe": cwe, "node": node, "evidence": evidence,
                              "path": path, "param": param, "payload": payload,
                              "oast_token": oast_token, "poc": poc,
                              "evidence_artifact_digests": evidence_artifact_digests,
-                             "transaction_digests": transaction_digests}
+                             "transaction_digests": transaction_digests,
+                             "variant_of": variant_of}
         return {"recorded": True, "finding_id": "abc123"}
 
     def announce_agent(self, api_key, arena_id, model, provider, stance=None):
@@ -369,11 +371,13 @@ def test_report_finding_forwards_verification_inputs():
     tools.report_finding(ctx, arena_id="a1", title="reflected XSS", cwe="CWE-79",
                          node="web", path="/search", param="q",
                          payload="<svg/onload=alert(1)>", oast_token="tok9",
-                         evidence_artifact_digests=["sha256:" + "a" * 64])
+                         evidence_artifact_digests=["sha256:" + "a" * 64],
+                         variant_of="rootid000001")
     f = ctx.client.last_finding
     assert f["path"] == "/search" and f["param"] == "q"
     assert f["payload"] == "<svg/onload=alert(1)>" and f["oast_token"] == "tok9"
     assert f["evidence_artifact_digests"] == ["sha256:" + "a" * 64]
+    assert f["variant_of"] == "rootid000001"
 
 
 def test_get_topology_returns_named_nodes():
@@ -821,3 +825,81 @@ def test_configurator_tools_proxy_rest_and_are_gated():
     # an attacker session cannot reach a configurator tool
     with pytest.raises(ToolNotAllowed):
         tools.run_setup_step(_ctx(stance=Stance.attacker), "a1", "web", "make")
+
+
+# --- research code-intel tools (operator stance only) ------------------------
+
+def _research_client_calls():
+    client = _FakeRestClient()
+    client.research_fix_lookup = lambda api_key, fix_ref, advisory_id=None: (
+        client.calls.append(("research_fix_lookup", api_key, fix_ref, advisory_id)) or
+        {"data": {"check_line": "added x"}, "digest": "d" * 64,
+         "truncation": {"truncated": False}, "provenance": {}})
+    client.research_layer_diff = lambda api_key, f, t, paths=None: (
+        client.calls.append(("research_layer_diff", api_key, f, t, paths)) or
+        {"data": {}, "digest": "e" * 64, "truncation": {"truncated": False},
+         "provenance": {}})
+    client.research_sibling_search = lambda api_key, pattern, ref=None, scope=None: (
+        client.calls.append(("research_sibling_search", api_key, pattern, ref, scope)) or
+        {"data": {}, "digest": "f" * 64, "truncation": {"truncated": False},
+         "provenance": {}})
+    return client
+
+
+def test_research_tools_are_operator_only():
+    assert {"research_fix_lookup", "research_layer_diff",
+            "research_sibling_search"} <= allowed_tools(Stance.operator)
+    assert not Session("k", Stance.attacker).can_use("research_fix_lookup")
+    assert not Session("k", Stance.defender).can_use("research_layer_diff")
+
+
+def test_research_tools_proxy_rest_and_trace(tmp_path):
+    ctx = _ctx(stance=Stance.operator, trace_dir=tmp_path,
+               client=_research_client_calls())
+    out = tools.research_fix_lookup(ctx, "abc123", advisory_id="GHSA-x")
+    assert out["digest"] == "d" * 64
+    tools.research_layer_diff(ctx, "v1", "v2")
+    tools.research_sibling_search(ctx, "bulk-permission")
+    kinds = {c[0] for c in ctx.client.calls}
+    assert {"research_fix_lookup", "research_layer_diff",
+            "research_sibling_search"} <= kinds
+    with pytest.raises(ToolNotAllowed):
+        tools.research_fix_lookup(_ctx(stance=Stance.attacker), "abc123")
+
+
+def test_research_rest_client_posts_bounded_paths():
+    from gateway.rest_client import RestClient
+
+    seen = []
+
+    class FakeHTTP:
+        def request(self, method, url, headers=None, json=None, timeout=None):
+            seen.append((method, url, json))
+            class Resp:
+                status_code = 200
+                content = b'{}'
+                def json(self):
+                    return {}
+            return Resp()
+
+    client = RestClient("http://orch:8000", http=FakeHTTP())
+    client.research_fix_lookup("k", "abc123", "GHSA-x")
+    client.research_layer_diff("k", "v1", "v2", ["src/documents/views.py"])
+    client.research_sibling_search("k", "bulk-permission")
+    assert seen[0] == ("POST", "http://orch:8000/research/code/fix-lookup",
+                       {"fix_ref": "abc123", "advisory_id": "GHSA-x"})
+    assert seen[1][0:2] == ("POST", "http://orch:8000/research/code/layer-diff")
+    assert seen[2][0:2] == ("POST", "http://orch:8000/research/code/sibling-search")
+    assert seen[2][2]["pattern"] == "bulk-permission"
+
+
+def test_operator_session_registers_research_tools():
+    import asyncio
+
+    from gateway.server import build_server
+
+    mcp = build_server(GatewayConfig(env={"NIDAVELLIR_STANCE": "operator",
+                                          "NIDAVELLIR_GATEWAY_HOST": "127.0.0.1"}))
+    names = {t.name for t in asyncio.run(mcp.list_tools())}
+    assert {"research_fix_lookup", "research_layer_diff",
+            "research_sibling_search"} <= names

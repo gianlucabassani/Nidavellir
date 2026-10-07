@@ -11,12 +11,13 @@ Before making material changes, read these sources in order:
 7. `git log` — when the sources above are silent or disagree with current code.
 
 Dynamic N-node Docker arenas, stance-scoped MCP gateways and HTTP transaction replay
-are implemented. NV-01–07 are complete: reproducible verification, target reset,
-confined PoC execution, durable budgets/stop, scoped access, independent authorization
-validation, durable paired evaluations and a two-class calibration library. Bughunt
-integration and record recovery remain planned. Docker-local is the
-implementation focus; OpenStack/AWS/libvirt drivers do not establish live provider
-support.
+are implemented. NV-01–08 and NV-10 are complete: reproducible verification, target
+reset, confined PoC execution, durable budgets/stop, scoped access, independent
+validation, durable paired evaluations, a two-class calibration library and encrypted
+record recovery. NV-09 completed its harness-agnostic BYO-agent workflow proof on
+2026-10-05: direct opencode + deepseek-v4.1-flash MCP runs and a paired regression are
+recorded in `docs/verification/`. Docker-local is the implementation focus;
+OpenStack/AWS/libvirt drivers do not establish live provider support.
 
 ## Stack / gotchas
 

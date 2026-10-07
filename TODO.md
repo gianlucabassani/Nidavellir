@@ -1,6 +1,6 @@
 # Nidavellir — ordered delivery checklist
 
-Updated 2026-09-26 after completing the NV-08 two-class calibration gate.
+Updated 2026-10-07 after the independent research audit and Phase 1 remediation.
 This is the canonical work queue. [ROADMAP.md](ROADMAP.md) retains product scope,
 design detail and legacy milestone mapping. Unchecked means unfinished.
 Verification history is in [docs/JOURNAL.md](docs/JOURNAL.md).
@@ -11,7 +11,8 @@ Build a professional local research and agent-testing platform: reproduce a targ
 give a human/BYO agent a contained research position, independently validate the result,
 reset and compare a changed agent or target. Docker-local is the first supported path.
 Discovery and evaluation both remain in scope; broader research features follow a
-demonstrated target need. Bughunt owns live bounty campaigns and their agent workflow.
+demonstrated target need. Any MCP-capable BYO client can use the scoped gateway; Bughunt
+is one example, not a dependency, and live bounty campaigns stay outside this platform.
 
 ## P0 — trustworthy research runtime
 
@@ -66,27 +67,37 @@ for both human and agent callers; API/GUI/MCP share the same service boundary.
   Pin model/scaffold/tools/config, target/version, initial state/seed, budgets and validators;
   resume or terminalize interrupted trials. Repeated paired trials report outcomes, false
   claims, requests, latency, available cost, uncertainty and infrastructure failures.
-  **Depends:** NV-02, NV-04, NV-06. **Accept:** compare builds A/B on matched conditions from
+  **Depends:** NV-02, NV-04, NV-06.   **Accept:** compare builds A/B on matched conditions from
   the GUI/API and explain a change without conflating broken infrastructure with agent failure.
+  *Closed 2026-10-06: model-driven paired suite complete (baseline full surface
+  vs candidate without report_finding, 3 seeds, verified difference −1, zero
+  infra-failed pairs, cost explicitly unavailable); NV07-R1 closed in ISSUES.md.*
 - [x] **NV-08 — Small dependable challenge library.** Begin with one resettable authorization
   fixture, then cover sessions/business logic, browser behavior and service faults as used.
   Version synthetic accounts/seed data, private truth, validators and leakage labels.
   **Depends:** NV-02, NV-06; grow alongside NV-07. **Accept:** repeated trials catch a known
   agent regression; public known-vulnerability fixtures are labeled calibration, not held-out
   capability evidence. Broad challenge intake is not a prerequisite for the first useful run.
-- [ ] **NV-09 — Bughunt integration and usefulness proof.** Scoped to bughunt's agentic
-  layer only (Hermes/Claude Code + MCP driving active testing, playbook choice, escalation
-  — BH-13/BH-14B/BH-15), not its deterministic pipelines (BH-01/03/04 enumeration/baseline/
-  worker/backup, which run independent of Nidavellir/Hermes by design, per bughunt D021).
-  Joint versioned test/evidence manifest with BH-13: target/scenario, build/tools, seed,
-  budgets, controls, observed outcomes, provenance and digests. Use synthetic identities,
-  never live bounty credentials/captures (bughunt D017).
+- [x] **NV-09 — BYO-agent workflow proof (harness-agnostic).** Any operator-selected
+  MCP client drives active testing through the scoped gateway — opencode, Claude Code,
+  Codex or Bughunt as one example; no client is a dependency. Nidavellir owns the pinned
+  target, budgets, controls, observation digests and independent validation. Versioned
+  test/evidence manifest: target/scenario, build/tools, seed, budgets, controls, observed
+  outcomes, provenance and digests. Use synthetic identities and calibration fixtures;
+  live campaign credentials/captures stay out of scope.
   **Depends:** NV-02–06 plus the first NV-08 fixture for a vertical run; NV-07 for durable
-  repeated comparisons. **Accept:** reproduce one bounty-agent workflow (e.g. bughunt's
-  synthetic-SPA vertical slice — two accounts, one owned object, one cross-account
-  comparison, one restart; broad autonomous crawling excluded), retain independently
-  validated evidence, reset, repeat with one agent change, and detect a seeded regression.
-  Record setup effort/reuse and whether this improves the operator's actual workflow.
+  repeated comparisons. **Accept:** reproduce one agent workflow (the synthetic-SPA
+  vertical slice — two accounts, one owned object, one cross-account comparison, one
+  restart; broad autonomous crawling excluded), retain independently validated evidence,
+  reset, repeat with one agent change, and detect a seeded regression. Record setup
+  effort/reuse and whether this improves the operator's actual workflow. First direct
+  runs (opencode + opencode-go/deepseek-v4.1-flash on the NV-06 and NV-09 fixtures) are
+  recorded in `docs/verification/byo-agent-*.json`. A paired run against the same SPA
+  fixture (baseline vs the same harness with the HTTP tool removed) detected the
+  regression: verified difference -1.0, two matched pairs, zero infrastructure-failed
+  pairs (`docs/verification/byo-agent-pair-2026-10-05-ce132ac4.json`). Closed after
+  operator review: setup reuses the pinned fixture and gate, and the paired result was
+  judged worth the operator's actual workflow.
 - [x] **NV-10 — Recover research and experiment records.** Versioned consistent backup and
   restore of research DB/events, scenarios/target manifests, evidence/transactions, traces,
   experiment records and protected encryption keys/configuration. Separate redacted sharing
@@ -98,13 +109,44 @@ for both human and agent callers; API/GUI/MCP share the same service boundary.
 work through the normal console/API. Use NV-09's evidence to decide expansion; preserve a
 focused maintenance scope if broader features do not improve actual research.
 
+## Audit remediation — phased before further research conclusions
+
+- [x] **Phase 1 — Code-intel correctness.** Bound Git output, disable configured
+  helpers and transports, report all cuts/incomplete counts, use owner-scoped AST
+  definitions and permission arguments, broaden manager queries, classify review
+  reasons. Acceptance: scratch regressions plus pinned release gate; evidence
+  `docs/verification/research-phase1-2026-10-07.json`. Does not establish exhaustion.
+- [x] **Phase 2 — Registration/execution correspondence (RESEARCH-R1/R4).** Committed
+  structured registration binds target, ordered IDs, executable request/control
+  definitions and probe/fixture/gate hashes; refusals precede fixture import.
+  Receipts retain both identities; M6 substitution and loaded-code/race regressions
+  pass. Contract: `docs/research/registration-contract.md`; verification:
+  `docs/verification/research-phase2-2026-10-07.json`. No historical chronology repair
+  or mail-control validity implied.
+- [ ] **Phase 3 — Isolation-valid probing (RESEARCH-R7).** Grant global permissions
+  while withholding object permission; prove allowed mutations with requester-owned
+  controls; test genuinely mixed batches with row-survival assertions; rerun into
+  new artifacts. Depends on Phase 2. (First application: Paperless mail round.)
+
+Accepted record: **no confirmed vulnerability under the tested conditions**;
+**12 retained hypotheses plus 9 asserted without per-probe evidence**. Historical
+artifacts stay unchanged. Coverage, historical gate/determinism/efficiency evidence,
+and code-intel audit/budget gaps remain open in ISSUES.md.
+
 ## P2 — research iteration driven by target needs
 
-- [ ] **NV-11 — Affected-versus-fixed replay.** Link a finding/PoC to exact vulnerable and
+- [x] **NV-11 — Affected-versus-fixed replay.** Link a finding/PoC to exact vulnerable and
   fixed versions and their configurations; compare effects and retain both evidence sets.
-  Extend existing Git diff/patch artifacts with targeted variant hypotheses.
+  Git-diff variant hypotheses move to the discovery-layer spec (operator sequencing,
+  2026-10-05).
   **Depends:** NV-02, NV-06, NV-10. **Accept:** reproduce a flaw and show its observed effect
   disappears on the fixed version under matching controls; unknown versions remain unknown.
+  Implemented: `variant_of` on both finding write paths and the MCP tool; the operator-only
+  `GET /findings/{finding_id}` group with a whitelisted target identity and evidence-derived
+  outcome. Live: CVE-2026-26012 confirmed on Vaultwarden 1.35.2 and refuted on 1.37.3, linked
+  into one `disappeared_under_controls` group
+  (`docs/verification/vaultwarden-live-2026-10-06-3eaf790a.json`); tests in
+  `tests/test_finding_variants.py` and `tests/test_http_access_control.py`.
 - [ ] **NV-12 — Fuzzing and crash triage when selected research needs it.** Bounded harness,
   corpus/seed and build identity, existing crash oracle, minimization, deduplication and
   reproducible crash bundle. **Depends:** NV-03–04, NV-06, NV-11.
@@ -118,7 +160,7 @@ focused maintenance scope if broader features do not improve actual research.
   deduplicate findings by affected identity, track version/fix/disclosure state and generate
   sanitized reproducible output. **Depends:** NV-10–11.
   **Accept:** trace one finding across versions and produce a reviewable disclosure bundle;
-  do not duplicate Bughunt's live bounty scope/scouting/credential management.
+  live bounty scope/scouting/credential management stay outside this platform.
 - [ ] **NV-15 — Held-out proof and optional active episodes.** Build private challenges from
   confirmed research findings with truth withheld; repeated trials, leakage policy, build
   identity and uncertainty. Add staged releases or LLM-app targets when used by the agent
@@ -132,6 +174,21 @@ Cloud provider parity, hosted multi-tenancy/SSO/billing, broad public leaderboar
 multi-agent red-vs-blue, defender scoring and VNC remain deferred. Local VM work is NV-13
 and requires a selected research target; cloud apply is not its prerequisite. No GPU-heavy
 workloads or local model training are required for the personal Docker path.
+
+## Separate track: operator UI
+
+UI, console and aesthetic work is **off the main delivery order** and out of the research
+and evaluation passes. It lives on its own branch, `ui/royal-command` (1 commit; 30 behind
+`main` — merge `main` in before resuming). Belongs to that track, not to a research pass:
+
+- the console rebuild described in [`docs/UI_REBUILD_PLAN.md`](docs/UI_REBUILD_PLAN.md);
+- the deferred human view for the research code-intel tools — a console page over
+  `POST /research/code/*`, which currently exposes REST JSON as the operator view.
+
+Rules: a research or evaluation pass does not include UI work; when a pass needs a human
+view it uses the existing REST/JSON output. No NV id is assigned to UI work and none
+should be added until the track is explicitly scheduled. Backend changes required by the
+UI stay limited to the presentation/BFF contract that exposes existing data and actions.
 
 ## Implemented foundations — preserve, then reverify
 

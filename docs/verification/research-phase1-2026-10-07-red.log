@@ -1,0 +1,260 @@
+FFFFFFFFFFFFF                                                            [100%]
+=================================== FAILURES ===================================
+___________________ test_byte_cut_reports_incomplete_counts ____________________
+
+scratch = PosixPath('/tmp/pytest-of-prime/pytest-11/test_byte_cut_reports_incomple0')
+
+    def test_byte_cut_reports_incomplete_counts(scratch):
+        old = commit(scratch, "# " + "x" * 70000 + "\n")
+        new = commit(scratch, "# " + "y" * 70000 +
+                     "\npermission_classes = (IsAuthenticated,)\n")
+        result = code.layer_diff(scratch, old, new, ["views.py"])
+>       assert result["truncation"]["truncated"]
+E       assert False
+
+tests/test_research_code_hardening.py:37: AssertionError
+_______________ test_external_diff_and_textconv_helpers_disabled _______________
+
+scratch = PosixPath('/tmp/pytest-of-prime/pytest-11/test_external_diff_and_textcon0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f50424963f0>
+
+    def test_external_diff_and_textconv_helpers_disabled(scratch, monkeypatch):
+        old = commit(scratch, "x = 1\n")
+        new = commit(scratch, "x = 2\n")
+        marker = scratch / "executed"
+        helper = scratch / "helper"
+        helper.write_text(f"#!/bin/sh\nprintf executed > '{marker}'\n")
+        helper.chmod(0o700)
+        git(scratch, "config", "diff.external", str(helper))
+        git(scratch, "config", "diff.hostile.textconv", str(helper))
+        (scratch / ".gitattributes").write_text("*.py diff=hostile\n")
+        monkeypatch.setenv("GIT_EXTERNAL_DIFF", str(helper))
+        result = code.layer_diff(scratch, old, new, ["views.py"])
+>       assert not marker.exists()
+E       AssertionError: assert not True
+E        +  where True = exists()
+E        +    where exists = PosixPath('/tmp/pytest-of-prime/pytest-11/test_external_diff_and_textcon0/executed').exists
+
+tests/test_research_code_hardening.py:54: AssertionError
+___________________ test_subprocess_output_bounded_in_bytes ____________________
+
+scratch = PosixPath('/tmp/pytest-of-prime/pytest-11/test_subprocess_output_bounded0')
+
+    def test_subprocess_output_bounded_in_bytes(scratch):
+        commit(scratch, "# " + "é" * 100000 + "\n")
+        out = code.run_git(scratch, "show", "HEAD:views.py")
+>       assert out.truncated
+               ^^^^^^^^^^^^^
+E       AttributeError: 'str' object has no attribute 'truncated'
+
+tests/test_research_code_hardening.py:63: AttributeError
+______________ test_missing_object_cannot_launch_promisor_helper _______________
+
+scratch = PosixPath('/tmp/pytest-of-prime/pytest-11/test_missing_object_cannot_lau0')
+
+    def test_missing_object_cannot_launch_promisor_helper(scratch):
+        commit(scratch, "x = 1\n")
+        blob = git(scratch, "rev-parse", "HEAD:views.py")
+        marker = scratch / "fetch-executed"
+        helper = scratch / "fetch-helper"
+        helper.write_text(f"#!/bin/sh\nprintf executed > '{marker}'\n")
+        helper.chmod(0o700)
+        git(scratch, "config", "remote.origin.promisor", "true")
+        git(scratch, "config", "remote.origin.url", f"ext::{helper}")
+        git(scratch, "config", "protocol.ext.allow", "always")
+        (scratch / ".git/objects" / blob[:2] / blob[2:]).unlink()
+        with pytest.raises(code.ResearchCodeError):
+            code.run_git(scratch, "show", "HEAD:views.py")
+>       assert not marker.exists()
+E       AssertionError: assert not True
+E        +  where True = exists()
+E        +    where exists = PosixPath('/tmp/pytest-of-prime/pytest-11/test_missing_object_cannot_lau0/fetch-executed').exists
+
+tests/test_research_code_hardening.py:80: AssertionError
+__________________ test_same_method_names_do_not_share_guards __________________
+
+scratch = PosixPath('/tmp/pytest-of-prime/pytest-11/test_same_method_names_do_not_0')
+
+    def test_same_method_names_do_not_share_guards(scratch):
+        commit(scratch, """class A:
+        def get(self):
+            permitted_object_ids(user, objects)
+            return Thing.objects.filter(owner=user)
+    class B:
+        def get(self):
+            return Thing.objects.filter(secret=True)
+    """)
+        sites = search(scratch, "unscoped-queryset")["data"]["sites"]
+>       assert sites[0]["status"] != sites[1]["status"]
+E       AssertionError: assert 'covered' != 'covered'
+
+tests/test_research_code_hardening.py:93: AssertionError
+_ test_irrelevant_or_dynamic_global_check_not_composed[user.has_perm('unrelated.change_other')] _
+
+scratch = PosixPath('/tmp/pytest-of-prime/pytest-11/test_irrelevant_or_dynamic_glo0')
+global_check = "user.has_perm('unrelated.change_other')"
+
+    @pytest.mark.parametrize("global_check", [
+        "user.has_perm('unrelated.change_other')",
+        "user.has_perm('documents.view_thing')",  # wrong verb
+        "user.has_perm(variable)",
+    ])
+    def test_irrelevant_or_dynamic_global_check_not_composed(scratch, global_check):
+        commit(scratch, f"""class View:
+        permission_classes = (IsAuthenticated,)
+        def update(self):
+            if not {global_check}:
+                raise Denied()
+            return has_perms_owner_aware(user, 'change_thing', thing)
+    """)
+        site = search(scratch, "half-composed-check")["data"]["sites"][0]
+>       assert site["status"] != "composed"
+E       AssertionError: assert 'composed' != 'composed'
+
+tests/test_research_code_hardening.py:111: AssertionError
+_ test_irrelevant_or_dynamic_global_check_not_composed[user.has_perm('documents.view_thing')] _
+
+scratch = PosixPath('/tmp/pytest-of-prime/pytest-11/test_irrelevant_or_dynamic_glo1')
+global_check = "user.has_perm('documents.view_thing')"
+
+    @pytest.mark.parametrize("global_check", [
+        "user.has_perm('unrelated.change_other')",
+        "user.has_perm('documents.view_thing')",  # wrong verb
+        "user.has_perm(variable)",
+    ])
+    def test_irrelevant_or_dynamic_global_check_not_composed(scratch, global_check):
+        commit(scratch, f"""class View:
+        permission_classes = (IsAuthenticated,)
+        def update(self):
+            if not {global_check}:
+                raise Denied()
+            return has_perms_owner_aware(user, 'change_thing', thing)
+    """)
+        site = search(scratch, "half-composed-check")["data"]["sites"][0]
+>       assert site["status"] != "composed"
+E       AssertionError: assert 'composed' != 'composed'
+
+tests/test_research_code_hardening.py:111: AssertionError
+_ test_irrelevant_or_dynamic_global_check_not_composed[user.has_perm(variable)] _
+
+scratch = PosixPath('/tmp/pytest-of-prime/pytest-11/test_irrelevant_or_dynamic_glo2')
+global_check = 'user.has_perm(variable)'
+
+    @pytest.mark.parametrize("global_check", [
+        "user.has_perm('unrelated.change_other')",
+        "user.has_perm('documents.view_thing')",  # wrong verb
+        "user.has_perm(variable)",
+    ])
+    def test_irrelevant_or_dynamic_global_check_not_composed(scratch, global_check):
+        commit(scratch, f"""class View:
+        permission_classes = (IsAuthenticated,)
+        def update(self):
+            if not {global_check}:
+                raise Denied()
+            return has_perms_owner_aware(user, 'change_thing', thing)
+    """)
+        site = search(scratch, "half-composed-check")["data"]["sites"][0]
+>       assert site["status"] != "composed"
+E       AssertionError: assert 'composed' != 'composed'
+
+tests/test_research_code_hardening.py:111: AssertionError
+______________ test_matching_enforced_global_argument_is_composed ______________
+
+scratch = PosixPath('/tmp/pytest-of-prime/pytest-11/test_matching_enforced_global_0')
+
+    def test_matching_enforced_global_argument_is_composed(scratch):
+        commit(scratch, """class View:
+        permission_classes = (IsAuthenticated,)
+        def update(self):
+            if not user.has_perms(['documents.change_thing']):
+                raise Denied()
+            return has_perms_owner_aware(user, 'change_thing', thing)
+    """)
+>       assert search(scratch, "half-composed-check")["data"]["sites"][0]["status"] == "composed"
+E       AssertionError: assert 'not composed' == 'composed'
+E         
+E         - composed
+E         + not composed
+E         ? ++++
+
+tests/test_research_code_hardening.py:123: AssertionError
+______________ test_unused_permission_call_does_not_guard_action _______________
+
+scratch = PosixPath('/tmp/pytest-of-prime/pytest-11/test_unused_permission_call_do0')
+
+    def test_unused_permission_call_does_not_guard_action(scratch):
+        commit(scratch, """class View:
+        permission_classes = (IsAuthenticated,)
+        @action(methods=['get'])
+        def exposed(self):
+            user.has_perm('documents.view_thing')
+            return secrets()
+    """)
+>       assert search(scratch, "unguarded-verb")["data"]["sites"][0]["status"] == "not composed"
+E       AssertionError: assert 'composed' == 'not composed'
+E         
+E         - not composed
+E         ? ----
+E         + composed
+
+tests/test_research_code_hardening.py:134: AssertionError
+_______________ test_queryset_forms_and_overwrite_are_classified _______________
+
+scratch = PosixPath('/tmp/pytest-of-prime/pytest-11/test_queryset_forms_and_overwr0')
+
+    def test_queryset_forms_and_overwrite_are_classified(scratch):
+        commit(scratch, """def bare():
+        a = Thing.objects.all()
+        b = Thing.objects.get(pk=1)
+        return Thing.objects.exclude(owner=user)
+    def bulk():
+        has_perms = user.has_perm('documents.change_thing')
+        has_perms = user_is_owner_of_all_documents
+        has_perms = has_perms and owner_check
+        has_perms = False
+    """)
+>       assert search(scratch, "unscoped-queryset")["data"]["total_matches"] == 3
+E       assert 0 == 3
+
+tests/test_research_code_hardening.py:148: AssertionError
+____________________ test_field_and_envelope_cuts_reported _____________________
+
+scratch = PosixPath('/tmp/pytest-of-prime/pytest-11/test_field_and_envelope_cuts_r0')
+
+    def test_field_and_envelope_cuts_reported(scratch):
+        commit(scratch, "def bare():\n    return Thing.objects.filter(" +
+               "name='" + "x" * 300 + "')\n")
+        result = search(scratch, "unscoped-queryset")
+>       assert result["truncation"]["truncated"]
+E       assert False
+
+tests/test_research_code_hardening.py:159: AssertionError
+_________________ test_unconfigured_repo_never_defaults_to_cwd _________________
+
+scratch = PosixPath('/tmp/pytest-of-prime/pytest-11/test_unconfigured_repo_never_d0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f504228cd60>
+
+    def test_unconfigured_repo_never_defaults_to_cwd(scratch, monkeypatch):
+        commit(scratch, "x = 1\n")
+        monkeypatch.chdir(scratch)
+        monkeypatch.delenv("RESEARCH_REPO_DIR", raising=False)
+>       with pytest.raises(code.ResearchCodeError, match="not provisioned"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ResearchCodeError
+
+/home/prime/Projects/Nidavellir/tests/test_research_code_hardening.py:168: Failed
+=========================== short test summary info ============================
+FAILED tests/test_research_code_hardening.py::test_byte_cut_reports_incomplete_counts
+FAILED tests/test_research_code_hardening.py::test_external_diff_and_textconv_helpers_disabled
+FAILED tests/test_research_code_hardening.py::test_subprocess_output_bounded_in_bytes
+FAILED tests/test_research_code_hardening.py::test_missing_object_cannot_launch_promisor_helper
+FAILED tests/test_research_code_hardening.py::test_same_method_names_do_not_share_guards
+FAILED tests/test_research_code_hardening.py::test_irrelevant_or_dynamic_global_check_not_composed[user.has_perm('unrelated.change_other')]
+FAILED tests/test_research_code_hardening.py::test_irrelevant_or_dynamic_global_check_not_composed[user.has_perm('documents.view_thing')]
+FAILED tests/test_research_code_hardening.py::test_irrelevant_or_dynamic_global_check_not_composed[user.has_perm(variable)]
+FAILED tests/test_research_code_hardening.py::test_matching_enforced_global_argument_is_composed
+FAILED tests/test_research_code_hardening.py::test_unused_permission_call_does_not_guard_action
+FAILED tests/test_research_code_hardening.py::test_queryset_forms_and_overwrite_are_classified
+FAILED tests/test_research_code_hardening.py::test_field_and_envelope_cuts_reported
+FAILED tests/test_research_code_hardening.py::test_unconfigured_repo_never_defaults_to_cwd
+13 failed in 0.52s

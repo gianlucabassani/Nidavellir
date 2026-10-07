@@ -260,6 +260,58 @@ def import_scenario(ctx: GatewayContext, spec, scenario_id: str | None = None,
     return res
 
 
+def research_fix_lookup(ctx: GatewayContext, fix_ref: str,
+                        advisory_id: str | None = None) -> dict:
+    """Read-only fix-commit intel: patch facts + one-line check summary for a
+    pinned-repo fix commit (proxies POST /research/code/fix-lookup).
+    Operator-only."""
+    _guard(ctx, "research_fix_lookup")
+    try:
+        res = ctx.client.research_fix_lookup(
+            ctx.session.api_key, fix_ref, advisory_id)
+    except Exception:
+        _trace(ctx, "research_fix_lookup", {"fix_ref": fix_ref}, ok=False)
+        raise
+    _trace(ctx, "research_fix_lookup",
+           {"fix_ref": fix_ref, "digest": (res or {}).get("digest")}, ok=True)
+    return res
+
+
+def research_layer_diff(ctx: GatewayContext, from_ref: str, to_ref: str,
+                        paths: list | None = None) -> dict:
+    """Read-only permission-call delta between two pins (proxies POST
+    /research/code/layer-diff). Operator-only."""
+    _guard(ctx, "research_layer_diff")
+    try:
+        res = ctx.client.research_layer_diff(
+            ctx.session.api_key, from_ref, to_ref, paths)
+    except Exception:
+        _trace(ctx, "research_layer_diff",
+               {"from_ref": from_ref, "to_ref": to_ref}, ok=False)
+        raise
+    _trace(ctx, "research_layer_diff",
+           {"from_ref": from_ref, "to_ref": to_ref,
+            "digest": (res or {}).get("digest")}, ok=True)
+    return res
+
+
+def research_sibling_search(ctx: GatewayContext, pattern: str,
+                            ref: str | None = None,
+                            path_scope: list | None = None) -> dict:
+    """Read-only named-pattern call-site search with composition status
+    (proxies POST /research/code/sibling-search). Operator-only."""
+    _guard(ctx, "research_sibling_search")
+    try:
+        res = ctx.client.research_sibling_search(
+            ctx.session.api_key, pattern, ref, path_scope)
+    except Exception:
+        _trace(ctx, "research_sibling_search", {"pattern": pattern}, ok=False)
+        raise
+    _trace(ctx, "research_sibling_search",
+           {"pattern": pattern, "digest": (res or {}).get("digest")}, ok=True)
+    return res
+
+
 def destroy_arena(ctx: GatewayContext, arena_id: str) -> dict:
     _guard(ctx, "destroy_arena")
     res = ctx.client.destroy(ctx.session.api_key, arena_id)
@@ -657,6 +709,7 @@ def report_finding(
     poc: str | None = None,
     evidence_artifact_digests: list[str] | None = None,
     transaction_digests: list[str] | None = None,
+    variant_of: str | None = None,
 ) -> dict:
     """Report a discovered vulnerability. The engagement goal is to DISCOVER the
     arena's known weaknesses; this records your finding for scoring. Pass the
@@ -678,7 +731,7 @@ def report_finding(
             ctx.session.api_key, arena_id, title, cwe=cwe, node=node, evidence=evidence,
             path=path, param=param, payload=payload, oast_token=oast_token, poc=poc,
             evidence_artifact_digests=evidence_artifact_digests,
-            transaction_digests=transaction_digests,
+            transaction_digests=transaction_digests, variant_of=variant_of,
         )
     except Exception:
         _trace(ctx, "report_finding", trace_args, ok=False, arena_id=arena_id)

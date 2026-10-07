@@ -19,7 +19,7 @@
   <div class="card-head"><h2>Paired differences</h2><span class="spacer"></span><span class="label">Candidate − baseline</span></div>
   <div class="table-wrap"><table><thead><tr><th>Metric</th><th>Mean difference</th><th>Matched pairs</th><th>Bootstrap 95%</th><th>Interval status</th></tr></thead><tbody>
     {% for metric, value in record.comparison.differences.items() %}
-    <tr><td>{{ metric|replace('_', ' ')|title }}</td><td class="mono">{{ value.mean if value.mean is not none else 'Unknown' }}</td><td>{{ value.pairs }}</td><td class="mono">{{ value.bootstrap_95 or 'Unknown' }}</td><td><span class="badge {{ 'badge--ok' if value.interval_status == 'supported' else 'badge--idle' }}">{{ value.interval_status or 'unlabelled' }}</span></td></tr>
+    <tr><td>{{ metric|replace('_', ' ')|title }}</td><td class="mono">{{ value.mean if value.mean is not none else 'Unknown' }}</td><td>{{ value.pairs }}</td><td class="mono">{{ value.bootstrap_95 or 'Unknown' }}</td><td><span class="badge {{ 'badge--ok' if value.interval_status == 'supported' else 'badge--idle' }}">{{ value.interval_status or 'unlabelled' }}</span>{% if value.note %}<div class="muted">{{ value.note }}</div>{% endif %}</td></tr>
     {% endfor %}
   </tbody></table></div>
   <div class="eval-table-foot">A constant difference is <code>degenerate</code>, not a supported uncertainty interval. Observed verified range: {{ record.comparison.verified_difference_range or 'Unknown' }}.</div>

@@ -57,6 +57,17 @@ No remaining blocker was found in the focused correction review.
   integration deselections require live Docker or OpenTofu.
 - `git diff --check` passed.
 
+## Reconciliation with current main
+
+PR #2 initially conflicted because the UI and research branches had diverged.
+Merging `main` (`2f3b2a0`) required resolution only in ISSUES and JOURNAL. All
+entries from both branches were retained. The reviewed BFF, browser component
+and WebUI tests are unchanged. The combined-tree pinned release gate passed:
+SQLite **1094 passed, 4 skipped, 6 deselected**; PostgreSQL **1098 passed,
+6 deselected**; clean Ruff/Bandit and migration/API/UI/gateway smoke. TypeScript,
+Prettier and Vite passed. The UI diff against main passes whitespace checks;
+existing main evidence logs were retained verbatim.
+
 ## Remaining boundary
 
 UI-R1 stays open: setup command output, custom topology authoring and non-Docker

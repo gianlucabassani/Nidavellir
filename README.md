@@ -61,6 +61,12 @@ its engagement becomes a **read-only record**: no live actions and no stale clai
 nodes, but findings, evidence, score, and trace stay reviewable — evidence outlives the
 infrastructure it came from.
 
+Findings can be linked across arenas with one field (`variant_of`). The operator-only
+`GET /findings/{id}` group read then shows each target's pinned identity and independently
+validated verdict side by side, and states — only when the evidence supports it — that a
+confirmed effect disappeared on the fixed target under matched controls. Unknown versions
+stay unknown.
+
 The **PoC** tab runs Python in disposable, resource-limited Docker helpers. Choose
 one target for HTTP(S) through `nidavellir.request("/path")`, or leave the job
 networkless. Explicitly selected transfer files are copied into `/workspace/input`;
@@ -159,7 +165,10 @@ NV-02–05 regression gates on 2026-09-24. NV-07 durable paired experiments comp
 their pinned release and isolated Docker live gates on 2026-09-25. NV-08's
 two-class calibration library and five-seed regression gate passed on 2026-09-26.
 NV-10 encrypted record recovery passed its release and clean-install Docker-local
-restore gates on 2026-09-27; NV-09 Bughunt integration remains open.
+restore gates on 2026-09-27. NV-09 completed its direct-harness BYO-agent
+acceptance on 2026-10-05: the first opencode + deepseek-v4.1-flash MCP runs
+passed independent validation, and a paired run detected the seeded
+tool-removal regression with zero infrastructure-failed pairs.
 
 | Stage | Focus | Status |
 |---|---|---|
@@ -168,7 +177,7 @@ restore gates on 2026-09-27; NV-09 Bughunt integration remains open.
 | **Console architecture** | Engagements, Evaluations, Library, Activity, unified creation, contextual workspace and SSE | ✅ shipped |
 | **Research-ready runtime** | NV-01–05 complete on Docker-local; unsupported model token/cost hard caps are explicit | ✅ complete |
 | **Discovery lane** | Patch-diff & variant hunting, fuzzing + crash triage, binary/appliance/VM intake, campaigns & disclosure output | ◻ planned |
-| **Evaluation workbench** | NV-06–08 independent validation, durable paired trials and a two-class calibration library plus NV-10 recovery shipped; NV-09 Bughunt proof remains | 🟢 partially shipped |
+| **Evaluation workbench** | NV-06–10 independent validation, durable paired trials, a two-class calibration library, recovery and the NV-09 BYO-agent proof shipped | 🟢 partially shipped |
 | **Held-out proof** | A real vulnerability found and proven on-platform; then a comparison over challenges drawn from that work | ◻ planned |
 | **Deferred** | OAuth/multi-tenancy, live cloud/VM providers, purple-team, VNC and hosted-product concerns | ◻ deferred |
 
