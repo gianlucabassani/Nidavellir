@@ -1,0 +1,98 @@
+{
+  "date": "2026-10-07",
+  "historical_verification_tree_before": "e6efdf8d65e61481e7202c7cf9dc91d527559c19",
+  "limits": [
+    "Gate proves committed executable correspondence, not security of arbitrary local operator Python",
+    "Recorded IDs include setup failure rows, not a claim every probe executed",
+    "Historical journal chronology and refutation labels are not repaired",
+    "Phase3 classifiers and fixture grants are unchanged"
+  ],
+  "remaining": [
+    "Phase3 global mail grants, allowed mutation controls, mixed M5 row-state assertions and new preregistered run",
+    "Fixture containment/resource ownership and comparison provenance from review plan",
+    "All-nine-fix rule coverage, historical missing evidence and authoring audit/budgets"
+  ],
+  "schema": "nidavellir/research-phase2-verification/v1",
+  "scope": "Phase 2 registration/execution correspondence only; no target experiment or fixture stack ran",
+  "source_head_before": "9e9a961918fde637be366d18b30d8db77118c5ad",
+  "source_sha256": {
+    "cyber-range/fixtures/paperless/build_fixture.py": "b701744c6f9ef17273dbd411868df33121f5a0bb43a943682f80ccc218b5d483",
+    "cyber-range/services/scenario-orchestrator/research_code.py": "dddc8ffc130e12c4d29f02d7f176ae9d47e4213e06999fc56dd79db0a76ac6e1",
+    "scripts/probe-paperless-variants.py": "a0aa52504576caec6239ee82c2d97269e056a476924f71337913e9299c996fdf",
+    "scripts/research_registration.py": "5f683face77508f9c9b3f6b5de1c038c8d118bd4373a8b20e0313a785d0bcf58",
+    "tests/test_probe_prereg.py": "8690d298f03a01482652b190df1bcbb92399b266d1d053727a5986a02fa5ec86"
+  },
+  "verification": {
+    "candidate": {
+      "artifact": "research-phase2-2026-10-07-candidate.json",
+      "hypothesis_ids": [
+        "H1",
+        "H2",
+        "H3",
+        "H4",
+        "H5",
+        "H6",
+        "M1",
+        "M2",
+        "M3",
+        "M4",
+        "M5",
+        "M6"
+      ],
+      "purpose": "demonstration only, not an empirical run registration",
+      "sha256": "06846c2ebd262bde6a881e26b9175106e9a2bf53441070dc0337f6e209fc635c"
+    },
+    "historical_evidence_unchanged": true,
+    "host_focused": {
+      "authority": "supplementary unpinned host only",
+      "log": "research-phase2-2026-10-07-focused.log",
+      "passed": 29
+    },
+    "independent_review": "Read-only reviewer reproduced and confirmed refusal for both source reread and stale-wrapper omissions; final29 tests passed; no remaining correspondence findings",
+    "regression_red": {
+      "bytecode-red": {
+        "log": "research-phase2-2026-10-07-bytecode-red.log",
+        "summary": "1 failed, 24 deselected in 0.17s"
+      },
+      "race-red": {
+        "log": "research-phase2-2026-10-07-race-red.log",
+        "summary": "2 failed, 19 deselected in 0.37s"
+      },
+      "red": {
+        "log": "research-phase2-2026-10-07-red.log",
+        "summary": "18 failed, 1 passed in 0.44s"
+      },
+      "review-red": {
+        "log": "research-phase2-2026-10-07-review-red.log",
+        "summary": "1 failed, 25 deselected in 0.19s"
+      },
+      "target-red": {
+        "log": "research-phase2-2026-10-07-target-red.log",
+        "summary": "2 failed, 26 deselected in 0.16s"
+      },
+      "wrapper-red": {
+        "log": "research-phase2-2026-10-07-wrapper-red.log",
+        "summary": "1 failed, 28 deselected in 0.13s"
+      }
+    },
+    "release_check": {
+      "bandit_high": 0,
+      "bandit_medium": 0,
+      "command": "make release-check",
+      "exit_code": 0,
+      "log": "research-phase2-2026-10-07-release.log",
+      "postgresql": {
+        "deselected": 6,
+        "passed": 1059
+      },
+      "python": "3.11.14",
+      "ruff": "passed",
+      "smoke": "migrations, API, UI and gateway ready",
+      "sqlite": {
+        "deselected": 6,
+        "passed": 1055,
+        "skipped": 4
+      }
+    }
+  }
+}

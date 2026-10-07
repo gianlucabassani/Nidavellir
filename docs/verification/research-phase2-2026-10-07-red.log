@@ -1,0 +1,431 @@
+FFFFFFFFFFFFFFF.FFF                                                      [100%]
+=================================== FAILURES ===================================
+______________________ test_substrings_do_not_bind_a_run _______________________
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_substrings_do_not_bind_a_0/history')
+
+    def test_substrings_do_not_bind_a_run(repo):
+        (repo / "docs/JOURNAL.md").write_text("mail-hunt elsewhere\nhypotheses: CSS layout only\n")
+        sha = _commit(repo)
+>       with pytest.raises(SystemExit, match="registration"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE SystemExit
+
+tests/test_probe_prereg.py:65: Failed
+----------------------------- Captured stdout call -----------------------------
+pre-registration 6f5860a68122 verified (ancestor, round 'mail-hunt' block present)
+___________________ test_valid_registration_retains_identity ___________________
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_valid_registration_retain0/history')
+
+    def test_valid_registration_retains_identity(repo):
+>       sha = _register(repo)
+              ^^^^^^^^^^^^^^^
+
+tests/test_probe_prereg.py:70: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_probe_prereg.py:55: in _register
+    data = _registration(repo) if data is None else data
+           ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_valid_registration_retain0/history')
+
+    def _registration(repo):
+        # The candidate is reviewed/committed before a later call can execute it.
+>       assert hasattr(probe, "registration_candidate"), "structured registration is missing"
+E       AssertionError: structured registration is missing
+E       assert False
+E        +  where False = hasattr(probe, 'registration_candidate')
+
+tests/test_probe_prereg.py:50: AssertionError
+_______________ test_registration_field_mismatch_refused[target] _______________
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_registration_field_mismat0/history')
+field = 'target'
+
+    @pytest.mark.parametrize("field", ["target", "hypotheses", "sources", "round_tag", "schema"])
+    def test_registration_field_mismatch_refused(repo, field):
+>       data = _registration(repo)
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/test_probe_prereg.py:80: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_registration_field_mismat0/history')
+
+    def _registration(repo):
+        # The candidate is reviewed/committed before a later call can execute it.
+>       assert hasattr(probe, "registration_candidate"), "structured registration is missing"
+E       AssertionError: structured registration is missing
+E       assert False
+E        +  where False = hasattr(probe, 'registration_candidate')
+
+tests/test_probe_prereg.py:50: AssertionError
+_____________ test_registration_field_mismatch_refused[hypotheses] _____________
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_registration_field_mismat1/history')
+field = 'hypotheses'
+
+    @pytest.mark.parametrize("field", ["target", "hypotheses", "sources", "round_tag", "schema"])
+    def test_registration_field_mismatch_refused(repo, field):
+>       data = _registration(repo)
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/test_probe_prereg.py:80: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_registration_field_mismat1/history')
+
+    def _registration(repo):
+        # The candidate is reviewed/committed before a later call can execute it.
+>       assert hasattr(probe, "registration_candidate"), "structured registration is missing"
+E       AssertionError: structured registration is missing
+E       assert False
+E        +  where False = hasattr(probe, 'registration_candidate')
+
+tests/test_probe_prereg.py:50: AssertionError
+______________ test_registration_field_mismatch_refused[sources] _______________
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_registration_field_mismat2/history')
+field = 'sources'
+
+    @pytest.mark.parametrize("field", ["target", "hypotheses", "sources", "round_tag", "schema"])
+    def test_registration_field_mismatch_refused(repo, field):
+>       data = _registration(repo)
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/test_probe_prereg.py:80: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_registration_field_mismat2/history')
+
+    def _registration(repo):
+        # The candidate is reviewed/committed before a later call can execute it.
+>       assert hasattr(probe, "registration_candidate"), "structured registration is missing"
+E       AssertionError: structured registration is missing
+E       assert False
+E        +  where False = hasattr(probe, 'registration_candidate')
+
+tests/test_probe_prereg.py:50: AssertionError
+_____________ test_registration_field_mismatch_refused[round_tag] ______________
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_registration_field_mismat3/history')
+field = 'round_tag'
+
+    @pytest.mark.parametrize("field", ["target", "hypotheses", "sources", "round_tag", "schema"])
+    def test_registration_field_mismatch_refused(repo, field):
+>       data = _registration(repo)
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/test_probe_prereg.py:80: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_registration_field_mismat3/history')
+
+    def _registration(repo):
+        # The candidate is reviewed/committed before a later call can execute it.
+>       assert hasattr(probe, "registration_candidate"), "structured registration is missing"
+E       AssertionError: structured registration is missing
+E       assert False
+E        +  where False = hasattr(probe, 'registration_candidate')
+
+tests/test_probe_prereg.py:50: AssertionError
+_______________ test_registration_field_mismatch_refused[schema] _______________
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_registration_field_mismat4/history')
+field = 'schema'
+
+    @pytest.mark.parametrize("field", ["target", "hypotheses", "sources", "round_tag", "schema"])
+    def test_registration_field_mismatch_refused(repo, field):
+>       data = _registration(repo)
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/test_probe_prereg.py:80: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_registration_field_mismat4/history')
+
+    def _registration(repo):
+        # The candidate is reviewed/committed before a later call can execute it.
+>       assert hasattr(probe, "registration_candidate"), "structured registration is missing"
+E       AssertionError: structured registration is missing
+E       assert False
+E        +  where False = hasattr(probe, 'registration_candidate')
+
+tests/test_probe_prereg.py:50: AssertionError
+___________ test_registered_m6_trash_is_not_executed_account_detail ____________
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_registered_m6_trash_is_no0/history')
+
+    def test_registered_m6_trash_is_not_executed_account_detail(repo):
+>       data = _registration(repo)
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/test_probe_prereg.py:88: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_registered_m6_trash_is_no0/history')
+
+    def _registration(repo):
+        # The candidate is reviewed/committed before a later call can execute it.
+>       assert hasattr(probe, "registration_candidate"), "structured registration is missing"
+E       AssertionError: structured registration is missing
+E       assert False
+E        +  where False = hasattr(probe, 'registration_candidate')
+
+tests/test_probe_prereg.py:50: AssertionError
+_ test_uncommitted_executable_drift_refused[scripts/probe-paperless-variants.py] _
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_uncommitted_executable_dr0/history')
+name = 'scripts/probe-paperless-variants.py'
+
+    @pytest.mark.parametrize("name", FILES)
+    def test_uncommitted_executable_drift_refused(repo, name):
+>       sha = _register(repo)
+              ^^^^^^^^^^^^^^^
+
+tests/test_probe_prereg.py:100: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_probe_prereg.py:55: in _register
+    data = _registration(repo) if data is None else data
+           ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_uncommitted_executable_dr0/history')
+
+    def _registration(repo):
+        # The candidate is reviewed/committed before a later call can execute it.
+>       assert hasattr(probe, "registration_candidate"), "structured registration is missing"
+E       AssertionError: structured registration is missing
+E       assert False
+E        +  where False = hasattr(probe, 'registration_candidate')
+
+tests/test_probe_prereg.py:50: AssertionError
+_ test_uncommitted_executable_drift_refused[scripts/research_registration.py] __
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_uncommitted_executable_dr1/history')
+name = 'scripts/research_registration.py'
+
+    @pytest.mark.parametrize("name", FILES)
+    def test_uncommitted_executable_drift_refused(repo, name):
+>       sha = _register(repo)
+              ^^^^^^^^^^^^^^^
+
+tests/test_probe_prereg.py:100: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_probe_prereg.py:55: in _register
+    data = _registration(repo) if data is None else data
+           ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_uncommitted_executable_dr1/history')
+
+    def _registration(repo):
+        # The candidate is reviewed/committed before a later call can execute it.
+>       assert hasattr(probe, "registration_candidate"), "structured registration is missing"
+E       AssertionError: structured registration is missing
+E       assert False
+E        +  where False = hasattr(probe, 'registration_candidate')
+
+tests/test_probe_prereg.py:50: AssertionError
+_ test_uncommitted_executable_drift_refused[cyber-range/fixtures/paperless/build_fixture.py] _
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_uncommitted_executable_dr2/history')
+name = 'cyber-range/fixtures/paperless/build_fixture.py'
+
+    @pytest.mark.parametrize("name", FILES)
+    def test_uncommitted_executable_drift_refused(repo, name):
+>       sha = _register(repo)
+              ^^^^^^^^^^^^^^^
+
+tests/test_probe_prereg.py:100: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_probe_prereg.py:55: in _register
+    data = _registration(repo) if data is None else data
+           ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_uncommitted_executable_dr2/history')
+
+    def _registration(repo):
+        # The candidate is reviewed/committed before a later call can execute it.
+>       assert hasattr(probe, "registration_candidate"), "structured registration is missing"
+E       AssertionError: structured registration is missing
+E       assert False
+E        +  where False = hasattr(probe, 'registration_candidate')
+
+tests/test_probe_prereg.py:50: AssertionError
+_ test_uncommitted_executable_drift_refused[cyber-range/services/scenario-orchestrator/research_code.py] _
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_uncommitted_executable_dr3/history')
+name = 'cyber-range/services/scenario-orchestrator/research_code.py'
+
+    @pytest.mark.parametrize("name", FILES)
+    def test_uncommitted_executable_drift_refused(repo, name):
+>       sha = _register(repo)
+              ^^^^^^^^^^^^^^^
+
+tests/test_probe_prereg.py:100: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_probe_prereg.py:55: in _register
+    data = _registration(repo) if data is None else data
+           ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_uncommitted_executable_dr3/history')
+
+    def _registration(repo):
+        # The candidate is reviewed/committed before a later call can execute it.
+>       assert hasattr(probe, "registration_candidate"), "structured registration is missing"
+E       AssertionError: structured registration is missing
+E       assert False
+E        +  where False = hasattr(probe, 'registration_candidate')
+
+tests/test_probe_prereg.py:50: AssertionError
+___________ test_uncommitted_manifest_does_not_replace_committed_one ___________
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_uncommitted_manifest_does0/history')
+
+    def test_uncommitted_manifest_does_not_replace_committed_one(repo):
+>       sha = _register(repo)
+              ^^^^^^^^^^^^^^^
+
+tests/test_probe_prereg.py:108: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_probe_prereg.py:55: in _register
+    data = _registration(repo) if data is None else data
+           ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_uncommitted_manifest_does0/history')
+
+    def _registration(repo):
+        # The candidate is reviewed/committed before a later call can execute it.
+>       assert hasattr(probe, "registration_candidate"), "structured registration is missing"
+E       AssertionError: structured registration is missing
+E       assert False
+E        +  where False = hasattr(probe, 'registration_candidate')
+
+tests/test_probe_prereg.py:50: AssertionError
+_________________ test_future_or_unknown_registration_refused __________________
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_future_or_unknown_registr0/history')
+
+    def test_future_or_unknown_registration_refused(repo):
+>       sha = _register(repo)
+              ^^^^^^^^^^^^^^^
+
+tests/test_probe_prereg.py:115: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_probe_prereg.py:55: in _register
+    data = _registration(repo) if data is None else data
+           ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_future_or_unknown_registr0/history')
+
+    def _registration(repo):
+        # The candidate is reviewed/committed before a later call can execute it.
+>       assert hasattr(probe, "registration_candidate"), "structured registration is missing"
+E       AssertionError: structured registration is missing
+E       assert False
+E        +  where False = hasattr(probe, 'registration_candidate')
+
+tests/test_probe_prereg.py:50: AssertionError
+______________ test_bad_tag_and_extra_registration_fields_refused ______________
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_bad_tag_and_extra_registr0/history')
+
+    def test_bad_tag_and_extra_registration_fields_refused(repo):
+        with pytest.raises(SystemExit, match="round-tag"):
+            probe.check_prereg("deadbeef", "NOT A TAG!!", root=repo)
+>       data = _registration(repo)
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/test_probe_prereg.py:126: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_bad_tag_and_extra_registr0/history')
+
+    def _registration(repo):
+        # The candidate is reviewed/committed before a later call can execute it.
+>       assert hasattr(probe, "registration_candidate"), "structured registration is missing"
+E       AssertionError: structured registration is missing
+E       assert False
+E        +  where False = hasattr(probe, 'registration_candidate')
+
+tests/test_probe_prereg.py:50: AssertionError
+______________ test_missing_duplicate_or_extra_result_ids_refused ______________
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_missing_duplicate_or_extr0/history')
+
+    def test_missing_duplicate_or_extra_result_ids_refused(repo):
+>       assert hasattr(probe, "finalize_results"), "result correspondence is missing"
+E       AssertionError: result correspondence is missing
+E       assert False
+E        +  where False = hasattr(probe, 'finalize_results')
+
+tests/test_probe_prereg.py:146: AssertionError
+____________ test_source_manifest_is_secret_free_and_target_pinned _____________
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_source_manifest_is_secret0/history')
+
+    def test_source_manifest_is_secret_free_and_target_pinned(repo):
+>       data = _registration(repo)
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/test_probe_prereg.py:159: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_source_manifest_is_secret0/history')
+
+    def _registration(repo):
+        # The candidate is reviewed/committed before a later call can execute it.
+>       assert hasattr(probe, "registration_candidate"), "structured registration is missing"
+E       AssertionError: structured registration is missing
+E       assert False
+E        +  where False = hasattr(probe, 'registration_candidate')
+
+tests/test_probe_prereg.py:50: AssertionError
+_______ test_changed_control_definition_is_refused_even_with_same_script _______
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_changed_control_definitio0/history')
+
+    def test_changed_control_definition_is_refused_even_with_same_script(repo):
+>       data = copy.deepcopy(_registration(repo))
+                             ^^^^^^^^^^^^^^^^^^^
+
+tests/test_probe_prereg.py:170: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-21/test_changed_control_definitio0/history')
+
+    def _registration(repo):
+        # The candidate is reviewed/committed before a later call can execute it.
+>       assert hasattr(probe, "registration_candidate"), "structured registration is missing"
+E       AssertionError: structured registration is missing
+E       assert False
+E        +  where False = hasattr(probe, 'registration_candidate')
+
+tests/test_probe_prereg.py:50: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_probe_prereg.py::test_substrings_do_not_bind_a_run - Failed...
+FAILED tests/test_probe_prereg.py::test_valid_registration_retains_identity
+FAILED tests/test_probe_prereg.py::test_registration_field_mismatch_refused[target]
+FAILED tests/test_probe_prereg.py::test_registration_field_mismatch_refused[hypotheses]
+FAILED tests/test_probe_prereg.py::test_registration_field_mismatch_refused[sources]
+FAILED tests/test_probe_prereg.py::test_registration_field_mismatch_refused[round_tag]
+FAILED tests/test_probe_prereg.py::test_registration_field_mismatch_refused[schema]
+FAILED tests/test_probe_prereg.py::test_registered_m6_trash_is_not_executed_account_detail
+FAILED tests/test_probe_prereg.py::test_uncommitted_executable_drift_refused[scripts/probe-paperless-variants.py]
+FAILED tests/test_probe_prereg.py::test_uncommitted_executable_drift_refused[scripts/research_registration.py]
+FAILED tests/test_probe_prereg.py::test_uncommitted_executable_drift_refused[cyber-range/fixtures/paperless/build_fixture.py]
+FAILED tests/test_probe_prereg.py::test_uncommitted_executable_drift_refused[cyber-range/services/scenario-orchestrator/research_code.py]
+FAILED tests/test_probe_prereg.py::test_uncommitted_manifest_does_not_replace_committed_one
+FAILED tests/test_probe_prereg.py::test_future_or_unknown_registration_refused
+FAILED tests/test_probe_prereg.py::test_bad_tag_and_extra_registration_fields_refused
+FAILED tests/test_probe_prereg.py::test_missing_duplicate_or_extra_result_ids_refused
+FAILED tests/test_probe_prereg.py::test_source_manifest_is_secret_free_and_target_pinned
+FAILED tests/test_probe_prereg.py::test_changed_control_definition_is_refused_even_with_same_script
+18 failed, 1 passed in 0.44s

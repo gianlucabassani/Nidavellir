@@ -1,7 +1,8 @@
 # Nidavellir — open risk register
 
 Updated 2026-10-07 after the independent audit. MODEL-R1 and NV07-R1
-remain closed for calibration machinery only. RESEARCH-R1/R4 are reopened;
+remain closed for calibration machinery only. RESEARCH-R1/R4 are closed for the new
+structured gate after Phase 2 verification; historical chronology is not repaired;
 mail probe validity, incomplete coverage and historical evidence gaps remain open.
 
 Known, currently-open risks and verification gaps. Each entry states what is
@@ -49,22 +50,6 @@ The count is **12 retained hypotheses plus 9 asserted without per-probe evidence
 not 21 evidence-backed refutations. The six H rows recur in the mail artifact;
 they must not be counted twice. Historical evidence files are unchanged.
 Accepted audit: `docs/verification/research-audit-2026-10-07.json`.
-
-### RESEARCH-R1 / RESEARCH-R4 · Pre-registration does not bind the run · high · reopened
-
-The ancestor check and two-substring check accept an unrelated CSS hypothesis
-with `mail-hunt` elsewhere, and accept result-bearing commit `109e89d` with tag
-`mail`. Tag and hypothesis text need not be in the same block. Neither target,
-hypothesis IDs, probe requests nor script digest is compared with execution.
-Registered M6 described trash listing/deletion; executed M6 read a mail account.
-IDs are only labels in prose and `record()`, so this substitution changed neither
-substring. The script executes all H/M probes regardless of the chosen tag.
-No historical pre-registration chronology is repaired by a future gate.
-
-**Closes when (Phase 2):** a structured registration binds target, hypothesis IDs,
-request/control definitions and probe-script digest; mismatches refuse before
-stack work; results retain the registration and execution identities. Regression
-coverage must include the original M6 substitution, not just missing markers.
 
 ### RESEARCH-R7 · Mail denials do not isolate object protection · high · open
 
@@ -137,6 +122,29 @@ contract. **Deliberately deferred — no extraction before a second consumer.**
 ---
 
 ## Closed
+
+### RESEARCH-R1 / RESEARCH-R4 · Registration/execution correspondence · Phase 2 corrected 2026-10-07
+
+The old ancestor/two-substring check admitted unrelated registration text and did
+not bind target, IDs, requests/controls or executable identity. Registered M6
+was trash listing/deletion; executed M6 was account detail, with the same label.
+This historical gap remains accepted; no future gate repairs its chronology.
+
+The new gate reads a committed structured manifest and compares target pins,
+ordered IDs, canonical executable request/control/setup/classifier definitions,
+and probe/fixture/gate/Git-runner hashes. Marker substrings are advisory only.
+A single captured snapshot binds both source and loaded-code checks; all five
+probe functions, including the wrapper, must match. Checked fixture bytes are
+compiled after admission. Result receipts retain both identities and reject
+missing/duplicate/extra/reordered recorded IDs. Setup failures are recorded rows,
+not proof that every probe executed. M6 same-ID substitution, source/fixture
+races and stale-code/wrapper regressions are covered by scratch tests.
+
+**Boundary:** new correspondence machinery only; Phase 3 control validity,
+standalone fixture isolation, broader coverage and audit/budget contracts remain
+open. No Paperless rerun or empirical registration occurred in Phase 2.
+Contract: `docs/research/registration-contract.md`. Verification:
+`docs/verification/research-phase2-2026-10-07.json`.
 
 ### RESEARCH-R5 · Code-intel helpers, egress and silent cuts · Phase 1 corrected 2026-10-07
 

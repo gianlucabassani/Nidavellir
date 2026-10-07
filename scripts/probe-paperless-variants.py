@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Variant-hunt probe round: six sibling hypotheses against pinned Paperless.
+"""Variant-hunt probe round: twelve retained hypotheses against pinned Paperless.
 
 Each hypothesis carries provenance (advisory + fix commit), an expected
 observable, and controls in the established shape. Results classify as
@@ -11,27 +11,44 @@ Usage: python3 scripts/probe-paperless-variants.py --require-prereg <sha>
 (builds a keep-alive seeded stack, probes, tears everything down, prints
 a JSON result table)
 
-RESEARCH-R1/R4: the round's journal pre-registration must already be
-committed; the script refuses to run unless <sha> is an ancestor of the
-current HEAD *and* introduces the round's hypothesis block (matched by
-<tag>) in docs/JOURNAL.md, so ordering and correspondence are provable
-from history, not prose.
+RESEARCH-R1/R4: --require-prereg names an ancestor commit containing a structured
+manifest at docs/research/registrations/<tag>.json. Its target, IDs, executable
+request/control definitions and script/fixture/gate hashes must match this run.
+Journal substrings are only a hint. Results retain both identities. This gate
+proves correspondence, not control validity or historical pre-registration.
+Generate a candidate with --round-tag <tag> --write-registration <path>, review
+its executable definitions, then commit it before probing. No probe runs in
+candidate mode.
 """
 from __future__ import annotations
 
 import argparse
 import importlib.util
+import hashlib
+import types
 import json
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+_LOADED_PROBE_DIGEST = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 _spec = importlib.util.spec_from_file_location(
-    "paperless_build_fixture",
-    ROOT / "cyber-range/fixtures/paperless/build_fixture.py")
-fixture = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(fixture)
+    "research_registration", ROOT / "scripts/research_registration.py")
+registration = importlib.util.module_from_spec(_spec)
+_registration_source = (ROOT / "scripts/research_registration.py").read_bytes()
+_LOADED_GATE_DIGEST = hashlib.sha256(_registration_source).hexdigest()
+exec(compile(_registration_source,
+             str(ROOT / "scripts/research_registration.py"), "exec"),
+     registration.__dict__)  # nosec B102 - trusted local gate; bypass stale pyc
+
+
+def registration_candidate(tag: str, root=ROOT) -> dict:
+    return registration.candidate(tag, root)
+
+
+def finalize_results(results: list[dict], receipt: dict) -> dict:
+    return registration.finalize(results, receipt)
 
 
 def status_of(call):
@@ -46,49 +63,25 @@ def status_of(call):
         return None, {"error": f"unparsable response: {type(exc).__name__}"}
 
 
-def check_prereg(prereg: str, tag: str, root=ROOT) -> None:
-    """Refuse to probe unless the pre-registration binds ordering AND content.
-
-    Ordering: <prereg> resolves and is an ancestor of HEAD. Content: the
-    commit must introduce the round's hypothesis block in docs/JOURNAL.md —
-    added lines containing the round tag plus a hypothesis marker — so an
-    unrelated ancestor sha cannot satisfy the gate.
-    """
-    import re as _re
-
-    if not prereg or len(prereg) > 64:
-        raise SystemExit("refusing to probe: --require-prereg <commit> is mandatory")
-    if not tag or not _re.fullmatch(r"[a-z0-9][a-z0-9-]{0,31}", tag):
-        raise SystemExit("refusing to probe: --round-tag must match [a-z0-9-]{1,32}")
-    resolved = subprocess.run(
-        ["git", "-C", str(root), "rev-parse", "--verify", prereg],
-        capture_output=True, text=True, check=False)
-    if resolved.returncode:
-        raise SystemExit(f"refusing to probe: unknown pre-registration {prereg!r}")
-    sha = resolved.stdout.strip()
-    ancestor = subprocess.run(
-        ["git", "-C", str(root), "merge-base", "--is-ancestor", sha, "HEAD"],
-        capture_output=True, check=False)
-    if ancestor.returncode:
-        raise SystemExit(
-            f"refusing to probe: {prereg!r} is not an ancestor of HEAD "
-            "(commit the pre-registration first)")
-    shown = subprocess.run(
-        ["git", "-C", str(root), "show", sha, "--", "docs/JOURNAL.md"],
-        capture_output=True, text=True, check=False)
-    added = [line[1:] for line in shown.stdout.splitlines()
-             if line.startswith("+") and not line.startswith("+++")]
-    blob = "\n".join(added)
-    if tag not in blob or "hypothes" not in blob.lower():
-        raise SystemExit(
-            f"refusing to probe: {sha[:12]} does not introduce a hypothesis "
-            f"block for round {tag!r} in docs/JOURNAL.md")
-    print(f"pre-registration {sha[:12]} verified (ancestor, round {tag!r} block present)",
-          flush=True)
+def check_prereg(prereg: str, tag: str, root=ROOT) -> dict:
+    """Verify a committed structured registration before importing the fixture."""
+    return registration.check(
+        prereg, tag, root, loaded_probe_digest=_LOADED_PROBE_DIGEST,
+        loaded_gate_digest=_LOADED_GATE_DIGEST,
+        loaded_functions={fn.__name__: fn.__code__ for fn in
+                          (main, status_of, finalize_results, registration_candidate, check_prereg)})
 
 
 def main(prereg: str, tag: str) -> None:
-    check_prereg(prereg, tag)
+    receipt = check_prereg(prereg, tag, root=ROOT)
+    fixture_path = ROOT / registration.FIXTURE
+    fixture_source = registration.source_bytes(ROOT, registration.FIXTURE)
+    if hashlib.sha256(fixture_source).hexdigest() != receipt["sources"][registration.FIXTURE]:
+        raise SystemExit("refusing to probe: fixture changed after registration check")
+    fixture = types.ModuleType("paperless_build_fixture")
+    fixture.__file__ = str(fixture_path)
+    exec(compile(fixture_source, str(fixture_path), "exec"),
+         fixture.__dict__)  # nosec B102 - execute exactly the checked local fixture bytes
     manifest = fixture.build(keep=True)
     base, tokens = manifest["base_url"], manifest["tokens"]
     A, B = tokens["A"], tokens["B"]
@@ -327,7 +320,7 @@ def main(prereg: str, tag: str) -> None:
     volumes = [f"paperless-fixture-{v}" for v in
                ("pgdata", "data", "media", "consume", "export")]
     try:
-        print(json.dumps({"hypotheses": results}, indent=2, sort_keys=True))
+        print(json.dumps(finalize_results(results, receipt), indent=2, sort_keys=True))
     finally:
         subprocess.run(teardown, capture_output=True, check=False)
         for volume in volumes:
@@ -339,9 +332,20 @@ def main(prereg: str, tag: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--require-prereg", required=True,
+    parser.add_argument("--require-prereg",
                         help="pre-registration commit sha (must predate this run)")
     parser.add_argument("--round-tag", required=True,
                         help="round tag the pre-registration commit must introduce")
+    parser.add_argument("--write-registration", type=Path,
+                        help="write a review candidate only; never builds or probes")
     args = parser.parse_args()
-    sys.exit(main(args.require_prereg, args.round_tag))
+    if args.write_registration:
+        if args.require_prereg:
+            parser.error("candidate generation and execution are separate modes")
+        candidate = registration_candidate(args.round_tag)
+        args.write_registration.parent.mkdir(parents=True, exist_ok=True)
+        args.write_registration.write_text(json.dumps(candidate, indent=2, sort_keys=True) + "\n")
+    elif not args.require_prereg:
+        parser.error("execution requires --require-prereg <commit SHA>")
+    else:
+        sys.exit(main(args.require_prereg, args.round_tag))

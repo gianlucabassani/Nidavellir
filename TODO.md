@@ -109,19 +109,24 @@ for both human and agent callers; API/GUI/MCP share the same service boundary.
 work through the normal console/API. Use NV-09's evidence to decide expansion; preserve a
 focused maintenance scope if broader features do not improve actual research.
 
-## Audit remediation — phased before further Paperless conclusions
+## Audit remediation — phased before further research conclusions
 
 - [x] **Phase 1 — Code-intel correctness.** Bound Git output, disable configured
   helpers and transports, report all cuts/incomplete counts, use owner-scoped AST
   definitions and permission arguments, broaden manager queries, classify review
   reasons. Acceptance: scratch regressions plus pinned release gate; evidence
   `docs/verification/research-phase1-2026-10-07.json`. Does not establish exhaustion.
-- [ ] **Phase 2 — Registration/execution correspondence (RESEARCH-R1/R4).** Bind
-  hypothesis IDs, target, requests/controls and probe-script digest; refuse mismatch
-  before stack work, retain both identities, test the original M6 substitution.
-- [ ] **Phase 3 — Mail isolation and atomicity (RESEARCH-R7).** Grant global mutation
-  permissions, prove member-owned mutation controls, test a genuinely mixed batch
-  with row-survival assertions; rerun into new artifacts. Depends on Phase 2.
+- [x] **Phase 2 — Registration/execution correspondence (RESEARCH-R1/R4).** Committed
+  structured registration binds target, ordered IDs, executable request/control
+  definitions and probe/fixture/gate hashes; refusals precede fixture import.
+  Receipts retain both identities; M6 substitution and loaded-code/race regressions
+  pass. Contract: `docs/research/registration-contract.md`; verification:
+  `docs/verification/research-phase2-2026-10-07.json`. No historical chronology repair
+  or mail-control validity implied.
+- [ ] **Phase 3 — Isolation-valid probing (RESEARCH-R7).** Grant global permissions
+  while withholding object permission; prove allowed mutations with requester-owned
+  controls; test genuinely mixed batches with row-survival assertions; rerun into
+  new artifacts. Depends on Phase 2. (First application: Paperless mail round.)
 
 Accepted record: **no confirmed vulnerability under the tested conditions**;
 **12 retained hypotheses plus 9 asserted without per-probe evidence**. Historical

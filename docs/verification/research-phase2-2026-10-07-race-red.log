@@ -1,0 +1,55 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+____ test_registration_for_new_disk_code_cannot_authorize_old_loaded_probe _____
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-23/test_registration_for_new_disk0/history')
+
+    def test_registration_for_new_disk_code_cannot_authorize_old_loaded_probe(repo):
+        path = repo / FILES[0]
+        path.write_text(path.read_text().replace('"M6", "MailAccountViewSet detail', '"M6", "changed definition'))
+        sha = _register(repo)
+>       with pytest.raises(SystemExit, match="loaded executable"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE SystemExit
+
+tests/test_probe_prereg.py:181: Failed
+_______________ test_fixture_changed_after_gate_is_not_imported ________________
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-23/test_fixture_changed_after_gat0/history')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f0f72b702b0>
+
+    def test_fixture_changed_after_gate_is_not_imported(repo, monkeypatch):
+        sha = _register(repo)
+        original = probe.check_prereg
+        marker = repo / "fixture-imported-after-check"
+    
+        def race(*args, **kwargs):
+            receipt = original(*args, **kwargs)
+            (repo / FILES[2]).write_text(f"from pathlib import Path\nPath({str(marker)!r}).touch()\n")
+            return receipt
+    
+        monkeypatch.setattr(probe, "ROOT", repo)
+        monkeypatch.setattr(probe, "check_prereg", race)
+        with pytest.raises(SystemExit, match="fixture changed"):
+>           probe.main(sha, "mail-hunt")
+
+tests/test_probe_prereg.py:198: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+prereg = 'a20280fcf40487c6544816978bec32f0dd46c371', tag = 'mail-hunt'
+
+    def main(prereg: str, tag: str) -> None:
+        receipt = check_prereg(prereg, tag, root=ROOT)
+        _fixture_spec = importlib.util.spec_from_file_location(
+            "paperless_build_fixture", ROOT / "cyber-range/fixtures/paperless/build_fixture.py")
+        fixture = importlib.util.module_from_spec(_fixture_spec)
+        _fixture_spec.loader.exec_module(fixture)
+>       manifest = fixture.build(keep=True)
+                   ^^^^^^^^^^^^^
+E       AttributeError: module 'paperless_build_fixture' has no attribute 'build'
+
+scripts/probe-paperless-variants.py:70: AttributeError
+=========================== short test summary info ============================
+FAILED tests/test_probe_prereg.py::test_registration_for_new_disk_code_cannot_authorize_old_loaded_probe
+FAILED tests/test_probe_prereg.py::test_fixture_changed_after_gate_is_not_imported
+2 failed, 19 deselected in 0.37s

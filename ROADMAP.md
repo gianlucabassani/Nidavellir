@@ -49,7 +49,9 @@ No client is a dependency. First direct runs with opencode and
 opencode-go/deepseek-v4.1-flash are recorded in `docs/verification/`; the paired BYO-agent and durable model-driven calibration comparisons are recorded.
 MODEL-R1/NV07-R1 closed on 2026-10-06 for machinery, not discovery capability.
 The 2026-10-07 research audit retracted Paperless exhaustion and reopened the
-pre-registration and mail-validity gaps in ISSUES.md.
+pre-registration and mail-validity gaps in ISSUES.md. Phase 2 on 2026-10-07
+closes the new structured registration gate; historical chronology is not repaired,
+and Phase 3 control validity remains open.
 
 Preserve Docker-local as the supported implementation focus. Cloud parity, hosted concerns,
 and multi-agent breadth remain deferred; local VM intake requires a selected research need.

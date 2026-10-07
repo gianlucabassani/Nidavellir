@@ -1,0 +1,36 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+__________ test_unpinned_or_missing_target_identity_refused["latest"] __________
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-31/test_unpinned_or_missing_targe0/history')
+replacement = '"latest"'
+
+    @pytest.mark.parametrize("replacement", ['"latest"', 'None'])
+    def test_unpinned_or_missing_target_identity_refused(repo, replacement):
+        path = repo / FILES[2]
+        with path.open("a") as handle:
+            handle.write(f'\nPINS = {{"paperless": {replacement}}}\n')
+>       with pytest.raises(SystemExit, match="immutable target"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE SystemExit
+
+tests/test_probe_prereg.py:297: Failed
+____________ test_unpinned_or_missing_target_identity_refused[None] ____________
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-31/test_unpinned_or_missing_targe1/history')
+replacement = 'None'
+
+    @pytest.mark.parametrize("replacement", ['"latest"', 'None'])
+    def test_unpinned_or_missing_target_identity_refused(repo, replacement):
+        path = repo / FILES[2]
+        with path.open("a") as handle:
+            handle.write(f'\nPINS = {{"paperless": {replacement}}}\n')
+>       with pytest.raises(SystemExit, match="immutable target"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE SystemExit
+
+tests/test_probe_prereg.py:297: Failed
+=========================== short test summary info ============================
+FAILED tests/test_probe_prereg.py::test_unpinned_or_missing_target_identity_refused["latest"]
+FAILED tests/test_probe_prereg.py::test_unpinned_or_missing_target_identity_refused[None]
+2 failed, 26 deselected in 0.16s

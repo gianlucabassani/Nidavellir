@@ -1,0 +1,98 @@
+{
+  "hypotheses": [
+    {
+      "definitions": [
+        "try:\n    _, links = call(base, 'GET', '/api/share_links/?page_size=10', token=A)\n    admin_link = links['results'][0]['id']\nexcept Exception as exc:\n    results.append({'id': 'H1', 'provenance': 'setup failed', 'expected': '', 'actor_status': None, 'controls': {}, 'verdict': 'infrastructure-failure', 'note': f'{type(exc).__name__}: {str(exc)[:160]}'})\n    admin_link = None",
+        "if admin_link is not None:\n    record('H1', 'GHSA-386h-chg4-cfw9 / b010f65ae (detail vs fixed create)', 'denied 403/404 (PaperlessObjectPermissions on ShareLink.owner)', lambda: call(base, 'GET', f'/api/share_links/{admin_link}/', token=B), [('owner_read_link', lambda: call(base, 'GET', f'/api/share_links/{admin_link}/', token=A), 200)], lambda s, b, c: 'refuted' if s in (403, 404) and c['owner_read_link']['held'] else 'confirmed' if s == 200 else 'infrastructure-failure')"
+      ],
+      "id": "H1"
+    },
+    {
+      "definitions": [
+        "try:\n    fixture.run('docker', 'exec', 'paperless-fixture-web', 'python3', '/usr/src/paperless/src/manage.py', 'shell', '-c', \"from django.contrib.auth.models import User, Permission\\nu = User.objects.get(username='member')\\nu.user_permissions.add(Permission.objects.get(codename='change_document'))\\nprint('granted')\")\n    h2_ready = True\nexcept Exception as exc:\n    results.append({'id': 'H2', 'provenance': 'setup failed', 'expected': '', 'actor_status': None, 'controls': {}, 'verdict': 'infrastructure-failure', 'note': f'{type(exc).__name__}: {str(exc)[:160]}'})\n    h2_ready = False",
+        "if h2_ready:\n    _, detail = call(base, 'GET', f'/api/documents/{rid}/', token=A)\n    vid = (detail.get('versions') or [{}])[0].get('id', rid)\n    record('H2', '8aab34ea7 versions global-check (object branch untested)', 'denied 403 (object gate after global gate)', lambda: call(base, 'DELETE', f'/api/documents/{rid}/versions/{vid}/', token=B), [('owner_versions_intact', lambda: call(base, 'GET', f'/api/documents/{rid}/', token=A), 200)], lambda s, b, c: 'refuted' if s in (403, 404) else 'confirmed' if s in (200, 204) else 'infrastructure-failure')"
+      ],
+      "id": "H2"
+    },
+    {
+      "definitions": [
+        "try:\n    call(base, 'PATCH', f'/api/documents/{sid}/', token=A, body={'set_permissions': {'view': {'users': [manifest['member_id']], 'groups': []}, 'change': {'users': [manifest['member_id']], 'groups': []}}})\n    h3_ready = True\nexcept Exception as exc:\n    results.append({'id': 'H3', 'provenance': 'setup failed', 'expected': '', 'actor_status': None, 'controls': {}, 'verdict': 'infrastructure-failure', 'note': f'{type(exc).__name__}: {str(exc)[:160]}'})\n    h3_ready = False",
+        "if h3_ready:\n    record('H3', 'GHSA-w47q-3m69-84v8 class via bulk path (ownership check)', 'denied 403 and restricted perms unchanged', lambda: call(base, 'POST', '/api/documents/bulk_edit/', token=B, body={'documents': [rid], 'method': 'set_permissions', 'parameters': {'set_permissions': {'view': {'users': [manifest['member_id']]}}}}), [('restricted_unmoved', lambda: call(base, 'GET', f'/api/documents/{rid}/', token=A), 200)], lambda s, b, c: 'refuted' if s == 403 else 'confirmed' if s == 200 else 'infrastructure-failure')"
+      ],
+      "id": "H3"
+    },
+    {
+      "definitions": [
+        "record('H4', '8aab34ea7 delete-perm gating (documents bulk path)', 'denied 403 and document survives', lambda: call(base, 'POST', '/api/documents/bulk_edit/', token=B, body={'documents': [sid], 'method': 'delete', 'parameters': {}}), [('shared_survives', lambda: call(base, 'GET', f'/api/documents/{sid}/', token=A), 200)], lambda s, b, c: 'refuted' if s == 403 and c['shared_survives']['held'] else 'confirmed' if s == 200 else 'infrastructure-failure')"
+      ],
+      "id": "H4"
+    },
+    {
+      "definitions": [
+        "try:\n    _, groups = call(base, 'GET', '/api/groups/?page_size=10', token=A)\n    gid = groups['results'][0]['id'] if groups.get('results') else 1\n    s1, _ = status_of(lambda: call(base, 'PATCH', f\"/api/users/{manifest['member_id']}/\", token=B, body={'groups': [gid]}))\n    s2, _ = status_of(lambda: call(base, 'PATCH', f\"/api/users/{manifest['member_id']}/\", token=B, body={'is_superuser': True}))\n    results.append({'id': 'H5', 'provenance': 'GHSA-59xh-5vwx-4c4q / 06b2d5102 (groups vs fixed flags)', 'expected': 'both denied 403; groups unchanged', 'actor_status': {'groups': s1, 'is_superuser': s2}, 'controls': {}, 'verdict': 'refuted' if s1 == 403 and s2 == 403 else 'confirmed' if 200 in (s1, s2) else 'infrastructure-failure'})\nexcept Exception as exc:\n    results.append({'id': 'H5', 'provenance': 'setup failed', 'expected': '', 'actor_status': None, 'controls': {}, 'verdict': 'infrastructure-failure', 'note': f'{type(exc).__name__}: {str(exc)[:160]}'})"
+      ],
+      "id": "H5"
+    },
+    {
+      "definitions": [
+        "record('H6', '81795bc93 bare-auth views (system status content)', 'member gated (403/404) or 200 with stats only, no user-scoped data', lambda: call(base, 'GET', '/api/status/', token=B), [('admin_status', lambda: call(base, 'GET', '/api/status/', token=A), 200)], lambda s, b, c: 'refuted' if s in (403, 404) and c['admin_status']['held'] else 'by-design' if s == 200 and (not any((k in json.dumps(b) for k in ('member@lab.invalid', 'sha256:c76bbf65586d34e04a700ce58c82fc139851be845caf39260388fb4547420ca5', 'restricted-secret')))) else 'confirmed' if s == 200 else 'infrastructure-failure')"
+      ],
+      "id": "H6"
+    },
+    {
+      "definitions": [
+        "record('M1', 'GHSA-7qqc-wrcw-2fj9 / 65ca78e9e (process vs fixed update)', 'denied 403/404; admin trigger not denied', lambda: call(base, 'POST', f'/api/mail_accounts/{acct}/process/', token=B), [('owner_process_not_denied', lambda: call(base, 'POST', f'/api/mail_accounts/{acct}/process/', token=A), None)], lambda s, b, c: 'refuted' if s in (403, 404) else 'confirmed' if s == 200 else 'infrastructure-failure')"
+      ],
+      "id": "M1"
+    },
+    {
+      "definitions": [
+        "record('M2', 'MailRuleSerializer.validate_account (change_mailaccount owner-aware)', 'denied 403; admin rule create 201', lambda: call(base, 'POST', '/api/mail_rules/', token=B, body={'name': 'rogue-rule', 'account': acct, 'enabled': False, 'folder': 'INBOX'}), [('owner_rule_create', lambda: call(base, 'POST', '/api/mail_rules/', token=A, body={'name': 'control-rule', 'account': acct, 'enabled': False, 'folder': 'INBOX'}), 201)], lambda s, b, c: 'refuted' if s in (403, 404) else 'confirmed' if s == 201 else 'infrastructure-failure')"
+      ],
+      "id": "M2"
+    },
+    {
+      "definitions": [
+        "record('M3', 'F2 class by another path (ProcessedMailViewSet filter)', '200 with no admin rows visible', lambda: call(base, 'GET', '/api/processed_mail/?page_size=10', token=B), [('owner_processed_list', lambda: call(base, 'GET', '/api/processed_mail/?page_size=10', token=A), 200)], lambda s, b, c: 'refuted' if s == 200 and (not (b.get('results') or [])) else 'confirmed' if s == 200 and (b.get('results') or []) else 'infrastructure-failure')"
+      ],
+      "id": "M3"
+    },
+    {
+      "definitions": [
+        "record('M4', 'MailAccountViewSet.test branch (change_mailaccount owner-aware)', 'denied 403; admin test not denied', lambda: call(base, 'POST', '/api/mail_accounts/test/', token=B, body={'name': 'probe', 'id': acct, 'imap_server': 'x', 'imap_port': 143, 'imap_security': 1, 'username': 'x', 'password': '****'}), [('owner_test_not_denied', lambda: call(base, 'POST', '/api/mail_accounts/test/', token=A, body={'name': 'probe', 'id': acct, 'imap_server': 'x', 'imap_port': 143, 'imap_security': 1, 'username': 'x', 'password': '****'}), None)], lambda s, b, c: 'refuted' if s in (403, 404) else 'confirmed' if s == 200 else 'infrastructure-failure')"
+      ],
+      "id": "M4"
+    },
+    {
+      "definitions": [
+        "try:\n    _, _owned = call(base, 'GET', '/api/processed_mail/?page_size=10', token=A)\n    admin_pm = (_owned.get('results') or [{}])[0].get('id')\n    if admin_pm is None:\n        raise RuntimeError('no processed mail rows to target')\nexcept Exception as exc:\n    results.append({'id': 'M5', 'provenance': 'setup failed', 'expected': '', 'actor_status': None, 'controls': {}, 'verdict': 'infrastructure-failure', 'note': f'{type(exc).__name__}: {str(exc)[:160]}'})\n    admin_pm = None",
+        "if admin_pm is not None:\n    record('M5', 'c28c532be whole-batch atomic reject', 'atomic 403 and admin row survives', lambda: call(base, 'POST', '/api/processed_mail/bulk_delete/', token=B, body={'mail_ids': [admin_pm]}), [('admin_row_survives', lambda: call(base, 'GET', '/api/processed_mail/?page_size=10', token=A), 200)], lambda s, b, c: 'refuted' if s in (403, 404) else 'confirmed' if s == 200 else 'infrastructure-failure')"
+      ],
+      "id": "M5"
+    },
+    {
+      "definitions": [
+        "record('M6', 'MailAccountViewSet detail (PaperlessObjectPermissions)', 'denied 403/404; owner reads 200', lambda: call(base, 'GET', f'/api/mail_accounts/{acct}/', token=B), [('owner_read_account', lambda: call(base, 'GET', f'/api/mail_accounts/{acct}/', token=A), 200)], lambda s, b, c: 'refuted' if s in (403, 404) and c['owner_read_account']['held'] else 'confirmed' if s == 200 else 'infrastructure-failure')"
+      ],
+      "id": "M6"
+    }
+  ],
+  "round_tag": "phase2-contract-demo",
+  "schema": "nidavellir/research-registration/v1",
+  "sources": {
+    "cyber-range/fixtures/paperless/build_fixture.py": "b701744c6f9ef17273dbd411868df33121f5a0bb43a943682f80ccc218b5d483",
+    "cyber-range/services/scenario-orchestrator/research_code.py": "dddc8ffc130e12c4d29f02d7f176ae9d47e4213e06999fc56dd79db0a76ac6e1",
+    "scripts/probe-paperless-variants.py": "a0aa52504576caec6239ee82c2d97269e056a476924f71337913e9299c996fdf",
+    "scripts/research_registration.py": "5f683face77508f9c9b3f6b5de1c038c8d118bd4373a8b20e0313a785d0bcf58"
+  },
+  "target": {
+    "pins": {
+      "gotenberg": "gotenberg/gotenberg:8.37.0@sha256:3fdee07e0dcd5005c3db4d81d1600d081fc6fb424da87e409e1c1f9624a249b8",
+      "greenmail": "greenmail/standalone:2.1.14@sha256:2bcd0470f569af3c8b98509421b23f1ad11ebb2d58c3648f4233bf450f3b5e2b",
+      "paperless": "paperlessngx/paperless-ngx:3.3.0@sha256:d70526917791fb99ee61b40a91f111d60c59914f36cfd481af494107054aed06",
+      "postgres": "postgres:16@sha256:65b16a8b326e0cfbdf33fa7e783f2a0cb352a61448616ccccfd616ef42aa0f65",
+      "redis": "redis:7-alpine@sha256:520775a41a63e77e06c73e35d2fd9cc15921a609516818796b4ecbb813078bc7"
+    },
+    "version": "3.3.0"
+  }
+}

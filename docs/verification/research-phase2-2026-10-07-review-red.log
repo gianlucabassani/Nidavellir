@@ -1,0 +1,35 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___ test_two_source_reads_cannot_bind_registered_bytes_to_other_loaded_code ____
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-29/test_two_source_reads_cannot_b0/history')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f52d55f6fd0>
+
+    def test_two_source_reads_cannot_bind_registered_bytes_to_other_loaded_code(repo, monkeypatch):
+        import types
+    
+        sha = _register(repo)
+        original = (repo / FILES[0]).read_bytes()
+        different = original.replace(b'"M6", "MailAccountViewSet detail', b'"M6", "different executable detail')
+        assert original != different
+        compiled = compile(different, probe.main.__code__.co_filename, "exec", dont_inherit=True)
+        other_main = next(c for c in compiled.co_consts if isinstance(c, types.CodeType) and c.co_name == "main")
+        monkeypatch.setattr(probe.main, "__code__", other_main)
+        original_read = probe.registration.source_bytes
+        reads = []
+    
+        def changed_between_reads(root, name):
+            if name == FILES[0]:
+                reads.append(name)
+                return original if len(reads) == 1 else different
+            return original_read(root, name)
+    
+        monkeypatch.setattr(probe.registration, "source_bytes", changed_between_reads)
+>       with pytest.raises(SystemExit, match="loaded executable"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE SystemExit
+
+tests/test_probe_prereg.py:288: Failed
+=========================== short test summary info ============================
+FAILED tests/test_probe_prereg.py::test_two_source_reads_cannot_bind_registered_bytes_to_other_loaded_code
+1 failed, 25 deselected in 0.19s

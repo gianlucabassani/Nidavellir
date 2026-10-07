@@ -3,6 +3,46 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-10-07 — Phase 2 registration/execution correspondence
+
+**Outcome:** RESEARCH-R1/R4 close for the new structured gate, not historical
+chronology. Registration now binds target pins, ordered H1–H6/M1–M6 IDs, canonical
+executable request/control/setup/classifier definitions and four source hashes.
+The old journal markers are a hint only. Same-ID M6 trash/account substitution
+is refused. The problem was independence: prose and hardcoded requests kept M6
+while describing different operations; labels and script hashes alone were insufficient.
+
+A single captured snapshot binds source and actual loaded code; the exact five
+probe functions, including the gate wrapper, must match. Gate/Git helpers compile
+captured bytes. Fixture import occurs after admission, hashes a captured fixture
+against the receipt, and executes those exact bytes. Receipts retain registration
+and execution identities; finalization refuses missing/duplicate/extra/reordered
+recorded IDs. Setup failures are rows, not proof every probe executed. No target
+probe, fixture stack or empirical registration ran in this pass. The adapter still
+executes all twelve hypotheses; the tag names the registration, not a subset.
+
+**Files:** `scripts/research_registration.py`, probe script, prereg tests;
+registration contract; ISSUES/ROADMAP/TODO and this entry; new dated candidate,
+red/focused/release logs and Phase 2 manifest. Pre-existing TODO generalization
+of Phase 3 is preserved. The prior review plan remains a separate uncommitted artifact.
+
+**Verification:** 18 regression failures before implementation; further failing
+source/fixture race, stale-bytecode, two-read, stale-wrapper and target-pin tests
+retained. Final focused suite **29 passed**. Independent read-only review confirmed
+its source-race/wrapper counterexamples refuse, with no remaining correspondence
+findings. Final `make release-check` exited 0: pinned Python **3.11.14**, Ruff clean,
+Bandit zero medium/high; SQLite **1055 passed, 4 skipped, 6 deselected**; PostgreSQL
+**1059 passed, 6 deselected**; migration/API/UI/gateway readiness smoke passed.
+Raw logs/source hashes: `docs/verification/research-phase2-2026-10-07.json`.
+Historical verification files and accepted audit hash inventory are unchanged.
+
+**Unresolved / next step:** Phase 3 isolation-valid controls, permission grants,
+mixed batch/row survival and a newly registered empirical run remain open. Existing
+classifiers are unchanged. Fixture containment/ownership, matched comparison
+provenance, all-nine-fix coverage, historical evidence and audit/authoring budgets
+remain separate work. Retractions stand: no confirmed vulnerability under the tested
+conditions; 12 retained hypotheses plus 9 asserted without per-probe evidence.
+
 ## 2026-10-07 — Independent audit accepted; Phase 1 code-intel remediation
 
 **Outcome:** The independent audit and the operator's source reproductions are

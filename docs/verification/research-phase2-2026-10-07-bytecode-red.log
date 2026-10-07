@@ -1,0 +1,24 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________ test_fresh_source_hash_does_not_hide_stale_loaded_m6_code ___________
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-27/test_fresh_source_hash_does_no0/history')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fee51eb6fd0>
+
+    def test_fresh_source_hash_does_not_hide_stale_loaded_m6_code(repo, monkeypatch):
+        path = repo / FILES[0]
+        value = path.read_text().replace('f"/api/mail_accounts/{acct}/", token=B),', 'f"/api/trash/{acct}/", token=B),')
+        assert value != path.read_text()
+        path.write_text(value)
+        # A timestamp-cache import can execute older code while computing a fresh
+        # __file__ hash at module startup. Emulate that hash without replacing main.
+        monkeypatch.setattr(probe, "_LOADED_PROBE_DIGEST", hashlib.sha256(path.read_bytes()).hexdigest())
+        sha = _register(repo)
+>       with pytest.raises(SystemExit, match="loaded executable"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE SystemExit
+
+tests/test_probe_prereg.py:264: Failed
+=========================== short test summary info ============================
+FAILED tests/test_probe_prereg.py::test_fresh_source_hash_does_not_hide_stale_loaded_m6_code
+1 failed, 24 deselected in 0.17s

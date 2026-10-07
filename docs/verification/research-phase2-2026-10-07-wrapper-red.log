@@ -1,0 +1,27 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________ test_stale_wrapper_cannot_omit_loaded_main_from_validation __________
+
+repo = PosixPath('/tmp/pytest-of-prime/pytest-34/test_stale_wrapper_cannot_omit0/history')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fadfa8636f0>
+
+    def test_stale_wrapper_cannot_omit_loaded_main_from_validation(repo, monkeypatch):
+        import types
+    
+        sha = _register(repo)
+        original = (repo / FILES[0]).read_bytes()
+        different = original.replace(b'"M6", "MailAccountViewSet detail', b'"M6", "stale executable detail')
+        different = different.replace(b'(main, status_of, finalize_results, registration_candidate)', b'(status_of,)')
+        assert different != original
+        compiled = compile(different, probe.main.__code__.co_filename, "exec", dont_inherit=True)
+        functions = {c.co_name: c for c in compiled.co_consts if isinstance(c, types.CodeType)}
+        monkeypatch.setattr(probe.main, "__code__", functions["main"])
+        monkeypatch.setattr(probe.check_prereg, "__code__", functions["check_prereg"])
+>       with pytest.raises(SystemExit, match="loaded executable"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE SystemExit
+
+tests/test_probe_prereg.py:313: Failed
+=========================== short test summary info ============================
+FAILED tests/test_probe_prereg.py::test_stale_wrapper_cannot_omit_loaded_main_from_validation
+1 failed, 28 deselected in 0.13s
