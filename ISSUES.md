@@ -72,9 +72,10 @@ prove launch, arena operations, evidence retention or Docker-local task parity.
 
 **Closes when:** route/action parity, browser denial and failure states, and
 retained-record inspection are verified across the intended Research,
-Benchmark and Cyber Range paths. Complete the manual accessibility/usability
-and fallback gates before default cutover. Record the result in
-`docs/verification/`.
+Benchmark and Cyber Range paths. The default cutover was approved on 2026-10-07
+and the fallback drill passed; the session-expiry, CSRF-denial and reconnect
+browser journeys and formal accessibility/usability review remain open. Record
+these and the remaining parity/live-service checks in `docs/verification/`.
 
 ---
 

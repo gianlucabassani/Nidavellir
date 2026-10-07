@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { postJson } from "../api";
 import type { ArenaData } from "../types";
 import {
@@ -273,6 +273,9 @@ export function ForwardsWorkbench({ arena }: { arena: ArenaData }) {
   const [service, setService] = useState("");
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
+  const forwardAction = useRef<{ destination: string; key: string } | null>(
+    null,
+  );
   if (loading && !value) return <Loading />;
   if (error) return <ErrorState message={error} refresh={refresh} />;
   if (!value) return null;
@@ -283,11 +286,18 @@ export function ForwardsWorkbench({ arena }: { arena: ArenaData }) {
     (value.services[0]
       ? `${value.services[0].target}:${value.services[0].service}`
       : "");
-  async function run(path: string, body: unknown, done: string) {
+  async function run(
+    path: string,
+    body: unknown,
+    done: string,
+    onSuccess?: () => void,
+  ) {
+    if (pending) return;
     setPending(true);
     setMessage("");
     try {
       await postJson(path, body);
+      onSuccess?.();
       setMessage(done);
       refresh();
     } catch (reason) {
@@ -312,11 +322,35 @@ export function ForwardsWorkbench({ arena }: { arena: ArenaData }) {
             className="registry-form forward-form"
             onSubmit={(event) => {
               event.preventDefault();
+              if (pending) return;
               const [target, service_id] = chosenService.split(":");
+              const destination = JSON.stringify([
+                arena.id,
+                chosenFoothold,
+                target,
+                service_id,
+              ]);
+              if (forwardAction.current?.destination !== destination) {
+                const bytes = crypto.getRandomValues(new Uint8Array(16));
+                forwardAction.current = {
+                  destination,
+                  key: Array.from(bytes, (byte) =>
+                    byte.toString(16).padStart(2, "0"),
+                  ).join(""),
+                };
+              }
               void run(
                 `/api/console/arenas/${id}/forwards`,
-                { foothold: chosenFoothold, target, service_id },
+                {
+                  foothold: chosenFoothold,
+                  target,
+                  service_id,
+                  idempotency_key: forwardAction.current.key,
+                },
                 "Forward lease opened.",
+                () => {
+                  forwardAction.current = null;
+                },
               );
             }}
           >
@@ -324,6 +358,7 @@ export function ForwardsWorkbench({ arena }: { arena: ArenaData }) {
               Foothold
               <select
                 value={chosenFoothold}
+                disabled={pending}
                 onChange={(event) => setFoothold(event.target.value)}
               >
                 {value.footholds.map((item) => (
@@ -335,6 +370,7 @@ export function ForwardsWorkbench({ arena }: { arena: ArenaData }) {
               Service
               <select
                 value={chosenService}
+                disabled={pending}
                 onChange={(event) => setService(event.target.value)}
               >
                 {value.services.map((item) => (

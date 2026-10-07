@@ -28,9 +28,10 @@ served the Sep 29 image. It was repeated after the mount was restored (see
   and a fresh-interpreter test that the unset default is the console.
 - Browser checks: `scripts/ui-release-{b,c,d,e,f,g,h}-check.cjs`,
   `scripts/ui-release-g-stepper-check.cjs`, `scripts/ui-assistant-rail-smoke.cjs`.
-- Pinned `make release-check` (Release H, same day): Ruff and Bandit clean;
-  970 SQLite tests (4 skipped, 6 deselected); 974 PostgreSQL tests (6 deselected);
-  smoke tests.
+- Final post-cutover and review-fix `make release-check`: Ruff and Bandit clean;
+  980 SQLite tests (4 skipped, 6 deselected); 984 PostgreSQL tests (6 deselected);
+  migration/API/UI/gateway readiness smoke passed. See
+  [focused merge review](ui-merge-review-2026-10-07.md).
 
 ## Not covered (UI-R1 stays open)
 

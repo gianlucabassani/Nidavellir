@@ -2414,7 +2414,7 @@ def test_console_arena_trace_reports_self_declared_attribution(client, monkeypat
     monkeypatch.setattr(webui_module, "_api_get", lambda path, timeout=5: ({
         "source_trace_id": "t-1", "input": "hidden",
         "metadata": {"gen_ai.request.model": "m", "gen_ai.system": "p",
-                     "scaffold": "s", "stance": "attacker", "api_key": "no"}}, True))
+                     "nv.harness": "s", "nv.stance": "attacker", "api_key": "no"}}, True))
     trace = client.get("/api/console/arenas/arena-1/trace").get_json()["trace"]
     assert trace == {"model": "m", "provider": "p", "scaffold": "s", "stance": "attacker",
                      "trace_id": "t-1", "export": "/api/arenas/arena-1/eval-export"}
@@ -2444,7 +2444,8 @@ def test_console_arena_forwards_list_open_and_revoke(client, monkeypatch):
     assert listed["forwards"] == [{"id": "f1", "target": "api", "service_id": "http",
                                    "state": "open", "expires_at": "soon"}]
     path = "/api/console/arenas/arena-1/forwards"
-    body = {"foothold": "kali", "target": "api", "service_id": "http"}
+    body = {"foothold": "kali", "target": "api", "service_id": "http",
+            "idempotency_key": "a" * 32}
     assert client.post(path, json=body).status_code == 400
     assert client.post(path, json={**body, "target": "../x"}, headers=headers).status_code == 422
     calls = []
@@ -2499,3 +2500,89 @@ def test_console_is_the_default_ui_when_the_switch_is_unset():
         cwd=_WEBUI, env=env, capture_output=True, text=True, timeout=60, check=True,
     )
     assert result.stdout.strip().splitlines()[-1] == "True"
+
+
+@pytest.mark.parametrize("failed_source", ["capabilities", "forwards"])
+def test_console_forwards_failed_read_is_not_an_empty_success(client, monkeypatch, failed_source):
+    import app as webui_module
+
+    assert _login(client).status_code == 302
+
+    def api_get(path, timeout=5):
+        if path.endswith("/" + failed_source):
+            return None, False
+        return {"operations": {"forward": {"state": "ready"}}, "forwards": []}, True
+
+    monkeypatch.setattr(webui_module, "_api_get", api_get)
+    response = client.get("/api/console/arenas/arena-1/forwards")
+    assert response.status_code == 503
+    assert "error" in response.get_json()
+
+
+def test_console_forward_retry_preserves_action_key(client, monkeypatch):
+    import app as webui_module
+
+    token = _csrf_token(client)
+    assert _login(client).status_code == 302
+    calls = []
+
+    def api_post(path, payload=None):
+        calls.append(payload)
+        if len(calls) == 1:
+            return {"error": "orchestrator unreachable"}, 502
+        return {"id": "same-lease"}, 200
+
+    monkeypatch.setattr(webui_module, "_api_post", api_post)
+    body = {"foothold": "kali", "target": "api", "service_id": "http",
+            "idempotency_key": "retry-key-123"}
+    headers = {"X-CSRFToken": token}
+    path = "/api/console/arenas/arena-1/forwards"
+    assert client.post(path, json=body, headers=headers).status_code == 502
+    assert client.post(path, json=body, headers=headers).status_code == 200
+    assert calls[0]["idempotency_key"] == calls[1]["idempotency_key"] == body["idempotency_key"]
+
+
+@pytest.mark.parametrize("key", [None, "", "../invalid", "short", "x" * 129])
+def test_console_forward_rejects_invalid_action_keys(client, monkeypatch, key):
+    import app as webui_module
+
+    token = _csrf_token(client)
+    assert _login(client).status_code == 302
+    calls = []
+    monkeypatch.setattr(webui_module, "_api_post", lambda *args, **kwargs: (
+        calls.append(args) or {}, 200))
+    response = client.post("/api/console/arenas/arena-1/forwards", json={
+        "foothold": "kali", "target": "api", "service_id": "http", "idempotency_key": key,
+    }, headers={"X-CSRFToken": token})
+    assert response.status_code == 422
+    assert not calls
+
+
+def test_console_trace_keeps_real_export_attribution_after_activity_flood(client, monkeypatch):
+    import app as webui_module
+
+    from eval_export import build_eval_record
+    from urllib.parse import parse_qs, urlsplit
+
+    assert _login(client).status_code == 302
+    agent = {"type": "agent_session", "payload": {
+        "model": "model-x", "provider": "provider-x", "harness": "custom-harness",
+        "stance": "attacker"}}
+    events = [{"type": "http_request", "payload": {}} for _ in range(200)] + [agent]
+    export = build_eval_record(arena_id="arena-1", record={"scenario": "fixture"},
+                               scenario_meta={}, score_report={}, events=events)
+
+    def api_get(path, timeout=5):
+        if path.endswith("/eval-export"):
+            return export, True
+        query = parse_qs(urlsplit(path).query)
+        selected = [event for event in events
+                    if "type" not in query or event["type"] == query["type"][0]]
+        return {"events": selected[:int(query.get("limit", [100])[0])]}, True
+
+    monkeypatch.setattr(webui_module, "_api_get", api_get)
+    trace = client.get("/api/console/arenas/arena-1/trace").get_json()["trace"]
+    assert trace is not None
+    assert trace["model"] == "model-x"
+    assert trace["scaffold"] == "custom-harness"
+    assert trace["stance"] == "attacker"

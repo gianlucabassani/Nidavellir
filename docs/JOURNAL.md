@@ -3,6 +3,40 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-10-07 — Prepare Royal Command merge and fix focused review findings
+
+**Outcome:** Committed the previously uncommitted work as three phase commits:
+Release G (`94cfb4e`), Release H (`dc93f04`) and approved default cutover
+(`95b03f4`). ADR-0017 now records the operator-approved 2026-10-07 default
+switch and explicitly retains the unrecorded security/reconnect browser journeys
+and formal accessibility review as open items. Independent Standards and Spec
+reviews found four unique P2 defects in the new BFF/trace/forward paths; all were
+fixed and re-reviewed with no remaining blocker in that focused scope. Trace
+now uses the actual export keys and type-filtered event presence queries.
+Forward reads fail visibly; retries preserve a browser action key and reuse the
+service's existing idempotency/budget contract. UI-R1 remains open.
+
+**Files:** `cyber-range/webui/app.py`, `frontend/src/arena/record.tsx`,
+`tests/test_webui.py`, `scripts/ui-forward-retry-check.cjs`, ADR-0017,
+`ISSUES.md`, cutover evidence and
+`docs/verification/ui-merge-review-2026-10-07.md`, plus this journal.
+
+**Verification:** Regressions failed before fixes and passed afterwards; full
+WebUI tests passed in pinned Python 3.11. Browser retry regression passed with
+all API calls intercepted; Release H smoke passed 25/25 with mutations refused.
+TypeScript, Prettier and Vite passed. Final corrected `make release-check` passed
+on Python 3.11.14: Ruff clean, Bandit zero medium/high findings, SQLite 980 passed
+(4 skipped, 6 deselected), PostgreSQL 984 passed (6 deselected), migration and
+API/UI/gateway readiness smoke. `git diff --check` passed.
+
+**Unresolved risks / next concrete step:** Publish the review-fix commit and open
+the PR against `main`; check remote CI before merge. The focused review does not
+claim exhaustive review of the entire console branch. Complete UI-R1 separately:
+legacy-only setup output/custom topology/non-Docker launches, real-service
+forward/archive/list-destroy journeys, session expiry/CSRF denial/reconnect and
+formal accessibility evidence. The mock review arena and rejected reference
+artifacts remain untouched.
+
 ## 2026-10-07 — Royal Command console becomes the default UI
 
 **Outcome:** The operator reviewed Releases G–H and approved them ("Overall approved"). `WEBUI_DEFAULT_CONSOLE` now defaults to true in `app.py` and `docker-compose.yml`, so `/` (and the post-login landing page) opens `/console`. Setting it to false restores the legacy home. The console footer's "Legacy console" link uses `/?legacy=1`, which bypasses the redirect so the legacy home stays reachable. Follow-up fixes:

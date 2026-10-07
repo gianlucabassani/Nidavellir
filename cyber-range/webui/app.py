@@ -1094,9 +1094,8 @@ def console_arena_score(instance_id):
 @app.route("/api/console/arenas/<instance_id>/trace")
 def console_arena_trace(instance_id):
     """Self-declared run attribution; only present once an agent has worked the arena."""
-    events = _events(instance_id, limit=200)
-    agent_types = {"agent_session", "agent_exec", "agent_binding", "agent_setup_step"}
-    if not any(event.get("type") in agent_types for event in events):
+    agent_types = ("agent_session", "agent_exec", "agent_binding", "agent_setup_step")
+    if not any(_events(instance_id, limit=1, type=kind) for kind in agent_types):
         return jsonify({"trace": None})
     data, ok = _api_get(f"/arenas/{instance_id}/eval-export")
     if not ok or not isinstance(data, dict):
@@ -1104,7 +1103,7 @@ def console_arena_trace(instance_id):
     meta = data.get("metadata") or {}
     return jsonify({"trace": {
         "model": meta.get("gen_ai.request.model"), "provider": meta.get("gen_ai.system"),
-        "scaffold": meta.get("scaffold"), "stance": meta.get("stance"),
+        "scaffold": meta.get("nv.harness"), "stance": meta.get("nv.stance"),
         "trace_id": data.get("source_trace_id"),
         "export": f"/api/arenas/{instance_id}/eval-export",
     }})
@@ -1120,13 +1119,20 @@ def console_arena_forwards(instance_id):
         fields = [body.get(key) for key in ("foothold", "target", "service_id")]
         if not all(isinstance(value, str) and _CONSOLE_SLUG.fullmatch(value) for value in fields):
             return jsonify({"error": "Choose a foothold and a declared service"}), 422
+        key = body.get("idempotency_key")
+        if not isinstance(key, str) or not re.fullmatch(r"[A-Za-z0-9._:-]{8,128}", key):
+            return jsonify({"error": "Expected a valid forward action key"}), 422
         data, code = _api_post(f"/arenas/{instance_id}/forwards", {
             "foothold": fields[0], "target": fields[1], "service_id": fields[2],
-            "lifetime_seconds": 120, "idempotency_key": uuid.uuid4().hex,
+            "lifetime_seconds": 120, "idempotency_key": key,
         })
         return jsonify(data or {}), code
-    capabilities = _api_get(f"/arenas/{instance_id}/capabilities")[0] or {}
-    forwards = (_api_get(f"/arenas/{instance_id}/forwards")[0] or {}).get("forwards") or []
+    capabilities, capabilities_ok = _api_get(f"/arenas/{instance_id}/capabilities")
+    leases, leases_ok = _api_get(f"/arenas/{instance_id}/forwards")
+    if not capabilities_ok or not leases_ok:
+        return jsonify({"error": "Forward state unavailable; retry to reconcile leases"}), 503
+    forwards = (leases or {}).get("forwards") or []
+    capabilities = capabilities or {}
     operation = (capabilities.get("operations") or {}).get("forward") or {}
     return jsonify({
         "state": operation.get("state") or "unknown",
