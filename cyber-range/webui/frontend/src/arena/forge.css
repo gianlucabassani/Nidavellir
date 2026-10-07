@@ -203,6 +203,19 @@
   border-color: #a28c62;
   text-decoration: none;
 }
+/* Tools that cannot use the selected station stay openable (records remain
+   readable) but read as secondary: no launch arrow, muted text. */
+.forge-toolbelt > a:not(.ready) {
+  background: transparent;
+  border-style: dashed;
+  color: var(--forge-muted);
+}
+.forge-toolbelt > a:not(.ready) .forge-tool-mark {
+  color: var(--forge-muted);
+}
+.forge-toolbelt > a.ready {
+  border-color: #a28c62;
+}
 .forge-tool-mark {
   color: var(--forge-accent);
   font: 16px monospace;
@@ -529,7 +542,7 @@
   position: absolute;
   right: 0;
   top: calc(100% + 6px);
-  z-index: 5;
+  z-index: var(--z-menu);
   min-width: 170px;
   padding: 8px;
   border: 1px solid var(--forge-line);

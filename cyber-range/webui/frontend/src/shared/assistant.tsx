@@ -62,6 +62,12 @@ export function ResearchAssistant({ arenaId }: { arenaId: string | null }) {
     }
   }
   useEffect(() => {
+    // Load once on mount so the launcher always shows whether a model is set.
+    const controller = new AbortController();
+    void refreshConnection(controller.signal);
+    return () => controller.abort();
+  }, []);
+  useEffect(() => {
     if (!open) return;
     const controller = new AbortController();
     void refreshConnection(controller.signal);
@@ -219,6 +225,13 @@ export function ResearchAssistant({ arenaId }: { arenaId: string | null }) {
       }
     }
   }
+  const modelState = connection?.configured
+    ? `${connection.provider} / ${connection.model} connected`
+    : connectionError
+      ? "model status unavailable"
+      : connection
+        ? "no model connected"
+        : "checking model connection";
   return (
     <>
       <button
@@ -229,10 +242,24 @@ export function ResearchAssistant({ arenaId }: { arenaId: string | null }) {
         aria-controls="research-assistant"
         onClick={() => (open ? close() : setOpen(true))}
         aria-label="Research assistant"
-        title="Research assistant"
+        aria-describedby="assistant-model-state"
+        title={`Research assistant: ${modelState}`}
       >
         <span aria-hidden="true">✧</span>
         <span className="assistant-launcher-label">Research assistant</span>
+        <i
+          className={`assistant-dot ${
+            connection?.configured
+              ? "connected"
+              : connection || connectionError
+                ? "missing"
+                : "checking"
+          }`}
+          aria-hidden="true"
+        />
+        <span id="assistant-model-state" className="visually-hidden">
+          {modelState}
+        </span>
       </button>
       {open && (
         <aside

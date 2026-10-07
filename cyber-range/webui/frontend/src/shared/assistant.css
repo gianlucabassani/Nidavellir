@@ -2,7 +2,7 @@
   position: fixed;
   right: 24px;
   bottom: 18px;
-  z-index: 50;
+  z-index: var(--z-assistant);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -18,11 +18,31 @@
 .assistant-launcher > span:first-child {
   font-size: 19px;
 }
+/* Model status, visible without opening the panel. */
+.assistant-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #7f8aa0;
+}
+.assistant-dot.connected {
+  background: #80d5b4;
+}
+.assistant-dot.missing {
+  background: #e6bb68;
+}
+@media (max-width: 1279px) {
+  .assistant-dot {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+  }
+}
 .research-assistant {
   position: fixed;
   right: 24px;
   bottom: 74px;
-  z-index: 49;
+  z-index: var(--z-assistant-panel);
   width: 400px;
   max-width: calc(100vw - 24px);
   max-height: min(720px, calc(100dvh - 110px));

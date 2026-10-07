@@ -48,7 +48,7 @@ function roleLabel(station: Station) {
   return station.role[0].toUpperCase() + station.role.slice(1);
 }
 
-function stationDetail(station: Station) {
+export function stationDetail(station: Station) {
   if (station.foothold) return "Attacker foothold";
   const ports = portList(station.declared_ports);
   return `${roleLabel(station)} · ${ports || "no declared ports"}`;
@@ -231,7 +231,7 @@ export function ForgeOverview({
                     <strong>{tool.label}</strong>
                     {status.short && <small>{status.short}</small>}
                   </span>
-                  <b>↗</b>
+                  {status.ok && <b aria-hidden="true">↗</b>}
                 </a>
               );
             })}

@@ -41,6 +41,7 @@ export function Benchmark() {
         </span>
         <b>SCRIPTED DRIVER</b>
       </div>
+      <WorkflowSteps value={value} />
       <div className="benchmark-grid">
         <Panel
           eyebrow="01 / LATEST EVALUATION"
@@ -122,7 +123,7 @@ export function Benchmark() {
           title="Recent comparisons"
           className="comparisons-panel"
           aside={
-            <a className="subtle-link" href="/evaluations#recent">
+            <a className="subtle-link" href="/evaluations">
               View all
             </a>
           }
@@ -174,5 +175,68 @@ export function Benchmark() {
         </Panel>
       </div>
     </>
+  );
+}
+
+// The comparison path in order, with the first unmet step marked as next.
+function WorkflowSteps({ value }: { value: BenchmarkData }) {
+  const steps = [
+    {
+      label: "Builds",
+      detail: "Register two versions",
+      count: value.builds.length,
+      done: value.builds.length >= 2,
+      href: "/console/benchmark/registry?kind=builds",
+    },
+    {
+      label: "Challenges",
+      detail: "Pin a resettable target",
+      count: value.challenges.length,
+      done: value.challenges.length >= 1,
+      href: "/console/benchmark/registry?kind=challenges",
+    },
+    {
+      label: "Suite",
+      detail: "Seeds and limits",
+      count: value.suites.length,
+      done: value.suites.length >= 1,
+      href: "/console/benchmark/registry?kind=suites",
+    },
+    {
+      label: "Compare",
+      detail: "Baseline vs candidate",
+      count: value.evaluations.length,
+      done: false,
+      href: "/console/evaluations/new",
+    },
+  ];
+  const next = steps.findIndex((step) => !step.done);
+  return (
+    <ol className="workflow-steps" aria-label="Comparison workflow">
+      {steps.map((step, index) => (
+        <li
+          key={step.label}
+          className={index === next ? "next" : step.done ? "done" : ""}
+        >
+          <a
+            href={step.href}
+            aria-current={index === next ? "step" : undefined}
+          >
+            <span className="workflow-index">0{index + 1}</span>
+            <span>
+              <strong>{step.label}</strong>
+              <small>{step.detail}</small>
+            </span>
+            <b>
+              {index === next
+                ? "Next"
+                : step.done
+                  ? `${step.count} ✓`
+                  : step.count}
+            </b>
+          </a>
+        </li>
+      ))}
+    </ol>
   );
 }

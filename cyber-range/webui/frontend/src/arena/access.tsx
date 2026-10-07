@@ -2,6 +2,7 @@ import { useState } from "react";
 import { jsonRequest, postJson } from "../api";
 import type { ArenaData } from "../types";
 import {
+  ConfirmDialog,
   Empty,
   ErrorState,
   Loading,
@@ -27,6 +28,7 @@ export function AgentAccess({ arena }: { arena: ArenaData }) {
   const [name, setName] = useState("");
   const [stance, setStance] = useState("attacker");
   const [pending, setPending] = useState(false);
+  const [revoking, setRevoking] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [failure, setFailure] = useState("");
   const active = arena.state === "active";
@@ -153,17 +155,7 @@ export function AgentAccess({ arena }: { arena: ArenaData }) {
                     <button
                       className="button button-danger"
                       disabled={pending}
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            `Revoke ${binding.agent_name} from ${arena.name}?`,
-                          )
-                        )
-                          void act(
-                            `/api/arenas/${id}/bindings/${encodeURIComponent(binding.agent_name)}`,
-                            "DELETE",
-                          );
-                      }}
+                      onClick={() => setRevoking(binding.agent_name)}
                     >
                       Revoke
                     </button>
@@ -179,6 +171,23 @@ export function AgentAccess({ arena }: { arena: ArenaData }) {
           />
         )}
       </Panel>
+      {revoking && (
+        <ConfirmDialog
+          title={`Revoke ${revoking} from ${arena.name}?`}
+          body="This removes the agent's authorization for this arena. Events it already recorded stay in the append-only audit trail."
+          confirmLabel="Revoke access"
+          danger
+          onCancel={() => setRevoking(null)}
+          onConfirm={() => {
+            const agent = revoking;
+            setRevoking(null);
+            void act(
+              `/api/arenas/${id}/bindings/${encodeURIComponent(agent)}`,
+              "DELETE",
+            );
+          }}
+        />
+      )}
     </div>
   );
 }

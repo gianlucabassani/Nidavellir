@@ -11,7 +11,7 @@
 .arena-tool-rail {
   position: sticky;
   top: 112px;
-  z-index: 20;
+  z-index: var(--z-rail);
   padding: 6px;
   border: 1px solid #42516a;
   background: #152238;

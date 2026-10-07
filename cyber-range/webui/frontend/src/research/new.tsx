@@ -2,6 +2,50 @@ import { useRef, useState } from "react";
 import { postForm, postJson } from "../api";
 import type { ResearchPreview } from "../types";
 import { Panel, Empty, PageHead } from "../ui";
+import { SegmentMap } from "../topology/SegmentMap";
+
+type Step = 1 | 2 | 3;
+const STEPS: { title: string; detail: string }[] = [
+  { title: "Target", detail: "What you stand up" },
+  { title: "Consent & limits", detail: "Authority, setup, time" },
+  { title: "Review & launch", detail: "Pinned identity, topology" },
+];
+// What the service does at each step, shown beside the form.
+const STEP_NOTES: Record<Step, [string, string][]> = {
+  1: [
+    [
+      "Resolve",
+      "Git refs resolve to a commit, OCI tags to a digest, bundles to their upload digest.",
+    ],
+    [
+      "Isolate",
+      "The target gets its own network segment, separated from the host.",
+    ],
+    [
+      "Foothold",
+      "An optional attacker station joins that segment for the engagement.",
+    ],
+  ],
+  2: [
+    [
+      "Authorize",
+      "Nothing is configured until you confirm scope and authority.",
+    ],
+    [
+      "Bound setup",
+      "Git and bundle targets get a time-boxed, step-budgeted setup session.",
+    ],
+    ["Revoke egress", "Dependency downloads stop before research begins."],
+  ],
+  3: [
+    ["Preview only", "Review resolves the target without deploying anything."],
+    [
+      "Pinned launch",
+      "Launch uses exactly the reviewed identity; any edit needs a new review.",
+    ],
+    ["Time box", "The engagement clock starts when the arena is created."],
+  ],
+};
 
 export function NewResearch() {
   const form = useRef<HTMLFormElement>(null);
@@ -21,6 +65,34 @@ export function NewResearch() {
   const [pinned, setPinned] = useState<Record<string, unknown> | null>(null);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
+  const stepped =
+    new URLSearchParams(window.location.search).get("layout") !== "form";
+  const [step, setStep] = useState<Step>(1);
+  const groups = [useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null)];
+  function stepValid(index: 0 | 1) {
+    const fields = groups[index].current?.querySelectorAll<
+      HTMLInputElement | HTMLSelectElement
+    >("input, select");
+    const invalid = [...(fields || [])].find((item) => !item.checkValidity());
+    if (invalid) {
+      invalid.reportValidity();
+      return false;
+    }
+    if (index === 0 && kind === "bundle" && !bundle) {
+      setMessage("Upload the source bundle before continuing.");
+      return false;
+    }
+    return true;
+  }
+  function goTo(next: Step) {
+    if (next > step) {
+      if (!stepValid(0)) return;
+      if (next === 3 && !stepValid(1)) return;
+    }
+    setMessage("");
+    setStep(next);
+    if (next === 3) void review();
+  }
   function requestBody() {
     const fields = new FormData(form.current!);
     const ports = String(fields.get("ports") || "")
@@ -183,13 +255,46 @@ export function NewResearch() {
         </span>
         <b>{simulationMode ? "MOCK" : "DOCKER-LOCAL"}</b>
       </div>
-      <div className="comparison-form-grid">
+      {stepped && (
+        <ol className="intake-steps" aria-label="Research setup steps">
+          {STEPS.map((item, index) => {
+            const number = (index + 1) as Step;
+            return (
+              <li
+                key={item.title}
+                className={
+                  number === step ? "current" : number < step ? "done" : ""
+                }
+              >
+                <button
+                  type="button"
+                  aria-current={number === step ? "step" : undefined}
+                  disabled={number > step || pending}
+                  onClick={() => goTo(number)}
+                >
+                  <span className="intake-step-number">
+                    {number < step ? "✓" : number}
+                  </span>
+                  <span>
+                    <strong>{item.title}</strong>
+                    <small>{item.detail}</small>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+      <div className={stepped ? "intake-stepper-grid" : "comparison-form-grid"}>
         <form
           className="panel comparison-form"
           ref={form}
+          noValidate={stepped}
           onSubmit={(event) => {
             event.preventDefault();
-            review();
+            if (!stepped) review();
+            else if (step < 3) goTo((step + 1) as Step);
+            else void launch();
           }}
           onChange={() => {
             editRevision.current += 1;
@@ -200,11 +305,25 @@ export function NewResearch() {
         >
           <div className="panel-head">
             <div>
-              <span className="eyebrow">01 / TARGET & CONSENT</span>
-              <h2>Research setup</h2>
+              <span className="eyebrow">
+                {stepped ? `STEP ${step} OF 3` : "01 / TARGET & CONSENT"}
+              </span>
+              <h2>
+                {!stepped
+                  ? "Research setup"
+                  : step === 1
+                    ? "What are you standing up?"
+                    : step === 2
+                      ? "Consent and limits"
+                      : "Review and launch"}
+              </h2>
             </div>
           </div>
-          <div className="comparison-fields research-fields">
+          <div
+            className="comparison-fields research-fields"
+            ref={groups[0]}
+            hidden={stepped && step !== 1}
+          >
             <label>
               Target type
               <select
@@ -291,6 +410,16 @@ export function NewResearch() {
               Service ports
               <input name="ports" placeholder="80, 443" inputMode="numeric" />
             </label>
+            <label className="form-check">
+              <input name="include_attacker" type="checkbox" defaultChecked />{" "}
+              Add an isolated attacker foothold
+            </label>
+          </div>
+          <div
+            className="comparison-fields research-fields"
+            ref={groups[1]}
+            hidden={stepped && step !== 2}
+          >
             <label>
               Participant
               <select name="participant_mode">
@@ -366,96 +495,215 @@ export function NewResearch() {
               </>
             )}
             <label className="form-check">
-              <input name="include_attacker" type="checkbox" defaultChecked />{" "}
-              Add an isolated attacker foothold
-            </label>
-            <label className="form-check">
               <input name="authorization_confirmed" type="checkbox" required />{" "}
               I confirm this target is in scope and I am authorized to assess it
             </label>
           </div>
+          {stepped && step === 3 && (
+            <div className="intake-review">
+              {pending && !preview ? (
+                <Empty
+                  title="Reviewing target"
+                  detail="Resolving the immutable identity and planned topology. Nothing is deployed."
+                />
+              ) : preview?.valid ? (
+                <>
+                  <div className="target-pin">
+                    <small>IMMUTABLE IDENTITY</small>
+                    <code>
+                      {kind === "oci"
+                        ? preview.runtime_ref
+                        : preview.resolved_ref}
+                    </code>
+                  </div>
+                  <div className="forge-workbench intake-map">
+                    <div className="forge-canvas">
+                      <SegmentMap
+                        compact
+                        nodes={preview.topology.nodes.map((node) => ({
+                          name: node.name,
+                          kind:
+                            node.kind === "foothold" ? "foothold" : "target",
+                          detail:
+                            node.kind === "foothold"
+                              ? "Attacker foothold"
+                              : `${node.role || "Target"}${
+                                  node.ports.length
+                                    ? ` · ${node.ports.map((port) => `:${port}`).join(" ")}`
+                                    : ""
+                                }`,
+                        }))}
+                        segments={preview.topology.segments}
+                      />
+                    </div>
+                  </div>
+                  <div className="topology-facts">
+                    <span>
+                      {preview.topology.segments.length} network segments
+                    </span>
+                    <span>Egress {preview.topology.egress || "unknown"}</span>
+                    {(kind === "git" || kind === "bundle") && (
+                      <span>
+                        Build {preview.introspection.build_system || "unknown"}{" "}
+                        · {preview.build_plan.strategy || "manual setup"}
+                      </span>
+                    )}
+                  </div>
+                  {preview.warnings.length > 0 && (
+                    <ul className="preview-warnings">
+                      {preview.warnings.map((warning) => (
+                        <li key={warning}>{warning}</li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              ) : (
+                <Empty
+                  title="Review did not pass"
+                  detail="Go back, correct the target or limits, and review again."
+                />
+              )}
+            </div>
+          )}
           {message && (
             <div className="form-error" role="alert">
               {message}
             </div>
           )}
-          <div className="comparison-form-foot">
-            <span>
-              Review validates the planned topology and pins the target.
-              Changing a field requires a new review.
-            </span>
-            <button
-              type="submit"
-              className="button button-outline"
-              disabled={pending}
-            >
-              {pending ? "Working…" : "Review target ↗"}
-            </button>
-          </div>
-        </form>
-        <Panel
-          eyebrow="02 / REVIEW"
-          title={preview?.summary.name || "Target preview"}
-          className="topology-panel"
-        >
-          {preview?.valid ? (
-            <>
-              <div className="target-pin">
-                <small>IMMUTABLE IDENTITY</small>
-                <code>
-                  {kind === "oci" ? preview.runtime_ref : preview.resolved_ref}
-                </code>
-              </div>
-              <div className="topology-preview topology-real">
-                <div className="topology-grid" />
-                {preview.topology.nodes.map((node) => (
-                  <div className="topology-box" key={node.name}>
-                    <span>{node.kind === "foothold" ? "◈" : "⬡"}</span>
-                    <strong>{node.name}</strong>
-                    <small>{node.role || node.kind}</small>
-                  </div>
-                ))}
-              </div>
-              <div className="topology-facts">
-                <span>{preview.topology.segments.length} network segments</span>
-                <span>Egress {preview.topology.egress || "unknown"}</span>
-              </div>
-              {(kind === "git" || kind === "bundle") && (
-                <p className="scenario-description">
-                  Build: {preview.introspection.build_system || "unknown"} ·
-                  Strategy: {preview.build_plan.strategy || "manual setup"} ·
-                  Auto-build{" "}
-                  {preview.build_plan.auto_build ? "enabled" : "disabled"}
-                </p>
-              )}
-              {preview.warnings.length > 0 && (
-                <ul className="preview-warnings">
-                  {preview.warnings.map((warning) => (
-                    <li key={warning}>{warning}</li>
-                  ))}
-                </ul>
-              )}
-              <div className="comparison-form-foot">
-                <span>
-                  Launch will create a new arena and start its time box.
-                </span>
+          {stepped ? (
+            <div className="comparison-form-foot intake-nav">
+              <button
+                type="button"
+                className="button button-outline"
+                disabled={step === 1 || pending}
+                onClick={() => goTo((step - 1) as Step)}
+              >
+                ← Back
+              </button>
+              {step < 3 ? (
                 <button
-                  type="button"
+                  type="submit"
+                  className="button button-gold"
+                  disabled={pending}
+                >
+                  {step === 2 ? "Review target →" : "Next →"}
+                </button>
+              ) : (
+                <button
+                  type="submit"
                   className="button button-gold"
                   disabled={!pinned || pending}
-                  onClick={launch}
                 >
                   {pending ? "Working…" : "Launch research ↗"}
                 </button>
-              </div>
-            </>
+              )}
+            </div>
           ) : (
-            <Empty
-              title="Preview before launch"
-              detail="Enter an authorized target and review its pinned identity, setup and topology."
-            />
+            <div className="comparison-form-foot">
+              <span>
+                Review validates the planned topology and pins the target.
+                Changing a field requires a new review.
+              </span>
+              <button
+                type="submit"
+                className="button button-outline"
+                disabled={pending}
+              >
+                {pending ? "Working…" : "Review target ↗"}
+              </button>
+            </div>
           )}
-        </Panel>
+        </form>
+        {stepped ? (
+          <aside
+            className="intake-notes"
+            aria-label="What happens in this step"
+          >
+            <span className="eyebrow">HOW IT WORKS</span>
+            <ol>
+              {STEP_NOTES[step].map(([title, detail]) => (
+                <li key={title}>
+                  <strong>{title}</strong>
+                  <span>{detail}</span>
+                </li>
+              ))}
+            </ol>
+            <a
+              className="inline-action"
+              href="/console/research/new?layout=form"
+            >
+              Use the single-page form ↗
+            </a>
+          </aside>
+        ) : (
+          <Panel
+            eyebrow="02 / REVIEW"
+            title={preview?.summary.name || "Target preview"}
+            className="topology-panel"
+          >
+            {preview?.valid ? (
+              <>
+                <div className="target-pin">
+                  <small>IMMUTABLE IDENTITY</small>
+                  <code>
+                    {kind === "oci"
+                      ? preview.runtime_ref
+                      : preview.resolved_ref}
+                  </code>
+                </div>
+                <div className="topology-preview topology-real">
+                  <div className="topology-grid" />
+                  {preview.topology.nodes.map((node) => (
+                    <div className="topology-box" key={node.name}>
+                      <span>{node.kind === "foothold" ? "◈" : "⬡"}</span>
+                      <strong>{node.name}</strong>
+                      <small>{node.role || node.kind}</small>
+                    </div>
+                  ))}
+                </div>
+                <div className="topology-facts">
+                  <span>
+                    {preview.topology.segments.length} network segments
+                  </span>
+                  <span>Egress {preview.topology.egress || "unknown"}</span>
+                </div>
+                {(kind === "git" || kind === "bundle") && (
+                  <p className="scenario-description">
+                    Build: {preview.introspection.build_system || "unknown"} ·
+                    Strategy: {preview.build_plan.strategy || "manual setup"} ·
+                    Auto-build{" "}
+                    {preview.build_plan.auto_build ? "enabled" : "disabled"}
+                  </p>
+                )}
+                {preview.warnings.length > 0 && (
+                  <ul className="preview-warnings">
+                    {preview.warnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                )}
+                <div className="comparison-form-foot">
+                  <span>
+                    Launch will create a new arena and start its time box.
+                  </span>
+                  <button
+                    type="button"
+                    className="button button-gold"
+                    disabled={!pinned || pending}
+                    onClick={launch}
+                  >
+                    {pending ? "Working…" : "Launch research ↗"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <Empty
+                title="Preview before launch"
+                detail="Enter an authorized target and review its pinned identity, setup and topology."
+              />
+            )}
+          </Panel>
+        )}
       </div>
     </>
   );

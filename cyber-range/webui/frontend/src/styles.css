@@ -1,5 +1,14 @@
 :root {
   font-family: Inter, "Segoe UI", Arial, sans-serif;
+  /* Stacking scale: in-panel menus < arena rail < header < header menus
+     < assistant < skip link. Use these instead of raw numbers. */
+  --z-menu: 5;
+  --z-rail: 20;
+  --z-header: 40;
+  --z-dropdown: 45;
+  --z-assistant-panel: 49;
+  --z-assistant: 50;
+  --z-skip: 100;
   color-scheme: light;
   --page: #ebe9e4;
   --surface: #fbf9f4;
@@ -9,8 +18,8 @@
   --subtle: #7c8287;
   --line: #cfc6b7;
   --line-soft: #e4ded4;
-  --purple: #765331;
-  --purple-soft: #ebdfcd;
+  --accent: #765331;
+  --accent-soft: #ebdfcd;
   --gold: #e4b965;
   --gold-ink: #292137;
   --bar: #1a2233;
@@ -34,8 +43,8 @@
   --subtle: #959db4;
   --line: #434a62;
   --line-soft: #363e55;
-  --purple: #d7ba85;
-  --purple-soft: #413c4e;
+  --accent: #d7ba85;
+  --accent-soft: #413c4e;
   --gold: #e6bb68;
   --gold-ink: #272037;
   --bar: #111729;
@@ -62,6 +71,21 @@ body {
   background: var(--page);
   font-size: 14px;
 }
+/* Counts, budgets and timestamps line up when values change. */
+table,
+dl,
+time,
+.count,
+.result-metrics,
+.activity-stats,
+.evidence-counts,
+.evidence-summary,
+.arena-live-status,
+.forge-inspector,
+.forge-signal,
+.forge-event {
+  font-variant-numeric: tabular-nums;
+}
 button,
 input,
 select {
@@ -85,9 +109,17 @@ summary:focus-visible {
   outline: 3px solid var(--gold);
   outline-offset: 3px;
 }
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .skip-link {
   position: fixed;
-  z-index: 100;
+  z-index: var(--z-skip);
   top: -60px;
   left: 16px;
   padding: 10px 14px;
@@ -101,7 +133,7 @@ summary:focus-visible {
 .site-header {
   position: sticky;
   top: 0;
-  z-index: 40;
+  z-index: var(--z-header);
   padding: 16px clamp(16px, 2.8vw, 44px) 0;
   pointer-events: none;
 }
@@ -287,7 +319,7 @@ summary:focus-visible {
 .profile-menu strong {
   display: block;
   padding: 6px 9px 10px;
-  color: var(--purple);
+  color: var(--accent);
   font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -321,7 +353,7 @@ summary:focus-visible {
   margin-bottom: 25px;
 }
 .eyebrow {
-  color: var(--purple);
+  color: var(--accent);
   font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.15em;
@@ -349,7 +381,7 @@ summary:focus-visible {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--purple);
+  color: var(--accent);
   font-size: 11px;
   font-weight: 800;
 }
@@ -439,7 +471,7 @@ summary:focus-visible {
 }
 .inline-action,
 .subtle-link {
-  color: var(--purple);
+  color: var(--accent);
   font-size: 12px;
   font-weight: 850;
   white-space: nowrap;
@@ -457,6 +489,8 @@ summary:focus-visible {
   font-weight: 850;
   text-transform: capitalize;
   white-space: nowrap;
+  /* Fit the label inside grid cells instead of stretching across the column. */
+  justify-self: start;
 }
 .status i {
   width: 6px;
@@ -485,13 +519,13 @@ summary:focus-visible {
   min-width: 29px;
   height: 29px;
   padding: 3px 6px;
-  background: var(--purple-soft);
-  color: var(--purple);
+  background: var(--accent-soft);
+  color: var(--accent);
   font-size: 13px;
   font-weight: 900;
 }
 .micro-label {
-  color: var(--purple);
+  color: var(--accent);
   font-size: 10px;
   font-weight: 850;
   letter-spacing: 0.14em;
@@ -630,7 +664,7 @@ summary:focus-visible {
   font-size: 11px;
 }
 .compact-row b {
-  color: var(--purple);
+  color: var(--accent);
   font-size: 14px;
 }
 .session-table {
@@ -707,7 +741,7 @@ summary:focus-visible {
   grid-column: 2;
   grid-row: 1/3;
   align-self: center;
-  color: var(--purple);
+  color: var(--accent);
 }
 .scope-note {
   display: flex;
@@ -721,7 +755,7 @@ summary:focus-visible {
   font-size: 12px;
 }
 .scope-note strong {
-  color: var(--purple);
+  color: var(--accent);
   white-space: nowrap;
 }
 .scope-note span {
@@ -732,7 +766,7 @@ summary:focus-visible {
   margin-left: auto;
   padding: 6px 8px;
   border: 1px solid var(--line);
-  color: var(--purple);
+  color: var(--accent);
   font-size: 9px;
   letter-spacing: 0.08em;
   white-space: nowrap;
@@ -759,7 +793,7 @@ summary:focus-visible {
   display: block;
 }
 .pair > div > span {
-  color: var(--purple);
+  color: var(--accent);
   font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.12em;
@@ -796,7 +830,7 @@ summary:focus-visible {
   border: 0;
 }
 .registry-list span {
-  color: var(--purple);
+  color: var(--accent);
   font-size: 18px;
   font-weight: 900;
 }
@@ -809,7 +843,7 @@ summary:focus-visible {
   border-bottom: 1px solid var(--line-soft);
 }
 .material-count strong {
-  color: var(--purple);
+  color: var(--accent);
   font-size: 30px;
 }
 .material-count span {
@@ -830,9 +864,9 @@ summary:focus-visible {
   text-align: left;
 }
 .catalog-item.selected {
-  border-left: 3px solid var(--purple);
+  border-left: 3px solid var(--accent);
   padding-left: 17px;
-  background: var(--purple-soft);
+  background: var(--accent-soft);
 }
 .catalog-item strong,
 .catalog-item small {
@@ -912,14 +946,16 @@ summary:focus-visible {
   justify-content: space-between;
   max-width: 1450px;
   margin: auto;
-  padding: 16px 30px 30px;
+  /* Bottom space keeps the footer and the end of the page clear of the
+     fixed assistant launcher. */
+  padding: 16px 30px 84px;
   color: var(--subtle);
   font-size: 10px;
   font-weight: 850;
   letter-spacing: 0.08em;
 }
 .site-footer a {
-  color: var(--purple);
+  color: var(--accent);
 }
 .arena-return {
   display: flex;
@@ -930,7 +966,7 @@ summary:focus-visible {
   font-size: 12px;
 }
 .arena-return a {
-  color: var(--purple);
+  color: var(--accent);
   font-weight: 800;
 }
 .arena-context {
@@ -2054,6 +2090,82 @@ summary:focus-visible {
   grid-column: 3;
   grid-row: 1 / 3;
 }
+.workflow-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+}
+.workflow-steps a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 100%;
+  padding: 13px 15px;
+  border: 1px solid var(--line);
+  border-top: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
+  transition: border-color 160ms ease;
+}
+.workflow-steps a:hover {
+  border-color: var(--accent);
+}
+.workflow-steps .next a {
+  border-top-color: var(--gold);
+}
+.workflow-steps strong {
+  display: block;
+  font-size: 12px;
+}
+.workflow-steps small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.workflow-steps b {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.workflow-steps .next b {
+  color: var(--accent);
+}
+.workflow-steps .done b {
+  color: var(--success);
+}
+.workflow-index {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--line);
+  color: var(--accent);
+  font: 800 10px monospace;
+}
+@media (max-width: 760px) {
+  .workflow-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.research-grid .research-activity {
+  grid-column: 1;
+}
+.research-activity .registry-tabs {
+  margin: 0;
+  border-bottom: 0;
+}
+.research-activity .registry-tabs button {
+  padding: 8px 11px;
+}
+.research-activity .registry-tabs button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 .activity-source {
   grid-row: 1 / 3;
   color: var(--accent);
@@ -2726,8 +2838,8 @@ summary:focus-visible {
 }
 .scenario-filters button.selected,
 .scenario-author-modes button.selected {
-  border-color: var(--purple);
-  background: var(--purple-soft);
+  border-color: var(--accent);
+  background: var(--accent-soft);
   color: var(--ink);
 }
 .scenario-library-list {
@@ -2748,9 +2860,9 @@ summary:focus-visible {
   text-align: left;
 }
 .scenario-library-item.selected {
-  border-left: 3px solid var(--purple);
+  border-left: 3px solid var(--accent);
   padding-left: 19px;
-  background: var(--purple-soft);
+  background: var(--accent-soft);
 }
 .scenario-library-item span {
   min-width: 0;
@@ -2819,7 +2931,7 @@ summary:focus-visible {
 }
 .scenario-author-form input[type="checkbox"],
 .scenario-author-form input[type="radio"] {
-  accent-color: var(--purple);
+  accent-color: var(--accent);
 }
 .scenario-author-actions {
   display: flex;
@@ -3111,7 +3223,7 @@ body {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  z-index: 45;
+  z-index: var(--z-dropdown);
   display: grid;
   min-width: 168px;
   padding: 7px;
@@ -3504,7 +3616,7 @@ body {
   font-size: 13px;
 }
 .arena-return ~ .gate-message a {
-  color: var(--purple);
+  color: var(--accent);
 }
 .gate-dialog {
   width: min(440px, calc(100vw - 24px));
@@ -3595,7 +3707,7 @@ body {
 .result-facts strong {
   display: block;
   overflow: hidden;
-  color: var(--purple);
+  color: var(--accent);
   font-size: 26px;
   text-overflow: ellipsis;
   text-transform: capitalize;
@@ -3639,7 +3751,7 @@ body {
   text-transform: capitalize;
 }
 .result-table-row span:last-child {
-  color: var(--purple);
+  color: var(--accent);
   text-transform: capitalize;
 }
 .result-interval-note {
@@ -3670,7 +3782,7 @@ body {
   color: var(--muted);
 }
 .challenge-row b {
-  color: var(--purple);
+  color: var(--accent);
 }
 .trial-list > div {
   display: grid;
@@ -4018,7 +4130,7 @@ body {
 }
 .topology-scroll-hint {
   margin: 8px 0 0;
-  color: var(--purple);
+  color: var(--accent);
   font-size: 11px;
   text-align: right;
 }
@@ -4037,4 +4149,198 @@ body {
 }
 .map-target.refused {
   border-left-color: var(--danger);
+}
+
+/* Night: the page stays navy; the Forge plates get a brass edge and a deeper
+   drop so they still read as raised plates on the night page. Release G
+   candidate, pending operator approval in the live console. */
+:root[data-theme="night"] .forge-workbench,
+:root[data-theme="night"] .research-grid .featured,
+:root[data-theme="night"] .benchmark-grid .latest-panel {
+  border-color: #b08f55;
+  box-shadow:
+    0 0 0 1px #8c775455,
+    0 18px 40px #05081499;
+}
+
+/* Research overview reuses the Arena's Forge map. */
+.featured-main.featured-main-map {
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+  padding-bottom: 14px;
+}
+.research-grid .featured-topology {
+  margin: 0 22px 8px;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  animation: none;
+}
+:root[data-theme="night"] .research-grid .featured-topology {
+  box-shadow: none;
+}
+.featured-topology .forge-canvas {
+  padding: 0;
+}
+.featured-topology-note {
+  margin: 0 22px 18px;
+  color: #c9c2b4;
+  font-size: 12px;
+}
+
+.field-hint {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+/* Research intake stepper: stone form, navy notes plate, brass step rail. */
+.intake-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.intake-steps li + li {
+  border-left: 1px solid var(--line);
+}
+.intake-steps button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 18px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.intake-steps button:disabled {
+  cursor: default;
+}
+.intake-steps .current button {
+  border-bottom-color: var(--gold);
+  color: var(--ink);
+}
+.intake-steps .done button:hover {
+  background: var(--surface-soft);
+}
+.intake-steps strong {
+  display: block;
+  font-size: 13px;
+}
+.intake-steps small {
+  font-size: 11px;
+}
+.intake-step-number {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  color: var(--accent);
+  font: 800 12px monospace;
+}
+.intake-steps .current .intake-step-number {
+  border-color: var(--gold);
+  background: var(--bar);
+  color: var(--gold);
+}
+.intake-steps .done .intake-step-number {
+  border-color: var(--success);
+  color: var(--success);
+}
+.intake-stepper-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.42fr);
+  gap: 18px;
+  align-items: start;
+}
+.intake-notes {
+  display: grid;
+  gap: 14px;
+  padding: 20px 22px;
+  border: 1px solid #7b6950;
+  background:
+    radial-gradient(circle at 88% 12%, #c39c4f26, transparent 34%),
+    linear-gradient(125deg, #172339, #273249);
+  color: #f6f1e8;
+}
+.intake-notes .eyebrow {
+  color: #dfbd77;
+}
+.intake-notes ol {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: note;
+}
+.intake-notes li {
+  display: grid;
+  gap: 3px;
+  padding-left: 14px;
+  border-left: 2px solid #b08f55;
+}
+.intake-notes strong {
+  font-size: 13px;
+}
+.intake-notes span {
+  color: #c9c2b4;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.intake-notes .inline-action {
+  color: #f3d398;
+  font-size: 11px;
+}
+.intake-review {
+  display: grid;
+  gap: 14px;
+  margin: 0 22px 18px;
+}
+.intake-review .target-pin {
+  margin: 0;
+}
+.intake-map {
+  border: 0;
+  box-shadow: none;
+  background: none;
+  animation: none;
+}
+.intake-map .forge-canvas {
+  padding: 0;
+}
+.intake-nav {
+  justify-content: space-between;
+}
+@media (max-width: 900px) {
+  .intake-stepper-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .intake-steps small {
+    display: none;
+  }
+  .intake-steps button {
+    padding: 12px 10px;
+    gap: 8px;
+  }
+}
+.comparison-fields[hidden] {
+  display: none;
+}
+.comparison-form-foot.intake-nav {
+  flex-direction: row;
+  align-items: center;
 }

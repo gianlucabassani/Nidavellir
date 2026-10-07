@@ -12,6 +12,31 @@ import {
 } from "../ui";
 import { ScenarioTopology } from "./index";
 
+// Labels and meanings match the service's engagement purposes. "Manual
+// research" keeps the purpose distinct from the Research workspace.
+const PURPOSES = [
+  {
+    id: "discovery",
+    label: "Discovery",
+    meaning: "Find unknown weaknesses or regressions in a target.",
+  },
+  {
+    id: "research",
+    label: "Manual research",
+    meaning: "Operator-led investigation without comparison scoring.",
+  },
+  {
+    id: "calibration",
+    label: "Calibration",
+    meaning: "Validate tools, policies, containment and scoring behaviour.",
+  },
+  {
+    id: "benchmark",
+    label: "Benchmark",
+    meaning: "Measure an agent or workflow against known objectives.",
+  },
+];
+
 export function NewArena() {
   const { value, error, loading, refresh } = useWorkspaceData<RangeData>(
     paths.range,
@@ -148,11 +173,17 @@ export function NewArena() {
                 value={purpose}
                 onChange={(event) => setPurpose(event.target.value)}
               >
-                <option value="discovery">Discovery</option>
-                <option value="research">Research</option>
-                <option value="calibration">Calibration</option>
-                <option value="benchmark">Benchmark</option>
+                {PURPOSES.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
               </select>
+              <small className="field-hint">
+                {PURPOSES.find((item) => item.id === purpose)?.meaning} Recorded
+                with the arena for the audit trail; it does not change scoring,
+                containment or limits.
+              </small>
             </label>
             <label>
               Participant

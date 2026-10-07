@@ -2,6 +2,7 @@ import { useState } from "react";
 import { postJson } from "../api";
 import type { ArenaData } from "../types";
 import {
+  ConfirmDialog,
   Empty,
   ErrorState,
   Loading,
@@ -47,6 +48,7 @@ export function SetupWorkbench({
     `/api/console/arenas/${id}/setup`,
   );
   const [mode, setMode] = useState<string | null>(null);
+  const [confirmFinish, setConfirmFinish] = useState(false);
   const [seconds, setSeconds] = useState<number | null>(null);
   const [budget, setBudget] = useState<number | null>(null);
   const [egress, setEgress] = useState<boolean | null>(null);
@@ -212,17 +214,23 @@ export function SetupWorkbench({
           <button
             className="button button-danger setup-finish"
             disabled={pending}
-            onClick={() => {
-              if (
-                window.confirm(
-                  `Finish setup for ${arena.name}? This closes the configuration phase.`,
-                )
-              )
-                void run(`${endpoint}/finish`, {});
-            }}
+            onClick={() => setConfirmFinish(true)}
           >
             Finish setup
           </button>
+        )}
+        {confirmFinish && (
+          <ConfirmDialog
+            title={`Finish setup for ${arena.name}?`}
+            body="This closes the configuration phase. Setup history stays in the event trace."
+            confirmLabel="Finish setup"
+            danger
+            onCancel={() => setConfirmFinish(false)}
+            onConfirm={() => {
+              setConfirmFinish(false);
+              void run(`${endpoint}/finish`, {});
+            }}
+          />
         )}
         {message && (
           <p className="gate-message" role="status">

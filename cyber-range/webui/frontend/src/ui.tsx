@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getJson } from "./api";
 import type { Workspace } from "./types";
 
@@ -212,5 +212,54 @@ export function ErrorState({
         Try again
       </button>
     </div>
+  );
+}
+
+// In-page replacement for window.confirm, styled like the lifecycle dialog.
+export function ConfirmDialog({
+  title,
+  body,
+  confirmLabel,
+  danger = false,
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  body: string;
+  confirmLabel: string;
+  danger?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const element = dialog.current;
+    if (element && !element.open) element.showModal();
+    return () => {
+      if (element?.open) element.close();
+    };
+  }, []);
+  return (
+    <dialog ref={dialog} className="gate-dialog" onClose={onCancel}>
+      <span className="eyebrow">CONFIRM ACTION</span>
+      <h2>{title}</h2>
+      <p>{body}</p>
+      <div>
+        <button
+          type="button"
+          className="button button-outline"
+          onClick={onCancel}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          className={`button ${danger ? "button-danger" : "button-gold"}`}
+          onClick={onConfirm}
+        >
+          {confirmLabel}
+        </button>
+      </div>
+    </dialog>
   );
 }
