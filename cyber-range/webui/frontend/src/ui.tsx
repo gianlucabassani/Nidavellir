@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { getJson } from "./api";
 import type { Workspace } from "./types";
 
@@ -239,6 +239,8 @@ export function ConfirmDialog({
   onCancel: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const bodyId = useId();
   useEffect(() => {
     const element = dialog.current;
     if (element && !element.open) element.showModal();
@@ -247,10 +249,31 @@ export function ConfirmDialog({
     };
   }, []);
   return (
-    <dialog ref={dialog} className="gate-dialog" onClose={onCancel}>
+    <dialog
+      ref={dialog}
+      className="gate-dialog"
+      aria-labelledby={titleId}
+      aria-describedby={bodyId}
+      onClose={onCancel}
+      onKeyDown={(event) => {
+        if (event.key !== "Tab") return;
+        const buttons = event.currentTarget.querySelectorAll<HTMLButtonElement>(
+          "button:not(:disabled)",
+        );
+        const first = buttons[0];
+        const last = buttons[buttons.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }}
+    >
       <span className="eyebrow">CONFIRM ACTION</span>
-      <h2>{title}</h2>
-      <p>{body}</p>
+      <h2 id={titleId}>{title}</h2>
+      <p id={bodyId}>{body}</p>
       <div>
         <button
           type="button"

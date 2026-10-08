@@ -1,6 +1,6 @@
 # Nidavellir — open risk register
 
-Updated 2026-10-07 after the independent audit. MODEL-R1 and NV07-R1
+Updated 2026-10-08 after UI-R1 closure and the independent audit. MODEL-R1 and NV07-R1
 remain closed for calibration machinery only. RESEARCH-R1/R4 are closed for the new
 structured gate after Phase 2 verification; historical chronology is not repaired;
 mail probe validity, incomplete coverage and historical evidence gaps remain open.
@@ -19,65 +19,25 @@ Severity is the risk of drawing a wrong conclusion from the platform's output:
 
 ---
 
-## Open — operator console migration
+## Closed — operator console migration
 
-### UI-R1 · Console cutover needs parity and usability evidence · low
+### UI-R1 · Console cutover parity and usability evidence · closed 2026-10-08
 
-The running development SQLite file initially lacked
-`model_connections.base_url` and `deployments.effective_provider`, and had no
-Alembic revision. On 2026-09-28 it was backed up to
-`/tmp/nv-ui-development-backup-2026-09-28.db`, reconciled with a clean schema
-and stamped at revision `0009`. SQLite integrity passed, both existing
-deployments remained, and the restarted Compose console returned 200 for
-Research, Benchmark, Cyber Range, Targets and Settings data in Chromium.
-One mock arena launched, its workspace and Browser/Transfer tabs loaded, and
-it was destroyed through the React UI with its record retained. The UI now
-labels this development simulation explicitly.
+The console now includes setup command history, the curated custom-topology
+builder, provider selection with explicit verification labels, and the remaining
+arena list actions. An isolated real Docker-local service run verified setup
+output retention, a scoped forward and revocation, reconnect after API outage,
+destroy-from-list, archive removal and clear-archive retention behavior. Expired
+session and CSRF denial browser journeys passed. A scoped accessibility review
+recorded keyboard behavior, 320–1440 px reflow, light/dark themes and automated
+WCAG 2.2 A/AA results.
 
-A separate disposable mock API database at the current schema served the new
-Research, Benchmark, Cyber Range, Targets and Settings screens and accepted a
-source-bundle upload/preview on 2026-09-28. That confirms those read/intake
-contracts independently of the stale development database; it does not meet
-the Docker-local closure criterion below.
-
-On 2026-09-29 an isolated PostgreSQL/Redis/worker/WebUI Compose stack ran a
-real Docker-local fixture through the React Cyber Range path: scenario import,
-launch, HTTP transaction and linked finding, replacement reset, retained
-original finding, replacement destroy and scenario deletion. The live run
-found and fixed a transaction-list shape mismatch that had crashed the HTTP
-tab. Both arena IDs had no labelled containers or networks after teardown;
-the isolated stack and volumes were removed.
-
-The same date, a separate Research browser journey uploaded and pinned a local
-source bundle, ran and finished setup, completed a confined PoC, recorded an
-observation, destroyed the arena and reopened the finding on its archived
-record. A second isolated NV-07 stack completed a three-pair scripted
-calibration comparison through the React registry and comparison screens:
-all six trials completed, with zero infrastructure failures. See
-`docs/verification/ui-research-benchmark-live-2026-09-29.md`. An arena event
-filtering gap and disposable-stack reaper timeout were fixed during this work.
-All tested arena resources and both disposable stacks were removed.
-
-On 2026-10-07 (Releases G–H) the console gained native Score/Challenges, run
-attribution, service forwards, the agent connect recipe, All arenas (destroy,
-remove, clear archive), All evaluations, capacity, Activity filters, a Forge
-sign-in page and a stepped research intake. Remaining legacy-only surfaces:
-setup command output, the custom topology builder and non-Docker-local
-launches. Forwards, archive removal and destroy-from-list have browser and
-unit coverage with mocked service calls only. The operator approved the console
-after manual review on 2026-10-07 and it is now the default UI; the live fallback
-drill passed both ways (`WEBUI_DEFAULT_CONSOLE=false` restores the legacy home,
-`/?legacy=1` reaches it while the console is default).
-
-**Why it matters:** successful read-only pages and a clean release gate do not
-prove launch, arena operations, evidence retention or Docker-local task parity.
-
-**Closes when:** route/action parity, browser denial and failure states, and
-retained-record inspection are verified across the intended Research,
-Benchmark and Cyber Range paths. The default cutover was approved on 2026-10-07
-and the fallback drill passed; the session-expiry, CSRF-denial and reconnect
-browser journeys and formal accessibility/usability review remain open. Record
-these and the remaining parity/live-service checks in `docs/verification/`.
+See [UI-R1 closure evidence](docs/verification/ui-r1-closure-2026-10-08.md),
+[accessibility review](docs/verification/ui-accessibility-review-2026-10-08.md)
+and the earlier [Docker-local research evidence](docs/verification/ui-docker-local-2026-09-29.md).
+Docker-local is the only provider verified against real infrastructure; all
+other advertised provider options remain labelled unverified pending their own
+live provisioning checks.
 
 ---
 

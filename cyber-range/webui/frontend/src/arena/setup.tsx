@@ -9,6 +9,7 @@ import {
   Panel,
   Status,
   useWorkspaceData,
+  formatObserved,
 } from "../ui";
 
 type SetupProposal = {
@@ -18,6 +19,16 @@ type SetupProposal = {
   rationale?: string;
 };
 type SetupState = {
+  steps?: {
+    node: string;
+    command: string;
+    stdout: string;
+    stderr: string;
+    exit_code: number | null;
+    ok: boolean;
+    via: string;
+    ts: string;
+  }[];
   open: boolean;
   finished?: boolean;
   planned?: {
@@ -373,6 +384,37 @@ export function SetupWorkbench({
           )}
         </Panel>
       )}
+      <Panel
+        eyebrow="03 / RECORD"
+        title="Setup command history"
+        className="setup-history"
+      >
+        {(value.steps || []).length ? (
+          value.steps!.map((step, index) => (
+            <article className="setup-history-step" key={`${step.ts}-${index}`}>
+              <div>
+                <Status value={step.ok ? "succeeded" : "failed"} />{" "}
+                <strong>{step.node}</strong> · exit{" "}
+                {step.exit_code ?? "unknown"} · {formatObserved(step.ts)}
+              </div>
+              <pre aria-label="Setup command">{step.command}</pre>
+              {step.stdout && (
+                <pre aria-label="Standard output">{step.stdout}</pre>
+              )}
+              {step.stderr && (
+                <pre className="form-error" aria-label="Standard error">
+                  {step.stderr}
+                </pre>
+              )}
+            </article>
+          ))
+        ) : (
+          <Empty
+            title="No recorded setup commands"
+            detail="Executed commands and their bounded output remain here after setup and arena teardown."
+          />
+        )}
+      </Panel>
     </div>
   );
 }

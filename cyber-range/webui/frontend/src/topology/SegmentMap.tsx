@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 export type MapNode = {
   name: string;
@@ -37,6 +37,7 @@ export function SegmentMap({
   onSelect?: (name: string) => void;
   compact?: boolean;
 }) {
+  const mapId = useId();
   const frame = useRef<HTMLDivElement>(null);
   const [available, setAvailable] = useState(900);
   useEffect(() => {
@@ -115,11 +116,11 @@ export function SegmentMap({
                 viewBox={`0 0 ${layout.width} ${layout.height}`}
                 width={layout.width}
                 height={layout.height}
-                role="img"
-                aria-labelledby="topology-title topology-description"
+                role={onSelect ? "group" : "img"}
+                aria-labelledby={`${mapId}-title ${mapId}-description`}
               >
-                <title id="topology-title">Declared arena topology</title>
-                <desc id="topology-description">
+                <title id={`${mapId}-title`}>Declared arena topology</title>
+                <desc id={`${mapId}-description`}>
                   Stations connect to their declared network segments, ordered
                   by hop from the attacker foothold. Connections do not prove
                   live reachability.
@@ -196,7 +197,7 @@ export function SegmentMap({
                     </g>
                   );
                 })}
-                {nodes.map((node) => {
+                {nodes.map((node, nodeIndex) => {
                   const position = layout.stations.get(node.name);
                   if (!position) return null;
                   const x = position.x;
@@ -207,7 +208,11 @@ export function SegmentMap({
                       key={node.name}
                       role={onSelect ? "button" : undefined}
                       tabIndex={onSelect ? 0 : undefined}
-                      aria-label={onSelect ? `Inspect ${node.name}` : undefined}
+                      aria-labelledby={
+                        onSelect
+                          ? `${mapId}-station-${nodeIndex}-name ${mapId}-station-${nodeIndex}-detail${node.state ? ` ${mapId}-station-${nodeIndex}-state` : ""}`
+                          : undefined
+                      }
                       aria-pressed={
                         onSelect ? selected === node.name : undefined
                       }
@@ -222,10 +227,12 @@ export function SegmentMap({
                         }
                       }}
                     >
-                      <title>
-                        {node.name}: {node.detail || node.kind}
-                        {node.state ? `, ${node.state}` : ""}
-                      </title>
+                      {!onSelect && (
+                        <title>
+                          {node.name}: {node.detail || node.kind}
+                          {node.state ? `, ${node.state}` : ""}
+                        </title>
+                      )}
                       <path
                         d={`M ${x} ${y - 35} H ${x + NODE_WIDTH - 11} L ${x + NODE_WIDTH} ${y - 24} V ${y + 35} H ${x} Z`}
                       />
@@ -234,21 +241,24 @@ export function SegmentMap({
                         d={`M ${x + 15} ${y - 11} L ${x + 28} ${y - 23} L ${x + 41} ${y - 11} L ${x + 28} ${y + 1} Z`}
                       />
                       <text
+                        id={`${mapId}-station-${nodeIndex}-name`}
                         className="topology-station-name"
                         x={x + 52}
                         y={y - 9}
                       >
-                        {shortLabel(node.name, 16)}
+                        {shortLabel(node.name, 16)}{" "}
                       </text>
                       <text
+                        id={`${mapId}-station-${nodeIndex}-detail`}
                         className="topology-station-detail"
                         x={x + 52}
                         y={y + 11}
                       >
-                        {shortLabel(node.detail || node.kind, 21)}
+                        {shortLabel(node.detail || node.kind, 21)}{" "}
                       </text>
                       {node.state && (
                         <text
+                          id={`${mapId}-station-${nodeIndex}-state`}
                           className="topology-station-state"
                           x={x + NODE_WIDTH - 12}
                           y={y + 27}

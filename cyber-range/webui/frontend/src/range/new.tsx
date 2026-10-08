@@ -11,6 +11,19 @@ import {
   ErrorState,
 } from "../ui";
 import { ScenarioTopology } from "./index";
+import { TopologyPreview } from "./topology";
+type LaunchOptions = {
+  default: string;
+  providers: { name: string; infra_class: string; verification: string }[];
+  catalog: {
+    id: string;
+    name: string;
+    kind: string;
+    available: boolean;
+    description: string;
+    note: string;
+  }[];
+};
 
 // Labels and meanings match the service's engagement purposes. "Manual
 // research" keeps the purpose distinct from the Research workspace.
@@ -41,6 +54,11 @@ export function NewArena() {
   const { value, error, loading, refresh } = useWorkspaceData<RangeData>(
     paths.range,
   );
+  const launch = useWorkspaceData<LaunchOptions>("/api/console/launch-options");
+  const custom = window.location.pathname.endsWith("/custom");
+  const [providerName, setProviderName] = useState("");
+  const [attackers, setAttackers] = useState<string[]>([]);
+  const [victims, setVictims] = useState<string[]>([]);
   const initialScenario =
     new URLSearchParams(window.location.search).get("scenario") || "";
   const [scenarioId, setScenarioId] = useState(initialScenario);
@@ -52,36 +70,67 @@ export function NewArena() {
   const [submitError, setSubmitError] = useState("");
   if (loading && !value) return <Loading />;
   if (error) return <ErrorState message={error} refresh={refresh} />;
-  if (!value) return null;
+  if (launch.loading && !launch.value) return <Loading />;
+  if (launch.error)
+    return <ErrorState message={launch.error} refresh={launch.refresh} />;
+  if (!value || !launch.value) return null;
+  const providers = launch.value.providers.filter(
+    (item) => !custom || ["docker-local", "mock"].includes(item.name),
+  );
+  const provider =
+    providers.find((item) => item.name === providerName) ||
+    providers.find((item) => item.name === "docker-local") ||
+    providers[0];
+  if (!provider)
+    return (
+      <Empty
+        title="No eligible provider"
+        detail="Configure a provider on the server before launching."
+      />
+    );
   const options = value.scenarios.filter(
     (item) =>
-      item.provider_class === "container" || item.provider_class === "any",
+      item.provider_class === "any" ||
+      provider.infra_class === "any" ||
+      item.provider_class === provider.infra_class,
   );
+  const canLaunch = Boolean(
+    custom ? attackers.length && victims.length : options.length,
+  );
+  const customNodes = [...attackers, ...victims].map((id) => ({
+    name: id,
+    kind: attackers.includes(id) ? "foothold" : "target",
+    role: attackers.includes(id) ? "attacker" : "victim",
+  }));
   const selected = options.find((item) => item.id === scenarioId) || options[0];
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selected || pending) return;
+    if (!canLaunch || pending) return;
     setPending(true);
     setSubmitError("");
     try {
-      const response = await fetch("/api/console/arenas", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          "X-CSRFToken":
-            document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
-              ?.content || "",
+      const response = await fetch(
+        custom ? "/api/console/arenas/custom" : "/api/console/arenas",
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "X-CSRFToken":
+              document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
+                ?.content || "",
+          },
+          body: JSON.stringify({
+            ...(custom ? { attackers, victims } : { scenario: selected?.id }),
+            provider: provider.name,
+            instance_id: name.trim(),
+            engagement_purpose: purpose,
+            participant_mode: participant,
+            engagement_time_box_seconds: timeBox,
+          }),
         },
-        body: JSON.stringify({
-          scenario: selected.id,
-          instance_id: name.trim(),
-          engagement_purpose: purpose,
-          participant_mode: participant,
-          engagement_time_box_seconds: timeBox,
-        }),
-      });
+      );
       if (response.redirected && new URL(response.url).pathname === "/login") {
         window.location.assign(
           `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`,
@@ -119,19 +168,34 @@ export function NewArena() {
         title="Launch a controlled arena"
         subtitle="Review the registered topology and set an operating time box."
         observed={value.observed_at}
-        action={null}
+        action={
+          <a
+            className="button button-outline"
+            href={custom ? "/console/arenas/new" : "/console/arenas/custom"}
+          >
+            {custom ? "Registered scenario" : "Build custom topology"} ↗
+          </a>
+        }
         refresh={refresh}
       />
       <div className="scope-note">
         <strong>
-          {value.simulation_mode ? "Simulation mode" : "Provider"}
+          {value.simulation_mode || provider.name === "mock"
+            ? "Simulation mode"
+            : "Provider"}
         </strong>
         <span>
-          {value.simulation_mode
+          {value.simulation_mode || provider.name === "mock"
             ? "The orchestrator validates this request, then simulates the arena. Use a Docker-local stack for infrastructure verification."
-            : "Docker-local is selected explicitly. The orchestrator validates images, policy and deployment eligibility."}
+            : provider.name === "docker-local"
+              ? "Docker-local is the live-verified provider. The service validates deployment eligibility."
+              : "This provider has not been live-verified. Configure it on the server; the service validates eligibility and reports failures."}
         </span>
-        <b>{value.simulation_mode ? "MOCK" : "DOCKER-LOCAL"}</b>
+        <b>
+          {value.simulation_mode || provider.name === "mock"
+            ? "MOCK"
+            : provider.name.toUpperCase()}
+        </b>
       </div>
       <div className="comparison-form-grid">
         <form className="panel comparison-form" onSubmit={submit}>
@@ -143,19 +207,85 @@ export function NewArena() {
           </div>
           <div className="comparison-fields">
             <label>
-              Registered scenario
+              Provider
               <select
-                required
-                value={selected?.id || ""}
-                onChange={(event) => setScenarioId(event.target.value)}
+                value={provider.name}
+                onChange={(event) => setProviderName(event.target.value)}
+                disabled={pending}
               >
-                {options.map((item) => (
-                  <option value={item.id} key={item.id}>
-                    {item.name} · {item.nodes} nodes
+                {providers.map((item) => (
+                  <option key={item.name} value={item.name}>
+                    {item.name} · {item.verification}
                   </option>
                 ))}
               </select>
             </label>
+            {custom ? (
+              [
+                {
+                  kind: "attacker",
+                  label: "Attacker stations",
+                  selected: attackers,
+                  set: setAttackers,
+                },
+                {
+                  kind: "victim",
+                  label: "Target stations",
+                  selected: victims,
+                  set: setVictims,
+                },
+              ].map((group) => (
+                <fieldset className="catalog-picks" key={group.kind}>
+                  <legend>{group.label}</legend>
+                  {launch
+                    .value!.catalog.filter((item) => item.kind === group.kind)
+                    .map((item) => (
+                      <label className="catalog-pick" key={item.id}>
+                        <input
+                          type="checkbox"
+                          disabled={
+                            !item.available ||
+                            pending ||
+                            (!group.selected.includes(item.id) &&
+                              group.selected.length >= 8)
+                          }
+                          checked={group.selected.includes(item.id)}
+                          onChange={(event) =>
+                            group.set(
+                              event.target.checked
+                                ? [...group.selected, item.id]
+                                : group.selected.filter((id) => id !== item.id),
+                            )
+                          }
+                        />
+                        <span>
+                          <strong>{item.name}</strong>
+                          <small>
+                            {item.available
+                              ? item.description
+                              : item.note || "Unavailable on this provider"}
+                          </small>
+                        </span>
+                      </label>
+                    ))}
+                </fieldset>
+              ))
+            ) : (
+              <label>
+                Registered scenario
+                <select
+                  required
+                  value={selected?.id || ""}
+                  onChange={(event) => setScenarioId(event.target.value)}
+                >
+                  {options.map((item) => (
+                    <option value={item.id} key={item.id}>
+                      {item.name} · {item.nodes} nodes
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label>
               Arena name
               <input
@@ -222,7 +352,7 @@ export function NewArena() {
             <button
               className="button button-gold"
               type="submit"
-              disabled={!selected || pending}
+              disabled={!canLaunch || pending}
             >
               {pending ? "Launching…" : "Launch arena ↗"}
             </button>
@@ -230,10 +360,32 @@ export function NewArena() {
         </form>
         <Panel
           eyebrow="02 / TOPOLOGY"
-          title={selected?.name || "Select a scenario"}
+          title={
+            custom ? "Your topology" : selected?.name || "Select a scenario"
+          }
           className="topology-panel"
         >
-          {selected ? (
+          {custom ? (
+            customNodes.length ? (
+              <TopologyPreview
+                topology={{
+                  nodes: customNodes,
+                  segments: [
+                    {
+                      name: "lab",
+                      nodes: customNodes.map((node) => node.name),
+                    },
+                  ],
+                  egress: "blocked",
+                }}
+              />
+            ) : (
+              <Empty
+                title="Choose stations"
+                detail="Select at least one attacker and one target from the curated catalog. The service compiles and validates the topology."
+              />
+            )
+          ) : selected ? (
             <>
               <ScenarioTopology key={selected.id} id={selected.id} />
               <p className="scenario-description">
@@ -243,8 +395,8 @@ export function NewArena() {
             </>
           ) : (
             <Empty
-              title="No Docker-local scenarios"
-              detail="Register a container scenario before launching an arena."
+              title="No compatible scenarios"
+              detail="Choose another provider or register a compatible scenario before launching."
               action={
                 <a className="inline-action" href="/console/scenarios">
                   Open scenario library ↗

@@ -73,17 +73,17 @@ ADR changes rendering and frontend tooling only.
 
 The operator approved Releases G–H after manual review ("Overall approved"),
 and the default changed to `/console` on 2026-10-07. The pinned release gate,
-legacy fallback drill and browser checks at 320–1440 px are recorded. See
+legacy fallback drill and browser checks at 320–1440 px are recorded in the
 [cutover evidence](../verification/ui-default-cutover-2026-10-07.md).
 
-Two verification items from the original pre-cutover checklist remain open:
+UI-R1 closed on 2026-10-08. The expired-session, CSRF-denial and event-stream
+reconnect journeys are recorded, and the product team completed a scoped
+accessibility review covering keyboard use, responsive reflow, both themes and
+WCAG 2.2 A/AA automated checks. See the [closure record](../verification/ui-r1-closure-2026-10-08.md)
+and [accessibility review](../verification/ui-accessibility-review-2026-10-08.md).
 
-- Record the session-expiry, CSRF-denial and reconnect browser journeys in
-  `docs/verification/`.
-- Record a formal accessibility review, including keyboard use and reflow.
-
-UI-R1 remains open for these items, remaining route/action parity and live
-service verification. The approved default switch does not establish full
-UI parity or feature completion. `WEBUI_DEFAULT_CONSOLE=false` restores the
-legacy home, `/?legacy=1` reaches it while the console is default, and legacy
-routes remain mounted.
+Docker-local is the only provider verified against real infrastructure.
+Other advertised providers carry an unverified label until their provisioning
+paths receive provider-specific live checks. `WEBUI_DEFAULT_CONSOLE=false`
+restores the legacy home, `/?legacy=1` reaches it while the console is default,
+and legacy routes remain mounted.
