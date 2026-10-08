@@ -5,7 +5,7 @@ This is the first pass of phase 0. It records every Flask route and HTTP
 method; it does **not** prove React action/state parity. The status column
 states the present migration boundary, not a completed replacement.
 
-**Current inventory:** 142 route/method operations. Re-run the script after route changes.
+**Current inventory:** 145 route/method operations. Re-run the script after route changes.
 
 | Current URL | Method | Handler | Workspace / destination | Auth | CSRF | Contract | Deep link | Migration status |
 |---|---|---|---|---|---|---|---|---|
@@ -18,6 +18,7 @@ states the present migration boundary, not a completed replacement.
 | `/console/arena/<instance_id>` | GET | `royal_console` | New console → `/console` | Operator session | — | Flask page / form | New route | Implemented projection/shell |
 | `/console/arenas` | GET | `royal_console` | New console → `/console` | Operator session | — | Flask page / form | New route | Implemented projection/shell |
 | `/console/arenas/new` | GET | `royal_console` | New console → `/console` | Operator session | — | Flask page / form | New route | Implemented projection/shell |
+| `/console/arenas/custom` | GET | `royal_console` | New console → `/console` | Operator session | — | Flask page / form | New route | Implemented projection/shell |
 | `/console/scenarios` | GET | `royal_console` | New console → `/console` | Operator session | — | Flask page / form | New route | Implemented projection/shell |
 | `/console/scenarios/import` | GET | `royal_console` | New console → `/console` | Operator session | — | Flask page / form | New route | Implemented projection/shell |
 | `/console/research/new` | GET | `royal_console` | New console → `/console` | Operator session | — | Flask page / form | New route | Implemented projection/shell |
@@ -31,6 +32,8 @@ states the present migration boundary, not a completed replacement.
 | `/console/evaluations/new` | GET | `royal_console` | New console → `/console` | Operator session | — | Flask page / form | New route | Implemented projection/shell |
 | `/console/evaluations/<evaluation_id>` | GET | `royal_console` | New console → `/console` | Operator session | — | Flask page / form | New route | Implemented projection/shell |
 | `/api/console/arenas` | POST | `console_arena_create` | New console → `/console` | Operator session | Required | JSON / stream proxy | New route | Implemented projection/shell |
+| `/api/console/launch-options` | GET | `console_launch_options` | New console → `/console` | Operator session | — | JSON / stream proxy | New route | Implemented projection/shell |
+| `/api/console/arenas/custom` | POST | `console_custom_arena_create` | New console → `/console` | Operator session | Required | JSON / stream proxy | New route | Implemented projection/shell |
 | `/api/console/research/preview` | POST | `console_research_preview` | New console → `/console` | Operator session | Required | JSON / stream proxy | New route | Implemented projection/shell |
 | `/api/console/research/launch` | POST | `console_research_launch` | New console → `/console` | Operator session | Required | JSON / stream proxy | New route | Implemented projection/shell |
 | `/api/console/evaluations/<evaluation_id>` | GET | `console_evaluation` | New console → `/console` | Operator session | — | JSON / stream proxy | New route | Implemented projection/shell |

@@ -3,6 +3,66 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+## 2026-10-08 — Close UI-R1 parity and verification gaps
+
+**Outcome:** Added the missing setup-output history, curated custom-topology
+builder, and provider selection to the default console. Recorded expired-session,
+CSRF-denial, service-outage reconnect, live Docker-local operation and scoped
+accessibility evidence. UI-R1 is ready to close; provider-specific live support
+outside Docker-local remains unverified.
+
+**Files:** React launch/setup/topology/dialog/accessibility components, Flask
+launch projections and event stream, focused WebUI tests, isolated acceptance
+stack and browser checks under `scripts/ui-r1-*`, route inventory, ADR-0017,
+ISSUES.md and two verification records.
+
+**Verification:** `make release-check` passed with 1,100 tests passed, 4 skipped
+and 6 deselected in SQLite; PostgreSQL had 1,104 passed and 6 deselected.
+Ruff/Bandit and release smoke were clean. Frontend
+TypeScript/Prettier and production build passed. Real Docker-local browser checks
+covered setup output through reload and teardown, WebSocket forward echo/revoke,
+service outage/reconnect, destroy-from-list, evidence retention, eligible
+archive removal and clear, plus custom catalog submission to the mock provider.
+Session expiry and invalid CSRF checks passed. Axe reported zero violations on
+41 page/theme combinations. Keyboard dialog checks and 320/390/1024/1440 px
+reflow checks passed.
+
+**Risks / next step:** Cloud and VM provisioning remain unverified. After the R1
+push, review the public tree/history for personal data or secrets, remove obsolete
+reference material and simplify README/roadmap guidance.
+
+
+## 2026-10-08 — Public repository documentation and exposure cleanup
+
+**Outcome:** Rewrote the README around a short local quick start and accurate
+provider/support boundaries. Updated the roadmap, checklist, ADR-0012, and UI
+reference docs to reflect the completed React cutover and UI-R1 evidence. Replaced
+the obsolete rebuild guide with an archive pointer; removed two unused scratch
+documents; generalized machine-specific paths in retained docs and test logs.
+The rejected charcoal renders and rejected foundations smoke script remain
+reference material only.
+
+**Files:** `README.md`, `ROADMAP.md`, `TODO.md`, `docs/adr/0012-gui-first-product-model.md`,
+`docs/UI_REBUILD_PLAN.md`, `docs/assets/ui-concepts/README.md`,
+`docs/verification/ui-assistant-navigation-2026-10-01.md`,
+`docs/superpowers/plans/2026-10-02-ui-forge-foundations.md`, two research
+verification logs, `docs/JOURNAL.md`; removed
+`docs/tmp_basic_codebase_review.md` and `tmp-implementationPlan.md`.
+
+**Verification:** Gitleaks scanned available Git history and a working snapshot of
+tracked files. Its findings were reviewed as development/verifier literals and
+the public synthetic challenge credential; no live infrastructure credential was
+found in tracked content. The modified Markdown files have no broken local
+links; `git diff --check` passed. Product tests were not rerun for
+documentation-only changes; the preceding UI-R1 release and live gates remain
+recorded above.
+
+**Unresolved risks / next step:** The public history still contains personal
+author metadata and old machine-specific paths in earlier commits. The current
+branch tree is cleaned, but purging reachable history requires coordinated
+history rewriting and force-pushing the public branches. Get operator approval
+before that step.
+
 ## 2026-10-07 — Reconcile Royal Command PR with current main
 
 **Outcome:** Opened [PR #2](https://github.com/gianlucabassani/Nidavellir/pull/2)

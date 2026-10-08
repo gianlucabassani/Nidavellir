@@ -60,7 +60,9 @@ function App() {
     window.location.pathname === "/console/library/targets";
   const settingsPage = window.location.pathname === "/console/settings";
   const profilePage = window.location.pathname === "/console/profile";
-  const newArena = window.location.pathname === "/console/arenas/new";
+  const newArena = ["/console/arenas/new", "/console/arenas/custom"].includes(
+    window.location.pathname,
+  );
   const scenarioLibrary = window.location.pathname === "/console/scenarios";
   const scenarioImport =
     window.location.pathname === "/console/scenarios/import";

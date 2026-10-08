@@ -645,6 +645,7 @@ def overview():
 @app.route("/console/arena/<instance_id>")
 @app.route("/console/arenas")
 @app.route("/console/arenas/new")
+@app.route("/console/arenas/custom")
 @app.route("/console/scenarios")
 @app.route("/console/scenarios/import")
 @app.route("/console/research/new")
@@ -697,10 +698,77 @@ def console_arena_create():
                      if item.get("id") == scenario), None)
     if not selected:
         return jsonify({"error": "Scenario is no longer registered"}), 404
-    if selected.get("provider_class") not in ("container", "any"):
-        return jsonify({"error": "Scenario is not available on Docker-local"}), 422
+    provider = body.get("provider", "docker-local")
+    if not isinstance(provider, str) or not re.fullmatch(r"[a-z][a-z0-9-]{0,31}", provider):
+        return jsonify({"error": "Choose a valid provider"}), 422
+    if provider == "docker-local":
+        infra = "container"
+    else:
+        providers, providers_ok = _api_get("/providers")
+        if not providers_ok:
+            return jsonify({"error": "Provider catalog unavailable"}), 503
+        entry = next((item for item in (providers or {}).get("providers", [])
+                      if item.get("name") == provider), None)
+        if entry is None:
+            return jsonify({"error": "Provider is no longer available"}), 422
+        infra = entry.get("infra_class")
+    needed = selected.get("provider_class")
+    if infra != "any" and needed != "any" and infra != needed:
+        return jsonify({"error": "Scenario is incompatible with the selected provider"}), 422
     result, status = _api_post("/deploy", {
-        "scenario": scenario, "instance_id": instance_id, "provider": "docker-local",
+        "scenario": scenario, "instance_id": instance_id, "provider": provider,
+        "engagement_purpose": purpose, "participant_mode": participant,
+        "engagement_time_box_seconds": time_box,
+    })
+    return jsonify(result), status
+
+
+
+@app.route("/api/console/launch-options")
+def console_launch_options():
+    providers, providers_ok = _api_get("/providers")
+    catalog, catalog_ok = _api_get("/catalog")
+    if not providers_ok or not catalog_ok:
+        return jsonify({"error": "Launch options unavailable"}), 503
+    return jsonify({
+        "default": providers.get("default"),
+        "providers": [{"name": item.get("name"), "infra_class": item.get("infra_class"),
+                       "verification": ("live-verified" if item.get("name") == "docker-local"
+                                        else "simulation" if item.get("name") == "mock" else "unverified")}
+                      for item in providers.get("providers", []) if isinstance(item, dict)],
+        "catalog": [{key: item.get(key) for key in
+                     ("id", "name", "kind", "description", "available", "provider_class", "note")}
+                    for item in catalog.get("images", []) if isinstance(item, dict)],
+    })
+
+
+@app.route("/api/console/arenas/custom", methods=["POST"])
+def console_custom_arena_create():
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Expected a JSON topology request"}), 422
+    name = body.get("instance_id")
+    provider = body.get("provider", "docker-local")
+    purpose = body.get("engagement_purpose")
+    participant = body.get("participant_mode")
+    time_box = body.get("engagement_time_box_seconds")
+    if (not isinstance(name, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,39}", name)
+            or not isinstance(provider, str) or provider not in ("docker-local", "mock")
+            or not isinstance(purpose, str) or purpose not in _ENGAGEMENT_PURPOSE_BY_ID
+            or not isinstance(participant, str) or participant not in _ENGAGEMENT_PARTICIPANT_BY_ID
+            or not isinstance(time_box, int) or isinstance(time_box, bool)
+            or time_box not in _ENGAGEMENT_TIME_BOXES):
+        return jsonify({"error": "Choose a valid name, provider, purpose and time box"}), 422
+    selections = {}
+    for kind in ("attackers", "victims"):
+        items = body.get(kind)
+        if (not isinstance(items, list) or not 1 <= len(items) <= 8
+                or not all(isinstance(item, str) and re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", item)
+                           for item in items)):
+            return jsonify({"error": "Choose one to eight catalog entries for each side"}), 422
+        selections[kind] = items
+    result, status = _api_post("/arenas/custom", {
+        "instance_id": name, "provider": provider, **selections,
         "engagement_purpose": purpose, "participant_mode": participant,
         "engagement_time_box_seconds": time_box,
     })
@@ -939,7 +1007,9 @@ def console_arena(instance_id):
         "state": status.get("status") or "unknown",
         "scenario": status.get("scenario") or "Custom target",
         "provider": outputs.get("provider") or status.get("provider") or "unknown",
-        "simulation_mode": CONSOLE_SIMULATION_MODE,
+        "simulation_mode": (CONSOLE_SIMULATION_MODE or outputs.get("provider") == "mock"
+                            or status.get("effective_provider") == "mock"
+                            or status.get("provider") == "mock"),
         "gateway_url": GATEWAY_PUBLIC_URL,
         "expires_at": status.get("expires_at"),
         "observed_at": datetime.now().astimezone().isoformat(),
@@ -1025,6 +1095,9 @@ def console_arena_setup(instance_id):
         "steps_run": data.get("steps_run"),
         "command_budget": data.get("command_budget"),
         "egress_enforced": data.get("egress_enforced") is True,
+        "steps": [{key: step.get(key) for key in
+                   ("node", "command", "stdout", "stderr", "exit_code", "ok", "via", "ts")}
+                  for step in _setup_steps(instance_id)],
         "pending_proposals": [{"step_id": item.get("step_id"),
                                "node": item.get("node"), "command": item.get("command"),
                                "rationale": item.get("rationale")}
@@ -2710,6 +2783,10 @@ def arena_stream(instance_id):
         previous = None
         while time.monotonic() < deadline:
             status, ok = _api_get(f"/status/{instance_id}")
+            if not ok or not isinstance(status, dict) or not status:
+                # Close instead of advertising healthy heartbeats for stale state.
+                # Native EventSource retry keeps its cursor and reconciles on open.
+                return
             if ok and status:
                 state = {
                     "status": status.get("status", "unknown"),

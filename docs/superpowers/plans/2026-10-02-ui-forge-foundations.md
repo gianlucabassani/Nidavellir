@@ -73,7 +73,7 @@ Each is asserted in `scripts/ui-foundation-smoke.cjs` (Task 1) and must pass by 
   - with `reducedMotion: 'reduce'`, `.forge-workbench` `animationName` is `none`;
   - Tab from the skip link reaches a nav item whose `outlineStyle` is not `none`;
   - no page errors.
-- [ ] **Step 2: Run it** — `NV_PLAYWRIGHT_MODULE=/home/prime/Projects/osint/web/node_modules/playwright NV_CHROMIUM_PATH=/home/prime/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome node scripts/ui-foundation-smoke.cjs`. Expected: FAIL on the font assertion (Inter).
+- [ ] **Step 2: Run it** — set `NV_PLAYWRIGHT_MODULE` to the local Playwright module and `NV_CHROMIUM_PATH` to the local Chromium binary, then run `node scripts/ui-foundation-smoke.cjs`. Expected: FAIL on the font assertion (Inter).
 
 ### Task 2: Tokens, fonts and base rules
 

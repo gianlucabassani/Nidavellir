@@ -125,7 +125,7 @@ export function ArenaWorkspace({ id }: { id: string }) {
           <a
             className="subtle-link"
             href={legacy}
-            title="Setup command output and custom-topology controls remain on the legacy page"
+            title="Open the retained legacy arena view"
           >
             Legacy arena page ↗
           </a>
