@@ -1,7 +1,8 @@
 # ADR-0012: GUI-first product model and console information architecture
 
-- **Status:** Proposed — acceptance items 1–4 met on 2026-08-18 (C1–C4 shipped);
-  item 5 waits on the durable evaluation records in E1–E5.
+- **Status:** Accepted — the GUI-first product model and acceptance items 1–4
+  are implemented. The original Flask/Jinja renderer choice is superseded by
+  ADR-0017; full evaluation workflow parity remains tracked in E5.
 - **Date:** 2026-08-10
 - **Deciders:** Gianluca Bassani
 
@@ -83,11 +84,11 @@ Destroyed arenas retain a read-only result/evidence view.
 
 ### 5. Keep the console thin
 
-Flask/Jinja remains the server-rendered operator surface. Business rules,
-records, scheduling, validation, scoring, and lifecycle transitions live behind
-orchestrator/service APIs. The redesign does not require a SPA or a new frontend
-build tool. New backend capabilities must be independently usable and testable
-through their API even though the normal product workflow is GUI-first.
+The original Flask/Jinja renderer choice is superseded by ADR-0017. The product
+boundary remains: business rules, records, scheduling, validation, scoring, and
+lifecycle transitions live behind service APIs. Flask owns the same-origin
+session and BFF boundary; the browser renderer must not become a second control
+plane. New backend capabilities remain independently usable through their APIs.
 
 ### 6. Migrate incrementally with feature parity
 
@@ -137,6 +138,10 @@ No backend vertical is rewritten merely to fit the new navigation.
   operator console and normal workflows must be complete in the browser.
 
 ## Acceptance
+
+Items 1–4 were accepted with C1–C4. Item 5's durable evaluation records now
+exist, but complete browser comparison parity remains an E5 item in
+[`TODO.md`](../../TODO.md).
 
 The decision is accepted when:
 

@@ -1,6 +1,6 @@
 # Nidavellir — ordered delivery checklist
 
-Updated 2026-10-07 after the independent research audit and Phase 1 remediation.
+Updated 2026-10-08 after UI-R1 closure and the independent research audit.
 This is the canonical work queue. [ROADMAP.md](ROADMAP.md) retains product scope,
 design detail and legacy milestone mapping. Unchecked means unfinished.
 Verification history is in [docs/JOURNAL.md](docs/JOURNAL.md).
@@ -175,20 +175,19 @@ multi-agent red-vs-blue, defender scoring and VNC remain deferred. Local VM work
 and requires a selected research target; cloud apply is not its prerequisite. No GPU-heavy
 workloads or local model training are required for the personal Docker path.
 
-## Separate track: operator UI
+## Separate track: operator UI — UI-R1 complete
 
-UI, console and aesthetic work is **off the main delivery order** and out of the research
-and evaluation passes. It lives on its own branch, `ui/royal-command` (1 commit; 30 behind
-`main` — merge `main` in before resuming). Belongs to that track, not to a research pass:
+The React console cutover and accepted UI-R1 parity work are complete. The default
+console includes setup-output history, custom-topology authoring, provider selection
+with verification labels, and archive/list actions. Real-service operations, session
+expiry, CSRF denial, reconnect, keyboard, responsive, and accessibility checks are
+recorded in [the closure report](docs/verification/ui-r1-closure-2026-10-08.md) and
+[the accessibility review](docs/verification/ui-accessibility-review-2026-10-08.md).
 
-- the console rebuild described in [`docs/UI_REBUILD_PLAN.md`](docs/UI_REBUILD_PLAN.md);
-- the deferred human view for the research code-intel tools — a console page over
-  `POST /research/code/*`, which currently exposes REST JSON as the operator view.
-
-Rules: a research or evaluation pass does not include UI work; when a pass needs a human
-view it uses the existing REST/JSON output. No NV id is assigned to UI work and none
-should be added until the track is explicitly scheduled. Backend changes required by the
-UI stay limited to the presentation/BFF contract that exposes existing data and actions.
+Docker-local is the only live-verified provider; its broader provider gap remains in
+`ISSUES.md`. The route/action inventory is in
+[`docs/UI_ROUTE_ACTION_MATRIX.md`](docs/UI_ROUTE_ACTION_MATRIX.md). Remaining research
+and evaluation work follows the NV checklist above.
 
 ## Implemented foundations — preserve, then reverify
 

@@ -26,7 +26,7 @@ For the existing local browser installation:
 
 ```sh
 NV_PLAYWRIGHT_MODULE=/tmp/nv-playwright/node_modules/playwright \
-NV_CHROMIUM_PATH=/home/prime/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome \
+NV_CHROMIUM_PATH=/path/to/chromium \
 node scripts/ui-assistant-rail-smoke.cjs
 ```
 

@@ -242,7 +242,7 @@ monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f504228cd60>
              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 E       Failed: DID NOT RAISE ResearchCodeError
 
-/home/prime/Projects/Nidavellir/tests/test_research_code_hardening.py:168: Failed
+$HOME/Projects/Nidavellir/tests/test_research_code_hardening.py:168: Failed
 =========================== short test summary info ============================
 FAILED tests/test_research_code_hardening.py::test_byte_cut_reports_incomplete_counts
 FAILED tests/test_research_code_hardening.py::test_external_diff_and_textconv_helpers_disabled
