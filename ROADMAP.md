@@ -20,7 +20,7 @@
 > that discovery work produces the verified, held-out material that makes
 > evaluation credible.
 
-## Current delivery order — updated 2026-10-08
+## Current delivery order — updated 2026-10-12
 
 [TODO.md](TODO.md) is the canonical ordered checklist with stable NV task IDs,
 dependencies and acceptance criteria. This roadmap retains product and design
@@ -48,7 +48,13 @@ MODEL-R1/NV07-R1 closed on 2026-10-06 for machinery, not discovery capability.
 The 2026-10-07 research audit retracted Paperless exhaustion and reopened the
 pre-registration and mail-validity gaps in ISSUES.md. Phase 2 on 2026-10-07
 closes the new structured registration gate; historical chronology is not repaired,
-and Phase 3 control validity remains open.
+and Phase 3 was verified on 2026-10-12 with owned mutation controls, mixed-batch
+survival and retained concrete requests. Full source inventories and nine
+affected/fixed fix shapes are retained; semantic candidate review remains manual.
+Failed admitted authoring queries are audited, and authoring queries are explicitly
+unbudgeted operator work. See the [quality closure report](docs/verification/research-quality-closure-2026-10-12.md).
+The [next usability proposal](docs/research/research-usability-next.md) is a draft
+for selection and approval, with no new console feature claimed complete.
 
 Preserve Docker-local as the supported implementation focus. Other providers are
 not live-verified. Cloud apply, hosted concerns, and multi-agent breadth remain

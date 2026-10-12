@@ -1,9 +1,9 @@
 # Nidavellir — open risk register
 
-Updated 2026-10-08 after UI-R1 closure and the independent audit. MODEL-R1 and NV07-R1
+Updated 2026-10-12 after active research-quality verification. MODEL-R1 and NV07-R1
 remain closed for calibration machinery only. RESEARCH-R1/R4 are closed for the new
 structured gate after Phase 2 verification; historical chronology is not repaired;
-mail probe validity, incomplete coverage and historical evidence gaps remain open.
+RESEARCH-R7–R10 are remediated within the recorded scope; source semantics remain manual review.
 
 Known, currently-open risks and verification gaps. Each entry states what is
 actually true today, why it matters, and the concrete evidence that would close
@@ -73,65 +73,12 @@ not 21 evidence-backed refutations. The six H rows recur in the mail artifact;
 they must not be counted twice. Historical evidence files are unchanged.
 Accepted audit: `docs/verification/research-audit-2026-10-07.json`.
 
-### RESEARCH-R7 · Mail denials do not isolate object protection · high · open
-
-M2/M4/M5 run without the member's mail mutation permissions and can be denied
-before the intended object check. M5 sends only one admin-owned mail ID, not a
-mixed batch; its control asserts listing status, not target-row survival. H2/H3
-and M2/M3/M5 classifiers can refute despite a failed recorded control. M1/M4
-observational controls are no longer mislabeled `held: false`, but that schema
-correction does not validate their inference. H5 lacks a mutation control.
-
-**Closes when (Phase 3):** grant the required global permissions while withholding
-foreign-object permission; demonstrate allowed member mutations; use a genuinely
-mixed M5 batch and check each target row survives. Re-run into new evidence
-artifacts with request/response/control observations; preserve old artifacts.
-
-### RESEARCH-R8 · Coverage and absence inference are incomplete · high · open
-
-The original 17/26/5/8/353 match counts reproduce, but only 50/353 queryset sites
-were classified. The omitted 303 include 44 `views.py` and all 33 mail matches.
-Rules do not encode all nine fix rows: serializer/viewset paths, privilege flag
-parsing, template context and check-before-mutation semantics lack complete
-coverage. The original method-name union and irrelevant/discarded `has_perm`
-false positives are corrected in Phase 1 (RESEARCH-R6); syntactic guard presence
-still does not prove dataflow dominance, class enforcement or caller safety.
-
-**Closes when:** each fix shape is tested against affected/fixed code and all
-residuals have retained evidence. A manual-review/heuristic-limit site remains
-unresolved, not zero actionable. New scans must not resurrect the exhaustion claim.
-
-### RESEARCH-R9 · Historical counts, determinism and efficiency lack retained proof · medium · open
-
-Nine initial endpoint refutations lack per-probe evidence. One retained fixture
-build has seven matching controls and a recomputable matrix digest; it cannot
-prove the asserted two-build determinism. Historical 977/981, 991/995 and
-1002/1006 release totals have no cited raw October gate output. They are unverified,
-not established fabrications. Six collect/derive calls and 416 output lines are
-supported; the manual ~600-line/~10-call baseline is hardcoded and the ~4× saving
-is unsubstantiated (600/416 is ~1.44 before unmeasured follow-up reads).
-
-**Closes when:** historical execution logs are located, or claims remain explicitly
-unverified. New reproducibility/verification results are dated separately and do
-not retroactively certify old runs.
-
-### RESEARCH-R10 · Code-intel audit and budget claims exceed implementation · medium · open
-
-Successful REST calls append one audit event; failures return before auditing.
-MCP wrappers trace calls but neither check nor charge a research budget. Digest
-binding and operator-only surfaces are present. The directory fallback is fixed
-in Phase 1, but checkout provisioning/ref immutability remains operator-owned.
-
-**Closes when:** failed admitted calls have metadata-only audit events, and the
-budget contract is either implemented with a defined authoring scope or explicitly
-withdrawn. No audit/budget implementation is included in Phase 1.
-
 ### RESEARCH-R3 · Mail sink is embedded in the Paperless fixture · low
 
 **True today:** GreenMail 2.1.14 (digest-pinned, SMTP 3025 / IMAP 3143 / HTTP
 API, reset by recreating the mailbox user) is implemented inside
 `cyber-range/fixtures/paperless/build_fixture.py`. It works, and its reset is part
-of the determinism proof, but nothing is reusable — a second mail-bearing target
+of the fixture reset workflow, but nothing is reusable — a second mail-bearing target
 would copy it.
 
 **Why it matters:** duplicated fixture plumbing is how fixture drift starts, and
@@ -144,6 +91,59 @@ contract. **Deliberately deferred — no extraction before a second consumer.**
 ---
 
 ## Closed
+
+### RESEARCH-R7 · Isolation-valid probe controls · closed 2026-10-12
+
+The new registered live round grants the relevant global permissions while
+withholding foreign-object access, proves member-owned operations, records concrete
+actor/control requests, and verifies both mixed-batch targets survive. H3 preserves
+its owned control's ownership. Prerequisite failures block refutation; effect
+observations remain separate and can support confirmation. H5's group assignment
+is explicitly authorized by its granted change_user permission; privilege flags
+remain unchanged. Twelve rows completed with every assertive control held.
+
+Evidence: [final registered probe](docs/verification/paperless-quality-verified-2026-10-12.json),
+registration `b059439`, and [closure scope](docs/verification/research-quality-closure-2026-10-12.md).
+Earlier status-only refutations are preserved and superseded for current conclusions.
+
+### RESEARCH-R8 · Complete inventory and conservative inference · remediated 2026-10-12
+
+All nine current pattern inventories are retained with complete counts, including
+2,846 queryset candidates. The earlier Phase 1 value of 459 was explicitly a
+byte-limited lower bound. Paged answers retain their continuation after envelope
+clipping; internal capture remains bounded. Nine fix shapes are compared on their
+affected/fixed changed source files, including field validation, privilege flags,
+template context and mutation order. Every residual retains its classification
+and evidence. These additional rules deliberately require semantic review;
+framework policy, parsing and dominance are not certified by syntax. No absence
+or exhaustion claim is accepted.
+
+Evidence: [inventory summary](docs/verification/research-quality-inventory-summary-2026-10-12.json),
+[complete compressed JSON](docs/verification/research-quality-inventory-2026-10-12.json.gz).
+This closes the inventory/inference gap; human review of candidates remains unresolved.
+
+### RESEARCH-R9 · Unsupported historical assertions reconciled · closed 2026-10-12
+
+Historical endpoint refutations, two-build determinism and October gate totals
+remain explicitly unverified. The unsupported efficiency comparison is withdrawn
+and removed from future acceptance output. Old records are unchanged; fresh gates
+are separately dated.
+
+Evidence: [historical reconciliation](docs/verification/research-history-reconciliation-2026-10-11.md).
+
+### RESEARCH-R10 · Failed-query audit and bounded authoring contract · closed 2026-10-12
+
+Admitted query errors and unexpected service exceptions append metadata-only audit
+events. Expected errors retain status 422; unexpected errors retain status 500.
+Failed events exclude request bodies, refs and exception content. Successful
+queries retain digest/truncation evidence. Real REST and MCP calls prove operator
+access, agent denial, paging and failure auditing. Authoring queries are explicitly
+unbudgeted operator work; arena execution retains its existing durable budgets.
+Checkout provisioning and immutability remain operator-owned.
+
+Evidence: [real REST/MCP check](docs/verification/research-code-live-2026-10-12.json),
+focused three-endpoint failure regressions, and the
+[authoring contract](docs/research/research-code-tools-spec.md).
 
 ### RESEARCH-R1 / RESEARCH-R4 · Registration/execution correspondence · Phase 2 corrected 2026-10-07
 

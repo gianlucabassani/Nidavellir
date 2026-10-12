@@ -1,0 +1,12 @@
+{
+  "schema": "nidavellir/research-setup-failure/v1",
+  "registration_commit": "4a7c39a",
+  "round_tag": "paperless-quality-controls",
+  "outcome": "setup-failure",
+  "stage": "decode member-owned fixture seed metadata",
+  "error_type": "JSONDecodeError",
+  "cause": "Django shell prepends an automatic-import banner to JSON output.",
+  "repair": "Decode the final JSON output line.",
+  "hypotheses_executed": false,
+  "fixture_teardown_observed": true
+}

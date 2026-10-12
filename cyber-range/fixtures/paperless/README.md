@@ -1,10 +1,10 @@
 # Paperless-ngx fixture (Nidavellir research lane)
 
 Pinned, pre-seeded Paperless-ngx 3.3.0 for local authorization research.
-Seeded entirely through the product's own HTTP API: an `admin` owner, a
-`member` with global view permissions, two documents (one restricted,
-one shared with the member via an object-level view grant), explicit
-permissions, and one admin-created share link on the shared document.
+Seeded through the HTTP API and explicit fixture-only Django setup: an `admin`
+owner, a `member` with global view and selected mutation permissions, restricted,
+shared and member-owned documents, version controls, mail accounts and rows, and
+an admin-created share link. Foreign objects retain their separate ownership.
 Synthetic lab credentials only.
 
 ## Build
@@ -31,12 +31,13 @@ control matrix before returning:
 The mail cells cover a GreenMail 2.1.14 sink (digest-pinned, same pattern:
 arch digest, SMTP 3025 + IMAP 3143 + HTTP API) with one seeded mailbox,
 one consumed message, one admin mail account and one consuming rule. Reset
-covers the sink: the seed recreates the mailbox user, so message UIDs and
-consumed document IDs are identical across rebuilds.
+covers the sink: the seed recreates the mailbox user. Equivalent behavior must be
+verified by separate builds; stable IDs alone would not establish equivalence.
 
 Reset is deleting the `paperless-fixture-*` volumes and re-running the
-script; two consecutive builds produced identical object IDs, matrix and
-behavior digest.
+script. The historical assertion of two identical builds is unverified: the old
+retained manifest establishes one build only. See
+[historical reconciliation](../../../docs/verification/research-history-reconciliation-2026-10-11.md).
 
 ## Auth notes (3.3.0, learned by probing)
 
@@ -44,9 +45,9 @@ behavior digest.
   `Authorization: Token <key>`.
 - A member needs global view permissions for the list endpoint; denied
   objects answer 404, not 403.
-- Refuted hypotheses on 3.3.0 (all correctly denied, not findings):
-  share-link creation for an unpermitted doc, bulk edit, selection data,
-  notes, download, metadata, thumb, versions endpoints.
+- Historical assertions about nine initial endpoint refutations have no retained
+  per-probe proof and remain unverified. Registered probe results are narrower:
+  interpret each request, positive control and observed effect separately.
 
 ## Pin gotcha
 
@@ -57,6 +58,8 @@ architecture. Re-resolve at each version pin.
 
 ## Research status
 
-Calibration-ready with proven controls. No novel finding banked —
-per the fail-closed rule the hypotheses above are recorded refuted and
-the hunt stops here until the next approved campaign.
+No novel finding is established by the historical records. New probing uses a
+committed registration, legitimate member-owned mutations and mixed-batch effect
+checks. Static inventories retain unresolved candidates and do not establish
+exhaustion. Fixture HTTP bindings are loopback-only; credentials and data are
+synthetic. The fixture owns only its `paperless-fixture-*` resources.

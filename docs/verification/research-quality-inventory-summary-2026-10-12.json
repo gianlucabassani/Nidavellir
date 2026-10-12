@@ -1,0 +1,121 @@
+{
+  "absence_established": false,
+  "all_current_totals_complete": true,
+  "artifact": "research-quality-inventory-2026-10-12.json.gz",
+  "counts": {
+    "bare-auth-view": 8,
+    "bulk-permission": 5,
+    "field-validation": 320,
+    "half-composed-check": 17,
+    "mutation-order": 693,
+    "privilege-flags": 139,
+    "template-context": 315,
+    "unguarded-verb": 25,
+    "unscoped-queryset": 2846
+  },
+  "fix_shapes": [
+    {
+      "affected_complete": true,
+      "fixed_complete": true,
+      "id": "F1",
+      "semantic_review": "Unresolved: syntax inventories and patch facts are not proof of enforcement.",
+      "source_paths": [
+        "src/documents/serialisers.py",
+        "src/documents/tests/test_api_documents.py"
+      ]
+    },
+    {
+      "affected_complete": true,
+      "fixed_complete": true,
+      "id": "F2",
+      "semantic_review": "Unresolved: syntax inventories and patch facts are not proof of enforcement.",
+      "source_paths": [
+        "src/documents/tests/test_api_search.py",
+        "src/documents/views.py"
+      ]
+    },
+    {
+      "affected_complete": true,
+      "fixed_complete": true,
+      "id": "F3",
+      "semantic_review": "Unresolved: syntax inventories and patch facts are not proof of enforcement.",
+      "source_paths": [
+        "src/documents/tests/test_api_permissions.py",
+        "src/paperless/views.py"
+      ]
+    },
+    {
+      "affected_complete": true,
+      "fixed_complete": true,
+      "id": "F4",
+      "semantic_review": "Unresolved: syntax inventories and patch facts are not proof of enforcement.",
+      "source_paths": [
+        "src/documents/serialisers.py",
+        "src/documents/templating/filepath.py",
+        "src/documents/tests/test_api_objects.py",
+        "src/documents/tests/test_file_handling.py",
+        "src/documents/views.py"
+      ]
+    },
+    {
+      "affected_complete": true,
+      "fixed_complete": true,
+      "id": "F5",
+      "semantic_review": "Unresolved: syntax inventories and patch facts are not proof of enforcement.",
+      "source_paths": [
+        "src/paperless_mail/tests/test_mail.py",
+        "src/paperless_mail/views.py"
+      ]
+    },
+    {
+      "affected_complete": true,
+      "fixed_complete": true,
+      "id": "F6",
+      "semantic_review": "Unresolved: syntax inventories and patch facts are not proof of enforcement.",
+      "source_paths": [
+        "src/documents/tests/test_api_bulk_edit.py",
+        "src/documents/tests/test_api_document_versions.py",
+        "src/documents/views.py"
+      ]
+    },
+    {
+      "affected_complete": true,
+      "fixed_complete": true,
+      "id": "F7",
+      "semantic_review": "Unresolved: syntax inventories and patch facts are not proof of enforcement.",
+      "source_paths": [
+        "src/documents/tests/test_api_bulk_edit.py",
+        "src/documents/tests/test_api_document_versions.py",
+        "src/documents/views.py"
+      ]
+    },
+    {
+      "affected_complete": true,
+      "fixed_complete": true,
+      "id": "F8",
+      "semantic_review": "Unresolved: syntax inventories and patch facts are not proof of enforcement.",
+      "source_paths": [
+        "src/paperless_mail/tests/test_api.py",
+        "src/paperless_mail/views.py"
+      ]
+    },
+    {
+      "affected_complete": true,
+      "fixed_complete": true,
+      "id": "F9",
+      "semantic_review": "Unresolved: syntax inventories and patch facts are not proof of enforcement.",
+      "source_paths": [
+        "src/documents/search/_backend.py",
+        "src/documents/search/_query.py",
+        "src/documents/search/_schema.py",
+        "src/documents/tests/test_api_permissions.py",
+        "src/documents/tests/test_api_search.py",
+        "src/documents/views.py"
+      ]
+    }
+  ],
+  "note": "All residuals retained; source byte/parse limits and policy semantics remain explicit.",
+  "schema": "nidavellir/research-inventory-summary/v1",
+  "sha256": "1bce2719545e5ade694e41452dc2aea71af37ef89985835b3fa89d8232c3484a",
+  "source_ref": "6f7ed1d4a7f06c1373b84f8b606fd011e294c4b4"
+}

@@ -297,13 +297,14 @@ def research_layer_diff(ctx: GatewayContext, from_ref: str, to_ref: str,
 
 def research_sibling_search(ctx: GatewayContext, pattern: str,
                             ref: str | None = None,
-                            path_scope: list | None = None) -> dict:
+                            path_scope: list | None = None, offset: int = 0) -> dict:
     """Read-only named-pattern call-site search with composition status
     (proxies POST /research/code/sibling-search). Operator-only."""
     _guard(ctx, "research_sibling_search")
     try:
-        res = ctx.client.research_sibling_search(
-            ctx.session.api_key, pattern, ref, path_scope)
+        args = (ctx.session.api_key, pattern, ref, path_scope)
+        res = ctx.client.research_sibling_search(*args, offset=offset) if offset else (
+            ctx.client.research_sibling_search(*args))
     except Exception:
         _trace(ctx, "research_sibling_search", {"pattern": pattern}, ok=False)
         raise

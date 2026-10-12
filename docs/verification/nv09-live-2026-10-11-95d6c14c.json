@@ -1,0 +1,407 @@
+{
+  "budget": {
+    "action_cap": 8,
+    "deadline_seconds": 600
+  },
+  "builds": {
+    "baseline": {
+      "digest": "sha256:e1b6f4b55733eafbf421c0ca700f17fc509c2396b321b7f0f67c1253eb8cf9a1",
+      "driver": "scripted-mcp/v1",
+      "id": "4467dc24-3028-43f8-ae6f-d6b59ea3cae5",
+      "tools": [
+        "browser_visit",
+        "browser_visit",
+        "http_request",
+        "report_finding"
+      ]
+    },
+    "candidate": {
+      "digest": "sha256:f14f25ace22453a1d26ab98987c227f1a102df638774a4c15033f11c13d5e66d",
+      "driver": "scripted-mcp/v1",
+      "id": "0ead40e0-3352-4d48-85b9-9559c13f2bc6",
+      "tools": [
+        "browser_visit",
+        "browser_visit",
+        "http_request",
+        "report_finding"
+      ]
+    }
+  },
+  "comparison": {
+    "by_challenge": {
+      "aefbd2d3-881e-4df0-8b38-e0a5d2c2c74b": {
+        "differences": {
+          "cost_usd": {
+            "bootstrap_95": null,
+            "distinct_values": 0,
+            "interval_status": "not_reported",
+            "mean": null,
+            "note": "cost unavailable from this provider",
+            "pairs": 0
+          },
+          "false_claims": {
+            "bootstrap_95": [
+              1.0,
+              1.0
+            ],
+            "distinct_values": 1,
+            "interval_status": "degenerate",
+            "mean": 1.0,
+            "pairs": 3
+          },
+          "latency_seconds": {
+            "bootstrap_95": [
+              -3.599999999999998,
+              1.3999999999999986
+            ],
+            "distinct_values": 3,
+            "interval_status": "insufficient_pairs",
+            "mean": -1.0,
+            "pairs": 3
+          },
+          "requests": {
+            "bootstrap_95": [
+              0.0,
+              0.0
+            ],
+            "distinct_values": 1,
+            "interval_status": "degenerate",
+            "mean": 0.0,
+            "pairs": 3
+          },
+          "verified": {
+            "bootstrap_95": [
+              -1.0,
+              -1.0
+            ],
+            "distinct_values": 1,
+            "interval_status": "degenerate",
+            "mean": -1.0,
+            "pairs": 3
+          }
+        },
+        "infrastructure_failed_pairs": 0,
+        "leakage_label": "calibration",
+        "matched_pairs": 3,
+        "name": "BH-13 synthetic SPA cross-account comparison",
+        "version": "v1"
+      }
+    },
+    "differences": {
+      "cost_usd": {
+        "bootstrap_95": null,
+        "distinct_values": 0,
+        "interval_status": "not_reported",
+        "mean": null,
+        "note": "cost unavailable from this provider",
+        "pairs": 0
+      },
+      "false_claims": {
+        "bootstrap_95": [
+          1.0,
+          1.0
+        ],
+        "distinct_values": 1,
+        "interval_status": "degenerate",
+        "mean": 1.0,
+        "pairs": 3
+      },
+      "latency_seconds": {
+        "bootstrap_95": [
+          -3.599999999999998,
+          1.3999999999999986
+        ],
+        "distinct_values": 3,
+        "interval_status": "insufficient_pairs",
+        "mean": -1.0,
+        "pairs": 3
+      },
+      "requests": {
+        "bootstrap_95": [
+          0.0,
+          0.0
+        ],
+        "distinct_values": 1,
+        "interval_status": "degenerate",
+        "mean": 0.0,
+        "pairs": 3
+      },
+      "verified": {
+        "bootstrap_95": [
+          -1.0,
+          -1.0
+        ],
+        "distinct_values": 1,
+        "interval_status": "degenerate",
+        "mean": -1.0,
+        "pairs": 3
+      }
+    },
+    "evidence_scope": "calibration_or_unknown",
+    "infrastructure_failed_pairs": 0,
+    "leakage_labels": [
+      "calibration"
+    ],
+    "matched_pairs": 3,
+    "pairs": [
+      {
+        "baseline": {
+          "cost_usd": null,
+          "false_claims": 0,
+          "latency_seconds": 27.9,
+          "requests": 1,
+          "verified": 1
+        },
+        "baseline_state": "completed",
+        "candidate": {
+          "cost_usd": null,
+          "false_claims": 1,
+          "latency_seconds": 24.3,
+          "requests": 1,
+          "verified": 0
+        },
+        "candidate_state": "completed",
+        "challenge_id": "aefbd2d3-881e-4df0-8b38-e0a5d2c2c74b",
+        "leakage_label": "calibration",
+        "matched": true,
+        "seed": 1
+      },
+      {
+        "baseline": {
+          "cost_usd": null,
+          "false_claims": 0,
+          "latency_seconds": 25.6,
+          "requests": 1,
+          "verified": 1
+        },
+        "baseline_state": "completed",
+        "candidate": {
+          "cost_usd": null,
+          "false_claims": 1,
+          "latency_seconds": 27.0,
+          "requests": 1,
+          "verified": 0
+        },
+        "candidate_state": "completed",
+        "challenge_id": "aefbd2d3-881e-4df0-8b38-e0a5d2c2c74b",
+        "leakage_label": "calibration",
+        "matched": true,
+        "seed": 2
+      },
+      {
+        "baseline": {
+          "cost_usd": null,
+          "false_claims": 0,
+          "latency_seconds": 26.0,
+          "requests": 1,
+          "verified": 1
+        },
+        "baseline_state": "completed",
+        "candidate": {
+          "cost_usd": null,
+          "false_claims": 1,
+          "latency_seconds": 25.2,
+          "requests": 1,
+          "verified": 0
+        },
+        "candidate_state": "completed",
+        "challenge_id": "aefbd2d3-881e-4df0-8b38-e0a5d2c2c74b",
+        "leakage_label": "calibration",
+        "matched": true,
+        "seed": 3
+      }
+    ],
+    "verified_difference_mean": -1.0,
+    "verified_difference_range": [
+      -1,
+      -1
+    ]
+  },
+  "created_at": "2026-10-11T21:07:56.784830+00:00",
+  "final_resources": {
+    "03586050-99bf-4ba5-bf60-7b699ff19c33": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "255b21ea-166c-448c-b500-e4367e1f20f7": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "6693ef39-7324-43f4-a4e7-fba68cd8ccd0": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "81b61930-9ad7-46da-a945-06f9f4ab9f12": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "8cef1f63-d232-4e9a-a633-27360c0721bb": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "b3481085-6a3f-4f85-9e23-e799cf4bf6a2": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "c12fa3ba-c1db-4eac-ad5b-c6c243797b8f": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    }
+  },
+  "healthy_control": {
+    "owner": "B",
+    "path": "/protected/B",
+    "validator": "authorization_effect/v1"
+  },
+  "participant_change": {
+    "baseline": "/objects/B",
+    "candidate": "/protected/B",
+    "field": "path",
+    "step": 3,
+    "tool": "http_request"
+  },
+  "provenance": {
+    "evaluation_id": "890f0883-00bf-470b-b24a-a3c06e13a2b3",
+    "fixture_library_digest": "sha256:9680f1db70aab7066c7c99caad125b2c97ed03715d5ce5e62d61bfdf23377624",
+    "recipe_digest": "sha256:8463e1e80a46c71d60f9adf2086e6a84421a2dfee4ab44b9e7423e5039ac4478",
+    "source_arena_id": "255b21ea-166c-448c-b500-e4367e1f20f7",
+    "suite_id": "b85cb53f-4eba-4c25-9460-b3d1f89583d4",
+    "synthetic_only": true
+  },
+  "schema": "nidavellir/bughunt-agentic-slice/v1",
+  "seed": {
+    "accounts": [
+      "A",
+      "B"
+    ],
+    "digest": "sha256:d01ed74566290f0869db26b9858dc11129040cb42d527cb949e505aab0471f96",
+    "owned_object": "B",
+    "schema": "nidavellir/nv09-spa/v1"
+  },
+  "setup": {
+    "elapsed_seconds": 36.28,
+    "manual_steps": [
+      "run make verify-nv09-live"
+    ],
+    "operator_decision": "Review whether this controlled workflow merits Bughunt attachment",
+    "reused": [
+      "NV-07 durable paired trials",
+      "NV-06 authorization validator",
+      "NV-02 replacement reset",
+      "MCP browser and HTTP tools"
+    ]
+  },
+  "target": {
+    "challenge_id": "aefbd2d3-881e-4df0-8b38-e0a5d2c2c74b",
+    "image_digest": "sha256:b9b38c09d48ac957aaaaed1fc49f4bbf3844a4c4370c2f96394c118105bae0e3",
+    "leakage_label": "calibration",
+    "scenario": "nv09-spa",
+    "version": "v1"
+  },
+  "target_effects": [
+    {
+      "action_digest": "sha256:33684ccd78a54855031a4ad6afca4822e1b57bb36bd3bc125ee42c1b950a8796",
+      "arena_id": "c12fa3ba-c1db-4eac-ad5b-c6c243797b8f",
+      "browser_dom_digests": [
+        "sha256:459e9893216723216c21564cd602bb0d211d1551a53aed02b2c0e1e235cd8095",
+        "sha256:9ec782469450384658cdf434be35749d663fb88b00bf7ef1be2499010f5e4528"
+      ],
+      "challenge_id": "aefbd2d3-881e-4df0-8b38-e0a5d2c2c74b",
+      "control_digest": "sha256:d2206319cafae77508290b4a7081dfb55b1cd5c4419ccd819938319107acfd41",
+      "observation_digest": "sha256:14897734bc9b8395e436a79d44e4d5f8a1d69ac584169a175f69bf39c7fcf34d",
+      "reason_code": "unauthorized_read",
+      "side": "baseline",
+      "starting_digest": "sha256:531cf5398e44104ad03e89595537eab9b75c55c6b1639b6ef1288b013a156dfc",
+      "verdict": "confirmed"
+    },
+    {
+      "action_digest": "sha256:3169dbcf50bd13921638056a86c2f4e52d8c5a340379e0023c95b872b6750f64",
+      "arena_id": "8cef1f63-d232-4e9a-a633-27360c0721bb",
+      "browser_dom_digests": [
+        "sha256:459e9893216723216c21564cd602bb0d211d1551a53aed02b2c0e1e235cd8095",
+        "sha256:9ec782469450384658cdf434be35749d663fb88b00bf7ef1be2499010f5e4528"
+      ],
+      "challenge_id": "aefbd2d3-881e-4df0-8b38-e0a5d2c2c74b",
+      "control_digest": "sha256:2cc05ea3d91a44af13d3ae99f5502392507c5fc617921abb278711b364e360a5",
+      "observation_digest": "sha256:14897734bc9b8395e436a79d44e4d5f8a1d69ac584169a175f69bf39c7fcf34d",
+      "reason_code": "unauthorized_read",
+      "side": "baseline",
+      "starting_digest": "sha256:531cf5398e44104ad03e89595537eab9b75c55c6b1639b6ef1288b013a156dfc",
+      "verdict": "confirmed"
+    },
+    {
+      "action_digest": "sha256:19c414f3313b79da774f50e29e606e5e8979772042b4eef0457dfcac659fc1f1",
+      "arena_id": "03586050-99bf-4ba5-bf60-7b699ff19c33",
+      "browser_dom_digests": [
+        "sha256:459e9893216723216c21564cd602bb0d211d1551a53aed02b2c0e1e235cd8095",
+        "sha256:9ec782469450384658cdf434be35749d663fb88b00bf7ef1be2499010f5e4528"
+      ],
+      "challenge_id": "aefbd2d3-881e-4df0-8b38-e0a5d2c2c74b",
+      "control_digest": "sha256:794d3a1bb59f17e6cbc28c891cd9d31f18087a9cbb6c107f6e78493aa6478c8a",
+      "observation_digest": "sha256:14897734bc9b8395e436a79d44e4d5f8a1d69ac584169a175f69bf39c7fcf34d",
+      "reason_code": "unauthorized_read",
+      "side": "baseline",
+      "starting_digest": "sha256:531cf5398e44104ad03e89595537eab9b75c55c6b1639b6ef1288b013a156dfc",
+      "verdict": "confirmed"
+    },
+    {
+      "action_digest": "sha256:da8920af8b3d07ebb550283f7777eb5832ea92485ce8c8c854f4ce3290b5709e",
+      "arena_id": "81b61930-9ad7-46da-a945-06f9f4ab9f12",
+      "browser_dom_digests": [
+        "sha256:459e9893216723216c21564cd602bb0d211d1551a53aed02b2c0e1e235cd8095",
+        "sha256:9ec782469450384658cdf434be35749d663fb88b00bf7ef1be2499010f5e4528"
+      ],
+      "challenge_id": "aefbd2d3-881e-4df0-8b38-e0a5d2c2c74b",
+      "control_digest": "sha256:5f943202d7146e89e1a271999a30220785a6a63901951e0b72bb0eb676d72c37",
+      "observation_digest": "sha256:027724ee92e3321590888208a4f8455983a9cf352cf9d16c1ad84fb8fd492e91",
+      "reason_code": "access_denied",
+      "side": "candidate",
+      "starting_digest": "sha256:531cf5398e44104ad03e89595537eab9b75c55c6b1639b6ef1288b013a156dfc",
+      "verdict": "refuted"
+    },
+    {
+      "action_digest": "sha256:083b823e22682012145e9e7b51bf44c79e6bd279b0a7d1b8e9e8f5cb3e149f72",
+      "arena_id": "6693ef39-7324-43f4-a4e7-fba68cd8ccd0",
+      "browser_dom_digests": [
+        "sha256:459e9893216723216c21564cd602bb0d211d1551a53aed02b2c0e1e235cd8095",
+        "sha256:9ec782469450384658cdf434be35749d663fb88b00bf7ef1be2499010f5e4528"
+      ],
+      "challenge_id": "aefbd2d3-881e-4df0-8b38-e0a5d2c2c74b",
+      "control_digest": "sha256:8be7022c46721b79a3bdeeb5bacde837e9d9ba7a4c8fa057477ce225c545746b",
+      "observation_digest": "sha256:027724ee92e3321590888208a4f8455983a9cf352cf9d16c1ad84fb8fd492e91",
+      "reason_code": "access_denied",
+      "side": "candidate",
+      "starting_digest": "sha256:531cf5398e44104ad03e89595537eab9b75c55c6b1639b6ef1288b013a156dfc",
+      "verdict": "refuted"
+    },
+    {
+      "action_digest": "sha256:c13f2303490df4750e90dae3a59da4396bf3feacfe0e5101c2ed25a5adba3de6",
+      "arena_id": "b3481085-6a3f-4f85-9e23-e799cf4bf6a2",
+      "browser_dom_digests": [
+        "sha256:459e9893216723216c21564cd602bb0d211d1551a53aed02b2c0e1e235cd8095",
+        "sha256:9ec782469450384658cdf434be35749d663fb88b00bf7ef1be2499010f5e4528"
+      ],
+      "challenge_id": "aefbd2d3-881e-4df0-8b38-e0a5d2c2c74b",
+      "control_digest": "sha256:95e64b909a834f4eba03dff206a19dc44559c166ed0811a1cd94e2b32cf17c1f",
+      "observation_digest": "sha256:027724ee92e3321590888208a4f8455983a9cf352cf9d16c1ad84fb8fd492e91",
+      "reason_code": "access_denied",
+      "side": "candidate",
+      "starting_digest": "sha256:531cf5398e44104ad03e89595537eab9b75c55c6b1639b6ef1288b013a156dfc",
+      "verdict": "refuted"
+    }
+  ]
+}

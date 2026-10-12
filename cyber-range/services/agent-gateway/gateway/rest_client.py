@@ -398,10 +398,12 @@ class RestClient:
         return self._request("POST", "/research/code/layer-diff", api_key, json=body)
 
     def research_sibling_search(self, api_key: str, pattern: str, ref: str | None = None,
-                                path_scope: list | None = None) -> dict:
+                                path_scope: list | None = None, offset: int = 0) -> dict:
         body = {"pattern": pattern}
         if ref:
             body["ref"] = ref
         if path_scope:
             body["path_scope"] = path_scope
+        if offset:
+            body["offset"] = offset
         return self._request("POST", "/research/code/sibling-search", api_key, json=body)

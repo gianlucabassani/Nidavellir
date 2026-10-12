@@ -69,9 +69,11 @@ and select providers with clear verification labels. UI-R1 was closed on
 2026-10-08; its live and accessibility checks are recorded in
 [the closure report](docs/verification/ui-r1-closure-2026-10-08.md).
 
-Remaining work is driven by research needs: validate the open Paperless
-research controls and coverage gaps, then add fuzzing, local VM intake,
-campaign records, and held-out comparisons when a suitable target exists.
+The research-quality follow-up repaired probe controls, complete source inventories
+and failed-query auditing. [Its verification report](docs/verification/research-quality-closure-2026-10-12.md)
+records the exact limits; source candidates still require human semantic review.
+The [next usability proposal](docs/research/research-usability-next.md) focuses on
+reviewing controls and evidence, comparing requests, and browsing source candidates.
 Cloud and other VM providers, multi-tenant hosting, and multi-agent red/blue
 work remain deferred. The ordered checklist is in [TODO.md](TODO.md); product
 scope and design detail are in [ROADMAP.md](ROADMAP.md); current risks are in

@@ -3,6 +3,45 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+
+## 2026-10-12 — Close the research-quality verification phase
+
+**Outcome:** Repaired RESEARCH-R7 owned/global permission controls, concrete request
+observations and mixed-batch effects. Every assertive control held in the final
+registered Paperless run: eleven request-scoped refutations, one authorized group-
+management result, no new confirmed vulnerability. RESEARCH-R8 now retains complete
+current inventories and nine affected/fixed source shapes with explicit unresolved
+semantics. RESEARCH-R9 historical assertions remain unverified; its unsupported
+comparison was withdrawn. RESEARCH-R10 admitted failures are audited; authoring is
+explicitly unbudgeted operator work. Existing arena budgets and provider boundaries
+are preserved. A separate research usability proposal is ready for selection.
+
+**Files:** research code-intel/API/gateway modules, Paperless fixture and probe,
+regression tests, two immutable-output verification scripts, new registrations and
+verification records, README.md, TODO.md, ISSUES.md, ROADMAP.md, research tool contract
+and usability proposal. Lossless gzip inventories keep the retained corpus compact.
+Historical artifacts remain unchanged.
+
+**Verification:** final make release-check passed on Python 3.11.14: Ruff, no
+medium/high Bandit findings, 1,114 SQLite passes / four skips / six deselections,
+1,118 PostgreSQL passes / six deselections, migration/API/UI/gateway smoke.
+Real REST/MCP authoring checks recorded six admitted audit events and agent denial.
+The real NV-09 browser/HTTP/MCP calibration gate passed and recorded zero arena
+resources after teardown. The final probe at registration b059439 matches all its
+registered source hashes; all twelve rows and controls are retained. Full inventory
+counts include 2,846 queryset candidates; no absence inference is made. Independent
+review's serious findings were fixed, including inherited DB configuration, masked
+permission checks, effect classification and a control clearing ownership. Both
+new writers refused an existing evidence path. Paperless fixture cleanup is empty.
+See docs/verification/research-quality-closure-2026-10-12.md for evidence and limits.
+
+**Unresolved risks / next step:** source semantics remain manual review; old proof
+claims stay unverified; Docker-local remains the live provider boundary. GitHub
+returned HTTP 403 stating the account was suspended, blocking PR publication.
+Preserve registration ancestry with a merge commit once remote access works.
+Next product step is selection/approval of the console control-and-evidence review
+slice in docs/research/research-usability-next.md; planning has not implemented it.
+
 ## 2026-10-08 — Close UI-R1 parity and verification gaps
 
 **Outcome:** Added the missing setup-output history, curated custom-topology

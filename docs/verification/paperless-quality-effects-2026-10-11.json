@@ -1,0 +1,460 @@
+{
+  "hypotheses": [
+    {
+      "actor_observation": {
+        "row_ids": []
+      },
+      "actor_status": 404,
+      "controls": {
+        "owner_read_link": {
+          "assertive": true,
+          "expected": 200,
+          "held": true,
+          "kind": "prerequisite",
+          "observation": {
+            "id": 1,
+            "row_ids": []
+          },
+          "status": 200
+        }
+      },
+      "definition_digest": "209f0f3c595b94472dd68383ab563368163a2559bfa960bb561ffd69311e9e94",
+      "expected": "denied 403/404 (PaperlessObjectPermissions on ShareLink.owner)",
+      "id": "H1",
+      "provenance": "GHSA-386h-chg4-cfw9 / b010f65ae (detail vs fixed create)",
+      "verdict": "refuted"
+    },
+    {
+      "actor_observation": {
+        "row_ids": []
+      },
+      "actor_status": 403,
+      "controls": {
+        "member_version_delete": {
+          "assertive": true,
+          "expected": 200,
+          "held": true,
+          "kind": "prerequisite",
+          "observation": {
+            "current_version_id": 3,
+            "row_ids": []
+          },
+          "status": 200
+        },
+        "owner_versions_intact": {
+          "assertive": true,
+          "expected": 200,
+          "held": true,
+          "kind": "effect",
+          "observation": {
+            "id": 1,
+            "owner": 2,
+            "row_ids": []
+          },
+          "status": 200
+        }
+      },
+      "definition_digest": "8b16c91b950d185d7746637858068914e1f2109cc7df7ba3eb6b036038d57638",
+      "expected": "denied 403 (object gate after global gate)",
+      "id": "H2",
+      "provenance": "8aab34ea7 versions global-check (object branch untested)",
+      "verdict": "refuted"
+    },
+    {
+      "actor_observation": {
+        "row_ids": []
+      },
+      "actor_status": 403,
+      "controls": {
+        "member_owned_set_permissions": {
+          "assertive": true,
+          "expected": 200,
+          "held": true,
+          "kind": "prerequisite",
+          "observation": {
+            "row_ids": []
+          },
+          "status": 200
+        },
+        "restricted_unmoved": {
+          "assertive": true,
+          "expected": 200,
+          "held": true,
+          "kind": "effect",
+          "observation": {
+            "id": 2,
+            "owner": 2,
+            "permissions": {
+              "change": {
+                "groups": [],
+                "users": [
+                  3
+                ]
+              },
+              "view": {
+                "groups": [],
+                "users": [
+                  3
+                ]
+              }
+            },
+            "row_ids": []
+          },
+          "status": 200
+        }
+      },
+      "definition_digest": "ea8dfca3d578557e40121da0adbf96262006736f89e45494567fcc115115d9e4",
+      "expected": "denied 403 and restricted perms unchanged",
+      "id": "H3",
+      "provenance": "GHSA-w47q-3m69-84v8 class via bulk path (ownership check)",
+      "verdict": "refuted"
+    },
+    {
+      "actor_observation": {
+        "row_ids": []
+      },
+      "actor_status": 403,
+      "controls": {
+        "shared_survives": {
+          "assertive": true,
+          "expected": 200,
+          "held": true,
+          "kind": "prerequisite",
+          "observation": {
+            "id": 3,
+            "owner": null,
+            "row_ids": []
+          },
+          "status": 200
+        }
+      },
+      "definition_digest": "e22231b2c17187e62adf11d4e4b237e65a2d93fe493a160da09b19a935d8cda4",
+      "expected": "denied 403 and document survives",
+      "id": "H4",
+      "provenance": "8aab34ea7 delete-perm gating (documents bulk path)",
+      "verdict": "refuted"
+    },
+    {
+      "actor_status": {
+        "groups": 200,
+        "is_superuser": 403
+      },
+      "after": {
+        "groups": [
+          1
+        ],
+        "id": 3,
+        "is_staff": false,
+        "is_superuser": false,
+        "row_ids": []
+      },
+      "before": {
+        "groups": [],
+        "id": 3,
+        "is_staff": false,
+        "is_superuser": false,
+        "row_ids": []
+      },
+      "controls": {
+        "member_profile_mutation": {
+          "assertive": true,
+          "expected": 200,
+          "held": true,
+          "status": 200
+        }
+      },
+      "definition_digest": "43d04d07e4fa2bd46b3bfefbb9fb7d1bcae463ba4943072241994b93c65d27bb",
+      "expected": "privilege flags denied; globally authorized group management recorded separately",
+      "id": "H5",
+      "provenance": "GHSA-59xh-5vwx-4c4q / 06b2d5102 (groups vs fixed flags)",
+      "verdict": "by-design"
+    },
+    {
+      "actor_observation": {
+        "row_ids": []
+      },
+      "actor_status": 403,
+      "controls": {
+        "admin_status": {
+          "assertive": true,
+          "expected": 200,
+          "held": true,
+          "kind": "prerequisite",
+          "observation": {
+            "row_ids": []
+          },
+          "status": 200
+        }
+      },
+      "definition_digest": "11aaf83c0997ad260e7b0eb2a276398138fbc7c22155d06c921454f1ff65de25",
+      "expected": "member gated (403/404) or 200 with stats only, no user-scoped data",
+      "id": "H6",
+      "provenance": "81795bc93 bare-auth views (system status content)",
+      "verdict": "refuted"
+    },
+    {
+      "actor_observation": {
+        "row_ids": []
+      },
+      "actor_status": 404,
+      "controls": {
+        "member_owned_process": {
+          "assertive": true,
+          "expected": 200,
+          "held": true,
+          "kind": "prerequisite",
+          "observation": {
+            "row_ids": []
+          },
+          "status": 200
+        }
+      },
+      "definition_digest": "17d227d3faea06ff53dcb5ce60ce64c7bf0ed87875293a7762a76e2e93cd1b37",
+      "expected": "denied 403/404; admin trigger not denied",
+      "id": "M1",
+      "provenance": "GHSA-7qqc-wrcw-2fj9 / 65ca78e9e (process vs fixed update)",
+      "verdict": "refuted"
+    },
+    {
+      "actor_observation": {
+        "account": [
+          "Invalid pk \"1\" - object does not exist."
+        ],
+        "row_ids": []
+      },
+      "actor_status": 400,
+      "controls": {
+        "member_owned_rule_create": {
+          "assertive": true,
+          "expected": 201,
+          "held": true,
+          "kind": "prerequisite",
+          "observation": {
+            "account": 2,
+            "id": 3,
+            "owner": 3,
+            "row_ids": []
+          },
+          "status": 201
+        }
+      },
+      "definition_digest": "bd50e97d167f95bf16120cc65c1f24bf0c0bcb52ca035f2bd9e3ed844aa548da",
+      "expected": "foreign account is denied or excluded from relation choices; member-owned rule create 201",
+      "id": "M2",
+      "provenance": "MailRuleSerializer.validate_account (change_mailaccount owner-aware)",
+      "verdict": "refuted"
+    },
+    {
+      "actor_observation": {
+        "row_ids": [
+          3,
+          2
+        ]
+      },
+      "actor_status": 200,
+      "controls": {
+        "owner_processed_list": {
+          "assertive": true,
+          "expected": 200,
+          "held": true,
+          "kind": "prerequisite",
+          "observation": {
+            "row_ids": [
+              3,
+              2,
+              1
+            ]
+          },
+          "status": 200
+        }
+      },
+      "definition_digest": "ff1f25af5897771c066f76bb89ec0d06a465c3b7b35a7b7d5b5cd27558f5d52f",
+      "expected": "200 with no admin rows visible",
+      "id": "M3",
+      "provenance": "F2 class by another path (ProcessedMailViewSet filter)",
+      "verdict": "refuted"
+    },
+    {
+      "actor_observation": {
+        "row_ids": []
+      },
+      "actor_status": 403,
+      "controls": {
+        "member_owned_test": {
+          "assertive": true,
+          "expected": 200,
+          "held": true,
+          "kind": "prerequisite",
+          "observation": {
+            "row_ids": [],
+            "success": true
+          },
+          "status": 200
+        }
+      },
+      "definition_digest": "2ec45f0284a839dfbd6f576d2e9a518db8bc5e89c1f159e3a159a223564c1d66",
+      "expected": "denied 403; admin test not denied",
+      "id": "M4",
+      "provenance": "MailAccountViewSet.test branch (change_mailaccount owner-aware)",
+      "verdict": "refuted"
+    },
+    {
+      "actor_observation": {
+        "row_ids": []
+      },
+      "actor_status": 403,
+      "controls": {
+        "admin_row_survives": {
+          "assertive": true,
+          "expected": 200,
+          "held": true,
+          "kind": "effect",
+          "observation": {
+            "row_ids": [
+              3,
+              2,
+              1
+            ]
+          },
+          "status": 200
+        },
+        "member_deleted_row_absent": {
+          "assertive": true,
+          "expected": 200,
+          "held": true,
+          "kind": "prerequisite",
+          "observation": {
+            "row_ids": [
+              2,
+              1
+            ]
+          },
+          "status": 200
+        },
+        "member_owned_delete": {
+          "assertive": true,
+          "expected": 200,
+          "held": true,
+          "kind": "prerequisite",
+          "observation": {
+            "deleted_mail_ids": [
+              3
+            ],
+            "row_ids": []
+          },
+          "status": 200
+        },
+        "mixed_rows_survive_after_control": {
+          "assertive": true,
+          "expected": 200,
+          "held": true,
+          "kind": "effect",
+          "observation": {
+            "row_ids": [
+              2,
+              1
+            ]
+          },
+          "status": 200
+        }
+      },
+      "definition_digest": "f223ea2e879063f4f98d1ff6a0b1cf0f3ff63878e98af4e4667780f58c2b420b",
+      "expected": "atomic 403 and both mixed-batch rows survive; member-only deletion succeeds",
+      "id": "M5",
+      "provenance": "c28c532be whole-batch atomic reject",
+      "verdict": "refuted"
+    },
+    {
+      "actor_observation": {
+        "row_ids": []
+      },
+      "actor_status": 404,
+      "controls": {
+        "owner_read_account": {
+          "assertive": true,
+          "expected": 200,
+          "held": true,
+          "kind": "prerequisite",
+          "observation": {
+            "id": 1,
+            "owner": 2,
+            "row_ids": []
+          },
+          "status": 200
+        }
+      },
+      "definition_digest": "a75ea107e7d78146105f588374602a629e2721b7121df229e28b80b56b0fbddf",
+      "expected": "denied 403/404; owner reads 200",
+      "id": "M6",
+      "provenance": "MailAccountViewSet detail (PaperlessObjectPermissions)",
+      "verdict": "refuted"
+    }
+  ],
+  "recorded_hypothesis_ids": [
+    "H1",
+    "H2",
+    "H3",
+    "H4",
+    "H5",
+    "H6",
+    "M1",
+    "M2",
+    "M3",
+    "M4",
+    "M5",
+    "M6"
+  ],
+  "registration": {
+    "definition_digests": {
+      "H1": "209f0f3c595b94472dd68383ab563368163a2559bfa960bb561ffd69311e9e94",
+      "H2": "8b16c91b950d185d7746637858068914e1f2109cc7df7ba3eb6b036038d57638",
+      "H3": "ea8dfca3d578557e40121da0adbf96262006736f89e45494567fcc115115d9e4",
+      "H4": "e22231b2c17187e62adf11d4e4b237e65a2d93fe493a160da09b19a935d8cda4",
+      "H5": "43d04d07e4fa2bd46b3bfefbb9fb7d1bcae463ba4943072241994b93c65d27bb",
+      "H6": "11aaf83c0997ad260e7b0eb2a276398138fbc7c22155d06c921454f1ff65de25",
+      "M1": "17d227d3faea06ff53dcb5ce60ce64c7bf0ed87875293a7762a76e2e93cd1b37",
+      "M2": "bd50e97d167f95bf16120cc65c1f24bf0c0bcb52ca035f2bd9e3ed844aa548da",
+      "M3": "ff1f25af5897771c066f76bb89ec0d06a465c3b7b35a7b7d5b5cd27558f5d52f",
+      "M4": "2ec45f0284a839dfbd6f576d2e9a518db8bc5e89c1f159e3a159a223564c1d66",
+      "M5": "f223ea2e879063f4f98d1ff6a0b1cf0f3ff63878e98af4e4667780f58c2b420b",
+      "M6": "a75ea107e7d78146105f588374602a629e2721b7121df229e28b80b56b0fbddf"
+    },
+    "execution_digest": "2486d67518491416540036dc991b2a8ce8186a1114517337cc85e94a6f3a8f40",
+    "hypothesis_ids": [
+      "H1",
+      "H2",
+      "H3",
+      "H4",
+      "H5",
+      "H6",
+      "M1",
+      "M2",
+      "M3",
+      "M4",
+      "M5",
+      "M6"
+    ],
+    "journal_marker_hint": false,
+    "registration_commit": "3064557ee5e78ed1facc3264565c5c66ec01a7db",
+    "registration_digest": "2486d67518491416540036dc991b2a8ce8186a1114517337cc85e94a6f3a8f40",
+    "registration_path": "docs/research/registrations/paperless-quality-closure.json",
+    "schema": "nidavellir/research-registration-receipt/v1",
+    "sources": {
+      "cyber-range/fixtures/paperless/build_fixture.py": "34ff0c8397f53e5685d25e0bf3d018413933783f15f775096f39450fc403c866",
+      "cyber-range/services/scenario-orchestrator/research_code.py": "d2de91ec8fd24cf05dd1ac0f4125f9d0f4d6d1bc5fe643fe081f0a2089222e3c",
+      "scripts/probe-paperless-variants.py": "5a7094c67be42471224aa6d4e6357d28900e05a0010783ac5acfd6d3f7d5e2d9",
+      "scripts/research_registration.py": "5f683face77508f9c9b3f6b5de1c038c8d118bd4373a8b20e0313a785d0bcf58"
+    },
+    "target": {
+      "pins": {
+        "gotenberg": "gotenberg/gotenberg:8.37.0@sha256:3fdee07e0dcd5005c3db4d81d1600d081fc6fb424da87e409e1c1f9624a249b8",
+        "greenmail": "greenmail/standalone:2.1.14@sha256:2bcd0470f569af3c8b98509421b23f1ad11ebb2d58c3648f4233bf450f3b5e2b",
+        "paperless": "paperlessngx/paperless-ngx:3.3.0@sha256:d70526917791fb99ee61b40a91f111d60c59914f36cfd481af494107054aed06",
+        "postgres": "postgres:16@sha256:65b16a8b326e0cfbdf33fa7e783f2a0cb352a61448616ccccfd616ef42aa0f65",
+        "redis": "redis:7-alpine@sha256:520775a41a63e77e06c73e35d2fd9cc15921a609516818796b4ecbb813078bc7"
+      },
+      "version": "3.3.0"
+    }
+  },
+  "schema": "nidavellir/research-probe-results/v2"
+}

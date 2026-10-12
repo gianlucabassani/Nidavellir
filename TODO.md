@@ -1,6 +1,6 @@
 # Nidavellir — ordered delivery checklist
 
-Updated 2026-10-08 after UI-R1 closure and the independent research audit.
+Updated 2026-10-12 after the research-quality verification phase.
 This is the canonical work queue. [ROADMAP.md](ROADMAP.md) retains product scope,
 design detail and legacy milestone mapping. Unchecked means unfinished.
 Verification history is in [docs/JOURNAL.md](docs/JOURNAL.md).
@@ -123,15 +123,25 @@ focused maintenance scope if broader features do not improve actual research.
   pass. Contract: `docs/research/registration-contract.md`; verification:
   `docs/verification/research-phase2-2026-10-07.json`. No historical chronology repair
   or mail-control validity implied.
-- [ ] **Phase 3 — Isolation-valid probing (RESEARCH-R7).** Grant global permissions
+- [x] **Phase 3 — Isolation-valid probing (RESEARCH-R7).** Grant global permissions
   while withholding object permission; prove allowed mutations with requester-owned
   controls; test genuinely mixed batches with row-survival assertions; rerun into
   new artifacts. Depends on Phase 2. (First application: Paperless mail round.)
+  *Closed 2026-10-12: final registration `b059439`; all assertive controls held,
+  eleven request-scoped refutations and one globally authorized group-management
+  result. Owned controls, concrete requests and mixed-row survival are retained.*
+- [x] **Research-quality follow-up (RESEARCH-R8–R10).** Retain complete paged current
+  inventories and nine affected/fixed source shapes; keep unresolved semantics
+  explicit; reconcile unsupported historical claims; audit admitted query failures
+  and withdraw the unsupported authoring-budget promise. Evidence and scope:
+  `docs/verification/research-quality-closure-2026-10-12.md`.
 
 Accepted record: **no confirmed vulnerability under the tested conditions**;
 **12 retained hypotheses plus 9 asserted without per-probe evidence**. Historical
-artifacts stay unchanged. Coverage, historical gate/determinism/efficiency evidence,
-and code-intel audit/budget gaps remain open in ISSUES.md.
+artifacts stay unchanged. Historical proof gaps are explicitly unverified; new
+evidence is dated separately. Source candidates remain unresolved until semantic
+review. The next proposed console slice is in `docs/research/research-usability-next.md`;
+planning does not implement it or change the existing product delivery order.
 
 ## P2 — research iteration driven by target needs
 
