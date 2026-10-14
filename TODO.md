@@ -1,6 +1,6 @@
 # Nidavellir — ordered delivery checklist
 
-Updated 2026-10-12 after the research-quality verification phase.
+Updated 2026-10-14 for the verified phase merge and next console slice.
 This is the canonical work queue. [ROADMAP.md](ROADMAP.md) retains product scope,
 design detail and legacy milestone mapping. Unchecked means unfinished.
 Verification history is in [docs/JOURNAL.md](docs/JOURNAL.md).
@@ -140,8 +140,19 @@ Accepted record: **no confirmed vulnerability under the tested conditions**;
 **12 retained hypotheses plus 9 asserted without per-probe evidence**. Historical
 artifacts stay unchanged. Historical proof gaps are explicitly unverified; new
 evidence is dated separately. Source candidates remain unresolved until semantic
-review. The next proposed console slice is in `docs/research/research-usability-next.md`;
-planning does not implement it or change the existing product delivery order.
+review. The next console slice is recorded below; its design is proposed and its
+implementation remains unfinished.
+
+## Next — research usability
+
+- [ ] **UI-R2 — Controls and evidence review in the console.** Extend the existing
+  console and artifact routes to show actor requests, prerequisite controls,
+  observed effects, verdicts and linked evidence together. Preserve operator-only
+  source authoring and existing execution budgets. **Depends:** Phase 3.
+  **Accept:** review a real two-account case from the console; failed positive
+  controls cannot appear as refutations; evidence remains available after teardown.
+  **Next action:** approve the first-slice design in
+  `docs/research/research-usability-next.md`, then implement and actively verify it.
 
 ## P2 — research iteration driven by target needs
 

@@ -1,6 +1,6 @@
 # Research usability — next proposal
 
-Draft for approval after the quality gate. These are proposed features, not
+UI-R2's first slice is drafted for approval after the quality gate. These are proposed features, not
 completed work. Extend the existing console and service contracts; keep source
 authoring operator-only and arena execution confined and budgeted.
 

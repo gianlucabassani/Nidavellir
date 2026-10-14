@@ -1,8 +1,9 @@
 # Research quality phase — closure
 
 Verified locally on 2026-10-12 (Europe/Rome). Raw timestamps use UTC.
-RESEARCH-R7–R10 are remediated within the following scope. GitHub publication is
-blocked separately by its account-suspension response.
+RESEARCH-R7–R10 are remediated within the following scope. The verified branch
+was published to the current GitLab origin. The GitHub suspension response during
+the initial handoff check concerned the old, separately configured remote.
 
 ## Active proof
 

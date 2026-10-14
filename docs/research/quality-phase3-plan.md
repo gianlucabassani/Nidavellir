@@ -42,4 +42,6 @@ remaining serious issue. See the 2026-10-12 closure report for scoped conclusion
 The new evidence writers refuse to overwrite existing files. Registration commits
 remain separate so each empirical refinement has an immutable prior registration;
 merge with a merge commit to preserve their ancestry. Source-query semantic review
-remains manual. GitHub PR work is blocked by its account-suspension response.
+remains manual. The verified branch is published to the current GitLab origin.
+The earlier GitHub suspension response concerned the separately configured old
+remote. The user authorized integration into main on 2026-10-14.

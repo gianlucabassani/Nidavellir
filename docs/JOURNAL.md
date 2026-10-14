@@ -37,8 +37,8 @@ See docs/verification/research-quality-closure-2026-10-12.md for evidence and li
 
 **Unresolved risks / next step:** source semantics remain manual review; old proof
 claims stay unverified; Docker-local remains the live provider boundary. GitHub
-returned HTTP 403 stating the account was suspended, blocking PR publication.
-Preserve registration ancestry with a merge commit once remote access works.
+returned HTTP 403 for the old GitHub remote; the current GitLab origin accepts
+the verified branch. Preserve registration ancestry with a merge commit.
 Next product step is selection/approval of the console control-and-evidence review
 slice in docs/research/research-usability-next.md; planning has not implemented it.
 
