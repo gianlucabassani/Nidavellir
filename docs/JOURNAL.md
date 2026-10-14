@@ -4,6 +4,33 @@ Dated handoffs record changes and actual verification. TODO.md is the canonical 
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
 
+
+## 2026-10-14 — Merge verified console and research quality work into GitLab main
+
+**Outcome:** User-authorized merge commit 40a277b integrated UI-R1 completion,
+documentation cleanup and RESEARCH-R7–R10 remediation into main. The push to the
+current GitLab origin succeeded. GitLab's newer Pages CI definition was preserved;
+all registration commits remain ancestors and every registered executable source
+hash still matches the final live probe. The old GitHub remote is separate.
+
+**Files:** Integration preserves the already-reviewed runtime changes. This handoff
+adds the merged-tree release log and makes UI-R2 the explicit next TODO: console
+review of actor requests, prerequisite controls, effects, verdicts and evidence.
+The first-slice design is ready for approval; implementation remains unfinished.
+
+**Verification:** Fresh make release-check on merged main passed: Ruff, no
+medium/high Bandit findings, 1,114 SQLite passes / four skips / six deselections,
+1,118 PostgreSQL passes / six deselections, Python 3.11.14 migrations/API/UI/gateway
+smoke. Raw evidence: docs/verification/research-quality-merged-release-2026-10-14.log.
+The integration changes relative to the verified code are Pages CI and handoff
+text only. Existing live Paperless, REST/MCP, Docker browser/HTTP, teardown and
+accessibility evidence remains linked in the closure records.
+
+**Risks / next step:** static source candidates still need semantic review; historical
+unsupported assertions stay unverified; Docker-local remains the live provider
+boundary. Next action is approval of UI-R2's first design, followed by implementation
+and a real two-account console journey with evidence retained after teardown.
+
 ## 2026-10-12 — Close the research-quality verification phase
 
 **Outcome:** Repaired RESEARCH-R7 owned/global permission controls, concrete request
