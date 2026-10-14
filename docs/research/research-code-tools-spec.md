@@ -36,9 +36,16 @@ dynamic permission arguments, bare-auth class, runtime permission override,
 framework/module queryset, custom/inherited policy or unverified owner dataflow.
 No candidate status implies that a vulnerability exists or is absent.
 
-REST/MCP remain operator-only. Successful REST calls append one audit event; failed
-calls currently do not. MCP traces calls; authoring budgets are not checked/charged
-(RESEARCH-R10). The earlier every-call/budget assertions below are withdrawn.
+REST/MCP remain operator-only. Every admitted REST query appends one metadata-only
+audit event, including query errors and unexpected service failures. Authorization
+and schema denials occur before admission. Successful events include output digest
+and truncation; failed events include tool, actor and HTTP status, without request
+body or exception text. MCP adds gateway traces.
+
+These bounded, read-only authoring queries are explicitly **unbudgeted operator
+work**. They do not consume or enforce arena action/time/token budgets. The earlier
+authoring-budget promise is withdrawn; arena execution keeps its existing budget
+contract. Checkout provisioning and immutability remain operator responsibilities.
 
 ## Design principle (explicit)
 
@@ -58,7 +65,7 @@ not retained, so the inventory does not establish an efficiency ratio.
 |---|---|---|---|---|
 | 1 | Advisory discovery (`gh api` advisories list) | negligible (1 call, 16 rows) | once | No — already answer-shaped |
 | 2 | Fix-commit lookup (`git log --grep`) | negligible (2 calls) | once | No |
-| 3 | Patch-hunk reading (`git show` × ~9, 20–130 lines each, ~600 lines) | **tokens** (all of it enters context) | per advisory | **Yes → fix_lookup** |
+| 3 | Patch-hunk reading (historical call/line estimates are unverified) | **tokens** (all of it enters context) | per advisory | **Yes → fix_lookup** |
 | 4 | Added-check classification (reasoning over each hunk) | **tokens** (reasoning, untruncated input) | per advisory | **Yes → deterministic extraction** |
 | 5 | Table-row construction (manual writing) | time | per advisory | Yes (tool emits rows) |
 | 6 | Sibling/call-site search (targeted greps, 15–60 line outputs, most discarded; follow-up reads of models/views/urls) | **tokens, largest share** (exploratory, high discard ratio) | per hypothesis | **Yes → sibling_search** |
@@ -131,11 +138,12 @@ Operator-only access is the boundary, not a guarantee that code is secret-free.
 
 - MCP (agent): three tools on the **operator stance only** (authoring-grade;
   attacker sessions must not browse repo history). Traced by the
-  gateway; authoring-budget enforcement remains open (RESEARCH-R10).
+  gateway; these are unbudgeted operator authoring queries.
 - REST (human): `POST /research/code/{fix-lookup,layer-diff,sibling-search}`,
-  operator-only, bounded models. Each successful call appends an audit event
+  operator-only, bounded models. Each admitted call appends an audit event
   (`lab_id="research-code"`, type `research_code_lookup`: tool, refs,
-  output digest, truncation flags, actor) — failed REST calls still need audit coverage (RESEARCH-R10).
+  output digest, truncation flags, actor). Failure events omit refs, output and
+  exception content, retaining tool, actor and status only.
 - Console page: deferred — REST JSON is the human view in this slice; a
   console page over the same endpoints is a trivial follow-up.
 
@@ -147,7 +155,21 @@ no console page, no repo provisioning (operator clones out of band).
 
 ## Acceptance mapping
 
-Mail collect+derive through the new surface: mail fix rows (7qqc, 96jx,
-bulk-mail-delete) via T1 + sibling candidates via T3, compared against
-the manual round's call/line cost. No mail probes (SMTP sink is the known
-prerequisite, next pass).
+Mail collect+derive uses mail fix rows via T1 and sibling candidates via T3.
+Output sizes can be observed; there is no measured manual efficiency baseline.
+The separate registered fixture probe performs live mail checks.
+
+### Complete candidate inventory (2026-10-11)
+
+T3 accepts a nonnegative `offset` and returns `next_offset`. Follow it using the
+returned immutable ref until null. Pagination reflects retained sites after the
+JSON byte cap; a partial git result still marks the total as incomplete.
+Each reply is capped at 64 KiB; internal grep capture is bounded at 2 MiB and
+individual AST source reads at 256 KiB. Exceeding these limits remains explicit.
+Only the requested page is classified, except bare-auth candidates that require
+syntax filtering before their count is known.
+The original five patterns retain their heuristic limits. `field-validation`,
+`privilege-flags`, `template-context` and `mutation-order` add candidate coverage
+for the remaining fix shapes, with explicit manual-review reasons. Their presence
+does not establish correct framework policy, boolean parsing, safe context contents
+or a check that dominates mutation. All residuals remain unresolved until reviewed.

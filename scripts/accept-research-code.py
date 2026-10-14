@@ -85,12 +85,8 @@ def main() -> None:
         },
         "mail_fix_diff": mail_diff["data"]["files"],
         "calls": calls,
-        "manual_baseline": {
-            "note": "observed cost of the manual mail-adjacent collect in the "
-                    "variant-hunt round (same three fixes plus sibling greps)",
-            "git_invocations": 10,
-            "hunk_lines_read": "~600 plus follow-up file reads",
-        },
+        "efficiency_comparison": {"available": False,
+                                  "reason": "No retained measured manual baseline."},
     }
     path = ROOT / "docs/verification" / (
         f"research-code-accept-{datetime.now():%Y-%m-%d}-{os.getpid()}.json")

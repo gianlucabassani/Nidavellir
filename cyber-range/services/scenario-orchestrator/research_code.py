@@ -31,6 +31,9 @@ FORBIDDEN_TOKENS = ("upload-pack", "receive-pack", "--exec", "clone",
                     "fetch", "pull", "push", "remote", "submodule")
 GIT_TIMEOUT = 30
 MAX_BYTES = 65536
+# Search captures a bounded inventory internally; each answer remains 64 KiB.
+# Larger repositories still advertise a lower bound and require narrower scopes.
+MAX_SEARCH_BYTES = 2 * 1024 * 1024
 MAX_SITES = 50
 MAX_HUNKS = 10
 MAX_DIFF_SITES = 20
@@ -90,7 +93,19 @@ def run_git(repo: Path, *args: str, ok_codes: tuple[int, ...] = (0,),
     """
     if not args or args[0] not in READONLY_VERBS:
         raise ResearchCodeError(f"refusing non-read git verb: {args[0] if args else None}")
+    literal_paths = False
     for token in args:
+        if token == "--":
+            literal_paths = True
+            continue
+        # Git stops parsing options at --. Names such as remote_version.py
+        # are paths, not transport commands; rejecting them loses inventory.
+        if literal_paths:
+            continue
+        # Immutable tree-object lookups are likewise literal source names.
+        # The SHA prefix prevents an option or transport from being parsed.
+        if re.fullmatch(r"[0-9a-f]{40}:[^\x00\r\n]+", token):
+            continue
         if any(forbidden in token for forbidden in FORBIDDEN_TOKENS) or token.startswith(
                 ("--output", "--ext-diff", "--textconv", "--filters",
                  "--open-files-in-pager", "--help")):
@@ -474,7 +489,7 @@ _OBJECT_PERM_MARKERS = {"PaperlessObjectPermissions", "ViewDocumentsPermissions"
 
 
 def sibling_search(repo: Path, ref: str, pattern: str,
-                   path_scope: list[str] | None = None) -> dict:
+                   path_scope: list[str] | None = None, *, offset: int = 0) -> dict:
     """Bounded syntactic candidates. No status establishes vulnerability absence."""
     needles = {
         "unscoped-queryset": r"\.objects\.[[:alpha:]_][[:alnum:]_]*[[:space:]]*(",
@@ -482,13 +497,19 @@ def sibling_search(repo: Path, ref: str, pattern: str,
         "bulk-permission": r"has_perms[[:space:]]*=",
         "half-composed-check": "has_perms_owner_aware(",
         "unguarded-verb": "@action",
+        "field-validation": r"validate_\|get_serializer\|queryset[[:space:]]*=",
+        "privilege-flags": r"is_superuser\|is_staff",
+        "template-context": r"context\|SandboxedEnvironment",
+        "mutation-order": r"\.delete(\|\.save(\|\.update(",
     }
     if pattern not in needles:
         raise ResearchCodeError("unknown pattern")
+    if isinstance(offset, bool) or not isinstance(offset, int) or not 0 <= offset <= 100000:
+        raise ResearchCodeError("invalid site offset")
     sha = resolve_ref(repo, ref or "HEAD")
-    scope = _check_paths(path_scope, ["src/documents/", "src/paperless_mail/"])
+    scope = _check_paths(path_scope, ["src/documents/", "src/paperless_mail/", "src/paperless/"])
     raw = run_git(repo, "grep", "-n", needles[pattern], sha, "--", *scope,
-                  ok_codes=(0, 1))
+                  ok_codes=(0, 1), max_bytes=MAX_SEARCH_BYTES)
     lines = raw.splitlines()
     if raw.truncated and lines:
         lines = lines[:-1]  # Never analyze an incomplete grep line.
@@ -501,7 +522,12 @@ def sibling_search(repo: Path, ref: str, pattern: str,
     # Filtering a bare-auth site needs the full class/action context. Do not
     # truncate before filtering or silently treat absent AST as no matches.
     cache, matches = {}, []
-    for path, lineno, evidence in candidates:
+    for index, (path, lineno, evidence) in enumerate(candidates):
+        # Only bare-auth needs syntax filtering before its count is known.
+        # Other patterns classify exactly the requested page, avoiding a full
+        # source analysis repeated for every continuation page.
+        if pattern != "bare-auth-view" and not offset <= index < offset + MAX_SITES:
+            continue
         if path not in cache:
             try:
                 tree = ast.parse(_show_file(repo, sha, path))
@@ -539,6 +565,16 @@ def sibling_search(repo: Path, ref: str, pattern: str,
                 status, classification = _classify_guard(function, by_owner, permissions, expected)
             elif pattern == "bulk-permission":
                 status, classification = _classify_accumulator(function, lineno)
+            elif pattern in {"field-validation", "privilege-flags", "template-context", "mutation-order"}:
+                # These fix shapes require framework, value parsing, context
+                # contents or dominance analysis. Retain every syntactic site;
+                # never promote textual check presence into a safety verdict.
+                status, classification = "manual-review", {
+                    "field-validation": "serializer-queryset-policy-unverified",
+                    "privilege-flags": "privilege-value-parsing-unverified",
+                    "template-context": "template-context-contents-unverified",
+                    "mutation-order": "check-before-mutation-unverified",
+                }[pattern]
             else:
                 calls = list(_local_nodes(function)) if function else []
                 aware = any(isinstance(n, ast.Call) and
@@ -550,15 +586,23 @@ def sibling_search(repo: Path, ref: str, pattern: str,
         matches.append({"file": path, "line": lineno, "status": status,
                         "classification": classification,
                         "evidence": _clip(evidence, 160, cuts, "site evidence byte cap")})
-    total = len(matches)
-    if total > MAX_SITES:
-        cuts.append(f"site list capped at {MAX_SITES}; refine path_scope")
+    total = len(matches) if pattern == "bare-auth-view" else len(candidates)
+    if total > offset + MAX_SITES:
+        cuts.append(f"site page capped at {MAX_SITES}; follow next_offset")
     data = {"pattern_status": "heuristic local syntax; composed means matching guard presence only; "
             "class-covered and manual-review require caller/dataflow/framework analysis; "
             "uncovered/not composed are candidates, not findings",
             "total_matches": total, "total_matches_complete": not raw.truncated,
-            "sites": matches[:MAX_SITES]}
-    return _envelope(data, {"repo": str(repo), "ref": sha}, bool(cuts), "; ".join(sorted(set(cuts))))
+            "offset": offset, "next_offset": 100000,
+            "sites": matches[offset:offset + MAX_SITES] if pattern == "bare-auth-view" else matches}
+    # Envelope clipping may shorten a page further. Derive the continuation
+    # from retained sites, never from the requested page size.
+    result = _envelope(data, {"repo": str(repo), "ref": sha}, bool(cuts),
+                       "; ".join(sorted(set(cuts))))
+    next_offset = offset + len(data["sites"])
+    data["next_offset"] = next_offset if next_offset < total else None
+    result["digest"] = _digest({key: value for key, value in result.items() if key != "digest"})
+    return result
 
 
 def _classify_guard(function, by_owner, permissions, expected):

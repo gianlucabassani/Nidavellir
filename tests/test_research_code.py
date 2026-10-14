@@ -72,6 +72,19 @@ def test_fix_lookup_bad_ref_and_verb_refused(repo):
         research_code.run_git(repo, "log", "--upload-pack=x")
 
 
+def test_read_only_inventory_accepts_git_words_in_literal_paths(repo):
+    import research_code
+
+    _commit(repo, {"pkg/test_api_remote_version.py":
+                   "def f():\n    return Document.objects.all()\n"}, "Literal path")
+    result = research_code.sibling_search(
+        repo, "HEAD", "unscoped-queryset", ["pkg/test_api_remote_version.py"])
+    assert result["data"]["total_matches"] == 1
+    assert result["data"]["sites"][0]["classification"] == "no-local-owner-check"
+    with pytest.raises(research_code.ResearchCodeError):
+        research_code.run_git(repo, "remote", "--", "pkg/test_api_remote_version.py")
+
+
 def test_repo_root_unprovisioned(tmp_path, monkeypatch):
     import research_code
 
@@ -132,16 +145,64 @@ def test_sibling_search_composition_status(repo):
         research_code.sibling_search(repo, "HEAD", "everything")
 
 
+def test_sibling_inventory_can_be_read_without_losing_residuals(repo):
+    import research_code
+
+    _commit(repo, {"pkg/views.py": "\n".join(
+        f"def f{i}():\n    return Document.objects.all()" for i in range(1200))},
+        "Many residual candidates")
+    sites = []
+    offset = 0
+    while True:
+        result = research_code.sibling_search(
+            repo, "HEAD", "unscoped-queryset", ["pkg/"], offset=offset)
+        assert result["data"]["total_matches"] == 1200
+        assert result["data"]["total_matches_complete"]
+        sites.extend(result["data"]["sites"])
+        offset = result["data"]["next_offset"]
+        if offset is None:
+            break
+    assert len(sites) == 1200
+    assert len({(s["file"], s["line"]) for s in sites}) == 1200
+    assert all(s["status"] == "uncovered" for s in sites)
+
+
+@pytest.mark.parametrize("pattern,affected,fixed,reason", [
+    ("field-validation", "class S:\n    queryset = Document.objects.all()\n",
+     "class S:\n    def validate_document(self, d):\n        return d\n",
+     "serializer-queryset-policy-unverified"),
+    ("privilege-flags", "def update(data):\n    return data['is_superuser']\n",
+     "def update(data):\n    return bool(data['is_superuser'])\n",
+     "privilege-value-parsing-unverified"),
+    ("template-context", "context = {'document': document}\n",
+     "context = {'title': title}\n", "template-context-contents-unverified"),
+    ("mutation-order", "def delete(obj):\n    obj.delete()\n",
+     "def delete(obj):\n    if permitted(obj):\n        obj.delete()\n",
+     "check-before-mutation-unverified"),
+])
+def test_additional_fix_shapes_retain_both_versions_for_review(
+        repo, pattern, affected, fixed, reason):
+    import research_code
+
+    before = _commit(repo, {"pkg/views.py": affected}, "Affected shape")
+    after = _commit(repo, {"pkg/views.py": fixed}, "Changed shape")
+    for ref in (before, after):
+        result = research_code.sibling_search(repo, ref, pattern, ["pkg/"])
+        assert result["data"]["sites"]
+        assert all(site["status"] == "manual-review" and site["classification"] == reason
+                   for site in result["data"]["sites"])
+
+
 # --- API surface -------------------------------------------------------------
 
-def _client(role, name):
+def _client(role, name, *, raise_server_exceptions=True):
     import api
     import auth
     from database import Database
 
     key = auth.generate_api_key()
     Database().create_api_key(auth.hash_api_key(key), name=name, role=role)
-    client = TestClient(api.app)
+    client = TestClient(api.app, raise_server_exceptions=raise_server_exceptions)
     client.headers["X-API-Key"] = key
     return client
 
@@ -177,6 +238,39 @@ def test_research_api_returns_answers_and_audits(repo):
         lab_id="research-code", limit=10, types=("research_code_lookup",))
     assert events and events[0]["payload"]["digest"] == payload["digest"]
     assert "has_perms_owner_aware" not in json.dumps(events[0]["payload"])
+
+
+@pytest.mark.parametrize("route,body,function", [
+    ("fix-lookup", {"fix_ref": "abc123"}, "fix_lookup"),
+    ("layer-diff", {"from_ref": "HEAD", "to_ref": "HEAD"}, "layer_diff"),
+    ("sibling-search", {"pattern": "bare-auth-view"}, "sibling_search"),
+])
+@pytest.mark.parametrize("unexpected", [False, True])
+def test_admitted_research_failures_are_audited_without_error_content(
+        repo, monkeypatch, route, body, function, unexpected):
+    import research_code
+    from database import Database
+
+    name = f"audit-failure-{function}-{unexpected}"
+    operator = _client("operator", name=name, raise_server_exceptions=False)
+
+    def fail(*args, **kwargs):
+        error = RuntimeError if unexpected else research_code.ResearchCodeError
+        raise error("private-checkout-content-secret")
+
+    monkeypatch.setattr(research_code, function, fail)
+    response = operator.post(f"/research/code/{route}", json=body)
+    assert response.status_code == (500 if unexpected else 422)
+    events = Database().list_events(
+        lab_id="research-code", limit=100, types=("research_code_lookup",))
+    matches = [event for event in events if event["actor"] == name]
+    assert len(matches) == 1
+    payload = matches[0]["payload"]
+    assert payload["tool"] == function
+    assert payload["outcome"] == "failed"
+    assert payload["status_code"] == response.status_code
+    assert "private-checkout-content-secret" not in json.dumps(payload)
+    assert "digest" not in payload
 
 
 def test_half_composed_check_statuses(repo):

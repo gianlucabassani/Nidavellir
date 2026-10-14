@@ -54,9 +54,13 @@ MEMBER = {"username": "member", "password": "lab-member-only", "email": "member@
 MEMBER_GLOBAL_PERMS = ["view_document", "view_tag", "view_correspondent",
                        "view_documenttype", "view_storagepath", "view_savedview",
                        "view_sharelink", "view_task", "view_group", "view_user",
-                       "view_processedmail", "view_mailrule", "view_mailaccount"]
+                       "view_processedmail", "view_mailrule", "view_mailaccount",
+                       "add_mailrule", "add_mailaccount", "change_mailaccount", "delete_processedmail",
+                       "change_document", "change_user"]
 DOCS = (("restricted-secret-1", "restricted secret alpha"),
-        ("shared-note-1", "shared note bravo"))
+        ("shared-note-1", "shared note bravo"),
+        ("member-control-1", "member control charlie"),
+        ("delete-control-1", "delete control delta"))
 
 PDF_TEMPLATE = (
     "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
@@ -287,7 +291,7 @@ def build(keep: bool = False) -> dict:
             if arrived is None:
                 raise RuntimeError(f"consumed document never appeared: {title} ({task_id})")
             doc_ids.append(arrived)
-        restricted_id, shared_id = doc_ids
+        restricted_id, shared_id, member_document, delete_control = doc_ids
         _, users = _call(base, "GET", "/api/users/?page_size=10", token=token_a)
         admin_id = next(u["id"] for u in users["results"]
                         if u["username"] == ADMIN["username"])
@@ -303,6 +307,28 @@ def build(keep: bool = False) -> dict:
                         body={"document": shared_id})
         sink_port = _sink_bases()["api"]
         mail = _seed_mail(f"http://127.0.0.1:{sink_port}", base, token_a)
+        # Distinct owned controls exercise the same global mutation gates while
+        # foreign objects retain their admin ownership and empty member grants.
+        owned = json.loads(_manage("shell", "-c",
+            "import json\n"
+            "from django.contrib.auth.models import User, Group\n"
+            "from django.utils import timezone\n"
+            "from documents.models import Document\n"
+            "from paperless_mail.models import MailAccount, MailRule, ProcessedMail\n"
+            "u=User.objects.get(username='member')\n"
+            f"d=Document.objects.get(pk={member_document}); d.owner=u; d.save()\n"
+            "versions=[]\n"
+            f"for root_id in [{restricted_id}, {member_document}]:\n"
+            "    d=Document.objects.get(pk=root_id); d.pk=None; d.root_document_id=root_id\n"
+            "    d.version_index=1; d.checksum='quality-version-'+str(root_id)\n"
+            "    d.filename=None; d.archive_filename=None; d.save(); versions.append(d.pk)\n"
+            f"a=MailAccount.objects.get(pk={mail['account_id']}); a.pk=None; a.owner=u; a.name='member-inbox'; a.save()\n"
+            "r=MailRule.objects.create(name='member-disabled', account=a, owner=u, enabled=False, folder='INBOX')\n"
+            "rows=[ProcessedMail.objects.create(rule=r, owner=u, folder='INBOX', uid='quality-'+str(i), "
+            "subject='synthetic-owned-control', received=timezone.now(), status='SUCCESS').pk for i in range(2)]\n"
+            "g=Group.objects.create(name='quality-control-group')\n"
+            "print(json.dumps({'member_mail_account':a.pk, 'member_processed_rows':rows, "
+            "'restricted_version':versions[0], 'member_version':versions[1], 'control_group':g.pk}))").splitlines()[-1])
         matrix = {}
         for label, tok, path, want in (
                 ("owner_read_restricted", token_a, f"/api/documents/{restricted_id}/", 200),
@@ -330,6 +356,7 @@ def build(keep: bool = False) -> dict:
             "mail_account_id": mail["account_id"], "mail_rule_id": mail["rule_id"],
             "mail_consumed_document": mail["consumed_document"],
             "mail_consumed_owner": mail["consumed_owner"],
+            "member_document": member_document, "delete_control_document": delete_control, **owned,
             "control_matrix": matrix,
             "behavior_digest": "sha256:" + hashlib.sha256(
                 json.dumps(matrix, sort_keys=True).encode()).hexdigest(),

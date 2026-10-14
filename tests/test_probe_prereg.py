@@ -200,7 +200,8 @@ def test_fixture_changed_after_gate_is_not_imported(repo, monkeypatch):
     assert not marker.exists()
 
 
-def test_valid_run_emits_receipt_for_all_recorded_ids(repo, monkeypatch, capsys):
+@pytest.mark.parametrize("failed_controls,effect_loss", [(False, False), (True, False), (False, True)])
+def test_valid_run_emits_receipt_for_all_recorded_ids(repo, monkeypatch, capsys, failed_controls, effect_loss):
     # Credential-free fixture adapter: exercise the real probe sequence and
     # final JSON envelope without Docker, sockets or a target experiment.
     path = repo / FILES[2]
@@ -211,7 +212,10 @@ MEMBER = {"password": "synthetic-member"}
 MAILBOX = {"password": "synthetic-mail"}
 def build(keep=False):
     return {"base_url": "http://fixture.invalid", "tokens": {"A": "fake-a", "B": "fake-b"},
-            "restricted_document": 1, "shared_document": 2, "member_id": 3, "mail_account_id": 4}
+            "restricted_document": 1, "shared_document": 2, "member_id": 3, "mail_account_id": 4,
+            "member_mail_account": 7, "member_processed_rows": [8, 9],
+            "restricted_version": 6, "member_version": 10, "member_document": 11,
+            "control_group": 12, "delete_control_document": 13}
 def run(*args, **kwargs):
     return None
 def _call(base, method, path, **kwargs):
@@ -219,6 +223,26 @@ def _call(base, method, path, **kwargs):
         return 200, {"results": [{"id": 5}]}
     return 200, {"versions": [{"id": 6}]}
 '''.replace('"example/paperless@sha256:" + "0" * 64', repr("example/paperless@sha256:" + "0" * 64)))
+    if failed_controls:
+        text = path.read_text().replace("return 200,", "return 500,")
+        text = text.replace("def _call(base, method, path, **kwargs):", """def _call(base, method, path, **kwargs):
+    if kwargs.get('token') == 'fake-b':
+        return 403, {}
+""")
+        path.write_text(text)
+    if effect_loss:
+        path.write_text(path.read_text() + '''
+_original_call = _call
+_rows = [{"id": 5, "owner": 2}, {"id": 8, "owner": 3}, {"id": 9, "owner": 3}]
+def _call(base, method, path, **kwargs):
+    if path.startswith("/api/processed_mail/"):
+        if method == "POST":
+            ids = kwargs["body"]["mail_ids"]
+            _rows[:] = [r for r in _rows if r["id"] not in ids]
+            return 200, {"deleted_mail_ids": ids}
+        return 200, {"results": list(_rows)}
+    return _original_call(base, method, path, **kwargs)
+''')
     sha = _register(repo)
     cleanup = []
     monkeypatch.setattr(probe, "ROOT", repo)
@@ -231,6 +255,12 @@ def _call(base, method, path, **kwargs):
     assert len(cleanup) == 7
     assert "fake-a" not in json.dumps(out)
     assert "fake-b" not in json.dumps(out)
+    if failed_controls:
+        assert all(row["verdict"] != "refuted" for row in out["hypotheses"])
+    if effect_loss:
+        mixed = next(row for row in out["hypotheses"] if row["id"] == "M5")
+        assert mixed["verdict"] == "confirmed"
+        assert mixed["controls"]["admin_row_survives"]["held"] is False
 
 
 def test_duplicate_json_keys_refused(repo):

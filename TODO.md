@@ -1,6 +1,6 @@
 # Nidavellir — ordered delivery checklist
 
-Updated 2026-10-07 after the independent research audit and Phase 1 remediation.
+Updated 2026-10-14 for the verified phase merge and next console slice.
 This is the canonical work queue. [ROADMAP.md](ROADMAP.md) retains product scope,
 design detail and legacy milestone mapping. Unchecked means unfinished.
 Verification history is in [docs/JOURNAL.md](docs/JOURNAL.md).
@@ -123,15 +123,36 @@ focused maintenance scope if broader features do not improve actual research.
   pass. Contract: `docs/research/registration-contract.md`; verification:
   `docs/verification/research-phase2-2026-10-07.json`. No historical chronology repair
   or mail-control validity implied.
-- [ ] **Phase 3 — Isolation-valid probing (RESEARCH-R7).** Grant global permissions
+- [x] **Phase 3 — Isolation-valid probing (RESEARCH-R7).** Grant global permissions
   while withholding object permission; prove allowed mutations with requester-owned
   controls; test genuinely mixed batches with row-survival assertions; rerun into
   new artifacts. Depends on Phase 2. (First application: Paperless mail round.)
+  *Closed 2026-10-12: final registration `b059439`; all assertive controls held,
+  eleven request-scoped refutations and one globally authorized group-management
+  result. Owned controls, concrete requests and mixed-row survival are retained.*
+- [x] **Research-quality follow-up (RESEARCH-R8–R10).** Retain complete paged current
+  inventories and nine affected/fixed source shapes; keep unresolved semantics
+  explicit; reconcile unsupported historical claims; audit admitted query failures
+  and withdraw the unsupported authoring-budget promise. Evidence and scope:
+  `docs/verification/research-quality-closure-2026-10-12.md`.
 
 Accepted record: **no confirmed vulnerability under the tested conditions**;
 **12 retained hypotheses plus 9 asserted without per-probe evidence**. Historical
-artifacts stay unchanged. Coverage, historical gate/determinism/efficiency evidence,
-and code-intel audit/budget gaps remain open in ISSUES.md.
+artifacts stay unchanged. Historical proof gaps are explicitly unverified; new
+evidence is dated separately. Source candidates remain unresolved until semantic
+review. The next console slice is recorded below; its design is proposed and its
+implementation remains unfinished.
+
+## Next — research usability
+
+- [ ] **UI-R2 — Controls and evidence review in the console.** Extend the existing
+  console and artifact routes to show actor requests, prerequisite controls,
+  observed effects, verdicts and linked evidence together. Preserve operator-only
+  source authoring and existing execution budgets. **Depends:** Phase 3.
+  **Accept:** review a real two-account case from the console; failed positive
+  controls cannot appear as refutations; evidence remains available after teardown.
+  **Next action:** approve the first-slice design in
+  `docs/research/research-usability-next.md`, then implement and actively verify it.
 
 ## P2 — research iteration driven by target needs
 
@@ -175,20 +196,19 @@ multi-agent red-vs-blue, defender scoring and VNC remain deferred. Local VM work
 and requires a selected research target; cloud apply is not its prerequisite. No GPU-heavy
 workloads or local model training are required for the personal Docker path.
 
-## Separate track: operator UI
+## Separate track: operator UI — UI-R1 complete
 
-UI, console and aesthetic work is **off the main delivery order** and out of the research
-and evaluation passes. It lives on its own branch, `ui/royal-command` (1 commit; 30 behind
-`main` — merge `main` in before resuming). Belongs to that track, not to a research pass:
+The React console cutover and accepted UI-R1 parity work are complete. The default
+console includes setup-output history, custom-topology authoring, provider selection
+with verification labels, and archive/list actions. Real-service operations, session
+expiry, CSRF denial, reconnect, keyboard, responsive, and accessibility checks are
+recorded in [the closure report](docs/verification/ui-r1-closure-2026-10-08.md) and
+[the accessibility review](docs/verification/ui-accessibility-review-2026-10-08.md).
 
-- the console rebuild described in [`docs/UI_REBUILD_PLAN.md`](docs/UI_REBUILD_PLAN.md);
-- the deferred human view for the research code-intel tools — a console page over
-  `POST /research/code/*`, which currently exposes REST JSON as the operator view.
-
-Rules: a research or evaluation pass does not include UI work; when a pass needs a human
-view it uses the existing REST/JSON output. No NV id is assigned to UI work and none
-should be added until the track is explicitly scheduled. Backend changes required by the
-UI stay limited to the presentation/BFF contract that exposes existing data and actions.
+Docker-local is the only live-verified provider; its broader provider gap remains in
+`ISSUES.md`. The route/action inventory is in
+[`docs/UI_ROUTE_ACTION_MATRIX.md`](docs/UI_ROUTE_ACTION_MATRIX.md). Remaining research
+and evaluation work follows the NV checklist above.
 
 ## Implemented foundations — preserve, then reverify
 

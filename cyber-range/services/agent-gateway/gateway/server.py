@@ -489,12 +489,13 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
 
         @mcp.tool()
         def research_sibling_search(pattern: str, ref: str | None = None,
-                                    path_scope: list | None = None) -> dict:
-            """Read-only named-pattern call-site search (unscoped-queryset |
-            bare-auth-view | bulk-permission | half-composed-check |
-            unguarded-verb) with composition status."""
+                                    path_scope: list | None = None, offset: int = 0) -> dict:
+            """Read-only paged candidate search. Supports queryset, authorization,
+            field-validation, privilege-flags, template-context and mutation-order
+            patterns. Follow next_offset using the returned immutable ref;
+            classifications do not establish vulnerability absence."""
             return tools.research_sibling_search(ctx(), pattern=pattern, ref=ref,
-                                                 path_scope=path_scope)
+                                                 path_scope=path_scope, offset=offset)
 
     return mcp
 

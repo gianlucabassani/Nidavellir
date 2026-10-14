@@ -1,0 +1,73 @@
+{
+  "agent_denied": true,
+  "audit": [
+    {
+      "outcome": "failed",
+      "status_code": 422,
+      "tool": "fix_lookup"
+    },
+    {
+      "digest": "4f1cd72ae55089f8797d665a422549f3a74ca60ea554c8ba59887f821d0fc533",
+      "outcome": "succeeded",
+      "pattern": "unscoped-queryset",
+      "status_code": 200,
+      "tool": "sibling_search",
+      "truncated": true
+    },
+    {
+      "outcome": "failed",
+      "status_code": 422,
+      "tool": "fix_lookup"
+    },
+    {
+      "digest": "4f1cd72ae55089f8797d665a422549f3a74ca60ea554c8ba59887f821d0fc533",
+      "outcome": "succeeded",
+      "pattern": "unscoped-queryset",
+      "status_code": 200,
+      "tool": "sibling_search",
+      "truncated": true
+    },
+    {
+      "digest": "c488f6e94a370e90a2474c24987d2f9986fa2d7a53e3cbb54446280dcd4ada6f",
+      "from_ref": "65ca78e9e^",
+      "outcome": "succeeded",
+      "status_code": 200,
+      "to_ref": "65ca78e9e",
+      "tool": "layer_diff",
+      "truncated": false
+    },
+    {
+      "digest": "b9f6a5763c8bc6e580dc476c74d19d2be6ceb2f4820bf5eff70d67ebf797280f",
+      "fix_ref": "65ca78e9e",
+      "outcome": "succeeded",
+      "status_code": 200,
+      "tool": "fix_lookup",
+      "truncated": false
+    }
+  ],
+  "authoring_budget": "unbudgeted operator queries",
+  "created_at": "2026-10-11T22:25:00.229482+00:00",
+  "mcp": {
+    "failed_query_reported": true,
+    "paged_query_digest": "4f1cd72ae55089f8797d665a422549f3a74ca60ea554c8ba59887f821d0fc533"
+  },
+  "rest": [
+    {
+      "digest": "b9f6a5763c8bc6e580dc476c74d19d2be6ceb2f4820bf5eff70d67ebf797280f",
+      "route": "fix-lookup",
+      "status": 200
+    },
+    {
+      "digest": "c488f6e94a370e90a2474c24987d2f9986fa2d7a53e3cbb54446280dcd4ada6f",
+      "route": "layer-diff",
+      "status": 200
+    },
+    {
+      "digest": "4f1cd72ae55089f8797d665a422549f3a74ca60ea554c8ba59887f821d0fc533",
+      "route": "sibling-search",
+      "status": 200
+    }
+  ],
+  "schema": "nidavellir/research-code-live/v1",
+  "scope": "Real local HTTP and MCP transport; no arena or provider proof."
+}

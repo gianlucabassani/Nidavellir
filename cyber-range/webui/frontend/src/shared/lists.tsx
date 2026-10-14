@@ -249,7 +249,7 @@ export function AllArenas() {
           body={
             confirm.kind === "destroy"
               ? "The service tears down the arena and cancels active helpers. Its record and evidence stay available."
-              : "This removes the retained record from the console history. The service only removes destroyed or failed records. This cannot be undone from the console."
+              : "The service removes eligible terminal records. Records with research evidence or evaluation references stay retained. Removal cannot be undone from the console."
           }
           confirmLabel={
             confirm.kind === "clear"

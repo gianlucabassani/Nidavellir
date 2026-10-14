@@ -213,16 +213,6 @@ export function ForgeOverview({
                       ? `${base}?tab=${tool.op}&target=${encodeURIComponent(node.name)}`
                       : `${base}?tab=${tool.op}`
                   }
-                  aria-label={
-                    status.ok && node
-                      ? `Use ${node.name} in ${tool.label}`
-                      : `Open ${tool.label}${status.text ? `: ${status.text}` : ""}`
-                  }
-                  title={
-                    status.text
-                      ? `${tool.label}: ${status.text}`
-                      : tool.description
-                  }
                 >
                   <span className="forge-tool-mark" aria-hidden="true">
                     {tool.mark}

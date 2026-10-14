@@ -2586,3 +2586,100 @@ def test_console_trace_keeps_real_export_attribution_after_activity_flood(client
     assert trace["model"] == "model-x"
     assert trace["scaffold"] == "custom-harness"
     assert trace["stance"] == "attacker"
+
+
+def test_console_setup_history_projects_retained_outputs(client, monkeypatch):
+    import app as webui_module
+
+    assert _login(client).status_code == 302
+    monkeypatch.setattr(webui_module, '_api_get', lambda path: ({'open': False}, True))
+    monkeypatch.setattr(webui_module, '_events', lambda *args, **kwargs: [])
+    monkeypatch.setattr(webui_module, '_setup_steps', lambda _: [{
+        'node': 'target', 'command': '<script>alert(1)</script>', 'stdout': 'ready\n',
+        'stderr': 'warning', 'exit_code': 0, 'ok': True, 'via': 'operator',
+        'ts': '2026-10-07', 'session_id': 'private', 'secret_extra': 'private',
+    }])
+    data = client.get('/api/console/arenas/archived/setup').get_json()
+    assert data['steps'] == [{'node': 'target', 'command': '<script>alert(1)</script>',
+        'stdout': 'ready\n', 'stderr': 'warning', 'exit_code': 0, 'ok': True,
+        'via': 'operator', 'ts': '2026-10-07'}]
+
+
+def test_console_launch_options_are_service_projected(client, monkeypatch):
+    import app as webui_module
+
+    assert _login(client).status_code == 302
+    def api_get(path):
+        return ({'default': 'docker-local', 'providers': [
+            {'name': 'docker-local', 'infra_class': 'container'},
+            {'name': 'openstack', 'infra_class': 'vm'}]} if path == '/providers' else
+            {'images': [{'id': 'box', 'name': 'Box', 'kind': 'attacker',
+                        'available': True, 'description': 'test', 'secret': 'private'}]}), True
+    monkeypatch.setattr(webui_module, '_api_get', api_get)
+    data = client.get('/api/console/launch-options').get_json()
+    assert data['providers'][1] == {'name': 'openstack', 'infra_class': 'vm', 'verification': 'unverified'}
+    assert data['catalog'][0]['id'] == 'box'
+    assert 'secret' not in data['catalog'][0]
+
+
+def test_console_registered_launch_preserves_non_docker_provider(client, monkeypatch):
+    import app as webui_module
+
+    token = _csrf_token(client)
+    assert _login(client).status_code == 302
+    def api_get(path):
+        if path == '/providers':
+            return {'providers': [{'name': 'openstack', 'infra_class': 'vm'}]}, True
+        return {'scenarios': [{'id': 'vm-lab', 'provider_class': 'vm'}]}, True
+    monkeypatch.setattr(webui_module, '_api_get', api_get)
+    calls = []
+    monkeypatch.setattr(webui_module, '_api_post', lambda path, body: (calls.append((path, body)) or {'instance_id': 'vm'}, 200))
+    body = {'scenario': 'vm-lab', 'instance_id': 'vm-review', 'provider': 'openstack',
+            'engagement_purpose': 'research', 'participant_mode': 'operator',
+            'engagement_time_box_seconds': 3600}
+    response = client.post('/api/console/arenas', json=body, headers={'X-CSRFToken': token})
+    assert response.status_code == 200
+    assert calls == [('/deploy', body)]
+
+
+def test_console_custom_topology_delegates_catalog_picks_and_csrf(client, monkeypatch):
+    import app as webui_module
+
+    token = _csrf_token(client)
+    assert _login(client).status_code == 302
+    calls = []
+    monkeypatch.setattr(webui_module, '_api_post', lambda path, body: (calls.append((path, body)) or {'instance_id': 'custom'}, 200))
+    body = {'instance_id': 'custom-review', 'attackers': ['kali-cli'], 'victims': ['juice-shop'],
+            'provider': 'docker-local', 'engagement_purpose': 'calibration',
+            'participant_mode': 'operator', 'engagement_time_box_seconds': 3600}
+    assert client.post('/api/console/arenas/custom', json=body).status_code == 400
+    response = client.post('/api/console/arenas/custom', json=body, headers={'X-CSRFToken': token})
+    assert response.status_code == 200
+    assert calls == [('/arenas/custom', body)]
+    assert client.post('/api/console/arenas/custom', json={**body, 'victims': ['../bad']},
+                       headers={'X-CSRFToken': token}).status_code == 422
+
+
+def test_console_arena_explicit_mock_is_labelled_simulation(client, monkeypatch):
+    import app as webui_module
+
+    monkeypatch.setattr(webui_module, "CONSOLE_SIMULATION_MODE", False)
+    monkeypatch.setattr(webui_module, "_api_get", lambda path, **kwargs: (
+        ({"status": "active", "outputs": {"provider": "mock"}}, True)
+        if path == "/status/mock-arena" else ({}, True)))
+    monkeypatch.setattr(webui_module, "_events", lambda *args, **kwargs: [])
+    monkeypatch.setattr(webui_module, "_findings", lambda *args: [])
+    _login(client)
+    assert client.get("/api/console/arenas/mock-arena").get_json()["simulation_mode"] is True
+
+
+def test_workspace_stream_closes_when_authoritative_state_is_unavailable(client, monkeypatch):
+    import app as webui_module
+
+    _login(client)
+    monkeypatch.setattr(webui_module, "_api_get", lambda *args, **kwargs: (None, False))
+    monkeypatch.setattr(webui_module, "_events", lambda *args, **kwargs: [])
+    monkeypatch.setattr(webui_module, "_STREAM_MAX_SECONDS", 0.001)
+    monkeypatch.setattr(webui_module.time, "sleep", lambda seconds: None)
+    response = client.get("/api/arenas/a1/stream")
+    assert response.get_data() == b""

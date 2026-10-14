@@ -3,6 +3,105 @@
 Dated handoffs record changes and actual verification. TODO.md is the canonical ordered
 work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
+
+## 2026-10-12 — Close the research-quality verification phase
+
+**Outcome:** Repaired RESEARCH-R7 owned/global permission controls, concrete request
+observations and mixed-batch effects. Every assertive control held in the final
+registered Paperless run: eleven request-scoped refutations, one authorized group-
+management result, no new confirmed vulnerability. RESEARCH-R8 now retains complete
+current inventories and nine affected/fixed source shapes with explicit unresolved
+semantics. RESEARCH-R9 historical assertions remain unverified; its unsupported
+comparison was withdrawn. RESEARCH-R10 admitted failures are audited; authoring is
+explicitly unbudgeted operator work. Existing arena budgets and provider boundaries
+are preserved. A separate research usability proposal is ready for selection.
+
+**Files:** research code-intel/API/gateway modules, Paperless fixture and probe,
+regression tests, two immutable-output verification scripts, new registrations and
+verification records, README.md, TODO.md, ISSUES.md, ROADMAP.md, research tool contract
+and usability proposal. Lossless gzip inventories keep the retained corpus compact.
+Historical artifacts remain unchanged.
+
+**Verification:** final make release-check passed on Python 3.11.14: Ruff, no
+medium/high Bandit findings, 1,114 SQLite passes / four skips / six deselections,
+1,118 PostgreSQL passes / six deselections, migration/API/UI/gateway smoke.
+Real REST/MCP authoring checks recorded six admitted audit events and agent denial.
+The real NV-09 browser/HTTP/MCP calibration gate passed and recorded zero arena
+resources after teardown. The final probe at registration b059439 matches all its
+registered source hashes; all twelve rows and controls are retained. Full inventory
+counts include 2,846 queryset candidates; no absence inference is made. Independent
+review's serious findings were fixed, including inherited DB configuration, masked
+permission checks, effect classification and a control clearing ownership. Both
+new writers refused an existing evidence path. Paperless fixture cleanup is empty.
+See docs/verification/research-quality-closure-2026-10-12.md for evidence and limits.
+
+**Unresolved risks / next step:** source semantics remain manual review; old proof
+claims stay unverified; Docker-local remains the live provider boundary. GitHub
+returned HTTP 403 for the old GitHub remote; the current GitLab origin accepts
+the verified branch. Preserve registration ancestry with a merge commit.
+Next product step is selection/approval of the console control-and-evidence review
+slice in docs/research/research-usability-next.md; planning has not implemented it.
+
+## 2026-10-08 — Close UI-R1 parity and verification gaps
+
+**Outcome:** Added the missing setup-output history, curated custom-topology
+builder, and provider selection to the default console. Recorded expired-session,
+CSRF-denial, service-outage reconnect, live Docker-local operation and scoped
+accessibility evidence. UI-R1 is ready to close; provider-specific live support
+outside Docker-local remains unverified.
+
+**Files:** React launch/setup/topology/dialog/accessibility components, Flask
+launch projections and event stream, focused WebUI tests, isolated acceptance
+stack and browser checks under `scripts/ui-r1-*`, route inventory, ADR-0017,
+ISSUES.md and two verification records.
+
+**Verification:** `make release-check` passed with 1,100 tests passed, 4 skipped
+and 6 deselected in SQLite; PostgreSQL had 1,104 passed and 6 deselected.
+Ruff/Bandit and release smoke were clean. Frontend
+TypeScript/Prettier and production build passed. Real Docker-local browser checks
+covered setup output through reload and teardown, WebSocket forward echo/revoke,
+service outage/reconnect, destroy-from-list, evidence retention, eligible
+archive removal and clear, plus custom catalog submission to the mock provider.
+Session expiry and invalid CSRF checks passed. Axe reported zero violations on
+41 page/theme combinations. Keyboard dialog checks and 320/390/1024/1440 px
+reflow checks passed.
+
+**Risks / next step:** Cloud and VM provisioning remain unverified. After the R1
+push, review the public tree/history for personal data or secrets, remove obsolete
+reference material and simplify README/roadmap guidance.
+
+
+## 2026-10-08 — Public repository documentation and exposure cleanup
+
+**Outcome:** Rewrote the README around a short local quick start and accurate
+provider/support boundaries. Updated the roadmap, checklist, ADR-0012, and UI
+reference docs to reflect the completed React cutover and UI-R1 evidence. Replaced
+the obsolete rebuild guide with an archive pointer; removed two unused scratch
+documents; generalized machine-specific paths in retained docs and test logs.
+The rejected charcoal renders and rejected foundations smoke script remain
+reference material only.
+
+**Files:** `README.md`, `ROADMAP.md`, `TODO.md`, `docs/adr/0012-gui-first-product-model.md`,
+`docs/UI_REBUILD_PLAN.md`, `docs/assets/ui-concepts/README.md`,
+`docs/verification/ui-assistant-navigation-2026-10-01.md`,
+`docs/superpowers/plans/2026-10-02-ui-forge-foundations.md`, two research
+verification logs, `docs/JOURNAL.md`; removed
+`docs/tmp_basic_codebase_review.md` and `tmp-implementationPlan.md`.
+
+**Verification:** Gitleaks scanned available Git history and a working snapshot of
+tracked files. Its findings were reviewed as development/verifier literals and
+the public synthetic challenge credential; no live infrastructure credential was
+found in tracked content. The modified Markdown files have no broken local
+links; `git diff --check` passed. Product tests were not rerun for
+documentation-only changes; the preceding UI-R1 release and live gates remain
+recorded above.
+
+**Unresolved risks / next step:** The public history still contains personal
+author metadata and old machine-specific paths in earlier commits. The current
+branch tree is cleaned, but purging reachable history requires coordinated
+history rewriting and force-pushing the public branches. Get operator approval
+before that step.
+
 ## 2026-10-07 — Reconcile Royal Command PR with current main
 
 **Outcome:** Opened [PR #2](https://github.com/gianlucabassani/Nidavellir/pull/2)

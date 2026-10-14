@@ -20,23 +20,20 @@
 > that discovery work produces the verified, held-out material that makes
 > evaluation credible.
 
-## Current delivery order — updated 2026-09-26
+## Current delivery order — updated 2026-10-12
 
 [TODO.md](TODO.md) is the canonical ordered checklist with stable NV task IDs,
-dependencies and acceptance criteria. This roadmap retains product/design detail;
-S/C/R/D/E/P labels below are subject areas, not a competing execution order.
-The operator requested this reorganization after reviewing the delivery state.
-NV-01–10 have completed their accepted gates; P2 work starts when a concrete research
-target selects it. Open risks and verification gaps are tracked in [ISSUES.md](ISSUES.md).
+dependencies and acceptance criteria. This roadmap retains product and design
+detail; S/C/R/D/E/P labels below are subject areas, not a second work queue.
+Open verification gaps are tracked in [ISSUES.md](ISSUES.md).
 
-1. **P0 / NV-01–05:** restore a repeatable Python 3.11 release gate; prove pinned target
-   lifecycle/reset; complete confined PoC execution, durable budgets/stop and scoped access.
-2. **P1 / NV-06–10:** strengthen independent validation; persist experiments and paired
-   trials; maintain a small challenge library; prove usefulness with a real BYO-agent
-   workflow; restore research/evaluation records on a clean installation.
-3. **P2 / NV-11–15:** affected-versus-fixed replay, targeted variant/fuzzing work,
-   binary/local VM intake and research campaign/disclosure output as concrete targets need
-   them; held-out comparison and active episodes follow suitable evidence.
+1. **P0 / NV-01–05 — complete:** pinned release gate, Docker-local lifecycle/reset,
+   confined PoC execution, durable stop/budget controls, and scoped access.
+2. **P1 / NV-06–10 — complete:** independent validation, durable paired trials,
+   calibration challenges, a direct BYO-agent workflow, and record recovery.
+3. **NV-11 — complete.** Affected-versus-fixed replay is verified on Docker-local.
+4. **NV-12–15 — target-led:** fuzzing, local VM intake, research campaigns, and
+   held-out evaluation start when a concrete target and suitable evidence justify them.
 
 Discovery and evaluation remain first-class objectives. One local calibration workflow
 can prove operational usefulness before a broad discovery toolkit or private corpus
@@ -51,10 +48,17 @@ MODEL-R1/NV07-R1 closed on 2026-10-06 for machinery, not discovery capability.
 The 2026-10-07 research audit retracted Paperless exhaustion and reopened the
 pre-registration and mail-validity gaps in ISSUES.md. Phase 2 on 2026-10-07
 closes the new structured registration gate; historical chronology is not repaired,
-and Phase 3 control validity remains open.
+and Phase 3 was verified on 2026-10-12 with owned mutation controls, mixed-batch
+survival and retained concrete requests. Full source inventories and nine
+affected/fixed fix shapes are retained; semantic candidate review remains manual.
+Failed admitted authoring queries are audited, and authoring queries are explicitly
+unbudgeted operator work. See the [quality closure report](docs/verification/research-quality-closure-2026-10-12.md).
+The [next usability proposal](docs/research/research-usability-next.md) is a draft
+for selection and approval, with no new console feature claimed complete.
 
-Preserve Docker-local as the supported implementation focus. Cloud parity, hosted concerns,
-and multi-agent breadth remain deferred; local VM intake requires a selected research need.
+Preserve Docker-local as the supported implementation focus. Other providers are
+not live-verified. Cloud apply, hosted concerns, and multi-agent breadth remain
+deferred; local VM intake requires a selected research need.
 The previous August sequence remains traceable in Git and the milestone mapping below.
 
 Correctness, containment, and independent verification remain ahead of feature
@@ -62,7 +66,13 @@ count. The authoritative product boundary is
 [`docs/VISION.md`](docs/VISION.md). Architecture
 decisions live in [`docs/adr/`](docs/adr/).
 
-### Current status — NV-09 complete, P2 on demand
+### Current status — UI-R1 complete, target-led research work remains
+
+NV-01–10 and NV-11 are complete, including the direct BYO-agent workflow.
+NV-12–15 remain target-led: fuzzing, local VM intake, research campaigns, and
+held-out evaluation should start when a concrete target and evidence justify
+them. The audit's Phase 3 mail-control validity and the open coverage, history,
+and code-intel accounting risks remain in [ISSUES.md](ISSUES.md).
 
 NV-08's versioned authorization and single-use-grant calibration challenges
 with independent effect/control validators remain the scripted baseline; their
@@ -80,6 +90,13 @@ headers) closed on 2026-10-06. The difference −1.0 comes from withholding
 `http_access_control` validator confirmed and refuted CVE-2026-26012 on pinned
 Vaultwarden 1.35.2/1.37.3 fixtures. NV-11–15 start only when a concrete
 research target selects them.
+
+UI-R1 closed on 2026-10-08. The default console now includes setup-output
+history, custom-topology authoring, and provider selection with verification
+labels. Real-service, session-expiry, CSRF, reconnect, keyboard, responsive,
+and accessibility checks are recorded in
+[`docs/verification/ui-r1-closure-2026-10-08.md`](docs/verification/ui-r1-closure-2026-10-08.md)
+and [`docs/verification/ui-accessibility-review-2026-10-08.md`](docs/verification/ui-accessibility-review-2026-10-08.md).
 
 ---
 
@@ -155,16 +172,15 @@ until migrated safely. New operator-facing prose uses the glossary above.
 
 ## 2. Current status — shipped engine
 
-Read against the dual objective, the shipped engine is already most of a research
-substrate and only part of a research *toolkit*. Reproducible setup from an
-immutable identity, containment, the crash oracle, change intelligence, hashed
-patch artifacts, PoCs, and an evidence trail that outlives the arena all serve
-discovery today. What discovery lacks is offensive tooling (§4) and the lane in §5:
-nothing feeds the crash oracle, there is no variant hunting, no binary or VM
-intake, and no campaign-level view across sessions.
+The platform can reproduce a Docker-local target, support contained research,
+and retain independently reviewed findings. The broader discovery toolkit is
+still incomplete: target-specific fuzzing and crash triage, binary/local-VM
+intake, and campaign-level tracking remain open.
 
-For evaluation the split is the opposite: the observation and scoring half is
-shipped, and the durable experiment records that make runs comparable are not.
+For evaluation, durable experiment records, paired comparisons, a small
+calibration library, and one direct BYO-agent proof are shipped. Held-out
+capability evidence still requires suitable confirmed research findings and
+leakage controls.
 
 ### S1 — Control plane and dynamic arenas · shipped
 
@@ -175,7 +191,7 @@ shipped, and the durable experiment records that make runs comparable are not.
 - API-key roles, CSRF, rate limits, input validation, and server-enforced
   key↔arena stance bindings.
 - Mature `docker-local` path; `mock` for tests/demo. OpenStack, AWS, and libvirt
-  remain non-live skeletons and are deliberately deferred.
+  drivers exist, but are not live-verified support. Cloud apply remains deferred.
 
 ### S2 — Target → running service · shipped (legacy M1)
 
@@ -201,10 +217,10 @@ Compose/devcontainer/buildpack tiers; binary/installer and VM-image intake.
 - Reference MCP harness, concurrency-capped suites, and deterministic transcript
   replay.
 
-The engine can score and export a run today. NV-07 adds durable agent build,
+The engine can score and export a run today. NV-07 added durable agent build,
 challenge, suite, evaluation, run and trial records, atomically claimed trials
 and paired baseline/candidate comparison over matched starting state.
-NV-06 adds a resettable authorization fixture with action-linked, target-local
+NV-06 added a resettable authorization fixture with action-linked, target-local
 effect and healthy-control observations, versioned four-way verdicts and
 post-teardown operator review. The headline benchmark score now uses automatic
 confirmed points; claim coverage and manual judgments remain separate.
@@ -289,6 +305,10 @@ support and current deployment health must not be inferred from driver files.
 ---
 
 ## 3. Console product architecture — shipped (C1–C4)
+
+This section preserves the product decisions and dated migration history. The
+current React renderer, default cutover, legacy fallback, and UI-R1 verification
+boundary are recorded in [ADR-0017](docs/adr/0017-react-operator-console-rendering.md).
 
 ### C1 — Information architecture and application shell · **COMPLETE**
 
@@ -500,7 +520,7 @@ back to its engagement/run context.
 live engagements with their expiry, findings awaiting a verdict, and an attention
 list that names both failed runs and any live arena whose egress is open, beside
 provider/capacity health and the activity feed. Every tile is a route into the work
-it counts. Evaluations remains an honest dash until E1 gives it durable records.
+it counts. Evaluation summaries now use the durable records described in §7.
 
 Activity → Findings and Activity → Evidence are no longer foundation pages. Findings
 folds the global `finding` and `finding_verification` streams into one index — the
@@ -534,12 +554,14 @@ agent drives the same bounded operation over MCP — one implementation, two
 callers, identical scope checks and audit records. A tool that only an agent can
 reach will not be exercised often enough to be trustworthy.
 
-### R1 — HTTP research primitive · code implemented; fresh live gate pending
+### R1 — HTTP research primitive · shipped and live-verified on Docker-local
 
-Ship structured, arena-target-only HTTP inspect/replay/modify over REST and
-attacker MCP. Accept node plus relative path—not arbitrary URLs. Bound and hash
-request/response bodies; keep audit events body-free; apply binding, budget,
-timeout, and target-scope checks. Keep this distinct from MITM packet observation.
+The REST, console, and attacker-MCP tools provide arena-target-only HTTP
+inspection, replay, and modification. They accept a node and relative path,
+bound and hash request/response bodies, keep audit events body-free, and enforce
+binding, budget, timeout, and target scope. The Docker-local browser journey,
+stored transaction evidence, and post-teardown review passed on 2026-10-08; see
+the [UI-R1 closure record](docs/verification/ui-r1-closure-2026-10-08.md).
 
 ### R2 — Confined PoC execution
 
@@ -882,9 +904,10 @@ multi-agent/purple-team.
 
 ## 10. Standing principles
 
-- **GUI-driven product, API-backed architecture.** Every normal operator workflow
-  is complete in the browser. Business logic, orchestration, and persistence stay
-  in the orchestrator/services; Flask/Jinja presents and drives them.
+- **GUI-driven product, API-backed architecture.** Normal operator workflows
+  live in the browser. Business logic, orchestration, and persistence stay in
+  services; Flask owns the same-origin session/BFF boundary and serves the React
+  console. The legacy renderer remains available as a fallback.
 - **Bring your own agent.** Nidavellir ships a neutral substrate and thin reference
   connectors, never the agent whose capability it claims to measure.
 - **AI-centered, never AI-required.** A human can operate an engagement and submit
@@ -928,8 +951,8 @@ multi-agent/purple-team.
 | Former console/SSE items | C1–C4 |
 | OAuth, multi-tenancy, cloud, purple-team, VNC | §9 deferred; local VM intake is NV-13 |
 
-Current task mapping is in [TODO.md](TODO.md). Detailed historical `Pn-m` implementation records remain in
-[`.agent/backlog/BACKLOG.md`](.agent/backlog/BACKLOG.md) and git history.
+Current task mapping is in [TODO.md](TODO.md). Earlier `Pn-m` milestone
+history remains in this document and in Git history.
 
 ---
 
@@ -946,6 +969,7 @@ Current task mapping is in [TODO.md](TODO.md). Detailed historical `Pn-m` implem
 - ADR-0011 — reproducible research sessions and change intelligence.
 - **ADR-0012 — GUI-first product model and console information architecture.**
 - **ADR-0013 — replacement reset, immutable recipes and observed equivalence.**
+- ADR-0017 — React operator console rendering and cutover boundary.
 
 The detailed state-of-the-art references behind the shipped design remain in the
 ADRs and repository history. New evaluation work should integrate with established

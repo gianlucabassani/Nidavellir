@@ -1,7 +1,7 @@
 # Royal Command review renders
 
-Royal Command is the approved direction. The React console is available at
-`/console` as an opt-in implementation while legacy task routes remain in use.
+Royal Command is the approved direction and the default React console at
+`/console`. Legacy routes remain available as a tested fallback.
 Most renders below use fixture or mock data. Rows marked “live” were captured
 from the packaged React app during isolated Docker-local browser journeys;
 see the [verification record](../../verification/ui-research-benchmark-live-2026-09-29.md).
@@ -63,8 +63,10 @@ additional planned workspace states. It uses demonstration data and does not
 submit to the backend. The [earlier concepts](research.html) are retained only
 as rejected comparison material.
 
-Current implementation and remaining parity work are tracked in
-[the UI rebuild plan](../../UI_REBUILD_PLAN.md) and
-[the route/action matrix](../../UI_ROUTE_ACTION_MATRIX.md).
+The console migration is complete through UI-R1. Current behavior and its
+verification boundary are recorded in [the route/action matrix](../../UI_ROUTE_ACTION_MATRIX.md),
+[the closure report](../../verification/ui-r1-closure-2026-10-08.md), and
+[ADR-0017](../../adr/0017-react-operator-console-rendering.md).
 The [dated legacy console reference](../legacy-console-reference/2026-09-28/MANIFEST.md)
-preserves the earlier aesthetic before any default-layout switch.
+preserves the earlier layout. Rejected charcoal renders and the rejected
+foundations smoke script remain reference material only.

@@ -47,10 +47,7 @@ export function Range() {
     value.scenarios.find((item) => item.id === selected) ||
     compatible[0] ||
     value.scenarios[0];
-  const launchable =
-    scenario &&
-    (scenario.provider_class === "container" ||
-      scenario.provider_class === "any");
+  const launchable = Boolean(scenario);
   const live = value.arenas.filter(
     (item) =>
       !["destroyed", "failed", "error_destroying"].includes(item.status),
