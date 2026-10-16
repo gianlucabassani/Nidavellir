@@ -1129,6 +1129,16 @@ def console_arena_findings(instance_id):
     } for item in findings]})
 
 
+@app.route("/api/console/arenas/<instance_id>/findings/<finding_id>/review")
+def console_finding_review(instance_id, finding_id):
+    """Read the service-owned operator projection, including archived evidence."""
+    data, ok = _api_get(
+        f"/arenas/{quote(instance_id, safe='')}/findings/{quote(finding_id, safe='')}/review")
+    if not ok or not isinstance(data, dict):
+        return jsonify({"error": "Control and evidence review unavailable. Retry to resolve this record."}), 503
+    return jsonify(data)
+
+
 _CONSOLE_SLUG = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")
 
 

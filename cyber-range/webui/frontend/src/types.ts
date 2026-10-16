@@ -355,3 +355,32 @@ export const paths: Record<Workspace, string> = {
   benchmark: "/api/console/benchmark",
   range: "/api/console/range",
 };
+
+export type FindingReview = {
+  verdict: string;
+  recorded_verdict: string | null;
+  reason_code: string | null;
+  validator_id: string | null;
+  validator_version: number | null;
+  recipe_digest: string | null;
+  target_identity_digest: string | null;
+  actor: {
+    identity: string | null;
+    digest: string;
+    request: Record<string, unknown>;
+    response: Record<string, unknown>;
+    headers_withheld: boolean;
+  } | null;
+  controls: {
+    name: string;
+    state: "passed" | "failed" | "observational" | "unresolved";
+    expected: Record<string, unknown>;
+    observed: Record<string, unknown> | null;
+    request: Record<string, unknown> | null;
+  }[];
+  effect: { digest: string; data: Record<string, unknown> } | null;
+  control_digest: string | null;
+  can_refute: boolean;
+  refutation_allowed: boolean;
+  unresolved: string[];
+};

@@ -1,0 +1,453 @@
+{
+  "browser_after_teardown": {
+    "cases": [
+      {
+        "control_states": [
+          "passed"
+        ],
+        "links_checked": 3,
+        "name": "disclosure",
+        "verdict": "confirmed",
+        "widths": [
+          320,
+          390,
+          1440
+        ]
+      },
+      {
+        "control_states": [
+          "passed"
+        ],
+        "links_checked": 3,
+        "name": "denial",
+        "verdict": "refuted",
+        "widths": [
+          320,
+          390,
+          1440
+        ]
+      },
+      {
+        "control_states": [
+          "passed",
+          "failed"
+        ],
+        "links_checked": 3,
+        "name": "failed-control",
+        "verdict": "infrastructure_failure",
+        "widths": [
+          320,
+          390,
+          1440
+        ]
+      }
+    ],
+    "date": "2026-10-15T22:13:05.554Z",
+    "page_errors": []
+  },
+  "browser_before_teardown": {
+    "cases": [
+      {
+        "control_states": [
+          "passed"
+        ],
+        "links_checked": 3,
+        "name": "disclosure",
+        "verdict": "confirmed",
+        "widths": [
+          320,
+          390,
+          1440
+        ]
+      },
+      {
+        "control_states": [
+          "passed"
+        ],
+        "links_checked": 3,
+        "name": "denial",
+        "verdict": "refuted",
+        "widths": [
+          320,
+          390,
+          1440
+        ]
+      },
+      {
+        "control_states": [
+          "passed",
+          "failed"
+        ],
+        "links_checked": 3,
+        "name": "failed-control",
+        "verdict": "infrastructure_failure",
+        "widths": [
+          320,
+          390,
+          1440
+        ]
+      }
+    ],
+    "date": "2026-10-15T22:12:47.286Z",
+    "page_errors": []
+  },
+  "cases": [
+    {
+      "arena": "eae1c4e7-3585-48e1-ad74-d35944fefd39",
+      "budget_unchanged_by_review": {
+        "arena": {
+          "epoch": 0,
+          "reason": null,
+          "state": "open"
+        },
+        "policy": {
+          "action_cap": 10,
+          "deadline": "2026-10-15 22:22:31.801724",
+          "remaining": 8,
+          "reserved": 0,
+          "spent": 2,
+          "token_cost": "unsupported_for_external_agents",
+          "version": 2
+        },
+        "system": {
+          "epoch": 0,
+          "state": "open"
+        }
+      },
+      "finding_id": "e565b2a876eb",
+      "name": "disclosure",
+      "review": {
+        "actor": {
+          "digest": "sha256:ea2b21c07a55bc9adb228e4e4f3873d9bc40cafc535edf8777be59d813d94307",
+          "headers_withheld": true,
+          "identity": "A",
+          "request": {
+            "body": null,
+            "method": "GET",
+            "node": "target",
+            "params": {},
+            "path": "/objects/B"
+          },
+          "response": {
+            "body": "{\"object\":\"private-B\"}",
+            "body_bytes": 22,
+            "body_sha256": "sha256:41eb350df0474bb0d52b7ab0ee2175284e01e7b626b080459856af57d87957d2",
+            "reason": "OK",
+            "status": 200,
+            "truncated": false
+          }
+        },
+        "can_refute": true,
+        "control_digest": "sha256:66496d1977bdde169a55fcec506086a0f892ea908b3c0ea890e04b1480a62903",
+        "controls": [
+          {
+            "expected": {
+              "actor": "B",
+              "control_ok": true,
+              "owner": "B",
+              "status": 200
+            },
+            "name": "Owner can read its own object",
+            "observed": {
+              "actor": "B",
+              "control_ok": true,
+              "owner": "B",
+              "status": 200
+            },
+            "request": {
+              "actor": "B",
+              "method": "GET",
+              "path": "/protected/B"
+            },
+            "state": "passed"
+          }
+        ],
+        "effect": {
+          "data": {
+            "actor": "A",
+            "owner": "B",
+            "request_id": "uir2542b61d7b75642788ceb7a380b2d53a6",
+            "status": 200,
+            "unauthorized_disclosure": true
+          },
+          "digest": "sha256:3215dcf18d882502a312baa068e44079f7258e049f8c0b766e466ab9c6b786f0"
+        },
+        "finding_id": "e565b2a876eb",
+        "reason_code": "unauthorized_read",
+        "recipe_digest": "sha256:f7191903f21509ae03ad8bbd65b028c2bb4be4873782bb15a69bb4b57940f823",
+        "recorded_verdict": "confirmed",
+        "refutation_allowed": true,
+        "schema": "nidavellir/evidence-review/v1",
+        "target_identity_digest": "sha256:72370e065b929757f9fc3d2eaca9f2d8b69eef949a5977bdcdfd6e2030420223",
+        "unresolved": [],
+        "validator_id": "authorization_effect",
+        "validator_version": 1,
+        "verdict": "confirmed"
+      }
+    },
+    {
+      "arena": "63f9b0cf-6ab9-4f09-b5e0-64fb238d2d03",
+      "budget_unchanged_by_review": {
+        "arena": {
+          "epoch": 0,
+          "reason": null,
+          "state": "open"
+        },
+        "policy": {
+          "action_cap": 10,
+          "deadline": "2026-10-15 22:22:39.209131",
+          "remaining": 8,
+          "reserved": 0,
+          "spent": 2,
+          "token_cost": "unsupported_for_external_agents",
+          "version": 2
+        },
+        "system": {
+          "epoch": 0,
+          "state": "open"
+        }
+      },
+      "finding_id": "587f42668793",
+      "missing_action": {
+        "finding_id": "f4aa0759a39f",
+        "review": {
+          "actor": null,
+          "can_refute": false,
+          "control_digest": null,
+          "controls": [
+            {
+              "expected": {
+                "actor": "B",
+                "control_ok": true,
+                "owner": "B",
+                "status": 200
+              },
+              "name": "Owner can read its own object",
+              "observed": null,
+              "request": {
+                "actor": "B",
+                "method": "GET",
+                "path": "/protected/B"
+              },
+              "state": "unresolved"
+            }
+          ],
+          "effect": null,
+          "finding_id": "f4aa0759a39f",
+          "reason_code": "missing_action",
+          "recipe_digest": "sha256:3e1309316b02fdc38aa2fe9d73184c41e3c87a6cd428764bf2e51fbfc1740ed9",
+          "recorded_verdict": "inconclusive",
+          "refutation_allowed": false,
+          "schema": "nidavellir/evidence-review/v1",
+          "target_identity_digest": "sha256:72370e065b929757f9fc3d2eaca9f2d8b69eef949a5977bdcdfd6e2030420223",
+          "unresolved": [
+            "Linked actor request/response is missing or failed its integrity check.",
+            "Effect observation is missing, unreadable or unsupported.",
+            "Prerequisite evidence is unresolved; it cannot support a refutation."
+          ],
+          "validator_id": "authorization_effect",
+          "validator_version": 1,
+          "verdict": "inconclusive"
+        }
+      },
+      "name": "denial",
+      "review": {
+        "actor": {
+          "digest": "sha256:3e671b68ecfa81e8c335f8a5563077a79b20c49fcb262151f67f30bea6c3855a",
+          "headers_withheld": true,
+          "identity": "A",
+          "request": {
+            "body": null,
+            "method": "GET",
+            "node": "target",
+            "params": {},
+            "path": "/protected/B"
+          },
+          "response": {
+            "body": "{\"error\":\"denied\"}",
+            "body_bytes": 18,
+            "body_sha256": "sha256:ad2108b94373d55034905f6b8c47981deba9b28c6913ad98af821166727a3859",
+            "reason": "Forbidden",
+            "status": 403,
+            "truncated": false
+          }
+        },
+        "can_refute": true,
+        "control_digest": "sha256:5f48f60c9838e2fbb6be6e36b1e5c8125cb1e46d8207ad31300bfbd1e201e0cc",
+        "controls": [
+          {
+            "expected": {
+              "actor": "B",
+              "control_ok": true,
+              "owner": "B",
+              "status": 200
+            },
+            "name": "Owner can read its own object",
+            "observed": {
+              "actor": "B",
+              "control_ok": true,
+              "owner": "B",
+              "status": 200
+            },
+            "request": {
+              "actor": "B",
+              "method": "GET",
+              "path": "/protected/B"
+            },
+            "state": "passed"
+          }
+        ],
+        "effect": {
+          "data": {
+            "actor": "A",
+            "owner": "B",
+            "request_id": "uir21ea49742c945483aadac558be96a58b7",
+            "status": 403,
+            "unauthorized_disclosure": false
+          },
+          "digest": "sha256:21d35e028a0cde5af7f1c7e1135cf01f3b49d5a5066174590a804e1a3fde4f19"
+        },
+        "finding_id": "587f42668793",
+        "reason_code": "access_denied",
+        "recipe_digest": "sha256:3e1309316b02fdc38aa2fe9d73184c41e3c87a6cd428764bf2e51fbfc1740ed9",
+        "recorded_verdict": "refuted",
+        "refutation_allowed": true,
+        "schema": "nidavellir/evidence-review/v1",
+        "target_identity_digest": "sha256:72370e065b929757f9fc3d2eaca9f2d8b69eef949a5977bdcdfd6e2030420223",
+        "unresolved": [],
+        "validator_id": "authorization_effect",
+        "validator_version": 1,
+        "verdict": "refuted"
+      }
+    },
+    {
+      "arena": "bc4b19c5-fd49-4fb1-8c57-3723c69e325c",
+      "budget_unchanged_by_review": {
+        "arena": {
+          "epoch": 0,
+          "reason": null,
+          "state": "open"
+        },
+        "policy": {
+          "action_cap": 10,
+          "deadline": "2026-10-15 22:22:44.411746",
+          "remaining": 8,
+          "reserved": 0,
+          "spent": 2,
+          "token_cost": "unsupported_for_external_agents",
+          "version": 2
+        },
+        "system": {
+          "epoch": 0,
+          "state": "open"
+        }
+      },
+      "finding_id": "22b44d06023e",
+      "name": "failed-control",
+      "review": {
+        "actor": {
+          "digest": "sha256:3e25113165b26ef3274b1c16cb64d5e5964678c4be46d8de62c23d23b00a227c",
+          "headers_withheld": true,
+          "identity": "A",
+          "request": {
+            "body": null,
+            "method": "GET",
+            "node": "target",
+            "params": {},
+            "path": "/health"
+          },
+          "response": {
+            "body": "{\"ready\":true,\"seed\":\"nv06-v1\"}",
+            "body_bytes": 31,
+            "body_sha256": "sha256:c5dc7829c35f0619ec51efc2a6402efefaa06a9961716dde175ca7aa095433c5",
+            "reason": "OK",
+            "status": 200,
+            "truncated": false
+          }
+        },
+        "can_refute": false,
+        "control_digest": "sha256:ae89de292ba201a319f6c7737211219cda49b95c84ce2bbac08deb4b3ef833ff",
+        "controls": [
+          {
+            "expected": {
+              "marker": true,
+              "status": 200
+            },
+            "name": "Owner observes the protected marker",
+            "observed": {
+              "marker": true,
+              "status": 200
+            },
+            "request": {
+              "actor": "B",
+              "method": "GET",
+              "path": "/health"
+            },
+            "state": "passed"
+          },
+          {
+            "expected": {
+              "marker": false,
+              "status": 200
+            },
+            "name": "Actor's allowed request succeeds without the protected marker",
+            "observed": {
+              "marker": true,
+              "status": 200
+            },
+            "request": {
+              "actor": "A",
+              "method": "GET",
+              "path": "/health"
+            },
+            "state": "failed"
+          }
+        ],
+        "effect": {
+          "data": {
+            "marker": true,
+            "status": 200
+          },
+          "digest": "sha256:7600230905841ef174e56f31dab48e4ebcaae1f29e9084b91c066b90c5313281"
+        },
+        "finding_id": "22b44d06023e",
+        "reason_code": "control_failed",
+        "recipe_digest": "sha256:8d731f739cbd677a36c2c77ff0d9b2a1e6265414168e4444ea27c676a8bec165",
+        "recorded_verdict": "infrastructure_failure",
+        "refutation_allowed": false,
+        "schema": "nidavellir/evidence-review/v1",
+        "target_identity_digest": "sha256:72370e065b929757f9fc3d2eaca9f2d8b69eef949a5977bdcdfd6e2030420223",
+        "unresolved": [
+          "A prerequisite failed; the result cannot be presented as a refutation."
+        ],
+        "validator_id": "http_access_control",
+        "validator_version": 1,
+        "verdict": "infrastructure_failure"
+      }
+    }
+  ],
+  "date": "2026-10-15-42495585",
+  "final_resources": {
+    "63f9b0cf-6ab9-4f09-b5e0-64fb238d2d03": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "bc4b19c5-fd49-4fb1-8c57-3723c69e325c": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "eae1c4e7-3585-48e1-ad74-d35944fefd39": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    }
+  },
+  "fixture_image": "sha256:3d895c419214c084c91d6c39be7dc60cda8c9f9837a42b7affc148e1975c13a2",
+  "schema": "nidavellir/ui-r2-live/v1",
+  "status": "passed"
+}

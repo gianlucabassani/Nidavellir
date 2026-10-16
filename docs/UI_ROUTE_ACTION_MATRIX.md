@@ -5,7 +5,7 @@ This is the first pass of phase 0. It records every Flask route and HTTP
 method; it does **not** prove React action/state parity. The status column
 states the present migration boundary, not a completed replacement.
 
-**Current inventory:** 145 route/method operations. Re-run the script after route changes.
+**Current inventory:** 146 route/method operations. Re-run the script after route changes.
 
 | Current URL | Method | Handler | Workspace / destination | Auth | CSRF | Contract | Deep link | Migration status |
 |---|---|---|---|---|---|---|---|---|
@@ -41,6 +41,7 @@ states the present migration boundary, not a completed replacement.
 | `/api/console/arenas/<instance_id>` | GET | `console_arena` | New console → `/console` | Operator session | — | JSON / stream proxy | New route | Implemented projection/shell |
 | `/api/console/arenas/<instance_id>/setup` | GET | `console_arena_setup` | New console → `/console` | Operator session | — | JSON / stream proxy | New route | Implemented projection/shell |
 | `/api/console/arenas/<instance_id>/findings` | GET | `console_arena_findings` | New console → `/console` | Operator session | — | JSON / stream proxy | New route | Implemented projection/shell |
+| `/api/console/arenas/<instance_id>/findings/<finding_id>/review` | GET | `console_finding_review` | New console → `/console` | Operator session | — | JSON / stream proxy | New route | Implemented projection/shell |
 | `/api/console/arenas/<instance_id>/score` | GET | `console_arena_score` | New console → `/console` | Operator session | — | JSON / stream proxy | New route | Implemented projection/shell |
 | `/api/console/arenas/<instance_id>/trace` | GET | `console_arena_trace` | New console → `/console` | Operator session | — | JSON / stream proxy | New route | Implemented projection/shell |
 | `/api/console/arenas/<instance_id>/forwards` | GET | `console_arena_forwards` | New console → `/console` | Operator session | — | JSON / stream proxy | New route | Implemented projection/shell |

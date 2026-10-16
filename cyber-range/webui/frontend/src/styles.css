@@ -5001,3 +5001,39 @@ body {
   max-width: 100%;
   flex-wrap: wrap;
 }
+
+.control-evidence-review {
+  margin-top: 12px;
+  padding: 14px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.control-evidence-review section {
+  border-top: 1px solid var(--line);
+  margin-top: 16px;
+  padding-top: 12px;
+}
+.control-evidence-review h4 {
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+.control-evidence-review h5 {
+  margin: 10px 0 4px;
+  font-size: 12px;
+}
+.control-evidence-review p,
+.review-unresolved li {
+  line-height: 1.6;
+}
+.control-evidence-review a {
+  color: var(--accent);
+  display: block;
+}
+.review-control + .review-control {
+  margin-top: 16px;
+}
+.review-unresolved {
+  border-left: 3px solid var(--accent);
+  padding-left: 12px;
+}

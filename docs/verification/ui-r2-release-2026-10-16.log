@@ -1,0 +1,186 @@
+./scripts/verify-release
+ Image nidavellir-verify:python-3.11.14 Building
+#1 [internal] load local bake definitions
+#1 reading from stdin 629B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile.verify
+#2 transferring dockerfile: 1.26kB done
+#2 DONE 0.1s
+
+#3 [internal] load metadata for docker.io/library/python:3.11.14-slim-bookworm
+#3 DONE 0.8s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 474B done
+#4 DONE 0.0s
+
+#5 [ 1/11] FROM docker.io/library/python:3.11.14-slim-bookworm@sha256:65a93d69fa75478d554f4ad27c85c1e69fa184956261b4301ebaf6dbb0a3543d
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 2.02MB 0.3s done
+#6 DONE 0.4s
+
+#7 [ 4/11] COPY requirements-dev.txt /workspace/requirements-dev.txt
+#7 CACHED
+
+#8 [ 5/11] COPY requirements-lock.txt /workspace/requirements-lock.txt
+#8 CACHED
+
+#9 [ 6/11] COPY cyber-range/services/scenario-orchestrator/requirements.txt /workspace/cyber-range/services/scenario-orchestrator/requirements.txt
+#9 CACHED
+
+#10 [ 8/11] COPY cyber-range/webui/requirements.txt /workspace/cyber-range/webui/requirements.txt
+#10 CACHED
+
+#11 [ 7/11] COPY cyber-range/services/agent-gateway/requirements.txt /workspace/cyber-range/services/agent-gateway/requirements.txt
+#11 CACHED
+
+#12 [ 2/11] RUN apt-get update     && apt-get install -y --no-install-recommends git make     && rm -rf /var/lib/apt/lists/*
+#12 CACHED
+
+#13 [ 3/11] WORKDIR /workspace
+#13 CACHED
+
+#14 [ 9/11] RUN python -m pip install --no-cache-dir -r requirements-lock.txt
+#14 CACHED
+
+#15 [10/11] COPY . /workspace
+#15 DONE 4.3s
+
+#16 [11/11] RUN mkdir -p /app     && ln -s /workspace/cyber-range/services/scenario-orchestrator/templates /app/templates     && ln -s /workspace/cyber-range/infra/terraform /app/terraform     && ln -s /workspace/cyber-range/infra/terraform-aws /app/terraform-aws     && ln -s /workspace/cyber-range/infra/terraform-libvirt /app/terraform-libvirt
+#16 DONE 0.6s
+
+#17 exporting to image
+#17 exporting layers
+#17 exporting layers 3.3s done
+#17 writing image sha256:4f52cfe3b0a9bf3aca9a04ff6cd7086943a7e69d6659fa330ddc4119c8f423b2 done
+#17 naming to docker.io/library/nidavellir-verify:python-3.11.14 0.0s done
+#17 DONE 3.3s
+
+#18 resolving provenance for metadata file
+#18 DONE 0.0s
+ Image nidavellir-verify:python-3.11.14 Built
+ Network nidavellir-verify_default Creating
+ Network nidavellir-verify_default Creating
+ Network nidavellir-verify_default Created
+ Network nidavellir-verify_default Created
+ Container nidavellir-verify-sqlite-run-23bd516fbb4c Creating
+ Container nidavellir-verify-sqlite-run-23bd516fbb4c Created
+Python 3.11.14
+ruff check cyber-range/services/scenario-orchestrator cyber-range/services/agent-gateway cyber-range/services/reference-harness scripts cyber-range/services/vulnhub-importer cyber-range/webui tests
+warning: Failed parse cache file `/workspace/.ruff_cache/0.6.9/4450102375687014610`: io error: failed to fill whole buffer
+warning: Failed parse cache file `/workspace/.ruff_cache/0.6.9/9638453191101620478`: io error: failed to fill whole buffer
+warning: Failed parse cache file `/workspace/.ruff_cache/0.6.9/4243856637840646760`: io error: failed to fill whole buffer
+warning: Failed parse cache file `/workspace/.ruff_cache/0.6.9/550618130034472552`: io error: failed to fill whole buffer
+warning: Failed parse cache file `/workspace/.ruff_cache/0.6.9/9371061977624323139`: io error: failed to fill whole buffer
+warning: Failed parse cache file `/workspace/.ruff_cache/0.6.9/14850703089518911770`: io error: failed to fill whole buffer
+warning: Failed parse cache file `/workspace/.ruff_cache/0.6.9/17956320493215503979`: io error: failed to fill whole buffer
+warning: Failed parse cache file `/workspace/.ruff_cache/0.6.9/9696510480149734749`: io error: failed to fill whole buffer
+All checks passed!
+bandit -r cyber-range/services/scenario-orchestrator cyber-range/services/agent-gateway cyber-range/services/reference-harness scripts cyber-range/services/vulnhub-importer cyber-range/webui -x '*/.venv/*,*/venv/*' -ll
+[main]	INFO	profile include tests: None
+[main]	INFO	profile exclude tests: None
+[main]	INFO	cli include tests: None
+[main]	INFO	cli exclude tests: None
+[main]	INFO	running on Python 3.11.14
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: argv is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: no is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: shell is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: the is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: runner is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: is is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: injectable is not a test name or id, ignoring
+[tester]	WARNING	nosec encountered (B603), but no failed test on file cyber-range/services/reference-harness/harness/claude_code.py:137
+[manager]	WARNING	Test in comment: container is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: default is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: mapped is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: by is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: compose is not a test name or id, ignoring
+[tester]	WARNING	nosec encountered (B104), but no failed test on file cyber-range/services/scenario-orchestrator/config.py:218
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: lab is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: target is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: permits is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: self is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: signed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: TLS is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: isolated is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: container is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: no is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: published is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: port is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: lab is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: target is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: permits is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: self is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: signed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: TLS is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: trusted is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: interpreter is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: and is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: path is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: argv is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: no is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: shell is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: timeout is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: SSRF is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: guarded is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: host is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: private is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: container is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: tmpfs is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: private is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: container is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: tmpfs is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: private is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: container is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: tmpfs is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: argv is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: no is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: shell is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: timeout is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: guarded is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: host is not a test name or id, ignoring
+[tester]	WARNING	nosec encountered (B108), but no failed test on file cyber-range/services/scenario-orchestrator/providers/docker_local.py:442
+[tester]	WARNING	nosec encountered (B108), but no failed test on file cyber-range/services/scenario-orchestrator/providers/docker_local.py:994
+[tester]	WARNING	nosec encountered (B108), but no failed test on file cyber-range/services/scenario-orchestrator/providers/docker_local.py:1015
+[tester]	WARNING	nosec encountered (B108), but no failed test on file cyber-range/services/scenario-orchestrator/providers/docker_local.py:1018
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: argv is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: no is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: shell is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: timeout is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: guarded is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: host is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: argv is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: no is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: shell is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: timeout is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: guarded is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: host is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: argv is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: no is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: shell is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: guarded is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: host is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: ref is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: is is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: an is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: argv is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: element is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fetched is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: object is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: argv is not a test name or id, ignoring
+[tester]	WARNING	nosec encountered (B603), but no failed test on file cyber-range/services/scenario-orchestrator/repo_introspect.py:491
+[tester]	WARNING	nosec encountered (B202), but no failed test on file cyber-range/services/vulnhub-importer/auto_importer.py:116

@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-15T22:13:05.554Z",
+  "cases": [
+    {
+      "name": "disclosure",
+      "verdict": "confirmed",
+      "links_checked": 3,
+      "widths": [
+        320,
+        390,
+        1440
+      ],
+      "control_states": [
+        "passed"
+      ]
+    },
+    {
+      "name": "denial",
+      "verdict": "refuted",
+      "links_checked": 3,
+      "widths": [
+        320,
+        390,
+        1440
+      ],
+      "control_states": [
+        "passed"
+      ]
+    },
+    {
+      "name": "failed-control",
+      "verdict": "infrastructure_failure",
+      "links_checked": 3,
+      "widths": [
+        320,
+        390,
+        1440
+      ],
+      "control_states": [
+        "passed",
+        "failed"
+      ]
+    }
+  ],
+  "page_errors": []
+}

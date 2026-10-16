@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type React from "react";
-import type { ArenaData, FindingRecord } from "../types";
+import { ControlEvidenceReview } from "./finding-review";
+import type { ArenaData, FindingRecord, FindingReview } from "../types";
 import {
   useWorkspaceData,
   Status,
@@ -15,6 +16,10 @@ export function FindingsWorkbench({ arena }: { arena: ArenaData }) {
   const { value, error, loading, refresh } = useWorkspaceData<{
     findings: FindingRecord[];
   }>(`/api/console/arenas/${id}/findings`);
+  const [reviews, setReviews] = useState<Record<string, FindingReview>>({});
+  const onReview = useCallback((findingId: string, review: FindingReview) => {
+    setReviews((previous) => ({ ...previous, [findingId]: review }));
+  }, []);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
   const [selected, setSelected] = useState<{
@@ -244,7 +249,16 @@ export function FindingsWorkbench({ arena }: { arena: ArenaData }) {
                         · {finding.cwe || "CWE unspecified"}
                       </small>
                     </div>
-                    <Status value={finding.verdict} />
+                    <Status
+                      value={
+                        finding.manual_verdict
+                          ? finding.verdict
+                          : reviews[finding.id]?.verdict ||
+                            (["refuted", "confirmed"].includes(finding.verdict)
+                              ? "review_required"
+                              : finding.verdict)
+                      }
+                    />
                   </div>
                   {finding.evidence && <p>{finding.evidence}</p>}
                   {finding.poc && (
@@ -253,6 +267,11 @@ export function FindingsWorkbench({ arena }: { arena: ArenaData }) {
                       <pre>{finding.poc}</pre>
                     </details>
                   )}
+                  <ControlEvidenceReview
+                    arenaId={arena.id}
+                    findingId={finding.id}
+                    onReview={onReview}
+                  />
                   {finding.validation_reason && (
                     <small>
                       Independent validation: {finding.validation_reason}
@@ -302,6 +321,8 @@ export function FindingsWorkbench({ arena }: { arena: ArenaData }) {
                           setSelected({ finding, verdict: "refuted" });
                           setDigest("");
                         }}
+                        disabled={!reviews[finding.id]?.refutation_allowed}
+                        title="Open control and evidence review before recording a refutation"
                       >
                         Refute
                       </button>

@@ -1,0 +1,16 @@
+{
+  "cases": [],
+  "date": "2026-10-15-3532ce6a",
+  "error": "RuntimeError: POST /arenas/e161d65c-c9e8-43e0-975e-6b12884c0a66/budget/policy: {'status': 409, 'body': '{\"detail\":\"deadline must be future and within deployment expiry\"}'}",
+  "final_resources": {
+    "e161d65c-c9e8-43e0-975e-6b12884c0a66": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    }
+  },
+  "fixture_image": "sha256:3d895c419214c084c91d6c39be7dc60cda8c9f9837a42b7affc148e1975c13a2",
+  "schema": "nidavellir/ui-r2-live/v1",
+  "status": "failed"
+}

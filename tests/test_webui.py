@@ -2683,3 +2683,19 @@ def test_workspace_stream_closes_when_authoritative_state_is_unavailable(client,
     monkeypatch.setattr(webui_module.time, "sleep", lambda seconds: None)
     response = client.get("/api/arenas/a1/stream")
     assert response.get_data() == b""
+
+
+def test_console_control_review_requires_login_and_reports_unavailable(client, monkeypatch):
+    import app as webui_module
+
+    path = '/api/console/arenas/arena-1/findings/finding-1/review'
+    assert client.get(path).status_code == 302
+    _login(client)
+    monkeypatch.setattr(webui_module, '_api_get', lambda path: (None, False))
+    assert client.get(path).status_code == 503
+    monkeypatch.setattr(webui_module, '_api_get', lambda path: ({
+        'schema': 'nidavellir/evidence-review/v1', 'verdict': 'inconclusive',
+        'controls': [{'state': 'failed'}], 'unresolved': ['Control failed']}, True))
+    result = client.get(path).get_json()
+    assert result['controls'][0]['state'] == 'failed'
+    assert result['verdict'] == 'inconclusive'

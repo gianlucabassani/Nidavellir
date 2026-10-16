@@ -843,6 +843,18 @@ first-class evidence. The manifest is operator-only and never shown to an agent.
     "evidence_digest": "sha256:0123..." }
   → { "verified": true, "finding_id": "7097421dd9fc", "verdict": "confirmed" }
   ```
+- `GET /arenas/{instance_id}/findings/{finding_id}/review` — retained
+  **operator/admin-only** control-and-evidence projection (`nidavellir/evidence-review/v1`).
+  Includes the linked actor request/response (header values withheld), prerequisite
+  expected/observed values and passed/failed/unresolved state, observed effects,
+  validation identity and evidence digests. Missing, corrupt, foreign-arena,
+  historical or unsupported evidence stays unresolved. An independent confirmed
+  or refuted result requires readable linked evidence and passed prerequisites;
+  the original verdict is retained separately. Reads survive arena teardown and
+  execute no probes or budgeted actions. Agent keys get 403; a missing arena or
+  finding in that arena gets 404. For supported validators, the verification write
+  above rejects refutation with 422 when prerequisite/effect evidence is unresolved
+  or failed. Operator judgments remain separate from automatic validation.
 - `GET /findings/{finding_id}` — the **affected-versus-fixed group** for a
   finding and every variant linked to it. **operator/admin only** (`403` for an
   `agent` key); unknown id `404`. Each member carries its arena, title, CWE,

@@ -1,0 +1,9 @@
+{
+  "cases": [],
+  "date": "2026-10-15-d3ef9015",
+  "error": "RuntimeError: POST /deploy: {'status': 422, 'body': '{\"detail\":[{\"type\":\"string_pattern_mismatch\",\"loc\":[\"body\",\"instance_id\"],\"msg\":\"String should match pattern \\'^[a-z0-9][a-z0-9-]{0,39}$\\'\",\"input\":\"UI-R2 disclosure\",\"ctx\":{\"pattern\":\"^[a-z0-9][a-z0-9-]{0,39}$\"}}]}'}",
+  "final_resources": {},
+  "fixture_image": "sha256:3d895c419214c084c91d6c39be7dc60cda8c9f9837a42b7affc148e1975c13a2",
+  "schema": "nidavellir/ui-r2-live/v1",
+  "status": "failed"
+}
