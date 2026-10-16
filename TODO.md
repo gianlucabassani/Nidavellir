@@ -1,6 +1,6 @@
 # Nidavellir — ordered delivery checklist
 
-Updated 2026-10-14 for the verified phase merge and next console slice.
+Updated 2026-10-16 after UI-R2 acceptance and independent review.
 This is the canonical work queue. [ROADMAP.md](ROADMAP.md) retains product scope,
 design detail and legacy milestone mapping. Unchecked means unfinished.
 Verification history is in [docs/JOURNAL.md](docs/JOURNAL.md).
@@ -140,19 +140,34 @@ Accepted record: **no confirmed vulnerability under the tested conditions**;
 **12 retained hypotheses plus 9 asserted without per-probe evidence**. Historical
 artifacts stay unchanged. Historical proof gaps are explicitly unverified; new
 evidence is dated separately. Source candidates remain unresolved until semantic
-review. The next console slice is recorded below; its design is proposed and its
-implementation remains unfinished.
+review. UI-R2 acceptance is recorded below; request comparison and source browsing remain
+separate unfinished slices.
 
 ## Next — research usability
 
-- [ ] **UI-R2 — Controls and evidence review in the console.** Extend the existing
+- [x] **UI-R2 — Controls and evidence review in the console.** Extend the existing
   console and artifact routes to show actor requests, prerequisite controls,
   observed effects, verdicts and linked evidence together. Preserve operator-only
   source authoring and existing execution budgets. **Depends:** Phase 3.
   **Accept:** review a real two-account case from the console; failed positive
   controls cannot appear as refutations; evidence remains available after teardown.
-  **Next action:** approve the first-slice design in
-  `docs/research/research-usability-next.md`, then implement and actively verify it.
+  *Closed 2026-10-16: real Docker-local two-account disclosure/denial and failed-control
+  reviews passed in the console before/after teardown; missing action stayed unresolved,
+  operator judgments survived refresh/reload, budgets were unchanged by review and all
+  arena resources were reclaimed. Independent review findings were fixed. Pinned release:
+  1,123 SQLite passes / four skips / six deselections, 1,127 PostgreSQL passes / six
+  deselections. Scope and retained evidence: `docs/verification/ui-r2-closure-2026-10-16.md`.*
+- [ ] **UI-R3 — Request comparison in the console.** Extend existing replay with named
+  groups, duplication, account/object edits, response comparison and saved notes, using
+  existing protected credential handling and execution budgets. **Depends:** UI-R2.
+  **Accept:** duplicate an owned request, change object/account, compare results and save
+  evidence without exporting credentials. **Next action:** confirm the separate slice's
+  design from `docs/research/research-usability-next.md` before implementation.
+- [ ] **UI-R4 — Source candidate review in the console.** Immutable refs, complete counts,
+  paged residuals, classification reasons and affected/fixed patch links. **Depends:** UI-R2;
+  remains after UI-R3 in delivery order. **Accept:** all retained sites are reachable,
+  incomplete scans and unresolved semantics remain visible, review state survives reopening.
+  No source browsing is implemented by UI-R2.
 
 ## P2 — research iteration driven by target needs
 

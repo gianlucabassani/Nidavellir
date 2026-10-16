@@ -20,7 +20,7 @@
 > that discovery work produces the verified, held-out material that makes
 > evaluation credible.
 
-## Current delivery order — updated 2026-10-12
+## Current delivery order — updated 2026-10-16
 
 [TODO.md](TODO.md) is the canonical ordered checklist with stable NV task IDs,
 dependencies and acceptance criteria. This roadmap retains product and design
@@ -53,8 +53,13 @@ survival and retained concrete requests. Full source inventories and nine
 affected/fixed fix shapes are retained; semantic candidate review remains manual.
 Failed admitted authoring queries are audited, and authoring queries are explicitly
 unbudgeted operator work. See the [quality closure report](docs/verification/research-quality-closure-2026-10-12.md).
-The [next usability proposal](docs/research/research-usability-next.md) is a draft
-for selection and approval, with no new console feature claimed complete.
+UI-R2's approved first slice is complete: actor request/response, prerequisite
+controls, observed effects, independent verdicts and linked evidence can be reviewed
+together in the console. The real Docker-local two-account journey, failed-control
+rejection, post-teardown links, cleanup, release gate and independent review are
+recorded in [UI-R2 closure](docs/verification/ui-r2-closure-2026-10-16.md).
+Request comparison (UI-R3) and source browsing (UI-R4) remain later slices in the
+[usability proposal](docs/research/research-usability-next.md).
 
 Preserve Docker-local as the supported implementation focus. Other providers are
 not live-verified. Cloud apply, hosted concerns, and multi-agent breadth remain
@@ -66,13 +71,13 @@ count. The authoritative product boundary is
 [`docs/VISION.md`](docs/VISION.md). Architecture
 decisions live in [`docs/adr/`](docs/adr/).
 
-### Current status — UI-R1 complete, target-led research work remains
+### Current status — UI-R2 complete, further research work remains
 
 NV-01–10 and NV-11 are complete, including the direct BYO-agent workflow.
 NV-12–15 remain target-led: fuzzing, local VM intake, research campaigns, and
 held-out evaluation should start when a concrete target and evidence justify
-them. The audit's Phase 3 mail-control validity and the open coverage, history,
-and code-intel accounting risks remain in [ISSUES.md](ISSUES.md).
+them. The audit remediation's dated scope and retained historical proof gaps remain in
+[ISSUES.md](ISSUES.md); source candidates still require semantic review.
 
 NV-08's versioned authorization and single-use-grant calibration challenges
 with independent effect/control validators remain the scripted baseline; their
@@ -97,6 +102,15 @@ labels. Real-service, session-expiry, CSRF, reconnect, keyboard, responsive,
 and accessibility checks are recorded in
 [`docs/verification/ui-r1-closure-2026-10-08.md`](docs/verification/ui-r1-closure-2026-10-08.md)
 and [`docs/verification/ui-accessibility-review-2026-10-08.md`](docs/verification/ui-accessibility-review-2026-10-08.md).
+
+UI-R2 closed on 2026-10-16. The operator-only service projection and expandable
+finding review keep prerequisites separate from effects and preserve independent
+versus operator judgments. Failed/missing prerequisites cannot support a refutation;
+unsupported evidence is explicit. Real Docker-local two-account and browser checks
+passed before and after teardown, with zero labelled resources; the pinned release
+and independent review passed. See [closure evidence](docs/verification/ui-r2-closure-2026-10-16.md).
+Historical registration sources and ancestry are preserved. No request comparison
+or source browser is delivered by this slice.
 
 ---
 

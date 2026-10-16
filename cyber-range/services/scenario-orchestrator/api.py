@@ -58,6 +58,7 @@ import setup_proposer
 import source_bundle
 import validators
 import validation_evidence
+import evidence_review
 import vulhub_import
 from auth import Principal, ensure_bootstrap_key, hash_api_key, require_principal
 from database import Database, StopDenied
@@ -5457,6 +5458,7 @@ def _validate_authorization_finding(record: dict, req: "FindingRequest", vuln: d
         "arena_id": record["id"],
         "recipe_digest": recipe.get("recipe_digest"),
         "target_identity_digest": target_identity,
+        "review_context": {"actor": expected_actor, "owner": owner},
         "validator_id": validators.AUTHORIZATION_EFFECT,
         "validator_version": 1,
         "action_digest": action_digest,
@@ -5529,6 +5531,7 @@ def _validate_grant_finding(record: dict, req: "FindingRequest", vuln: dict,
             "finding_id": finding_id, "arena_id": record["id"],
             "recipe_digest": recipe.get("recipe_digest"),
             "target_identity_digest": lifecycle_manifest.digest(recipe.get("nodes") or {}),
+            "review_context": {"actor": expected_actor, "grant": grant},
             "validator_id": validators.SINGLE_USE_GRANT_EFFECT,
             "validator_version": 1, "action_digest": action_digest,
             "observation_digest": observation_digest, "control_digest": control_digest,
@@ -5609,6 +5612,13 @@ def _validate_http_access_control_finding(record: dict, req: "FindingRequest", v
             "finding_id": finding_id, "arena_id": record["id"],
             "recipe_digest": recipe.get("recipe_digest"),
             "target_identity_digest": lifecycle_manifest.digest(recipe.get("nodes") or {}),
+            "review_context": ({"actor": config["actor"], "owner": config["owner"],
+                                "disclosure_status": config["disclosure_status"],
+                                "owner_request": {"actor": config["owner"],
+                                                  **{k: config["action"][k] for k in ("method", "path")}},
+                                "control_request": {"actor": config["actor"],
+                                                    **{k: config["control"][k] for k in ("method", "path")}}}
+                               if config else {}),
             "validator_id": validators.HTTP_ACCESS_CONTROL,
             "validator_version": 1, "action_digest": action_digest,
             "observation_digest": observation_digest, "control_digest": control_digest,
@@ -5843,6 +5853,24 @@ def get_finding_group(finding_id: str,
             "comparison": _finding_group_outcome(members)}
 
 
+def _review_finding(instance_id: str, finding_id: str) -> dict:
+    if not db.get_deployment(instance_id):
+        raise HTTPException(status_code=404, detail="Arena not found")
+    for event in _finding_events(instance_id):
+        payload = event.get("payload") or {}
+        if payload.get("finding_id") == finding_id:
+            return evidence_review.build(instance_id, payload)
+    raise HTTPException(status_code=404, detail="Finding not found in this arena")
+
+
+@app.get("/arenas/{instance_id}/findings/{finding_id}/review")
+def review_finding(instance_id: str, finding_id: str,
+                   principal: Principal = Depends(require_principal)):
+    """Operator-only retained control/effect review; never executes arena actions."""
+    _require_operator(principal)
+    return _review_finding(instance_id, finding_id)
+
+
 @app.post("/arenas/{instance_id}/findings/{finding_id}/verify")
 def verify_finding(
     instance_id: str,
@@ -5864,6 +5892,10 @@ def verify_finding(
     known = {(e.get("payload") or {}).get("finding_id") for e in _finding_events(instance_id)}
     if finding_id not in known:
         raise HTTPException(status_code=404, detail="Finding not found in this arena")
+    if req.verdict == "refuted":
+        review = _review_finding(instance_id, finding_id)
+        if review["validator_id"] in evidence_review.SUPPORTED and not review["can_refute"]:
+            raise HTTPException(status_code=422, detail="Refutation requires resolved, passed prerequisite controls and linked evidence")
     if req.verdict == "confirmed":
         if not req.evidence_digest:
             raise HTTPException(status_code=422, detail="confirmation requires an immutable evidence digest")

@@ -5,6 +5,49 @@ work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
 
 
+## 2026-10-16 — Complete UI-R2 controls and evidence review
+
+**Outcome:** Implemented the approved bounded first slice in the existing console.
+Each finding can show its actor request/response, prerequisite controls with expected
+and observed results, effects, independent verdict and immutable evidence links
+together. Failed prerequisites cannot present a refutation; missing, corrupt,
+foreign-arena, historical and unsupported evidence stays explicit. Operator judgments
+remain separate and win the effective headline through cached review and refresh.
+The service rejects refutation without resolved passed prerequisites for supported
+validators. Review performs no arena action and leaves execution budget unchanged.
+
+**Files:** `evidence_review.py` and validator receipt/API additions under the
+orchestrator; Flask review projection; React finding review, types and scoped styles;
+`tests/test_evidence_review.py`, WebUI regressions; `scripts/verify-ui-r2-live.py`
+and `scripts/ui-r2-browser-check.cjs`; API/route inventory, delivery docs, proposal
+status and `docs/verification/ui-r2-*` evidence, screenshots and review record.
+
+**Verification:** Final `make release-check` passed on pinned Python 3.11.14:
+Ruff and Bandit clean, 1,123 SQLite passed / four skipped / six deselected,
+1,127 PostgreSQL passed / six deselected, migration/API/UI/gateway smoke passed.
+Frontend TypeScript/Prettier and production build passed. Real Docker-local
+NV-06 two-account tests covered disclosure, denial under healthy controls,
+deliberately tainted positive control and missing action evidence. Real browser
+checks passed before and after arena teardown, including 18 protected evidence-link
+reads, operator-judgment retention, zero page errors and 320/390/1440 px reflow.
+Agent denial, wrong-arena refusal and unchanged review budget were recorded.
+All three arenas had zero labelled resources; the isolated stack, its volumes and
+three dedicated image tags were removed. Failed harness attempts and the interrupted
+first release log remain labelled, not counted as acceptance. Independent review
+found two important issues (operator headline override and confirmation surviving
+missing controls); both were reproduced, fixed and re-reviewed with no important
+findings remaining. See `docs/verification/ui-r2-closure-2026-10-16.md`.
+
+**Unresolved risks / next step:** Structured adapters cover authorization, single-use
+grants and HTTP access control v1; the UI-specific live proof covers authorization
+and HTTP control failure, not grant review. Legacy/unsupported evidence stays unresolved;
+there is no standalone Paperless JSON importer. Historical Paperless conclusions,
+registered sources and registration ancestry remain unchanged; no new research or
+agent-capability claim is made. Docker-local remains the live provider boundary.
+UI-R3 request comparison is the next TODO and requires its own design confirmation;
+source browsing is UI-R4. The `project-status-report` skill is not installed in this
+session; this entry and the closure report retain outcome/files/verification/risks/next-step fields.
+
 ## 2026-10-14 — Merge verified console and research quality work into GitLab main
 
 **Outcome:** User-authorized merge commit 40a277b integrated UI-R1 completion,

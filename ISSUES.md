@@ -1,6 +1,6 @@
 # Nidavellir — open risk register
 
-Updated 2026-10-12 after active research-quality verification. MODEL-R1 and NV07-R1
+Updated 2026-10-16 after UI-R2 control-and-evidence acceptance. MODEL-R1 and NV07-R1
 remain closed for calibration machinery only. RESEARCH-R1/R4 are closed for the new
 structured gate after Phase 2 verification; historical chronology is not repaired;
 RESEARCH-R7–R10 are remediated within the recorded scope; source semantics remain manual review.
@@ -38,6 +38,35 @@ and the earlier [Docker-local research evidence](docs/verification/ui-docker-loc
 Docker-local is the only provider verified against real infrastructure; all
 other advertised provider options remain labelled unverified pending their own
 live provisioning checks.
+
+---
+
+## Closed — control and evidence console review
+
+### UI-R2 · Prerequisites and effects reviewed together · closed 2026-10-16
+
+The console Findings view now joins the actor request/response, prerequisite
+requests and expected/observed results, effects, independent verdict and protected
+transaction/control/effect links. Failed prerequisites cannot become a refutation;
+missing, unreadable or unsupported evidence stays unresolved. Operator judgments
+remain separate and are preserved through cached review, refresh and reload.
+
+A real Docker-local synthetic two-account run proved disclosure, denial under
+healthy controls, a tainted control blocked from refutation, and missing action
+evidence. All protected links remained accessible after arena teardown; all three
+arenas had zero labelled resources. Review did not consume action budget. Agent
+denial, arena scope, missing/corrupt/foreign control regressions and final pinned
+release passed. Independent review's two important findings were fixed and
+re-reviewed with no important issues remaining.
+
+Evidence and limits: [UI-R2 closure](docs/verification/ui-r2-closure-2026-10-16.md),
+[live report](docs/verification/ui-r2-live-2026-10-15-42495585.json),
+[independent review](docs/verification/ui-r2-review-2026-10-16.md).
+Supported structured review adapters are authorization, single-use grants and
+generic HTTP access control v1; the live proof covers authorization and HTTP control
+failure. Historical records without retained expectation context and unsupported
+adapters stay unresolved. Paperless chronology and registered probe evidence are
+unchanged. Request comparison (UI-R3) and source browsing (UI-R4) remain unfinished.
 
 ---
 
@@ -333,6 +362,9 @@ These are deliberate limits, recorded so they are not rediscovered as bugs.
   every evaluation endpoint and no evaluation record is exposed through MCP.
   Participant acknowledgements stay neutral — an agent is never told whether a
   finding was confirmed.
+- **Structured review has an explicit adapter boundary.** Unsupported validator
+  versions and historical records without retained expectation context remain unresolved.
+  UI-R2 does not import arbitrary standalone probe JSON or certify source semantics.
 - **Only `make release-check` is authoritative.** Host-Python runs are useful
   signal but use unpinned packages; claims cite the pinned 3.11 SQLite and
   PostgreSQL gate.

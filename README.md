@@ -72,8 +72,10 @@ and select providers with clear verification labels. UI-R1 was closed on
 The research-quality follow-up repaired probe controls, complete source inventories
 and failed-query auditing. [Its verification report](docs/verification/research-quality-closure-2026-10-12.md)
 records the exact limits; source candidates still require human semantic review.
-The [next usability proposal](docs/research/research-usability-next.md) focuses on
-reviewing controls and evidence, comparing requests, and browsing source candidates.
+[UI-R2](docs/verification/ui-r2-closure-2026-10-16.md) brings actor requests,
+prerequisite controls, effects and evidence together in the console, including
+post-teardown review. [Request comparison and source candidate browsing](docs/research/research-usability-next.md)
+remain later slices.
 Cloud and other VM providers, multi-tenant hosting, and multi-agent red/blue
 work remain deferred. The ordered checklist is in [TODO.md](TODO.md); product
 scope and design detail are in [ROADMAP.md](ROADMAP.md); current risks are in
