@@ -1,0 +1,338 @@
+./scripts/verify-release
+ Image nidavellir-verify:python-3.11.14 Building
+#1 [internal] load local bake definitions
+#1 reading from stdin 629B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile.verify
+#2 transferring dockerfile: 37B
+#2 transferring dockerfile: 1.26kB done
+#2 DONE 0.1s
+
+#3 [internal] load metadata for docker.io/library/python:3.11.14-slim-bookworm
+#3 DONE 1.0s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 474B done
+#4 DONE 0.1s
+
+#5 [ 1/11] FROM docker.io/library/python:3.11.14-slim-bookworm@sha256:65a93d69fa75478d554f4ad27c85c1e69fa184956261b4301ebaf6dbb0a3543d
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 170.24MB 2.0s done
+#6 DONE 2.1s
+
+#7 [ 7/11] COPY cyber-range/services/agent-gateway/requirements.txt /workspace/cyber-range/services/agent-gateway/requirements.txt
+#7 CACHED
+
+#8 [ 4/11] COPY requirements-dev.txt /workspace/requirements-dev.txt
+#8 CACHED
+
+#9 [ 5/11] COPY requirements-lock.txt /workspace/requirements-lock.txt
+#9 CACHED
+
+#10 [ 8/11] COPY cyber-range/webui/requirements.txt /workspace/cyber-range/webui/requirements.txt
+#10 CACHED
+
+#11 [ 2/11] RUN apt-get update     && apt-get install -y --no-install-recommends git make     && rm -rf /var/lib/apt/lists/*
+#11 CACHED
+
+#12 [ 3/11] WORKDIR /workspace
+#12 CACHED
+
+#13 [ 6/11] COPY cyber-range/services/scenario-orchestrator/requirements.txt /workspace/cyber-range/services/scenario-orchestrator/requirements.txt
+#13 CACHED
+
+#14 [ 9/11] RUN python -m pip install --no-cache-dir -r requirements-lock.txt
+#14 CACHED
+
+#15 [10/11] COPY . /workspace
+#15 DONE 1.6s
+
+#16 [11/11] RUN mkdir -p /app     && ln -s /workspace/cyber-range/services/scenario-orchestrator/templates /app/templates     && ln -s /workspace/cyber-range/infra/terraform /app/terraform     && ln -s /workspace/cyber-range/infra/terraform-aws /app/terraform-aws     && ln -s /workspace/cyber-range/infra/terraform-libvirt /app/terraform-libvirt
+#16 DONE 0.5s
+
+#17 exporting to image
+#17 exporting layers
+#17 exporting layers 3.5s done
+#17 writing image sha256:deab9d84631bdb9d26e5b6790ebf0bd5983c64c1bde6415dcdc03edbda4bb185 done
+#17 naming to docker.io/library/nidavellir-verify:python-3.11.14 done
+#17 DONE 3.5s
+
+#18 resolving provenance for metadata file
+#18 DONE 0.0s
+ Image nidavellir-verify:python-3.11.14 Built
+ Network nidavellir-verify_default Creating
+ Network nidavellir-verify_default Creating
+ Network nidavellir-verify_default Created
+ Network nidavellir-verify_default Created
+ Container nidavellir-verify-sqlite-run-f4142f2cf785 Creating
+ Container nidavellir-verify-sqlite-run-f4142f2cf785 Created
+Python 3.11.14
+ruff check cyber-range/services/scenario-orchestrator cyber-range/services/agent-gateway cyber-range/services/reference-harness scripts cyber-range/services/vulnhub-importer cyber-range/webui tests
+warning: Failed parse cache file `/workspace/.ruff_cache/0.6.9/17956320493215503979`: io error: failed to fill whole buffer
+warning: Failed parse cache file `/workspace/.ruff_cache/0.6.9/12310484717622031525`: io error: failed to fill whole buffer
+warning: Failed parse cache file `/workspace/.ruff_cache/0.6.9/9638453191101620478`: io error: failed to fill whole buffer
+warning: Failed parse cache file `/workspace/.ruff_cache/0.6.9/550618130034472552`: io error: failed to fill whole buffer
+warning: Failed parse cache file `/workspace/.ruff_cache/0.6.9/9696510480149734749`: io error: failed to fill whole buffer
+warning: Failed parse cache file `/workspace/.ruff_cache/0.6.9/9371061977624323139`: io error: failed to fill whole buffer
+warning: Failed parse cache file `/workspace/.ruff_cache/0.6.9/4243856637840646760`: io error: failed to fill whole buffer
+warning: Failed parse cache file `/workspace/.ruff_cache/0.6.9/4450102375687014610`: io error: failed to fill whole buffer
+warning: Failed parse cache file `/workspace/.ruff_cache/0.6.9/7445458162646377988`: io error: failed to fill whole buffer
+warning: Failed parse cache file `/workspace/.ruff_cache/0.6.9/14850703089518911770`: io error: failed to fill whole buffer
+All checks passed!
+bandit -r cyber-range/services/scenario-orchestrator cyber-range/services/agent-gateway cyber-range/services/reference-harness scripts cyber-range/services/vulnhub-importer cyber-range/webui -x '*/.venv/*,*/venv/*' -ll
+[main]	INFO	profile include tests: None
+[main]	INFO	profile exclude tests: None
+[main]	INFO	cli include tests: None
+[main]	INFO	cli exclude tests: None
+[main]	INFO	running on Python 3.11.14
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: argv is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: no is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: shell is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: the is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: runner is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: is is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: injectable is not a test name or id, ignoring
+[tester]	WARNING	nosec encountered (B603), but no failed test on file cyber-range/services/reference-harness/harness/claude_code.py:137
+[manager]	WARNING	Test in comment: container is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: default is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: mapped is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: by is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: compose is not a test name or id, ignoring
+[tester]	WARNING	nosec encountered (B104), but no failed test on file cyber-range/services/scenario-orchestrator/config.py:218
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: lab is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: target is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: permits is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: self is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: signed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: TLS is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: isolated is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: container is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: no is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: published is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: port is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: lab is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: target is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: permits is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: self is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: signed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: TLS is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: trusted is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: interpreter is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: and is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: path is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: argv is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: no is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: shell is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: timeout is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: SSRF is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: guarded is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: host is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: private is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: container is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: tmpfs is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: private is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: container is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: tmpfs is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: private is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: container is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: tmpfs is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: argv is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: no is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: shell is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: timeout is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: guarded is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: host is not a test name or id, ignoring
+[tester]	WARNING	nosec encountered (B108), but no failed test on file cyber-range/services/scenario-orchestrator/providers/docker_local.py:442
+[tester]	WARNING	nosec encountered (B108), but no failed test on file cyber-range/services/scenario-orchestrator/providers/docker_local.py:994
+[tester]	WARNING	nosec encountered (B108), but no failed test on file cyber-range/services/scenario-orchestrator/providers/docker_local.py:1015
+[tester]	WARNING	nosec encountered (B108), but no failed test on file cyber-range/services/scenario-orchestrator/providers/docker_local.py:1018
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: argv is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: no is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: shell is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: timeout is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: guarded is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: host is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: argv is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: no is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: shell is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: timeout is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: guarded is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: host is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: argv is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: no is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: shell is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: guarded is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: host is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: ref is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: is is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: an is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: argv is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: element is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fetched is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: object is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: argv is not a test name or id, ignoring
+[tester]	WARNING	nosec encountered (B603), but no failed test on file cyber-range/services/scenario-orchestrator/repo_introspect.py:491
+[tester]	WARNING	nosec encountered (B202), but no failed test on file cyber-range/services/vulnhub-importer/auto_importer.py:116
+[manager]	WARNING	Test in comment: trusted is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: local is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: gate is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: bypass is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: stale is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: pyc is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: execute is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: exactly is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: the is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: checked is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: local is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixture is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: bytes is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: trusted is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: local is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: Git is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: runner is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: bypass is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: stale is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: pyc is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: local is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: base is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: URL is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: local is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: URL is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: local is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: URL is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: local is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: URL is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: local is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: URL is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: controlled is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: local is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixture is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: local is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixture is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: local is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixture is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fixed is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: local is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: service is not a test name or id, ignoring
+Working... ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:09
+Run started:2026-10-18 13:41:13.894192+00:00
+
+Test results:
+	No issues identified.
+
+Code scanned:
+	Total lines of code: 31064
+	Total lines skipped (#nosec): 0
+	Total potential issues skipped due to specifically being disabled (e.g., #nosec BXXX): 32
+
+Run metrics:
+	Total issues (by severity):
+		Undefined: 0
+		Low: 358
+		Medium: 0
+		High: 0
+	Total issues (by confidence):
+		Undefined: 0
+		Low: 0
+		Medium: 16
+		High: 342
+Files skipped (0):
+MOCK_MODE=true pytest -m 'not integration'
+........................................................................ [  6%]
+.....................................................................s.. [ 12%]
+........................................................................ [ 18%]
+........................................................................ [ 25%]
+........................................................................ [ 31%]
+........................................................................ [ 37%]
+..................................................s..................... [ 44%]
+..............................................................ss........ [ 50%]
+........................................................................ [ 56%]
+........................................................................ [ 63%]
+........................................................................ [ 69%]
+........................................................................ [ 75%]
+........................................................................ [ 82%]
+........................................................................ [ 88%]
+........................................................................ [ 94%]
+.............................................................            [100%]
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_budget_stop.py:210: requires real PostgreSQL row locking
+SKIPPED [1] tests/test_lifecycle_reset.py:155: real competing-transaction assertion runs in the PostgreSQL gate
+SKIPPED [1] tests/test_nv05_forwards.py:120: PostgreSQL row-lock race
+SKIPPED [1] tests/test_nv05_forwards.py:180: PostgreSQL revoke/connect race
+1137 passed, 4 skipped, 6 deselected in 81.46s (0:01:21)
+python scripts/release-smoke.py
+release smoke: Python 3.11.14
+✅ Directory ready: /tmp/nidavellir-release-smoke-a9ve3pc1/runs
+✅ Directory ready: /tmp/nidavellir-release-smoke-a9ve3pc1/data
+✅ Directory ready: /tmp/nidavellir-release-smoke-a9ve3pc1/keys
+✅ Directory ready: /tmp/nidavellir-release-smoke-a9ve3pc1/cache
+✅ Directory ready: /tmp/nidavellir-release-smoke-a9ve3pc1/data/scenarios
+✅ Directory ready: /tmp/nidavellir-release-smoke-a9ve3pc1/data/source-bundles
+⚠️  WARNING: Running in MOCK_MODE - no real infrastructure will be created
+✅ Configuration validated successfully
+   BASE_DIR: /app
+   CYBER_RANGE_DIR: /app
+   TEMPLATES_DIR: /app/templates
+   TERRAFORM_TEMPLATE: /app/terraform
+   RUNS_DIR: /tmp/nidavellir-release-smoke-a9ve3pc1/runs
+   DATA_DIR: /tmp/nidavellir-release-smoke-a9ve3pc1/data
+2026-10-18 13:42:42,823 - API - INFO - ✅ Configuration validation passed
+2026-10-18 13:42:42,862 - auth - WARNING - No API keys exist — the API will reject every request. Create one with: python auth.py create-key <name> <role>
+2026-10-18 13:42:43,345 - httpx - INFO - HTTP Request: GET http://testserver/health "HTTP/1.1 200 OK"
+2026-10-18 13:42:43,661 - nidavellir_webui_smoke - WARNING - WEBUI_PASSWORD is the well-known default — fine for the local demo, NEVER for a reachable deployment.
+release smoke: migrations, API, UI and gateway ready
+ Container nidavellir-verify-postgres-1 Creating
+ Container nidavellir-verify-postgres-1 Created
+ Container nidavellir-verify-postgres-1 Starting
+ Container nidavellir-verify-postgres-1 Started
+ Container nidavellir-verify-postgres-1 Waiting
+ Container nidavellir-verify-postgres-1 Healthy
+ Container nidavellir-verify-postgres-gate-run-59ae017f37aa Creating
+ Container nidavellir-verify-postgres-gate-run-59ae017f37aa Created
+Python 3.11.14
+make test-unit
+make[1]: Entering directory '/workspace'
+MOCK_MODE=true pytest -m 'not integration'
+........................................................................ [  6%]
+........................................................................ [ 12%]
+........................................................................ [ 18%]
+........................................................................ [ 25%]
+........................................................................ [ 31%]
+........................................................................ [ 37%]
+........................................................................ [ 44%]
+........................................................................ [ 50%]
+........................................................................ [ 56%]
+........................................................................ [ 63%]
+........................................................................ [ 69%]
+........................................................................ [ 75%]
+........................................................................ [ 82%]
+........................................................................ [ 88%]
+........................................................................ [ 94%]
+.............................................................            [100%]
+1141 passed, 6 deselected in 72.06s (0:01:12)
+make[1]: Leaving directory '/workspace'
+ Container nidavellir-verify-postgres-1 Stopping
+ Container nidavellir-verify-postgres-1 Stopped
+ Container nidavellir-verify-postgres-1 Removing
+ Container nidavellir-verify-postgres-1 Removed
+ Network nidavellir-verify_default Removing
+ Network nidavellir-verify_default Removed

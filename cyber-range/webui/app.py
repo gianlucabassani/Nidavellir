@@ -2938,6 +2938,30 @@ def console_file_download(instance_id):
                     ("node", "path", "content_b64", "offset", "returned_bytes",
                      "file_bytes", "next_offset", "digest")})
 
+@app.route("/api/console/arenas/<instance_id>/http/transactions/<digest>/preview")
+def console_http_preview(instance_id, digest):
+    data, ok = _api_get(f"/arenas/{quote(instance_id, safe='')}/http/transactions/{quote(digest, safe='')}/preview")
+    return jsonify(data or {"error": "Transaction preview unavailable"}), (200 if ok else 503)
+
+
+@app.route("/api/console/arenas/<instance_id>/http/comparison")
+def console_http_comparison(instance_id):
+    query = urlencode({key: request.args.get(key, "") for key in ("left", "right")})
+    data, ok = _api_get(f"/arenas/{quote(instance_id, safe='')}/http/comparison?{query}")
+    return jsonify(data or {"error": "Comparison unavailable; verify both retained transactions and retry"}), (200 if ok else 503)
+
+
+@app.route("/api/console/arenas/<instance_id>/http/request-groups", methods=["GET", "POST"])
+def console_http_request_groups(instance_id):
+    path = f"/arenas/{quote(instance_id, safe='')}/http/request-groups"
+    if request.method == "POST":
+        data, code = _api_post(path, request.get_json(silent=True) or {})
+        return jsonify(data), code
+    query = urlencode({key: request.args[key] for key in ("before", "limit") if key in request.args})
+    data, ok = _api_get(path + (f"?{query}" if query else ""))
+    return jsonify(data or {"error": "Saved request groups unavailable"}), (200 if ok else 503)
+
+
 @app.route("/api/arenas/<instance_id>/http/transactions", methods=["GET"])
 def http_transactions_proxy(instance_id):
     """Stored HTTP transactions for this arena, newest first."""

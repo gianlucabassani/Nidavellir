@@ -246,12 +246,14 @@ export type HttpTransaction = {
   digest: string;
   created_at: string;
   replay_of: string | null;
+  preview_clipped?: boolean;
   request: {
     node: string;
     method: string;
     path: string;
     params: Record<string, string>;
     headers: Record<string, string>;
+    withheld_headers?: string[];
     body: string | null;
   };
   response: {
@@ -383,4 +385,22 @@ export type FindingReview = {
   can_refute: boolean;
   refutation_allowed: boolean;
   unresolved: string[];
+};
+
+export type HttpComparison = {
+  left: HttpTransaction;
+  right: HttpTransaction;
+  captured_body_equal: boolean | null;
+  body_diff: string;
+  response_headers_diff: string;
+  complete: boolean;
+  unresolved: string[];
+  interpretation: string;
+};
+export type HttpRequestGroup = {
+  group_id: string;
+  name: string;
+  notes: string;
+  left: { digest: string; label: string };
+  right: { digest: string; label: string };
 };

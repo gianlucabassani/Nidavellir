@@ -187,18 +187,28 @@ class RestClient:
             "GET", f"/arenas/{arena_id}/http/transactions/{encoded}", api_key
         )
 
+    def http_comparison(self, api_key: str, arena_id: str, left: str, right: str) -> dict:
+        query = urllib.parse.urlencode({"left": left, "right": right})
+        return self._request("GET", f"/arenas/{arena_id}/http/comparison?{query}", api_key)
+
     def http_replay(
         self, api_key: str, arena_id: str, digest: str, *,
         node: str | None = None, path: str | None = None,
         params: dict[str, str] | None = None,
         headers: dict[str, str] | None = None,
         method: str | None = None, body: str | None = None,
+        replace_params: bool = False,
+        credential_source_digest: str | None = None,
+        credential_header_names: list[str] | None = None,
     ) -> dict:
         encoded = urllib.parse.quote(digest, safe="")
         payload: dict = {}
         for key, val in (
             ("node", node), ("path", path), ("params", params),
             ("headers", headers), ("method", method), ("body", body),
+            ("replace_params", replace_params),
+            ("credential_source_digest", credential_source_digest),
+            ("credential_header_names", credential_header_names),
         ):
             if val is not None:
                 payload[key] = val

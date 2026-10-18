@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type React from "react";
 import { MapTargetNotice, useMapTarget } from "./target";
+import { HttpComparisonWorkbench } from "./http-comparison";
 import type {
   ArenaData,
   HttpTransaction,
@@ -34,6 +35,13 @@ export function HttpWorkbench({ arena }: { arena: ArenaData }) {
   const [params, setParams] = useState("");
   const [headers, setHeaders] = useState("");
   const [body, setBody] = useState("");
+  const [pair, setPair] = useState<{ left: string; right: string }>({
+    left: "",
+    right: "",
+  });
+  const [credentialSource, setCredentialSource] = useState("");
+  const [credentialHeaders, setCredentialHeaders] = useState("Authorization");
+  const [inheritedHeaders, setInheritedHeaders] = useState<string[]>([]);
   const [replayOf, setReplayOf] = useState<string | null>(null);
   const [detail, setDetail] = useState<HttpTransaction | null>(null);
   const [detailError, setDetailError] = useState("");
@@ -44,9 +52,13 @@ export function HttpWorkbench({ arena }: { arena: ArenaData }) {
 
   async function inspect(digest: string, prepareReplay = false) {
     setDetailError("");
+    if (prepareReplay) {
+      setFormOpen(false);
+      setMessage("Preparing stored request…");
+    }
     try {
       const response = await fetch(
-        `/api/arenas/${id}/http/transactions/${encodeURIComponent(digest)}`,
+        `/api/console/arenas/${id}/http/transactions/${encodeURIComponent(digest)}/preview`,
         { credentials: "same-origin", headers: { Accept: "application/json" } },
       );
       if (response.redirected && new URL(response.url).pathname === "/login") {
@@ -60,7 +72,7 @@ export function HttpWorkbench({ arena }: { arena: ArenaData }) {
         throw new Error(
           data.error || data.detail || `Inspection failed (${response.status})`,
         );
-      const transaction = { ...data.transaction, digest } as HttpTransaction;
+      const transaction = { ...data, digest } as HttpTransaction;
       setDetail(transaction);
       if (prepareReplay) {
         const request = transaction.request;
@@ -75,8 +87,11 @@ export function HttpWorkbench({ arena }: { arena: ArenaData }) {
             .join("\n"),
         );
         setBody(request.body || "");
+        setInheritedHeaders(request.withheld_headers || []);
+        setCredentialSource("");
         setReplayOf(digest);
         setFormOpen(true);
+        setMessage("Stored request ready. Review edits before sending.");
         window.setTimeout(
           () =>
             formRef.current?.scrollIntoView({
@@ -134,7 +149,17 @@ export function HttpWorkbench({ arena }: { arena: ArenaData }) {
         path,
         params: Object.fromEntries(new URLSearchParams(params)),
         headers: parsedHeaders,
-        body: body || null,
+        body: replayOf ? body : body || null,
+        ...(replayOf ? { replace_params: true } : {}),
+        ...(replayOf && credentialSource.trim()
+          ? {
+              credential_source_digest: credentialSource.trim(),
+              credential_header_names: credentialHeaders
+                .split(",")
+                .map((name) => name.trim())
+                .filter(Boolean),
+            }
+          : {}),
       };
       const endpoint = replayOf
         ? `/api/arenas/${id}/http/transactions/${encodeURIComponent(replayOf)}/replay`
@@ -164,6 +189,8 @@ export function HttpWorkbench({ arena }: { arena: ArenaData }) {
             ? result.detail
             : result.error || `Request rejected (${response.status})`,
         );
+      if (replayOf && result.transaction_digest)
+        setPair({ left: replayOf, right: result.transaction_digest });
       setReplayOf(null);
       setFormOpen(false);
       setMessage(`${method} ${path} → ${result.status}. Transaction recorded.`);
@@ -282,6 +309,7 @@ export function HttpWorkbench({ arena }: { arena: ArenaData }) {
                 <label>
                   Headers
                   <textarea
+                    aria-label="Request headers"
                     value={headers}
                     onChange={(event) => setHeaders(event.target.value)}
                     rows={3}
@@ -289,9 +317,46 @@ export function HttpWorkbench({ arena }: { arena: ArenaData }) {
                     placeholder="X-Research-Token: value (one per line)"
                   />
                 </label>
+                {replayOf && (
+                  <fieldset className="http-identity">
+                    <legend>Account for this replay</legend>
+                    <p>
+                      Stored headers are inherited server-side:{" "}
+                      {inheritedHeaders.join(", ") || "none withheld"}. Values
+                      stay out of this editor.
+                    </p>
+                    <label>
+                      Credential source transaction (optional)
+                      <input
+                        value={credentialSource}
+                        onChange={(event) =>
+                          setCredentialSource(event.target.value)
+                        }
+                        placeholder="sha256:… from this arena"
+                        maxLength={71}
+                      />
+                    </label>
+                    <label>
+                      Credential header names
+                      <input
+                        value={credentialHeaders}
+                        onChange={(event) =>
+                          setCredentialHeaders(event.target.value)
+                        }
+                        placeholder="Authorization, Cookie"
+                      />
+                    </label>
+                    <p>
+                      Leave the source empty to keep the original account.
+                      Override request IDs in Headers when the target requires
+                      unique IDs.
+                    </p>
+                  </fieldset>
+                )}
                 <label>
                   Body
                   <textarea
+                    aria-label="Request body"
                     value={body}
                     onChange={(event) => setBody(event.target.value)}
                     rows={5}
@@ -382,9 +447,33 @@ export function HttpWorkbench({ arena }: { arena: ArenaData }) {
                         className="button button-outline"
                         onClick={() => void inspect(item.digest, true)}
                       >
-                        Replay
+                        Duplicate and edit
                       </button>
                     )}
+                    <button
+                      type="button"
+                      className="button button-outline"
+                      onClick={() =>
+                        setPair((previous) => ({
+                          ...previous,
+                          left: item.digest,
+                        }))
+                      }
+                    >
+                      Set A
+                    </button>
+                    <button
+                      type="button"
+                      className="button button-outline"
+                      onClick={() =>
+                        setPair((previous) => ({
+                          ...previous,
+                          right: item.digest,
+                        }))
+                      }
+                    >
+                      Set B
+                    </button>
                     <a
                       className="inline-action"
                       href={`/console/arena/${id}?tab=findings&transaction=${encodeURIComponent(item.digest)}`}
@@ -423,6 +512,11 @@ export function HttpWorkbench({ arena }: { arena: ArenaData }) {
           />
         )}
       </Panel>
+      <HttpComparisonWorkbench
+        arenaId={arena.id}
+        pair={pair}
+        onSelect={setPair}
+      />
       <Panel
         eyebrow="03 / INSPECT"
         title="Transaction detail"
@@ -441,6 +535,12 @@ export function HttpWorkbench({ arena }: { arena: ArenaData }) {
               </strong>
               <code>{detail.digest}</code>
             </div>
+            <p>
+              Authentication header values are withheld.{" "}
+              {detail.preview_clipped
+                ? "Response preview clipped; use the retained transaction for full captured content."
+                : ""}
+            </p>
             <div className="http-detail-columns">
               <section>
                 <h3>Request</h3>

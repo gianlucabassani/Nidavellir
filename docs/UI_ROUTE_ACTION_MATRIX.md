@@ -5,7 +5,7 @@ This is the first pass of phase 0. It records every Flask route and HTTP
 method; it does **not** prove React action/state parity. The status column
 states the present migration boundary, not a completed replacement.
 
-**Current inventory:** 146 route/method operations. Re-run the script after route changes.
+**Current inventory:** 150 route/method operations. Re-run the script after route changes.
 
 | Current URL | Method | Handler | Workspace / destination | Auth | CSRF | Contract | Deep link | Migration status |
 |---|---|---|---|---|---|---|---|---|
@@ -133,6 +133,10 @@ states the present migration boundary, not a completed replacement.
 | `/api/console/arenas/<instance_id>/browser/visit` | POST | `console_browser_visit` | New console → `/console` | Operator session | Required | JSON / stream proxy | New route | Implemented projection/shell |
 | `/api/console/arenas/<instance_id>/files/upload` | POST | `console_file_upload` | New console → `/console` | Operator session | Required | JSON / stream proxy | New route | Implemented projection/shell |
 | `/api/console/arenas/<instance_id>/files/download` | POST | `console_file_download` | New console → `/console` | Operator session | Required | JSON / stream proxy | New route | Implemented projection/shell |
+| `/api/console/arenas/<instance_id>/http/transactions/<digest>/preview` | GET | `console_http_preview` | New console → `/console` | Operator session | — | JSON / stream proxy | New route | Implemented projection/shell |
+| `/api/console/arenas/<instance_id>/http/comparison` | GET | `console_http_comparison` | New console → `/console` | Operator session | — | JSON / stream proxy | New route | Implemented projection/shell |
+| `/api/console/arenas/<instance_id>/http/request-groups` | GET | `console_http_request_groups` | New console → `/console` | Operator session | — | JSON / stream proxy | New route | Implemented projection/shell |
+| `/api/console/arenas/<instance_id>/http/request-groups` | POST | `console_http_request_groups` | New console → `/console` | Operator session | Required | JSON / stream proxy | New route | Implemented projection/shell |
 | `/api/arenas/<instance_id>/http/transactions` | GET | `http_transactions_proxy` | Research / arena → `/console?workspace=research` | Operator session | — | JSON / stream proxy | Preserve current URL | Legacy action linked |
 | `/api/arenas/<instance_id>/http/transactions/<digest>` | GET | `http_transaction_proxy` | Research / arena → `/console?workspace=research` | Operator session | — | JSON / stream proxy | Preserve current URL | Legacy action linked |
 | `/api/arenas/<instance_id>/validation-evidence/<digest>` | GET | `validation_evidence_proxy` | Research / arena → `/console?workspace=research` | Operator session | — | JSON / stream proxy | Preserve current URL | Legacy action linked |

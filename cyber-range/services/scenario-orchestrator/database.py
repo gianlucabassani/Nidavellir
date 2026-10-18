@@ -1608,7 +1608,7 @@ class Database:
             self._append_event(session, lab_id, actor, type, payload)
             session.commit()
 
-    def list_events(self, lab_id=None, limit=100, types=None):
+    def list_events(self, lab_id=None, limit=100, types=None, before_id=None):
         """Recent events (newest first), optionally for one lab and/or restricted
         to a set of event ``types``. The type filter lets the setup-phase derive
         the current session from setup-lifecycle events alone, so high-volume
@@ -1625,6 +1625,8 @@ class Database:
                 query = query.where(Event.lab_id == lab_id)
             if types is not None:
                 query = query.where(Event.type.in_(list(types)))
+            if before_id is not None:
+                query = query.where(Event.id < before_id)
             if limit is not None:
                 query = query.limit(limit)
             return [
@@ -1638,6 +1640,19 @@ class Database:
                 }
                 for e in session.scalars(query)
             ]
+
+    def has_http_capture(self, lab_id: str, actor: str, digest: str) -> bool:
+        """An immutable body-free execution receipt proves deduplicated capture access.
+
+        Event payloads are serialized by _append_event with json.dumps. Match the
+        complete named digest field, not a replay_of or another reference.
+        """
+        needle = json.dumps({"transaction_digest": digest})[1:-1]
+        with self._session() as session:
+            query = select(Event.id).where(
+                Event.lab_id == lab_id, Event.actor == actor,
+                Event.type == "http_request", Event.payload.contains(needle)).limit(1)
+            return session.scalar(query) is not None
 
     # --- API keys (ADR-0002) -------------------------------------------------
     # Only SHA-256 digests are stored; plaintext keys never touch the DB.

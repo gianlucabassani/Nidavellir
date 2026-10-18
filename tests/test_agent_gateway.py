@@ -903,3 +903,25 @@ def test_operator_session_registers_research_tools():
     names = {t.name for t in asyncio.run(mcp.list_tools())}
     assert {"research_fix_lookup", "research_layer_diff",
             "research_sibling_search"} <= names
+
+
+def test_comparison_tool_reads_without_spending_or_tracing_bodies(tmp_path, monkeypatch):
+    ctx = _ctx(stance=Stance.attacker, trace_dir=str(tmp_path))
+    ctx.step_budget = 1
+    ctx.steps_used = 1
+    monkeypatch.setattr(ctx.client, 'http_comparison', lambda *_: {
+        'schema': 'nidavellir/http-comparison/v1', 'body_diff': 'sensitive-body'}, raising=False)
+    result = tools.compare_http_transactions(ctx, 'a1', 'sha256:' + 'a' * 64, 'sha256:' + 'b' * 64)
+    assert result['body_diff'] == 'sensitive-body'
+    assert ctx.steps_used == 1
+    assert 'sensitive-body' not in (tmp_path / 'a1.jsonl').read_text()
+    with pytest.raises(ToolNotAllowed):
+        tools.compare_http_transactions(_ctx(stance=Stance.defender), 'a1', 'a', 'b')
+
+
+def test_replay_cannot_silently_ignore_an_incomplete_identity_switch():
+    ctx = _ctx(stance=Stance.attacker)
+    with pytest.raises(ValueError, match='source.*header'):
+        tools.replay_http_transaction(ctx, 'a1', 'sha256:' + 'a' * 64,
+                                     credential_header_names=['Authorization'])
+    assert ctx.steps_used == 0

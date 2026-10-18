@@ -1,0 +1,18 @@
+{
+  "arena": "22e18908-bcd2-4b15-9374-0eb1f1f0fb28",
+  "date": "2026-10-16-3731bbac",
+  "error": "CalledProcessError: Command '['node', 'scripts/ui-r3-browser-check.cjs']' returned non-zero exit status 1.",
+  "final_resources": {
+    "22e18908-bcd2-4b15-9374-0eb1f1f0fb28": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    }
+  },
+  "fixture_image": "sha256:3d895c419214c084c91d6c39be7dc60cda8c9f9837a42b7affc148e1975c13a2",
+  "owned": "sha256:743345ee64a655c84a63e952d31527080eb99d8d5fb9cd1514ab5d38523a9c2a",
+  "owner": "sha256:9c53b98de4f037873133b49d24bebf9b1675d88a4dc4a7d29b92715f23089898",
+  "schema": "nidavellir/ui-r3-live/v1",
+  "status": "failed"
+}

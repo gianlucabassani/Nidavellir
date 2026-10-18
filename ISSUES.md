@@ -1,6 +1,6 @@
 # Nidavellir — open risk register
 
-Updated 2026-10-16 after UI-R2 control-and-evidence acceptance. MODEL-R1 and NV07-R1
+Updated 2026-10-18 after UI-R3 request-comparison acceptance. MODEL-R1 and NV07-R1
 remain closed for calibration machinery only. RESEARCH-R1/R4 are closed for the new
 structured gate after Phase 2 verification; historical chronology is not repaired;
 RESEARCH-R7–R10 are remediated within the recorded scope; source semantics remain manual review.
@@ -66,7 +66,37 @@ Supported structured review adapters are authorization, single-use grants and
 generic HTTP access control v1; the live proof covers authorization and HTTP control
 failure. Historical records without retained expectation context and unsupported
 adapters stay unresolved. Paperless chronology and registered probe evidence are
-unchanged. Request comparison (UI-R3) and source browsing (UI-R4) remain unfinished.
+unchanged. UI-R3 request comparison closed separately on 2026-10-18; UI-R4 source
+browsing remains unfinished.
+
+---
+
+## Closed — request comparison in the console
+
+### UI-R3 · Useful request/account comparisons without credential copying · closed 2026-10-18
+
+Operators can duplicate and edit captured requests, reuse selected authorization
+headers server-side, explicitly replay, compare bounded response bodies and projected
+headers, and retain immutable named pairs, labels and notes. Both digests can be
+attached to an existing finding. Read-only attacker MCP comparison uses the same
+actor/arena boundary. Replay parents, raw reads and credential sources enforce
+capture ownership; durable successful receipts handle cross-actor content dedup.
+
+Real Docker-local browser and MCP checks passed: object change returned 403,
+stored account change returned 200, saved notes and protected evidence reopened after
+teardown, stopped replay returned 423, and comparisons left budgets unchanged.
+Browser replay payloads, group metadata and gateway traces contained no synthetic
+account tokens. The final pinned release and independent review passed. All arena
+resources, isolated service volumes and four dedicated service image tags were removed.
+
+Evidence: [UI-R3 closure](docs/verification/ui-r3-closure-2026-10-18.md),
+[review](docs/verification/ui-r3-review-2026-10-18.md). Header projection is partial;
+cookie values, redirect query values/fragments and unknown headers are withheld.
+Truncated captures and clipped previews/diffs are explicitly incomplete. Authorized
+originals remain linked. Notes are immutable snapshots, not a mutable workspace.
+Source browsing, new credential storage and batch execution remain outside this slice.
+This calibration proves workflow, not a newly discovered vulnerability or agent capability.
+Existing historical Paperless and provider gaps remain unchanged. UI-R4 is next.
 
 ---
 

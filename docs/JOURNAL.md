@@ -5,6 +5,47 @@ work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
 
 
+## 2026-10-18 — Complete UI-R3 request comparison
+
+**Outcome:** Delivered the separately approved bounded researcher/agent slice in
+existing HTTP routes and console: duplicate without sending, explicit edited replay,
+server-side reuse of selected stored account headers, bounded A/B body and projected
+header comparison, immutable named pairs/labels/notes, finding references and a
+read-only attacker MCP tool. Response differences remain observations; UI-R2 controls
+and verdicts retain their independent semantics. Actor capture receipts preserve
+legitimate access under content deduplication; agent raw reads, replay parents and
+credential sources share ownership checks. Session/CSRF, stop and budgets remain enforced.
+
+**Files:** Orchestrator `http_comparisons.py`, API/database; gateway client/server/tools
+and stances; Flask BFF; React HTTP/comparison, types and scoped styles; focused service,
+gateway and WebUI tests; live Python/browser scripts; API/route inventory, research
+usability status, TODO/ISSUES/ROADMAP and `docs/verification/ui-r3-*` records.
+
+**Verification:** Final `make release-check` passed pinned Python 3.11.14: Ruff/Bandit
+clean, 1,137 SQLite passed / four skipped / six deselected, 1,141 PostgreSQL passed /
+six deselected; migrations/API/UI/gateway smoke passed. Frontend TypeScript/Prettier
+and production build passed. Final real Docker-local browser/MCP acceptance
+`48ef5c41` proved owned 200, foreign-object 403, stored account change 200, two saved
+comparison snapshots, finding references and protected evidence links before/after
+teardown. Comparison consumed no action budget; stopped replay returned 423; agent
+and wrong-arena refusals passed; browser replay payloads/groups/traces excluded
+synthetic account tokens. Both browser phases had zero page errors and 320/390/1440 px
+reflow. All arena resources, isolated stack/volumes and four dedicated service image
+tags were removed. Failed harness attempts remain labelled. Independent review's four
+important findings were fixed and re-reviewed; fresh final review had no important
+issues, and its minor response-size label was corrected. All four registered source
+hashes and registration ancestry remain intact. See
+`docs/verification/ui-r3-closure-2026-10-18.md` for retained evidence and precise limits.
+
+**Unresolved risks / next concrete step:** Public calibration proves workflow only;
+Docker-local remains the live provider boundary. Projected headers are partial and
+truncated/clipped evidence stays incomplete. Named groups are immutable snapshots;
+no source browser, batch sender, general workspace or new credential vault was added.
+Paperless chronology, registered research conclusions and manual source-semantic review
+remain unchanged. Next TODO is UI-R4: confirm its design and concrete source-review
+acceptance before implementation. `project-status-report` is not installed; this
+entry and closure use outcome/files/verification/risks/next-step fields.
+
 ## 2026-10-16 — Complete UI-R2 controls and evidence review
 
 **Outcome:** Implemented the approved bounded first slice in the existing console.

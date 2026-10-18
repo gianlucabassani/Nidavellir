@@ -38,6 +38,7 @@ import eval_export
 import eval_model_driver
 import generator
 import http_transactions
+import http_comparisons
 import helper_jobs
 import image_check
 import images
@@ -2670,8 +2671,72 @@ def get_arena_http_transaction(
     """Retrieve one stored HTTP transaction envelope by digest."""
     _arena_record_or_404(instance_id)
     _require_binding(principal, instance_id, bindings.CAP_EXEC)
-    manifest, envelope = _http_transaction_or_404(instance_id, digest)
+    manifest, envelope = _comparison_transaction(instance_id, digest, principal)
     return {"manifest": manifest, "transaction": envelope}
+
+
+def _comparison_transaction(instance_id: str, digest: str, principal: Principal):
+    stored = _http_transaction_or_404(instance_id, digest)
+    if (principal.role == "agent" and stored[0].get("actor") != principal.name
+            and not db.has_http_capture(instance_id, principal.name, digest)):
+        raise HTTPException(status_code=403, detail="Agent comparison and credential reuse require its own captured transaction")
+    return stored
+
+
+@app.get("/arenas/{instance_id}/http/transactions/{digest}/preview")
+def preview_http_transaction(instance_id: str, digest: str,
+                             principal: Principal = Depends(require_principal)):
+    _arena_record_or_404(instance_id)
+    _require_binding(principal, instance_id, bindings.CAP_EXEC)
+    return http_comparisons.view(*_comparison_transaction(instance_id, digest, principal))
+
+
+@app.get("/arenas/{instance_id}/http/comparison")
+def compare_http_transactions(instance_id: str, left: str = Query(max_length=71),
+                              right: str = Query(max_length=71),
+                              principal: Principal = Depends(require_principal)):
+    _arena_record_or_404(instance_id)
+    _require_binding(principal, instance_id, bindings.CAP_EXEC)
+    return http_comparisons.compare(_comparison_transaction(instance_id, left, principal),
+                                    _comparison_transaction(instance_id, right, principal))
+
+
+class ComparedTransaction(BaseModel):
+    digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    label: str = Field(min_length=1, max_length=80)
+
+
+class HttpRequestGroup(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    notes: str = Field(default="", max_length=2000)
+    left: ComparedTransaction
+    right: ComparedTransaction
+
+
+@app.post("/arenas/{instance_id}/http/request-groups")
+def save_http_request_group(instance_id: str, req: HttpRequestGroup,
+                            principal: Principal = Depends(require_principal)):
+    """Save an immutable named A/B group; transaction bodies/credentials stay in their store."""
+    _require_operator(principal)
+    _arena_record_or_404(instance_id)
+    for item in (req.left, req.right):
+        _http_transaction_or_404(instance_id, item.digest)
+    if req.left.digest == req.right.digest:
+        raise HTTPException(status_code=422, detail="Choose two distinct transactions")
+    group = {"group_id": uuid.uuid4().hex, **req.model_dump()}
+    db.record_event(instance_id, "http_request_group", group, actor=principal.name)
+    return group
+
+
+@app.get("/arenas/{instance_id}/http/request-groups")
+def list_http_request_groups(instance_id: str, before: int | None = Query(default=None, ge=1),
+                             limit: int = Query(default=25, ge=1, le=100),
+                             principal: Principal = Depends(require_principal)):
+    _require_operator(principal)
+    _arena_record_or_404(instance_id)
+    events = db.list_events(instance_id, limit=limit + 1, types=("http_request_group",), before_id=before)
+    return {"groups": [event["payload"] for event in events[:limit]],
+            "next_before": events[limit - 1]["id"] if len(events) > limit else None}
 
 
 class HttpReplayRequest(BaseModel):
@@ -2680,6 +2745,9 @@ class HttpReplayRequest(BaseModel):
     method and body REPLACE when provided. The stored record is never mutated —
     a replay always produces a new linked transaction."""
 
+    replace_params: bool = False
+    credential_source_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    credential_header_names: list[str] = Field(default_factory=list, max_length=16)
     node: str | None = Field(default=None, min_length=1, max_length=64)
     path: str | None = Field(default=None, min_length=1, max_length=2048)
     params: dict[str, str] | None = Field(default=None)
@@ -2691,6 +2759,12 @@ class HttpReplayRequest(BaseModel):
 
     @model_validator(mode="after")
     def _bounded_overrides(self):
+        names = self.credential_header_names
+        if bool(self.credential_source_digest) != bool(names):
+            raise ValueError("A credential source and selected header names are required together")
+        if (any(not re.fullmatch(r"[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}", name) for name in names)
+                or len({name.lower() for name in names}) != len(names)):
+            raise ValueError("Credential header names must be valid and unique")
         if self.path is not None:
             parsed = urllib.parse.urlsplit(self.path)
             if (
@@ -2742,20 +2816,33 @@ def replay_arena_http_transaction(
     immutable and the new record links to it via `replay_of`."""
     record = _active_arena_or_error(instance_id)
     _require_binding(principal, instance_id, bindings.CAP_EXEC)
-    _, stored = _http_transaction_or_404(instance_id, digest)
+    _, stored = _comparison_transaction(instance_id, digest, principal)
     sreq = stored.get("request") or {}
+    merged_headers = {key.lower(): (key, value)
+                      for group in (sreq.get("headers") or {}, req.headers or {})
+                      for key, value in group.items()}
     merged = {
         "node": req.node if req.node is not None else sreq.get("node", "victim"),
         "path": req.path if req.path is not None else sreq.get("path", "/"),
-        "params": {**(sreq.get("params") or {}), **(req.params or {})},
-        "headers": {**(sreq.get("headers") or {}), **(req.headers or {})},
+        "params": (req.params or {}) if req.replace_params else {**(sreq.get("params") or {}), **(req.params or {})},
+        "headers": dict(merged_headers.values()),
         "method": (req.method or sreq.get("method") or "GET").upper(),
         "body": req.body if req.body is not None else sreq.get("body"),
     }
+    if req.credential_source_digest:
+        _, source = _comparison_transaction(instance_id, req.credential_source_digest, principal)
+        source_headers = {key.lower(): (key, value) for key, value in (source.get("request", {}).get("headers") or {}).items()}
+        selected = {name.lower() for name in req.credential_header_names}
+        if not selected <= source_headers.keys():
+            raise HTTPException(status_code=422, detail="Selected credential header is absent from the source")
+        # Case-insensitive replacement must not leave the old identity in another casing.
+        merged["headers"] = {key: value for key, value in merged["headers"].items() if key.lower() not in selected}
+        merged["headers"].update(dict(source_headers[name] for name in selected))
     try:
         effective = HttpRequestRequest(**merged)
     except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        messages = [item["msg"] for item in exc.errors(include_input=False, include_context=False, include_url=False)]
+        raise HTTPException(status_code=422, detail="Invalid replay: " + "; ".join(messages)) from exc
     return _execute_and_record_http(record, effective, principal, replay_of=digest)
 
 
@@ -3016,8 +3103,8 @@ def _redact_findings_for_agent(principal: Principal, events: list[dict]) -> list
     hidden = ("matched_vuln_id", "validation")
     redacted = []
     for e in events:
-        if e.get("type") == "finding_verification":
-            # Manual adjudication is operator judgment and can reveal truth.
+        if e.get("type") in ("finding_verification", "http_request_group"):
+            # Operator notes and manual adjudication is operator judgment and can reveal truth.
             continue
         payload = e.get("payload")
         if e.get("type") == "finding" and isinstance(payload, dict) and any(

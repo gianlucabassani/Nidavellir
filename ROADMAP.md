@@ -20,7 +20,7 @@
 > that discovery work produces the verified, held-out material that makes
 > evaluation credible.
 
-## Current delivery order — updated 2026-10-16
+## Current delivery order — updated 2026-10-18
 
 [TODO.md](TODO.md) is the canonical ordered checklist with stable NV task IDs,
 dependencies and acceptance criteria. This roadmap retains product and design
@@ -58,7 +58,12 @@ controls, observed effects, independent verdicts and linked evidence can be revi
 together in the console. The real Docker-local two-account journey, failed-control
 rejection, post-teardown links, cleanup, release gate and independent review are
 recorded in [UI-R2 closure](docs/verification/ui-r2-closure-2026-10-16.md).
-Request comparison (UI-R3) and source browsing (UI-R4) remain later slices in the
+UI-R3's separately approved request-comparison slice is complete: explicit edited
+replay, server-side stored-account header reuse, bounded A/B comparison, immutable
+named pairs and notes, finding references and a read-only attacker MCP tool.
+[UI-R3 closure](docs/verification/ui-r3-closure-2026-10-18.md) records real Docker-local
+browser/MCP acceptance, post-teardown evidence, cleanup, release and review. Source
+browsing (UI-R4) remains the next slice in the
 [usability proposal](docs/research/research-usability-next.md).
 
 Preserve Docker-local as the supported implementation focus. Other providers are
@@ -71,7 +76,7 @@ count. The authoritative product boundary is
 [`docs/VISION.md`](docs/VISION.md). Architecture
 decisions live in [`docs/adr/`](docs/adr/).
 
-### Current status — UI-R2 complete, further research work remains
+### Current status — UI-R3 complete, further research work remains
 
 NV-01–10 and NV-11 are complete, including the direct BYO-agent workflow.
 NV-12–15 remain target-led: fuzzing, local VM intake, research campaigns, and
@@ -109,8 +114,21 @@ versus operator judgments. Failed/missing prerequisites cannot support a refutat
 unsupported evidence is explicit. Real Docker-local two-account and browser checks
 passed before and after teardown, with zero labelled resources; the pinned release
 and independent review passed. See [closure evidence](docs/verification/ui-r2-closure-2026-10-16.md).
-Historical registration sources and ancestry are preserved. No request comparison
-or source browser is delivered by this slice.
+Historical registration sources and ancestry are preserved. UI-R2 itself delivers
+no request comparison or source browser.
+
+UI-R3 closed on 2026-10-18 after the separately approved bounded design. Operators
+can duplicate a captured request without sending it, change object or account through
+protected stored headers, explicitly replay within existing budgets, compare response
+bodies and projected headers, and save immutable pairs with labels and notes. Agent
+comparison is restricted to that actor's captures and consumes no action. Raw reads,
+replay parents and credential sources share the ownership boundary; a successful
+capture receipt preserves access when content deduplication retains another first
+actor. Comparison remains observation, not a vulnerability verdict. Both real browser
+and MCP acceptance passed; stopped replay was refused, retained evidence remained
+readable after teardown, and the pinned release gate and independent review passed.
+See [UI-R3 evidence](docs/verification/ui-r3-closure-2026-10-18.md). UI-R4 source
+candidate review is next and requires its own design confirmation.
 
 ---
 
