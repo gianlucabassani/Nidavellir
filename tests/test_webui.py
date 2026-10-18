@@ -2699,3 +2699,16 @@ def test_console_control_review_requires_login_and_reports_unavailable(client, m
     result = client.get(path).get_json()
     assert result['controls'][0]['state'] == 'failed'
     assert result['verdict'] == 'inconclusive'
+
+
+def test_http_comparison_and_group_console_boundaries(client, monkeypatch):
+    import app as webui_module
+
+    route = '/api/console/arenas/r3/http/comparison?left=sha256:a&right=sha256:b'
+    assert client.get(route).status_code == 302
+    _login(client)
+    monkeypatch.setattr(webui_module, '_api_get', lambda path: (None, False))
+    assert client.get(route).status_code == 503
+    monkeypatch.setattr(webui_module, '_api_get', lambda path: ({'complete': False, 'unresolved': ['capture truncated']}, True))
+    assert client.get(route).get_json()['complete'] is False
+    assert client.post('/api/console/arenas/r3/http/request-groups', json={}).status_code == 400

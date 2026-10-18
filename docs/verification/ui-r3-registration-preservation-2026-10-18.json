@@ -1,0 +1,22 @@
+{
+  "registration_ancestor": "b059439",
+  "ancestor_preserved": true,
+  "registered_sources": {
+    "cyber-range/fixtures/paperless/build_fixture.py": {
+      "expected": "67f88b4b251908398259981dc8349218104bd2281201a197fba80af0fd8bffd9",
+      "actual": "67f88b4b251908398259981dc8349218104bd2281201a197fba80af0fd8bffd9"
+    },
+    "cyber-range/services/scenario-orchestrator/research_code.py": {
+      "expected": "0647a0d4971bdff617f251a19b28adcdacbfaf0e5dcc6d253de0444099260127",
+      "actual": "0647a0d4971bdff617f251a19b28adcdacbfaf0e5dcc6d253de0444099260127"
+    },
+    "scripts/probe-paperless-variants.py": {
+      "expected": "3f02ebe742947388846d7ca39b904ce516b9fd15b8cda873ce43335ec5220957",
+      "actual": "3f02ebe742947388846d7ca39b904ce516b9fd15b8cda873ce43335ec5220957"
+    },
+    "scripts/research_registration.py": {
+      "expected": "5f683face77508f9c9b3f6b5de1c038c8d118bd4373a8b20e0313a785d0bcf58",
+      "actual": "5f683face77508f9c9b3f6b5de1c038c8d118bd4373a8b20e0313a785d0bcf58"
+    }
+  }
+}

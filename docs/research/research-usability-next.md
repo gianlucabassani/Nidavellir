@@ -3,8 +3,9 @@
 UI-R2's first slice was approved and completed on 2026-10-16. Its operator-only
 control/evidence review and real Docker-local two-account acceptance are recorded in
 [the closure report](../verification/ui-r2-closure-2026-10-16.md). It supports existing
-structured validators; it does not import arbitrary standalone probe JSON. The second
-and third slices remain proposals (UI-R3 and UI-R4 in TODO.md). Keep source authoring
+structured validators; it does not import arbitrary standalone probe JSON. The second slice, UI-R3, was separately approved and delivered on 2026-10-18; see
+[its closure report](../verification/ui-r3-closure-2026-10-18.md). UI-R4 remains a
+proposal. Keep source authoring
 operator-only and arena execution confined and budgeted.
 
 | Order | Observed friction | Proposed change | Acceptance |
@@ -25,6 +26,12 @@ Caido Replay retains request/response pairs for comparison
 ([official documentation](https://docs.caido.io/app/quickstart/replay)).
 Neither is evidence that a proposed Nidavellir feature is implemented or secure.
 
-Before implementing UI-R3 or UI-R4: approve that slice’s design and record its
-scoped acceptance test. UI-R2’s completion does not approve the later designs. Provider expansion and repository
+Before implementing UI-R4: approve that slice’s design and record its scoped
+acceptance test. The separately approved UI-R3 design uses two existing transactions,
+explicit single-request replay, server-side reuse of selected stored headers, bounded
+response comparison and immutable named pairs with notes. Its Docker-local acceptance
+duplicates an owned request, changes object/account, saves and reopens evidence before
+and after teardown, and exercises the read-only MCP comparison. No batch sending,
+new credential vault, source browser or general workspace editor is included.
+Provider expansion and repository
 history cleanup remain outside this proposal.

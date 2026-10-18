@@ -654,6 +654,19 @@ def get_http_transaction(ctx: GatewayContext, arena_id: str, digest: str) -> dic
     return result
 
 
+def compare_http_transactions(ctx: GatewayContext, arena_id: str, left: str, right: str) -> dict:
+    """Read a bounded A/B diff of this agent's captures without sending a request."""
+    _guard(ctx, "compare_http_transactions")
+    args = {"left": left, "right": right}
+    try:
+        result = ctx.client.http_comparison(ctx.session.api_key, arena_id, left, right)
+    except Exception:
+        _trace(ctx, "compare_http_transactions", args, ok=False, arena_id=arena_id)
+        raise
+    _trace(ctx, "compare_http_transactions", args, ok=True, arena_id=arena_id)
+    return result
+
+
 def replay_http_transaction(
     ctx: GatewayContext,
     arena_id: str,
@@ -665,11 +678,16 @@ def replay_http_transaction(
     headers: dict[str, str] | None = None,
     method: str | None = None,
     body: str | None = None,
+    replace_params: bool = False,
+    credential_source_digest: str | None = None,
+    credential_header_names: list[str] | None = None,
 ) -> dict:
     """Re-send a stored HTTP transaction with optional edits; the new record
     links to the original via `replay_of`. Same server-side scope checks as a
     direct request."""
     _guard(ctx, "replay_http_transaction")
+    if bool(credential_source_digest) != bool(credential_header_names):
+        raise ValueError("A credential source and selected header names are required together")
     _check_budget(ctx)
     args = {
         "digest": digest, "node": node, "path": path, "method": method,
@@ -677,10 +695,16 @@ def replay_http_transaction(
         "header_names": sorted((headers or {}).keys()) if headers else [],
         "has_body": body is not None,
     }
+    reuse = ({"credential_source_digest": credential_source_digest,
+              "credential_header_names": credential_header_names}
+             if credential_source_digest is not None else {})
+    if replace_params:
+        reuse["replace_params"] = True
+    args.update(reuse)
     try:
         result = ctx.client.http_replay(
             ctx.session.api_key, arena_id, digest, node=node, path=path,
-            params=params, headers=headers, method=method, body=body,
+            params=params, headers=headers, method=method, body=body, **reuse,
         )
     except Exception:
         _trace(ctx, "replay_http_transaction", args, ok=False, arena_id=arena_id)

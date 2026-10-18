@@ -362,6 +362,89 @@ new content-addressed transaction whose manifest links to its parent via
 the arena to be active and carry the same binding/scope/rate-limit checks as
 a direct drive; unknown digests are 404, malformed ones 422.
 
+### Request comparison and stored-account replay (UI-R3)
+
+`GET /arenas/{id}/http/transactions/{digest}/preview` returns a bounded response
+preview and an editable request with authentication header values withheld. Stored
+headers remain available to the server during replay. `GET /arenas/{id}/http/comparison?left={digest}&right={digest}`
+reads two integrity-checked captures and returns `nidavellir/http-comparison/v1`:
+request projections, statuses, captured sizes/hashes, response previews, body diff,
+projected response-header diff, captured-body equality and explicit incompleteness.
+Response previews are capped at 8,192 characters per side; each diff at 16,384
+characters. Request bodies retain their existing configured request-size limit.
+Truncated captures, unknown completeness and preview/diff cuts are explicit;
+matching captured prefixes cannot establish full-response equality. No response
+difference is a vulnerability verdict. Use the independent prerequisite/effect
+review when assessing a finding.
+
+The preview retains selected headers useful for research: content, redirects,
+authentication challenges, cache, CORS and browser security policy. Cookie values
+are withheld while cookie names and security flags remain; redirect query/fragment
+values and userinfo are withheld. Other response headers are omitted from this
+projection. The protected original transaction remains unchanged.
+
+Operators/admins can inspect and replay all retained captures in their arena.
+Agent raw reads, previews, comparisons, replay parents and credential sources
+require the existing exec-capable binding **and a capture belonging to that caller**.
+The first manifest actor or a successful body-free HTTP execution receipt proves
+access, so identical captures deduplicated across callers remain usable by each
+legitimate caller. Knowing an operator's digest does not grant its credentials.
+Read-only comparison consumes no action and remains available after teardown;
+sends/replays retain normal action, scope, stop and lifecycle enforcement.
+
+Replay additionally accepts:
+
+```json
+{
+  "path": "/objects/foreign",
+  "replace_params": true,
+  "params": {},
+  "body": "",
+  "credential_source_digest": "sha256:0123...",
+  "credential_header_names": ["Authorization"]
+}
+```
+
+Credential source and selected header names must be supplied together. Selected
+headers are resolved from the same-arena capture and replace existing names
+case-insensitively. Header values are not copied into group metadata, editor fields
+or gateway traces. Effective validation errors omit merged input values. The
+remaining stored headers are inherited; operators must select the appropriate
+header names for the target's authentication scheme. `replace_params` defaults to
+false for compatibility; the console sets it for full query editing. An empty body
+string clears the body; null/omitted retains the original under existing semantics.
+No replay occurs when merely preparing a duplicate or reopening a comparison.
+
+`POST /arenas/{id}/http/request-groups` saves an immutable named A/B snapshot:
+
+```json
+{
+  "name": "Owned versus foreign",
+  "notes": "Owner control still needs review",
+  "left": {"digest": "sha256:0123...", "label": "Owned"},
+  "right": {"digest": "sha256:abcd...", "label": "Foreign"}
+}
+```
+
+Both distinct digests must exist in the arena. Names are capped at 120 characters,
+labels at 80 and notes at 2,000. The returned group ID identifies an append-only
+snapshot; saving again does not overwrite previous evidence. Only labels, notes and
+references are stored in the event; transaction bodies and credentials stay in their
+existing store. `GET /arenas/{id}/http/request-groups?limit=25&before={event_id}`
+pages snapshots newest first with `next_before`. These routes are operator/admin-only;
+group events and notes are removed from agent event feeds. Metadata saving executes
+no target action, consumes no action budget and may annotate retained evidence after
+teardown. Existing record-retention and recovery cover the events and transactions.
+
+Flask exposes same-origin preview/comparison/group routes under
+`/api/console/arenas/{id}/http/`, with session and CSRF protection on writes.
+The HTTP workbench links both selected digests into the existing finding form.
+The attacker MCP tool `compare_http_transactions(arena_id, left, right)` reads the
+same bounded comparison without spending a gateway step. The existing
+`replay_http_transaction` tool also accepts the credential-source and query-replacement
+options. Gateway traces retain digests/header names and outcome metadata, not bodies
+or credential values. Saved operator notes are not an agent tool surface.
+
 Findings accept `transaction_digests` alongside `evidence_artifact_digests`
 (R1 slice 6): each digest is verified against this arena's transaction store
 at submission time and recorded on the finding as a reference — method, path,

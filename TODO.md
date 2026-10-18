@@ -1,6 +1,6 @@
 # Nidavellir — ordered delivery checklist
 
-Updated 2026-10-16 after UI-R2 acceptance and independent review.
+Updated 2026-10-18 after UI-R3 acceptance and independent review.
 This is the canonical work queue. [ROADMAP.md](ROADMAP.md) retains product scope,
 design detail and legacy milestone mapping. Unchecked means unfinished.
 Verification history is in [docs/JOURNAL.md](docs/JOURNAL.md).
@@ -140,8 +140,8 @@ Accepted record: **no confirmed vulnerability under the tested conditions**;
 **12 retained hypotheses plus 9 asserted without per-probe evidence**. Historical
 artifacts stay unchanged. Historical proof gaps are explicitly unverified; new
 evidence is dated separately. Source candidates remain unresolved until semantic
-review. UI-R2 acceptance is recorded below; request comparison and source browsing remain
-separate unfinished slices.
+review. UI-R2 and UI-R3 acceptance is recorded below; source browsing remains
+a separate unfinished slice.
 
 ## Next — research usability
 
@@ -157,17 +157,25 @@ separate unfinished slices.
   arena resources were reclaimed. Independent review findings were fixed. Pinned release:
   1,123 SQLite passes / four skips / six deselections, 1,127 PostgreSQL passes / six
   deselections. Scope and retained evidence: `docs/verification/ui-r2-closure-2026-10-16.md`.*
-- [ ] **UI-R3 — Request comparison in the console.** Extend existing replay with named
+- [x] **UI-R3 — Request comparison in the console.** Extend existing replay with named
   groups, duplication, account/object edits, response comparison and saved notes, using
   existing protected credential handling and execution budgets. **Depends:** UI-R2.
   **Accept:** duplicate an owned request, change object/account, compare results and save
-  evidence without exporting credentials. **Next action:** confirm the separate slice's
-  design from `docs/research/research-usability-next.md` before implementation.
+  evidence without exporting credentials.
+  *Closed 2026-10-18: approved bounded design; real Docker-local browser and MCP
+  comparison passed, including object/account edits, immutable named pairs and notes,
+  finding references, stopped replay refusal and post-teardown evidence. Reads left
+  budgets unchanged; browser replay payloads contained no account tokens. All arena
+  resources and the isolated stack were reclaimed. Independent review passed after
+  fixes. Pinned release: 1,137 SQLite passes / four skips / six deselections, 1,141
+  PostgreSQL passes / six deselections. Evidence and limits:
+  `docs/verification/ui-r3-closure-2026-10-18.md`.*
 - [ ] **UI-R4 — Source candidate review in the console.** Immutable refs, complete counts,
   paged residuals, classification reasons and affected/fixed patch links. **Depends:** UI-R2;
   remains after UI-R3 in delivery order. **Accept:** all retained sites are reachable,
   incomplete scans and unresolved semantics remain visible, review state survives reopening.
-  No source browsing is implemented by UI-R2.
+  No source browsing is implemented by UI-R2 or UI-R3. **Next action:** confirm this
+  slice's design and concrete source-review acceptance before implementation.
 
 ## P2 — research iteration driven by target needs
 

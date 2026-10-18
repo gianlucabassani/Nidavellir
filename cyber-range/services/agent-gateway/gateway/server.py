@@ -272,20 +272,32 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
             return tools.get_http_transaction(ctx(), arena_id=arena_id, digest=digest)
 
         @mcp.tool()
+        def compare_http_transactions(arena_id: str, left: str, right: str) -> dict:
+            """Compare two of your stored HTTP captures: status, sizes, hashes and bounded
+            body diff. Sends no requests; truncation/missing evidence is explicit.
+            Differences are observations, not vulnerability verdicts."""
+            return tools.compare_http_transactions(ctx(), arena_id, left, right)
+
+        @mcp.tool()
         def replay_http_transaction(
             arena_id: str, digest: str, node: str | None = None,
             path: str | None = None, params: dict[str, str] | None = None,
             headers: dict[str, str] | None = None, method: str | None = None,
             body: str | None = None,
+            replace_params: bool = False,
+            credential_source_digest: str | None = None,
+            credential_header_names: list[str] | None = None,
         ) -> dict:
             """Re-send a stored transaction with edits. params/headers merge
             onto the stored ones; node/path/method/body replace when given.
             The original stays immutable; the new record links to it via
-            replay_of."""
+            replay_of. Optionally reuse selected credential headers server-side from
+            another of your own same-arena captures without copying secret values."""
             return tools.replay_http_transaction(
                 ctx(), arena_id=arena_id, digest=digest, node=node,
                 path=path, params=params, headers=headers, method=method,
-                body=body,
+                body=body, replace_params=replace_params, credential_source_digest=credential_source_digest,
+                credential_header_names=credential_header_names,
             )
 
         @mcp.tool()

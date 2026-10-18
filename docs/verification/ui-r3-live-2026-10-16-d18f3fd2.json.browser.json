@@ -1,0 +1,39 @@
+{
+  "date": "2026-10-16T10:41:50.267Z",
+  "checks": [
+    "Duplicating did not send; explicit object-change replay returned 403; named evidence pair saved",
+    "Stored account switch resolved credentials server-side; browser replay payloads contained no account tokens",
+    "Saved labels/notes/evidence restored after reload; both finding refs linked; retained transactions readable; responsive widths passed"
+  ],
+  "sends": [
+    {
+      "node": "target",
+      "method": "GET",
+      "path": "/protected/B",
+      "params": {},
+      "headers": {
+        "X-Request-ID": "r3foreign1792147311857"
+      },
+      "body": "",
+      "replace_params": true
+    },
+    {
+      "node": "target",
+      "method": "GET",
+      "path": "/protected/B",
+      "params": {},
+      "headers": {
+        "X-Request-ID": "r3identity1792147313282"
+      },
+      "body": "",
+      "replace_params": true,
+      "credential_source_digest": "sha256:15a23a303cb68b6bb85b60d18300dd95462dcf2232158c2c1c5a8fd172ccc9c4",
+      "credential_header_names": [
+        "Authorization"
+      ]
+    }
+  ],
+  "denied": "sha256:76d822686579aab6387903bb6be853c99bf78348472eb7fa5b601fb76822feb7",
+  "changed_account": "sha256:863e6198734e17e4a0af33e6a09ac0695901d913b57590452f4969be9b3c6cb6",
+  "errors": []
+}

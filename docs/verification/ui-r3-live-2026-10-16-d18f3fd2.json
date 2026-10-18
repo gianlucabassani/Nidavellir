@@ -1,0 +1,257 @@
+{
+  "arena": "d81d7385-0735-4a0c-8096-45dc17fc1a9b",
+  "browser": {
+    "changed_account": "sha256:863e6198734e17e4a0af33e6a09ac0695901d913b57590452f4969be9b3c6cb6",
+    "checks": [
+      "Duplicating did not send; explicit object-change replay returned 403; named evidence pair saved",
+      "Stored account switch resolved credentials server-side; browser replay payloads contained no account tokens",
+      "Saved labels/notes/evidence restored after reload; both finding refs linked; retained transactions readable; responsive widths passed"
+    ],
+    "date": "2026-10-16T10:41:50.267Z",
+    "denied": "sha256:76d822686579aab6387903bb6be853c99bf78348472eb7fa5b601fb76822feb7",
+    "errors": [],
+    "sends": [
+      {
+        "body": "",
+        "headers": {
+          "X-Request-ID": "r3foreign1792147311857"
+        },
+        "method": "GET",
+        "node": "target",
+        "params": {},
+        "path": "/protected/B",
+        "replace_params": true
+      },
+      {
+        "body": "",
+        "credential_header_names": [
+          "Authorization"
+        ],
+        "credential_source_digest": "sha256:15a23a303cb68b6bb85b60d18300dd95462dcf2232158c2c1c5a8fd172ccc9c4",
+        "headers": {
+          "X-Request-ID": "r3identity1792147313282"
+        },
+        "method": "GET",
+        "node": "target",
+        "params": {},
+        "path": "/protected/B",
+        "replace_params": true
+      }
+    ]
+  },
+  "budget_unchanged_by_comparison": {
+    "arena": {
+      "epoch": 0,
+      "reason": null,
+      "state": "open"
+    },
+    "policy": {
+      "action_cap": 12,
+      "deadline": "2026-10-16 10:51:47.942715",
+      "remaining": 8,
+      "reserved": 0,
+      "spent": 4,
+      "token_cost": "unsupported_for_external_agents",
+      "version": 2
+    },
+    "system": {
+      "epoch": 0,
+      "state": "open"
+    }
+  },
+  "comparisons": [
+    {
+      "body_diff": "--- A\n+++ B\n@@ -1 +1 @@\n-{\"object\":\"private-A\"}\n+{\"error\":\"denied\"}\n",
+      "captured_body_equal": false,
+      "complete": true,
+      "interpretation": "Response differences are observations, not a vulnerability verdict. Review prerequisites and effects separately.",
+      "left": {
+        "actor": "nv06-agent",
+        "created_at": "2026-10-16T10:41:48.547737+00:00",
+        "digest": "sha256:27a2a7a257624c4d2d251285f239508a385fdd3e2d3afab918b9d2913ef7e291",
+        "preview_clipped": false,
+        "replay_of": null,
+        "request": {
+          "body": null,
+          "headers": {
+            "X-Request-ID": "r3ownedd18f3fd2"
+          },
+          "method": "GET",
+          "node": "target",
+          "params": {},
+          "path": "/protected/A",
+          "withheld_headers": [
+            "Authorization"
+          ]
+        },
+        "response": {
+          "body": "{\"object\":\"private-A\"}",
+          "body_bytes": 22,
+          "body_sha256": "sha256:20cd0fd5f0b7af378f0ded620e6172fbf62d44316d2b6d38d74d25bc0534741a",
+          "captured_body_sha256": "sha256:20cd0fd5f0b7af378f0ded620e6172fbf62d44316d2b6d38d74d25bc0534741a",
+          "headers": {
+            "content-length": "22",
+            "content-type": "application/json"
+          },
+          "reason": "OK",
+          "status": 200,
+          "truncated": false
+        }
+      },
+      "response_headers_diff": "--- A headers\n+++ B headers\n@@ -1,4 +1,4 @@\n {\n-  \"content-length\": \"22\",\n+  \"content-length\": \"18\",\n   \"content-type\": \"application/json\"\n }\n",
+      "right": {
+        "actor": "bootstrap",
+        "created_at": "2026-10-16T10:41:52.680715+00:00",
+        "digest": "sha256:76d822686579aab6387903bb6be853c99bf78348472eb7fa5b601fb76822feb7",
+        "preview_clipped": false,
+        "replay_of": "sha256:27a2a7a257624c4d2d251285f239508a385fdd3e2d3afab918b9d2913ef7e291",
+        "request": {
+          "body": "",
+          "headers": {
+            "X-Request-ID": "r3foreign1792147311857"
+          },
+          "method": "GET",
+          "node": "target",
+          "params": {},
+          "path": "/protected/B",
+          "withheld_headers": [
+            "Authorization"
+          ]
+        },
+        "response": {
+          "body": "{\"error\":\"denied\"}",
+          "body_bytes": 18,
+          "body_sha256": "sha256:ad2108b94373d55034905f6b8c47981deba9b28c6913ad98af821166727a3859",
+          "captured_body_sha256": "sha256:ad2108b94373d55034905f6b8c47981deba9b28c6913ad98af821166727a3859",
+          "headers": {
+            "content-length": "18",
+            "content-type": "application/json"
+          },
+          "reason": "Forbidden",
+          "status": 403,
+          "truncated": false
+        }
+      },
+      "schema": "nidavellir/http-comparison/v1",
+      "unresolved": []
+    },
+    {
+      "body_diff": "--- A\n+++ B\n@@ -1 +1 @@\n-{\"object\":\"private-A\"}\n+{\"object\":\"private-B\"}\n",
+      "captured_body_equal": false,
+      "complete": true,
+      "interpretation": "Response differences are observations, not a vulnerability verdict. Review prerequisites and effects separately.",
+      "left": {
+        "actor": "nv06-agent",
+        "created_at": "2026-10-16T10:41:48.547737+00:00",
+        "digest": "sha256:27a2a7a257624c4d2d251285f239508a385fdd3e2d3afab918b9d2913ef7e291",
+        "preview_clipped": false,
+        "replay_of": null,
+        "request": {
+          "body": null,
+          "headers": {
+            "X-Request-ID": "r3ownedd18f3fd2"
+          },
+          "method": "GET",
+          "node": "target",
+          "params": {},
+          "path": "/protected/A",
+          "withheld_headers": [
+            "Authorization"
+          ]
+        },
+        "response": {
+          "body": "{\"object\":\"private-A\"}",
+          "body_bytes": 22,
+          "body_sha256": "sha256:20cd0fd5f0b7af378f0ded620e6172fbf62d44316d2b6d38d74d25bc0534741a",
+          "captured_body_sha256": "sha256:20cd0fd5f0b7af378f0ded620e6172fbf62d44316d2b6d38d74d25bc0534741a",
+          "headers": {
+            "content-length": "22",
+            "content-type": "application/json"
+          },
+          "reason": "OK",
+          "status": 200,
+          "truncated": false
+        }
+      },
+      "response_headers_diff": "",
+      "right": {
+        "actor": "bootstrap",
+        "created_at": "2026-10-16T10:41:54.039595+00:00",
+        "digest": "sha256:863e6198734e17e4a0af33e6a09ac0695901d913b57590452f4969be9b3c6cb6",
+        "preview_clipped": false,
+        "replay_of": "sha256:27a2a7a257624c4d2d251285f239508a385fdd3e2d3afab918b9d2913ef7e291",
+        "request": {
+          "body": "",
+          "headers": {
+            "X-Request-ID": "r3identity1792147313282"
+          },
+          "method": "GET",
+          "node": "target",
+          "params": {},
+          "path": "/protected/B",
+          "withheld_headers": [
+            "Authorization"
+          ]
+        },
+        "response": {
+          "body": "{\"object\":\"private-B\"}",
+          "body_bytes": 22,
+          "body_sha256": "sha256:41eb350df0474bb0d52b7ab0ee2175284e01e7b626b080459856af57d87957d2",
+          "captured_body_sha256": "sha256:41eb350df0474bb0d52b7ab0ee2175284e01e7b626b080459856af57d87957d2",
+          "headers": {
+            "content-length": "22",
+            "content-type": "application/json"
+          },
+          "reason": "OK",
+          "status": 200,
+          "truncated": false
+        }
+      },
+      "schema": "nidavellir/http-comparison/v1",
+      "unresolved": []
+    }
+  ],
+  "date": "2026-10-16-d18f3fd2",
+  "error": "RuntimeError: ('docker', 'compose', '-p', 'nidavellir-ui-r3', '-f', 'docker-compose.nv06.yml', 'exec', '-T', '-e', 'R3_ARENA=d81d7385-0735-4a0c-8096-45dc17fc1a9b', '-e', 'R3_OWNED=sha256:27a2a7a257624c4d2d251285f239508a385fdd3e2d3afab918b9d2913ef7e291', '-e', 'R3_TAG=d18f3fd2', 'agent-gateway', 'python', '-c', \"\\nimport anyio,json,os\\nfrom mcp import ClientSession\\nfrom mcp.client.streamable_http import streamablehttp_client\\nasync def main():\\n    async with streamablehttp_client('http://127.0.0.1:9000/mcp') as streams:\\n        async with ClientSession(*streams[:2]) as session:\\n            await session.initialize()\\n            names={tool.name for tool in (await session.list_tools()).tools}\\n            assert 'compare_http_transactions' in names\\n            args={'arena_id':os.environ['R3_ARENA'],'digest':os.environ['R3_OWNED'],\\n                  'path':'/protected/B','headers':{'X-Request-ID':'r3mcp'+os.environ['R3_TAG']},\\n                  'credential_source_digest':os.environ['R3_OWNED'],'credential_header_names':['Authorization']}\\n            result=await session.call_tool('replay_http_transaction',arguments=args)\\n            assert not result.isError,result\\n            value=result.structuredContent or json.loads(next(x.text for x in result.content if x.type=='text'))\\n            assert value['status']==403,value\\n            args={'arena_id':os.environ['R3_ARENA'],'left':os.environ['R3_OWNED'],'right':value['transaction_digest']}\\n            result=await session.call_tool('compare_http_transactions',arguments=args)\\n            assert not result.isError,result\\n            comparison=result.structuredContent or json.loads(next(x.text for x in result.content if x.type=='text'))\\n            assert comparison['left']['response']['status']==200\\n            assert comparison['right']['response']['status']==403\\n            assert comparison['complete'] and comparison['captured_body_equal'] is False\\n            print('R3_MCP='+json.dumps({'comparison':comparison,'replay_digest':value['transaction_digest']}))\\nanyio.run(main())\\n\"):  Traceback (most recent call last):\n  File \"<string>\", line 26, in <module>\n  File \"/usr/local/lib/python3.11/site-packages/anyio/_core/_eventloop.py\", line 83, in run\n    return async_backend.run(func, args, {}, backend_options)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.11/site-packages/anyio/_backends/_asyncio.py\", line 2548, in run\n    return runner.run(wrapper())\n           ^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.11/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.11/asyncio/base_events.py\", line 654, in run_until_complete\n    return future.result()\n           ^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.11/site-packages/anyio/_backends/_asyncio.py\", line 2531, in wrapper\n    return await func(*args)\n                 ^^^^^^^^^^^\nTypeError: 'coroutine' object is not callable\nsys:1: RuntimeWarning: coroutine 'main' was never awaited\n",
+  "final_resources": {
+    "d81d7385-0735-4a0c-8096-45dc17fc1a9b": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    }
+  },
+  "fixture_image": "sha256:3d895c419214c084c91d6c39be7dc60cda8c9f9837a42b7affc148e1975c13a2",
+  "groups": [
+    {
+      "group_id": "034e6a060c5a4ce2a513dc4822d70f1e",
+      "left": {
+        "digest": "sha256:27a2a7a257624c4d2d251285f239508a385fdd3e2d3afab918b9d2913ef7e291",
+        "label": "Owned object"
+      },
+      "name": "Stored account B",
+      "notes": "Stored account B can read its own object; compare identity and body separately.",
+      "right": {
+        "digest": "sha256:863e6198734e17e4a0af33e6a09ac0695901d913b57590452f4969be9b3c6cb6",
+        "label": "Account B own object"
+      }
+    },
+    {
+      "group_id": "4111bb1f9086407c82e62e1a5b7a5bc1",
+      "left": {
+        "digest": "sha256:27a2a7a257624c4d2d251285f239508a385fdd3e2d3afab918b9d2913ef7e291",
+        "label": "Owned object"
+      },
+      "name": "Owned A versus foreign B",
+      "notes": "Foreign access denied; owner control still needs independent review.",
+      "right": {
+        "digest": "sha256:76d822686579aab6387903bb6be853c99bf78348472eb7fa5b601fb76822feb7",
+        "label": "Foreign object"
+      }
+    }
+  ],
+  "owned": "sha256:27a2a7a257624c4d2d251285f239508a385fdd3e2d3afab918b9d2913ef7e291",
+  "owner": "sha256:15a23a303cb68b6bb85b60d18300dd95462dcf2232158c2c1c5a8fd172ccc9c4",
+  "schema": "nidavellir/ui-r3-live/v1",
+  "status": "failed"
+}

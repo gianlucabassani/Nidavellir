@@ -1,0 +1,42 @@
+ Container nidavellir-ui-r3-worker-1 Stopping
+ Container nidavellir-ui-r3-agent-gateway-1 Stopping
+ Container nidavellir-ui-r3-webui-1 Stopping
+ Container nidavellir-ui-r3-agent-gateway-1 Stopped
+ Container nidavellir-ui-r3-agent-gateway-1 Removing
+ Container nidavellir-ui-r3-agent-gateway-1 Removed
+ Container nidavellir-ui-r3-worker-1 Stopped
+ Container nidavellir-ui-r3-worker-1 Removing
+ Container nidavellir-ui-r3-worker-1 Removed
+ Container nidavellir-ui-r3-webui-1 Stopped
+ Container nidavellir-ui-r3-webui-1 Removing
+ Container nidavellir-ui-r3-webui-1 Removed
+ Container nidavellir-ui-r3-orchestrator-1 Stopping
+ Container nidavellir-ui-r3-orchestrator-1 Stopped
+ Container nidavellir-ui-r3-orchestrator-1 Removing
+ Container nidavellir-ui-r3-orchestrator-1 Removed
+ Container nidavellir-ui-r3-redis-1 Stopping
+ Container nidavellir-ui-r3-postgres-1 Stopping
+ Container nidavellir-ui-r3-postgres-1 Stopped
+ Container nidavellir-ui-r3-postgres-1 Removing
+ Container nidavellir-ui-r3-redis-1 Stopped
+ Container nidavellir-ui-r3-redis-1 Removing
+ Container nidavellir-ui-r3-postgres-1 Removed
+ Container nidavellir-ui-r3-redis-1 Removed
+ Volume nidavellir-ui-r3_nv06-traces Removing
+ Volume nidavellir-ui-r3_nv06-runs Removing
+ Volume nidavellir-ui-r3_nv06-data Removing
+ Volume nidavellir-ui-r3_nv06-keys Removing
+ Network nidavellir-ui-r3_default Removing
+ Volume nidavellir-ui-r3_nv06-traces Removed
+ Volume nidavellir-ui-r3_nv06-runs Removed
+ Volume nidavellir-ui-r3_nv06-data Removed
+ Volume nidavellir-ui-r3_nv06-keys Removed
+ Network nidavellir-ui-r3_default Removed
+Untagged: nidavellir-ui-r3-orchestrator:latest
+Deleted: sha256:4d92fbbc20b668f60b9942d278baf86efdaacc15c21f44a06468e7356742bb14
+Untagged: nidavellir-ui-r3-worker:latest
+Deleted: sha256:0e2811fce08bfbb83b1bb7e88b53f0e175ff48b7b7c60d597166eaeaf9f11f4b
+Untagged: nidavellir-ui-r3-webui:latest
+Deleted: sha256:62957d21d78597dcb23b57b8740908e288316e08ab7223142eb895f5470846ae
+Untagged: nidavellir-ui-r3-agent-gateway:latest
+Deleted: sha256:74f31e7b91a14d319adce38137c814dc7e524982ca665839ecbf8d63623a2302

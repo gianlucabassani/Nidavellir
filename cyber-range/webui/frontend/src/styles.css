@@ -5037,3 +5037,87 @@ body {
   border-left: 3px solid var(--accent);
   padding-left: 12px;
 }
+
+.http-comparison-panel {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.http-comparison-panel > :not(.panel-head) {
+  margin-left: 22px;
+  margin-right: 22px;
+}
+.http-comparison-panel p {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.http-comparison-select {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.http-comparison-panel label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.http-comparison-panel input,
+.http-comparison-panel textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  color: var(--ink);
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+}
+.http-compared-responses {
+  overflow-wrap: anywhere;
+  margin-top: 18px;
+}
+.http-compared-responses section {
+  min-width: 0;
+}
+.http-compared-responses pre {
+  max-height: 300px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  font-size: 12px;
+}
+.http-compared-responses a {
+  color: var(--accent);
+  font-size: 12px;
+}
+.http-group-form {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+  margin-top: 20px;
+}
+.http-group-form button {
+  justify-self: start;
+}
+.http-saved-groups {
+  display: grid;
+  gap: 8px;
+}
+.http-saved-groups button {
+  text-align: left;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.http-identity {
+  border: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+@media (max-width: 640px) {
+  .http-comparison-select {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

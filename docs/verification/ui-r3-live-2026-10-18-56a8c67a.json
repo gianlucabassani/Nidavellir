@@ -1,0 +1,344 @@
+{
+  "arena": "e6bfea53-419d-41e7-9bd9-26377d17648d",
+  "browser": {
+    "changed_account": "sha256:cf76de6b0e9f4d848bb487f2bfc342b3aa7272ea304f1660c73925aa045ca8b1",
+    "checks": [
+      "Duplicating did not send; explicit object-change replay returned 403; named evidence pair saved",
+      "Stored account switch resolved credentials server-side; browser replay payloads contained no account tokens",
+      "Saved labels/notes/evidence restored after reload; both finding refs linked; retained transactions readable; responsive widths passed"
+    ],
+    "date": "2026-10-18T13:41:02.704Z",
+    "denied": "sha256:76b4ce24df6a0de925f6d3d2f2c0b32a8ce428e730b183c50cebe0b068e0f03f",
+    "errors": [],
+    "sends": [
+      {
+        "body": "",
+        "headers": {
+          "X-Request-ID": "r3foreign1792330864305"
+        },
+        "method": "GET",
+        "node": "target",
+        "params": {},
+        "path": "/protected/B",
+        "replace_params": true
+      },
+      {
+        "body": "",
+        "credential_header_names": [
+          "Authorization"
+        ],
+        "credential_source_digest": "sha256:c3dcf2ad5afd42ed03028cade0ebdb8d1645b800a45ea30c0e6e1682c3e9776a",
+        "headers": {
+          "X-Request-ID": "r3identity1792330866303"
+        },
+        "method": "GET",
+        "node": "target",
+        "params": {},
+        "path": "/protected/B",
+        "replace_params": true
+      }
+    ]
+  },
+  "budget_unchanged_by_comparison": {
+    "arena": {
+      "epoch": 0,
+      "reason": null,
+      "state": "open"
+    },
+    "policy": {
+      "action_cap": 12,
+      "deadline": "2026-10-18 13:50:59.512829",
+      "remaining": 8,
+      "reserved": 0,
+      "spent": 4,
+      "token_cost": "unsupported_for_external_agents",
+      "version": 2
+    },
+    "system": {
+      "epoch": 0,
+      "state": "open"
+    }
+  },
+  "comparisons": [
+    {
+      "body_diff": "--- A\n+++ B\n@@ -1 +1 @@\n-{\"object\":\"private-A\"}\n+{\"error\":\"denied\"}\n",
+      "captured_body_equal": false,
+      "complete": true,
+      "interpretation": "Response differences are observations, not a vulnerability verdict. Review prerequisites and effects separately.",
+      "left": {
+        "actor": "nv06-agent",
+        "created_at": "2026-10-18T13:41:00.305198+00:00",
+        "digest": "sha256:874ec28af8948a256584aac84628f36eee1010daba55df90bb429a1ac9d40fcb",
+        "preview_clipped": false,
+        "replay_of": null,
+        "request": {
+          "body": null,
+          "headers": {
+            "X-Request-ID": "r3owned56a8c67a"
+          },
+          "method": "GET",
+          "node": "target",
+          "params": {},
+          "path": "/protected/A",
+          "withheld_headers": [
+            "Authorization"
+          ]
+        },
+        "response": {
+          "body": "{\"object\":\"private-A\"}",
+          "body_bytes": 22,
+          "body_sha256": "sha256:20cd0fd5f0b7af378f0ded620e6172fbf62d44316d2b6d38d74d25bc0534741a",
+          "captured_body_sha256": "sha256:20cd0fd5f0b7af378f0ded620e6172fbf62d44316d2b6d38d74d25bc0534741a",
+          "headers": {
+            "content-length": "22",
+            "content-type": "application/json"
+          },
+          "reason": "OK",
+          "status": 200,
+          "truncated": false
+        }
+      },
+      "response_headers_diff": "--- A headers\n+++ B headers\n@@ -1,4 +1,4 @@\n {\n-  \"content-length\": \"22\",\n+  \"content-length\": \"18\",\n   \"content-type\": \"application/json\"\n }\n",
+      "right": {
+        "actor": "bootstrap",
+        "created_at": "2026-10-18T13:41:05.483614+00:00",
+        "digest": "sha256:76b4ce24df6a0de925f6d3d2f2c0b32a8ce428e730b183c50cebe0b068e0f03f",
+        "preview_clipped": false,
+        "replay_of": "sha256:874ec28af8948a256584aac84628f36eee1010daba55df90bb429a1ac9d40fcb",
+        "request": {
+          "body": "",
+          "headers": {
+            "X-Request-ID": "r3foreign1792330864305"
+          },
+          "method": "GET",
+          "node": "target",
+          "params": {},
+          "path": "/protected/B",
+          "withheld_headers": [
+            "Authorization"
+          ]
+        },
+        "response": {
+          "body": "{\"error\":\"denied\"}",
+          "body_bytes": 18,
+          "body_sha256": "sha256:ad2108b94373d55034905f6b8c47981deba9b28c6913ad98af821166727a3859",
+          "captured_body_sha256": "sha256:ad2108b94373d55034905f6b8c47981deba9b28c6913ad98af821166727a3859",
+          "headers": {
+            "content-length": "18",
+            "content-type": "application/json"
+          },
+          "reason": "Forbidden",
+          "status": 403,
+          "truncated": false
+        }
+      },
+      "schema": "nidavellir/http-comparison/v1",
+      "unresolved": []
+    },
+    {
+      "body_diff": "--- A\n+++ B\n@@ -1 +1 @@\n-{\"object\":\"private-A\"}\n+{\"object\":\"private-B\"}\n",
+      "captured_body_equal": false,
+      "complete": true,
+      "interpretation": "Response differences are observations, not a vulnerability verdict. Review prerequisites and effects separately.",
+      "left": {
+        "actor": "nv06-agent",
+        "created_at": "2026-10-18T13:41:00.305198+00:00",
+        "digest": "sha256:874ec28af8948a256584aac84628f36eee1010daba55df90bb429a1ac9d40fcb",
+        "preview_clipped": false,
+        "replay_of": null,
+        "request": {
+          "body": null,
+          "headers": {
+            "X-Request-ID": "r3owned56a8c67a"
+          },
+          "method": "GET",
+          "node": "target",
+          "params": {},
+          "path": "/protected/A",
+          "withheld_headers": [
+            "Authorization"
+          ]
+        },
+        "response": {
+          "body": "{\"object\":\"private-A\"}",
+          "body_bytes": 22,
+          "body_sha256": "sha256:20cd0fd5f0b7af378f0ded620e6172fbf62d44316d2b6d38d74d25bc0534741a",
+          "captured_body_sha256": "sha256:20cd0fd5f0b7af378f0ded620e6172fbf62d44316d2b6d38d74d25bc0534741a",
+          "headers": {
+            "content-length": "22",
+            "content-type": "application/json"
+          },
+          "reason": "OK",
+          "status": 200,
+          "truncated": false
+        }
+      },
+      "response_headers_diff": "",
+      "right": {
+        "actor": "bootstrap",
+        "created_at": "2026-10-18T13:41:07.127677+00:00",
+        "digest": "sha256:cf76de6b0e9f4d848bb487f2bfc342b3aa7272ea304f1660c73925aa045ca8b1",
+        "preview_clipped": false,
+        "replay_of": "sha256:874ec28af8948a256584aac84628f36eee1010daba55df90bb429a1ac9d40fcb",
+        "request": {
+          "body": "",
+          "headers": {
+            "X-Request-ID": "r3identity1792330866303"
+          },
+          "method": "GET",
+          "node": "target",
+          "params": {},
+          "path": "/protected/B",
+          "withheld_headers": [
+            "Authorization"
+          ]
+        },
+        "response": {
+          "body": "{\"object\":\"private-B\"}",
+          "body_bytes": 22,
+          "body_sha256": "sha256:41eb350df0474bb0d52b7ab0ee2175284e01e7b626b080459856af57d87957d2",
+          "captured_body_sha256": "sha256:41eb350df0474bb0d52b7ab0ee2175284e01e7b626b080459856af57d87957d2",
+          "headers": {
+            "content-length": "22",
+            "content-type": "application/json"
+          },
+          "reason": "OK",
+          "status": 200,
+          "truncated": false
+        }
+      },
+      "schema": "nidavellir/http-comparison/v1",
+      "unresolved": []
+    }
+  ],
+  "date": "2026-10-18-56a8c67a",
+  "final_resources": {
+    "e6bfea53-419d-41e7-9bd9-26377d17648d": {
+      "containers": 0,
+      "images": 0,
+      "networks": 0,
+      "volumes": 0
+    }
+  },
+  "fixture_image": "sha256:3d895c419214c084c91d6c39be7dc60cda8c9f9837a42b7affc148e1975c13a2",
+  "groups": [
+    {
+      "group_id": "33785f1fad95405d99db6f0c55528fb9",
+      "left": {
+        "digest": "sha256:874ec28af8948a256584aac84628f36eee1010daba55df90bb429a1ac9d40fcb",
+        "label": "Owned object"
+      },
+      "name": "Stored account B",
+      "notes": "Stored account B can read its own object; compare identity and body separately.",
+      "right": {
+        "digest": "sha256:cf76de6b0e9f4d848bb487f2bfc342b3aa7272ea304f1660c73925aa045ca8b1",
+        "label": "Account B own object"
+      }
+    },
+    {
+      "group_id": "48ce713ad9a647f7ae4e3e9f654e2c21",
+      "left": {
+        "digest": "sha256:874ec28af8948a256584aac84628f36eee1010daba55df90bb429a1ac9d40fcb",
+        "label": "Owned object"
+      },
+      "name": "Owned A versus foreign B",
+      "notes": "Foreign access denied; owner control still needs independent review.",
+      "right": {
+        "digest": "sha256:76b4ce24df6a0de925f6d3d2f2c0b32a8ce428e730b183c50cebe0b068e0f03f",
+        "label": "Foreign object"
+      }
+    }
+  ],
+  "mcp": {
+    "comparison": {
+      "body_diff": "--- A\n+++ B\n@@ -1 +1 @@\n-{\"object\":\"private-A\"}\n+{\"error\":\"denied\"}\n",
+      "captured_body_equal": false,
+      "complete": true,
+      "interpretation": "Response differences are observations, not a vulnerability verdict. Review prerequisites and effects separately.",
+      "left": {
+        "actor": "nv06-agent",
+        "created_at": "2026-10-18T13:41:00.305198+00:00",
+        "digest": "sha256:874ec28af8948a256584aac84628f36eee1010daba55df90bb429a1ac9d40fcb",
+        "preview_clipped": false,
+        "replay_of": null,
+        "request": {
+          "body": null,
+          "headers": {
+            "X-Request-ID": "r3owned56a8c67a"
+          },
+          "method": "GET",
+          "node": "target",
+          "params": {},
+          "path": "/protected/A",
+          "withheld_headers": [
+            "Authorization"
+          ]
+        },
+        "response": {
+          "body": "{\"object\":\"private-A\"}",
+          "body_bytes": 22,
+          "body_sha256": "sha256:20cd0fd5f0b7af378f0ded620e6172fbf62d44316d2b6d38d74d25bc0534741a",
+          "captured_body_sha256": "sha256:20cd0fd5f0b7af378f0ded620e6172fbf62d44316d2b6d38d74d25bc0534741a",
+          "headers": {
+            "content-length": "22",
+            "content-type": "application/json"
+          },
+          "reason": "OK",
+          "status": 200,
+          "truncated": false
+        }
+      },
+      "response_headers_diff": "--- A headers\n+++ B headers\n@@ -1,4 +1,4 @@\n {\n-  \"content-length\": \"22\",\n+  \"content-length\": \"18\",\n   \"content-type\": \"application/json\"\n }\n",
+      "right": {
+        "actor": "nv06-agent",
+        "created_at": "2026-10-18T13:41:12.746773+00:00",
+        "digest": "sha256:4fd9e4058941048883a612d3896a1ea27b3444c8bf21588b1a54a1d886ecef94",
+        "preview_clipped": false,
+        "replay_of": "sha256:874ec28af8948a256584aac84628f36eee1010daba55df90bb429a1ac9d40fcb",
+        "request": {
+          "body": null,
+          "headers": {
+            "X-Request-ID": "r3mcp56a8c67a"
+          },
+          "method": "GET",
+          "node": "target",
+          "params": {},
+          "path": "/protected/B",
+          "withheld_headers": [
+            "Authorization"
+          ]
+        },
+        "response": {
+          "body": "{\"error\":\"denied\"}",
+          "body_bytes": 18,
+          "body_sha256": "sha256:ad2108b94373d55034905f6b8c47981deba9b28c6913ad98af821166727a3859",
+          "captured_body_sha256": "sha256:ad2108b94373d55034905f6b8c47981deba9b28c6913ad98af821166727a3859",
+          "headers": {
+            "content-length": "18",
+            "content-type": "application/json"
+          },
+          "reason": "Forbidden",
+          "status": 403,
+          "truncated": false
+        }
+      },
+      "schema": "nidavellir/http-comparison/v1",
+      "unresolved": []
+    },
+    "replay_digest": "sha256:4fd9e4058941048883a612d3896a1ea27b3444c8bf21588b1a54a1d886ecef94"
+  },
+  "owned": "sha256:874ec28af8948a256584aac84628f36eee1010daba55df90bb429a1ac9d40fcb",
+  "owner": "sha256:c3dcf2ad5afd42ed03028cade0ebdb8d1645b800a45ea30c0e6e1682c3e9776a",
+  "retained_browser": {
+    "checks": [
+      "Saved labels/notes/evidence restored after reload; both finding refs linked; retained transactions readable; responsive widths passed"
+    ],
+    "date": "2026-10-18T13:41:15.868Z",
+    "errors": [],
+    "sends": []
+  },
+  "schema": "nidavellir/ui-r3-live/v1",
+  "status": "passed",
+  "stopped_replay_status": 423,
+  "trace_metadata_only": true
+}
