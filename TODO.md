@@ -1,6 +1,7 @@
 # Nidavellir — ordered delivery checklist
 
-Updated 2026-10-18 after UI-R3 acceptance and independent review.
+Updated 2026-10-24 to record the required agentic research workflow; UI-R3 acceptance
+and independent review remain dated 2026-10-18.
 This is the canonical work queue. [ROADMAP.md](ROADMAP.md) retains product scope,
 design detail and legacy milestone mapping. Unchecked means unfinished.
 Verification history is in [docs/JOURNAL.md](docs/JOURNAL.md).
@@ -176,6 +177,38 @@ a separate unfinished slice.
   incomplete scans and unresolved semantics remain visible, review state survives reopening.
   No source browsing is implemented by UI-R2 or UI-R3. **Next action:** confirm this
   slice's design and concrete source-review acceptance before implementation.
+
+## Required workflow — agentic research and testing
+
+- [ ] **RESEARCH-W1 — Evidence-backed agentic investigation loop.** Operator direction
+  recorded 2026-10-24: the research methods in the two supplied LiveOverflow videos
+  must inform the workflow. Sources, access limits and the provisional mapping are in
+  [the reference review](docs/research/agentic-research-video-references-2026-10-24.md).
+  Support explicit hypotheses and prerequisites, targeted source/patch review,
+  bounded experiments, observation-led revision, reusable defect patterns and variant
+  searches, independent reproduction and affected/fixed comparison. Retain rejected
+  hypotheses and inconclusive results as well as successful findings.
+  **Accept:** one pinned Docker-local investigation records each stage and its
+  evidence links; source inspection/debugging privileges are distinguished from
+  attacker capabilities; target/configuration changes and extra prerequisites are
+  visible and cannot silently support a claim about the original target. A crash,
+  an agent's success text and a source candidate are not sufficient exploit proof.
+  A clean reset/reproduction and healthy controls support the exact claimed effect;
+  reusable patterns retain provenance and require fresh validation on each variant.
+  Effective-configuration lineage is required: normalize source defaults, build
+  inputs, scenario/deployment overrides, setup actions and bounded runtime facts;
+  identify the earliest known vulnerable state and enabling delta when evidence
+  permits. Conclusions are confidence-graded, secret-safe and use adjacent-state
+  replay before claiming a proven introduction point. The approved design is recorded in
+  [the effective-configuration lineage design](docs/superpowers/specs/2026-10-24-effective-configuration-lineage-design.md).
+  **Status:** requirement captured, not implemented or live-verified as a complete
+  workflow. Full video/transcript review remains pending. Decide whether investigation
+  sequencing belongs to the BYO client or a platform coordinator before designing
+  runtime behavior. Preserve ADR-0005/0009/0010/0011, existing budget/stop/containment
+  boundaries and operator-only authoring. This requirement does not reorder UI-R4
+  or complete NV-12; integrated fuzzing/minimization remains NV-12 work.
+  **Next action:** resolve the source-review gap and workflow ownership, then approve
+  a bounded design and concrete acceptance case before implementation.
 
 ## P2 — research iteration driven by target needs
 

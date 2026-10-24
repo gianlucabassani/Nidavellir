@@ -20,7 +20,7 @@
 > that discovery work produces the verified, held-out material that makes
 > evaluation credible.
 
-## Current delivery order — updated 2026-10-18
+## Current delivery order — updated 2026-10-24
 
 [TODO.md](TODO.md) is the canonical ordered checklist with stable NV task IDs,
 dependencies and acceptance criteria. This roadmap retains product and design
@@ -661,6 +661,37 @@ HTTP primitive or a sandbox is not equipped.
 **Scope discipline.** Nidavellir does not become an exploitation framework or a
 scanner. It provisions, contains, observes, verifies, and records. Tooling lands
 here only when it produces evidence the platform can independently check.
+
+### Required agentic research workflow — recorded 2026-10-24
+
+The operator requires the research logic in two supplied LiveOverflow videos to
+be part of the workflow. [The reference review](docs/research/agentic-research-video-references-2026-10-24.md)
+records verified related primary writing and the remaining video/transcript access
+gap. The intended loop is: explicit hypothesis and prerequisites → targeted
+source/patch inspection → bounded experiment → observed evidence and hypothesis
+revision → independent reproduction → reusable root-cause pattern and variant
+testing. Retain unsuccessful and inconclusive experiments, not only final claims.
+
+Target identity, configuration changes, researcher/debug access and actual attacker
+capabilities must remain distinguishable. A demonstration that changes the target
+or assumes an extra vulnerability cannot silently validate the original claim.
+Crash signals require effect-specific validation; a successful PoC requires healthy
+controls and reproduction from reset. Each derived variant needs its own evidence.
+
+When history permits, the workflow must also locate the earliest known state that
+contains an enabling misconfiguration. Effective-configuration lineage combines
+source defaults, build inputs, scenario/deployment overrides, approved setup actions
+and bounded runtime facts. The introduction point is confidence-graded and becomes
+a focused agent hypothesis; it is not proof of exploitability until adjacent states
+are replayed under matching controls. See the
+[proposed design](docs/superpowers/specs/2026-10-24-effective-configuration-lineage-design.md).
+
+This is an open requirement, **RESEARCH-W1** in TODO.md, not a delivered coordinator
+or a claim of full video alignment. Whether sequencing stays in the BYO client or
+also gains platform orchestration remains a design decision. Existing accepted
+ADRs and scoped service boundaries continue to apply. UI-R4 remains next; NV-12
+still owns integrated fuzzing and crash triage. No delivery item is closed by this
+requirement capture.
 
 ### D1 — Patch-diff and variant hunting
 

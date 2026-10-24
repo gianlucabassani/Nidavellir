@@ -5,6 +5,40 @@ work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
 
 
+## 2026-10-24 — Record required agentic research workflow
+
+**Outcome:** Captured the operator's requirement that the two supplied LiveOverflow
+references inform the research workflow. Added open RESEARCH-W1 acceptance for
+hypotheses, bounded experiments, retained revisions, independent reproduction and
+reviewed root-cause recipes/variants. Target/configuration integrity and declared
+attacker prerequisites are explicit. Added the operator-selected
+effective-configuration lineage direction and a proposed detailed design for
+finding the earliest known vulnerable state, confidence-grading the conclusion,
+and feeding the enabling delta back into research. Related primary writing is
+distinguished from unavailable video/transcript content. No runtime capability or
+checklist completion is claimed; UI-R4 order and NV-12's unfinished fuzzing scope
+are preserved.
+
+**Files:** `docs/research/agentic-research-video-references-2026-10-24.md`,
+`docs/superpowers/specs/2026-10-24-effective-configuration-lineage-design.md`,
+`docs/superpowers/plans/2026-10-24-effective-configuration-lineage.md`,
+`TODO.md`, `ROADMAP.md`, and this journal.
+
+**Verification:** Reviewed the reference note against current delivery documents
+and accepted ADR boundaries; checked local Markdown links and `git diff --check`.
+Documentation only: no application suite, live arena, fuzzing or model experiment
+was run. Previously recorded release results remain separately dated.
+
+**Unresolved risks / next concrete step:** The detailed lineage design is approved
+and its implementation plan is ready for execution. Full video/transcript inspection remains
+pending; related articles cannot certify all methods in either video. Workflow
+ownership (BYO-client sequencing versus platform coordination) remains undecided.
+Resolve those points and select a concrete acceptance case before approving a
+bounded implementation design. Source semantics remain manual review; existing
+Paperless historical gaps and provider verification limits remain unchanged.
+`project-status-report` remains unavailable; this entry uses the repository's
+outcome/files/verification/risks/next-step format.
+
 ## 2026-10-18 — Complete UI-R3 request comparison
 
 **Outcome:** Delivered the separately approved bounded researcher/agent slice in
