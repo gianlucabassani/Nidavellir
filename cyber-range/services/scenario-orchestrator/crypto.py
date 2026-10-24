@@ -24,6 +24,10 @@ Follow-ups (intentionally out of scope here)
     Key rotation, and sourcing the key from a KMS / secrets manager rather than
     an env var. The tagged format leaves room for a future `enc:v2:` scheme.
 """
+import base64
+import hashlib
+import hmac
+import json
 import logging
 import os
 
@@ -40,9 +44,12 @@ class SecretCipher:
 
     def __init__(self, key=None):
         if key:
-            self._fernet = Fernet(key.encode() if isinstance(key, str) else key)
+            encoded = key.encode() if isinstance(key, str) else key
+            self._fernet = Fernet(encoded)
+            self._key = base64.urlsafe_b64decode(encoded)
         else:
             self._fernet = None
+            self._key = None
 
     @property
     def enabled(self) -> bool:
@@ -75,6 +82,20 @@ class SecretCipher:
             logger.error("Failed to decrypt stored secret (wrong or rotated key?)")
             return None
 
+    def lineage_hmac(self, value, *, lineage_id: str) -> str:
+        """Return a deterministic secret token scoped to one target lineage."""
+        if self._key is None:
+            raise RuntimeError("record encryption is required for sensitive lineage facts")
+        if not isinstance(lineage_id, str) or not lineage_id:
+            raise ValueError("lineage_id is required")
+        context = b"nidavellir/config-lineage/v1\0" + lineage_id.encode("utf-8")
+        comparison_key = hmac.new(self._key, context, hashlib.sha256).digest()
+        canonical = json.dumps(
+            value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+        token = hmac.new(comparison_key, canonical, hashlib.sha256).hexdigest()
+        return f"hmac-sha256:{token}"
+
 
 # --- module-level default cipher -------------------------------------------
 # Lazily built from the environment and cached, so the key can be set before
@@ -105,6 +126,11 @@ def decrypt_secret(value):
 
 def encryption_enabled() -> bool:
     return _cipher().enabled
+
+
+def lineage_secret_hmac(value: object, *, lineage_id: str) -> str:
+    """Compare a secret only inside one lineage without exposing key material."""
+    return _cipher().lineage_hmac(value, lineage_id=lineage_id)
 
 
 if __name__ == "__main__":

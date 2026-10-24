@@ -101,6 +101,28 @@ def test_decrypt_tagged_value_without_key_returns_none():
     assert crypto.SecretCipher(key=None).decrypt(token) is None
 
 
+def test_lineage_secret_hmac_is_stable_only_within_one_lineage(monkeypatch):
+    monkeypatch.setenv("SECRETS_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    crypto.reset_default_cipher()
+
+    first = crypto.lineage_secret_hmac(True, lineage_id="target-a")
+    repeated = crypto.lineage_secret_hmac(True, lineage_id="target-a")
+    other = crypto.lineage_secret_hmac(True, lineage_id="target-b")
+
+    assert first == repeated
+    assert first.startswith("hmac-sha256:")
+    assert first != other
+    assert "True" not in first
+
+
+def test_lineage_secret_hmac_requires_encryption(monkeypatch):
+    monkeypatch.delenv("SECRETS_ENCRYPTION_KEY", raising=False)
+    crypto.reset_default_cipher()
+
+    with pytest.raises(RuntimeError, match="encryption"):
+        crypto.lineage_secret_hmac("low-entropy", lineage_id="target-a")
+
+
 # --- database integration: encryption at rest ------------------------------
 
 @pytest.fixture
