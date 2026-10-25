@@ -5,6 +5,36 @@ Detailed run/operate notes. For what Nidavellir is and the roadmap, see the
 
 ## Run the stack (Docker, recommended)
 
+Configuration lineage requires `SECRETS_ENCRYPTION_KEY` and a reviewed
+`lifecycle.configuration_profile` on the scenario. It captures declared
+deployment inputs automatically, supports explicit Docker runtime capture, and
+attempts post-setup capture from trusted observation. A failed post-setup capture
+records `configuration_capture_failed`; it does not invent a baseline or reopen
+the completed setup session. Setup command text and output are not parsed as
+configuration truth. Complete active coverage needs the instrumented
+`runtime_readback` contract described in [scenario authoring](SCENARIOS.md);
+container environment metadata alone is incomplete. The provider runs only a
+fixed bounded loopback observer reader, never a profile-supplied command or URL.
+
+Use the [REST interface](API.md#effective-configuration-lineage) to compare
+snapshots and analyze a finding group. Capture runtime state before the probe,
+run matching controls, and reset/replay each configuration before requesting
+strong introduction confidence. Create an analysis while runtime integrity can
+still be checked, then retain that immutable result for post-teardown review.
+Re-analysis after teardown cannot establish a fresh runtime integrity check.
+
+`make verify-configuration-lineage-live` starts an isolated Compose project,
+uses an ephemeral encryption key, runs the synthetic three-state experiment and
+removes its arenas, networks and service volumes. Reports are retained in
+`docs/verification/`. Its API port is `18006`; the normal development stack is
+not restarted. Source history additionally requires an operator-provisioned
+local Git checkout at `RESEARCH_REPO_DIR`; the API never fetches history.
+
+Backup/restore includes encrypted configuration snapshots and validates their
+digests, arena links and metadata. Keep the existing offline recovery procedure.
+Console integration remains a later slice after UI-R4; use REST/MCP for this
+backend increment.
+
 Confined PoC execution requires the trusted image built by `make build-poc-runner`
 (also built by the main Compose project). Workers refuse to pull an image during
 PoC execution and create containers using the resolved local image ID. Keep the

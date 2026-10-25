@@ -2,6 +2,52 @@
 
 Base URL: `http://localhost:8000`
 
+## Effective configuration lineage
+
+These routes capture a reviewed configuration profile's inputs and compare
+immutable snapshots. Snapshot storage requires `SECRETS_ENCRYPTION_KEY`.
+Profiles define target-specific semantics; completeness means coverage of that
+profile, not certification of every application setting.
+
+| Method and path | Access and behavior |
+|---|---|
+| `POST /arenas/{id}/configuration-snapshots` | Operator/admin; body `{"stage":"deployment"}` or `runtime`/`post_setup`. Returns `201` and `snapshot`. Runtime stages require an active arena and Docker-local. |
+| `GET /arenas/{id}/configuration-snapshots?limit=100&before=…` | Operator/admin; cursor-paged snapshots, newest first. |
+| `GET /arenas/{id}/configuration-snapshots/{snapshot_id}` | Operator/admin; integrity-checked retained snapshot; wrong arena is `404`. |
+| `POST /arenas/{id}/configuration-history` | Operator/admin; `{"refs":["<commit>","<commit>"]}` extracts declared files from the locally provisioned `RESEARCH_REPO_DIR`. No checkout, fetch or target execution. |
+| `POST /configuration-lineage/compare` | Operator/admin; `{"before":"<snapshot id>","after":"<snapshot id>"}` returns effective and provenance changes. |
+| `POST /configuration-lineage/analyze` | Operator/admin; `subject_arena_id`, ordered `snapshot_ids` (2–32), `research_key`, optional `publish_to` agent names. Verdicts are resolved from retained finding/control/effect evidence, never supplied by the caller. |
+| `GET /configuration-lineage/analyses/{analysis_id}` | Operator/admin; immutable completed analysis, available after teardown. |
+| `GET /arenas/{id}/configuration-lineage/{analysis_id}` | Bound attacker or operator; agents require explicit publication in a research/discovery engagement. Returns a bounded hypothesis projection. |
+
+The attacker MCP tool `get_configuration_lineage(arena_id, analysis_id)` reads
+the same projection without consuming an action. Configuration events remain
+operator-only in the general event feed. Publication is refused for calibration
+and benchmark engagements so it cannot reveal held-out validation truth.
+
+`proven` requires matched actor probes and control plans, an independently
+refuted predecessor and confirmed successor, complete relevant inputs, successful
+reset receipts and unchanged runtime integrity. A controlled recipe transition
+must change only profile-declared configuration keys. The reported introduction
+scope is the selected configuration states; it does not establish an upstream
+commit or a production deployment date. `supported` lacks some reconstruction
+or replay evidence, `inferred` is a static candidate delta, and `unknown` lacks
+sufficient comparable evidence. Git extraction retains immutable commits and
+parent identities; missing source/runtime facts remain explicit.
+
+Docker environment metadata is retained as supplied input, never certified as
+an active application value. Complete runtime coverage requires a profile's
+`runtime_readback`: a fixed, size/time-bounded target-local observer using the
+same trusted target instrumentation convention as independent validation.
+Uninstrumented applications retain partial coverage. Agent projections include
+before/after snapshot identities, non-sensitive values, source classes and
+allowlisted source references, plus explicit completeness.
+
+Sensitive values are replaced by lineage-scoped HMACs in encrypted snapshots.
+REST/MCP projections omit the HMAC and value. Authorized comparison can state
+that a sensitive value changed, without revealing it. Snapshot ids/digests,
+profile identity, capture stage and missing evidence remain available.
+
 ## Durable research budgets and stop controls
 
 New arenas receive a versioned aggregate action cap (default 1000, configured

@@ -20,7 +20,7 @@
 > that discovery work produces the verified, held-out material that makes
 > evaluation credible.
 
-## Current delivery order — updated 2026-10-24
+## Current delivery order — updated 2026-10-25
 
 [TODO.md](TODO.md) is the canonical ordered checklist with stable NV task IDs,
 dependencies and acceptance criteria. This roadmap retains product and design
@@ -684,14 +684,23 @@ source defaults, build inputs, scenario/deployment overrides, approved setup act
 and bounded runtime facts. The introduction point is confidence-graded and becomes
 a focused agent hypothesis; it is not proof of exploitability until adjacent states
 are replayed under matching controls. See the
-[proposed design](docs/superpowers/specs/2026-10-24-effective-configuration-lineage-design.md).
+[approved design](docs/superpowers/specs/2026-10-24-effective-configuration-lineage-design.md).
+
+RESEARCH-W1a's backend closed on 2026-10-25 with encrypted snapshots, typed
+profile facts, fixed Git/runtime adapters, setup provenance and a published agent
+delta. Runtime environment metadata alone is incomplete; active coverage requires
+an instrumented target's fixed observer. Real Docker-local reset, independent
+validation, conservative confidence, MCP, retention and cleanup passed, followed
+by the pinned release gate. The proof covers selected configuration states;
+historical Git candidates still need semantic review and matched runtime evidence.
+See [delivery evidence](docs/verification/configuration-lineage-closure-2026-10-25.md).
 
 This is an open requirement, **RESEARCH-W1** in TODO.md, not a delivered coordinator
 or a claim of full video alignment. Whether sequencing stays in the BYO client or
 also gains platform orchestration remains a design decision. Existing accepted
 ADRs and scoped service boundaries continue to apply. UI-R4 remains next; NV-12
-still owns integrated fuzzing and crash triage. No delivery item is closed by this
-requirement capture.
+still owns integrated fuzzing and crash triage. The broader workflow remains open
+after this bounded backend delivery.
 
 ### D1 — Patch-diff and variant hunting
 

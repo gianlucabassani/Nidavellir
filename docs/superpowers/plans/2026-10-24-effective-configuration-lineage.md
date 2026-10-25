@@ -10,6 +10,28 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-24-effective-configuration-lineage-design.md`
 
+**Execution status, 2026-10-25:** backend delivery complete on branch
+`configuration-lineage`. The task outcomes below supersede the original detailed
+step checklist where review or interface dependencies required adjustments.
+Do not restart completed tasks from the unchecked historical step template.
+
+| Task | Outcome and evidence |
+|---|---|
+| 1 | Complete: pure profiles/snapshots/deltas/confidence and keyed secrecy; commit `4be0c84`, then conservative review regressions in `30b5cd9`. |
+| 2 | Complete: normalized recipe profiles, public projection and deployment capture; integrated with persistence in `30b5cd9`. |
+| 3 | Complete: encrypted immutable table, Alembic 0011, pagination, digest/reference checks and recovery; `30b5cd9`. |
+| 4 | Complete: operator REST capture/history/compare/analyze and retained reads; `30b5cd9`. |
+| 5 | Complete for the bounded backend: fixed Git/typed input adapters, opt-in active runtime observer and successful labelled setup provenance; unsupported layers remain partial. |
+| 6 | Complete: explicit research-only publication and bound read-only MCP enabling delta; real and retained REST/MCP acceptance passed. |
+| 7 | Complete: final live `configuration-lineage-live-2026-10-25-3750717d.json`, conservative cases and asserted zero arena resources; commit `0a817f4`. |
+| 8 | Complete: independent review fix pass, release log, closure and delivery documentation. Final release: 1,186 SQLite / 1,190 PostgreSQL passes, Ruff/Bandit clean, readiness/migrations passed. |
+
+Implementation rulings: focused commands ran in the pinned verifier; dependent
+capture/persistence tasks shared an integration commit; REST lives in a separate
+adapter module; fixed active readback replaces the design's no-target-code
+assumption; only selected-state introduction can be proven; console remains
+after UI-R4. See the final closure/review records for evidence and remaining scope.
+
 ## Global Constraints
 
 - Docker-local is the only live-supported runtime adapter; all other providers refuse runtime capture explicitly.
@@ -531,4 +553,3 @@ Mark RESEARCH-W1's lineage portion complete only if the final live gate, indepen
 git add docs/API.md docs/OPERATIONS.md docs/SCENARIOS.md README.md ROADMAP.md TODO.md ISSUES.md docs/JOURNAL.md docs/verification/configuration-lineage-closure-2026-10-24.md docs/verification/configuration-lineage-review-2026-10-24.md
 git commit -m "docs: record verified configuration lineage workflow"
 ```
-

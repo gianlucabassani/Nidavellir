@@ -1,9 +1,17 @@
 # Nidavellir — open risk register
 
-Updated 2026-10-18 after UI-R3 request-comparison acceptance. MODEL-R1 and NV07-R1
+Updated 2026-10-25 after configuration-lineage backend acceptance; UI-R3 closed
+2026-10-18. MODEL-R1 and NV07-R1
 remain closed for calibration machinery only. RESEARCH-R1/R4 are closed for the new
 structured gate after Phase 2 verification; historical chronology is not repaired;
 RESEARCH-R7–R10 are remediated within the recorded scope; source semantics remain manual review.
+
+Configuration-lineage backend acceptance was added on 2026-10-25. It does not
+close the historical Paperless, source-semantic or provider gaps below.
+Active-value semantics depend on reviewed target instrumentation; Docker
+environment metadata alone remains incomplete. Generic override ingestion,
+automatic investigation coordination and console integration are unfinished.
+See [lineage delivery scope](docs/verification/configuration-lineage-closure-2026-10-25.md).
 
 Known, currently-open risks and verification gaps. Each entry states what is
 actually true today, why it matters, and the concrete evidence that would close

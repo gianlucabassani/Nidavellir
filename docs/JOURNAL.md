@@ -5,6 +5,45 @@ work queue; ROADMAP.md retains design detail and historical milestone mapping.
 
 
 
+## 2026-10-25 — Deliver effective-configuration lineage backend
+
+**Outcome:** Implemented RESEARCH-W1a: reviewed profiles, immutable encrypted
+snapshots, configuration provenance/deltas, bounded Git source history, active
+runtime readback, labelled successful setup provenance, evidence-derived
+introduction confidence and an explicitly published read-only agent projection.
+The enabling delta includes nonsecret direction and source references. Proven
+introduction means the selected replayed configuration transition, not an
+unqualified upstream commit or production date. Broader RESEARCH-W1 remains open.
+
+**Files:** New `configuration_lineage.py`, `configuration_capture.py` and
+`configuration_api.py`; crypto, lifecycle, scenario, database/model/migration,
+recovery, Docker provider and gateway adapters; focused tests; calibration
+fixture/profile; isolated Compose/live gate; API/scenario/operations/delivery docs;
+`docs/verification/configuration-lineage-*` reports, review and release logs.
+
+**Verification:** Final pinned `make release-check` exited zero: Python 3.11.14,
+Ruff/Bandit clean, 1,186 SQLite passes / four skips / six deselections, 1,190
+PostgreSQL passes / six deselections; clean migration and API/UI/gateway smoke
+passed. Independent review's Important findings were fixed with RED→GREEN
+regressions. Final live `3750717d` proved secure/misconfigured/later-state behavior,
+reset, matched effects/controls, active readback, setup provenance, REST/MCP,
+published post-teardown evidence, unchanged read budgets, and conservative outcomes
+for failed controls, conflicting/missing runtime facts, omitted history, mutable
+image refusal and target mutation. All ten owned arenas have zero labelled
+containers/networks/volumes/images; isolated service volumes/network were removed.
+Failed attempts remain labelled. See
+[closure evidence](verification/configuration-lineage-closure-2026-10-25.md).
+
+**Unresolved risks / next concrete step:** Runtime readback requires trusted,
+target-specific instrumentation; supplied environment metadata is incomplete.
+The fixed observer reader follows ADR-0009 and replaces the design's overly broad
+no-target-code capture assumption. Generic override ingestion, automatic Git
+bisect, source semantics and coordinator/recipe workflow are unfinished. UI-R4
+remains the next console slice; NV-12 fuzzing remains open. Full video alignment
+and earlier Paperless/provider gaps remain unchanged. Build images remain cache,
+not active infrastructure. Implementation is isolated on `configuration-lineage`
+at `/tmp/nidavellir-lineage-wt-2`; integration into main is a separate decision.
+
 ## 2026-10-24 — Record required agentic research workflow
 
 **Outcome:** Captured the operator's requirement that the two supplied LiveOverflow

@@ -1,5 +1,42 @@
 # Authoring Scenarios (schema v3)
 
+Configuration lineage is opt-in through `lifecycle.configuration_profile`.
+The reviewed [calibration profile](../cyber-range/fixtures/config-lineage/profile.json)
+is a complete example. Give the profile an id, version, canonical fact keys,
+types (`bool`, `int`, `string`, `enum`), explicit sensitivity, required coverage,
+security tags and source selectors. Profiles are bounded to 128 facts and 64 KiB;
+unknown or executable parser fields are refused.
+
+Sources are `source_file`, `build`, `scenario_env`, `deployment`, `setup`,
+`runtime_env` and `runtime_readback`. Source files support fixed dotenv or JSON-pointer parsing at
+normalized relative Git paths. Scenario and runtime environment selectors name
+an existing node and key. Docker captures configured container environment and
+image metadata, not arbitrary process memory or files. `runtime_env` records
+supplied input as incomplete; it cannot win the effective merge or establish
+application consumption. `runtime_readback` opts an instrumented target into a
+fixed localhost observer on port 8081, path `/oracle/configuration`. Its bounded
+JSON response has schema `nidavellir/configuration-runtime/v1` and a `values`
+object keyed by the declared selectors. The same active application setting must
+drive behavior and this observer. A reviewed profile must
+explain how those inputs affect the selected target; a profile is not an automatic
+semantic audit. The observer is a target-specific trust contract, like an
+independent validator; arbitrary environment introspection cannot replace it.
+Generic deployment overrides without an adapter remain missing facts.
+
+For setup provenance, declare a `setup` source with `node`, `selector`, and
+`step` label. Supply that label as `configuration_step` on an operator
+`POST /arenas/{id}/setup/step`. Post-setup capture links a successful labelled
+step from the finished session to the trusted active readback. Failed/rejected
+steps and command output cannot supply values. This records the observation
+after the step; it does not alone prove that the step caused a change.
+
+Precedence is `source < build < scenario < deployment < setup < runtime`.
+Equal-precedence conflicts remain unresolved. Required coverage is checked per
+key and declared layer, including layers absent from historical extraction.
+Sensitive facts always use keyed comparison and require encryption; unknown
+sensitivity must be marked sensitive. Never put secret values in profile ids,
+keys, selectors, paths or tags.
+
 A **scenario** is a provider-agnostic, data-defined topology: arbitrary
 `nodes[]` on named network `segments[]`, plus `objectives` and optional
 `agents[]` stance bindings. One spec is meant to compile to any provider

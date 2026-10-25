@@ -1,6 +1,6 @@
 # Nidavellir — ordered delivery checklist
 
-Updated 2026-10-24 to record the required agentic research workflow; UI-R3 acceptance
+Updated 2026-10-25 after the configuration-lineage backend acceptance; UI-R3 acceptance
 and independent review remain dated 2026-10-18.
 This is the canonical work queue. [ROADMAP.md](ROADMAP.md) retains product scope,
 design detail and legacy milestone mapping. Unchecked means unfinished.
@@ -201,14 +201,28 @@ a separate unfinished slice.
   permits. Conclusions are confidence-graded, secret-safe and use adjacent-state
   replay before claiming a proven introduction point. The approved design is recorded in
   [the effective-configuration lineage design](docs/superpowers/specs/2026-10-24-effective-configuration-lineage-design.md).
-  **Status:** requirement captured, not implemented or live-verified as a complete
-  workflow. Full video/transcript review remains pending. Decide whether investigation
+  **Status:** the configuration-lineage backend is implemented and verified as
+  described below; the complete investigation workflow remains unfinished.
+  Full video/transcript review remains pending. Decide whether investigation
   sequencing belongs to the BYO client or a platform coordinator before designing
   runtime behavior. Preserve ADR-0005/0009/0010/0011, existing budget/stop/containment
   boundaries and operator-only authoring. This requirement does not reorder UI-R4
   or complete NV-12; integrated fuzzing/minimization remains NV-12 work.
-  **Next action:** resolve the source-review gap and workflow ownership, then approve
-  a bounded design and concrete acceptance case before implementation.
+  **Next action:** UI-R4 remains next; use its source review to connect a concrete
+  target's historical candidate/configuration delta to an independently verified
+  experiment. Resolve broader workflow ownership before adding a coordinator.
+
+- [x] **RESEARCH-W1a — Effective-configuration lineage backend.** Closed 2026-10-25
+  for reviewed profiles, encrypted snapshots, fixed source/Git and runtime adapters,
+  labelled setup provenance, bounded comparison, evidence-derived confidence and
+  an explicitly published read-only agent delta. A proven result applies to
+  selected replayed configuration states; it does not certify a global first
+  upstream commit or deployment date. Complete active coverage needs target-specific
+  runtime instrumentation; unsupported layers remain partial. Final Docker-local
+  REST/MCP, controls, mutation, missing/conflicting input and teardown acceptance
+  passed with zero labelled arena resources. Release: 1,186 SQLite / 1,190 PostgreSQL
+  passes. [Evidence, review and limits](docs/verification/configuration-lineage-closure-2026-10-25.md).
+  Console integration stays after UI-R4; NV-12 and the broader RESEARCH-W1 stay open.
 
 ## P2 — research iteration driven by target needs
 

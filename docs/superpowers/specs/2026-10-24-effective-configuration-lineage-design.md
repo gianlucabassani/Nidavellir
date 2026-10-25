@@ -5,6 +5,17 @@
 **Roadmap item:** RESEARCH-W1
 **Related:** ADR-0011, ADR-0013, ADR-0014, NV-11, NV-12
 
+**Implementation clarification, 2026-10-25:** `runtime_env` is incomplete supplied
+input, not proof of consumption. An optional `runtime_readback` source uses a
+fixed bounded target-local observer, following the independent-validation trust
+model, to establish active values. This replaces the overly broad statement
+below that no capture executes target code; no profile-supplied command or URL is
+executed. Setup provenance requires a labelled successful step and this active
+readback. `proven` introduction is scoped to the selected configuration states;
+Git candidates are not promoted to globally first-exploitable commits without
+additional evidence. Console integration remains after UI-R4. See
+[delivery evidence](../../verification/configuration-lineage-closure-2026-10-25.md).
+
 ## Intent
 
 Nidavellir must help a researcher identify, when evidence permits, the earliest
@@ -334,4 +345,3 @@ the backend must not be described as available in the console before that passes
 
 No slice may claim that the feature is available until the matched Docker-local
 acceptance journey and release gate pass.
-

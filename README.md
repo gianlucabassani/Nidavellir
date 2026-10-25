@@ -76,6 +76,12 @@ records the exact limits; source candidates still require human semantic review.
 prerequisite controls, effects and evidence together in the console, including
 post-teardown review. [Request comparison and source candidate browsing](docs/research/research-usability-next.md)
 remain later slices.
+The [configuration-lineage backend](docs/verification/configuration-lineage-closure-2026-10-25.md)
+captures reviewed configuration profiles, compares retained snapshots and supplies
+an agent with the enabling delta. Matched Docker-local replay can prove a
+configuration transition; historical source candidates and uninstrumented runtime
+settings remain explicitly uncertain. Use REST/MCP; console integration follows UI-R4.
+
 Cloud and other VM providers, multi-tenant hosting, and multi-agent red/blue
 work remain deferred. The ordered checklist is in [TODO.md](TODO.md); product
 scope and design detail are in [ROADMAP.md](ROADMAP.md); current risks are in
