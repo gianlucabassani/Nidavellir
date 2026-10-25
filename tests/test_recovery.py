@@ -219,3 +219,44 @@ def test_retention_cannot_delete_only_research_record():
         database.delete_deployment(arena)
     database.purge_deployments(("destroyed",))
     assert database.get_deployment(arena) is not None
+
+
+@pytest.mark.parametrize("tamper", [None, "digest", "arena"])
+def test_configuration_snapshot_recovery(tmp_path, monkeypatch, tamper):
+    import crypto
+    from configuration_capture import deployment_snapshot
+    from tests.test_configuration_capture import recipe
+    from models import ConfigurationSnapshot
+
+    root, engine, key = _source(tmp_path, monkeypatch)
+    crypto.reset_default_cipher()
+    snapshot = deployment_snapshot("old-result", recipe())
+    with engine.begin() as conn:
+        conn.execute(ConfigurationSnapshot.__table__.insert().values(
+            id=snapshot["snapshot_id"], arena_id="missing" if tamper == "arena" else "old-result",
+            target_digest=snapshot["target_identity"]["digest"], stage=snapshot["stage"],
+            snapshot_digest="sha256:" + "0" * 64 if tamper == "digest" else snapshot["snapshot_digest"],
+            encrypted_payload=SecretCipher(key).encrypt(json.dumps(snapshot)), created_at=datetime.now()))
+    bundle = tmp_path / "lineage.nvr"
+    if tamper:
+        with pytest.raises(recovery.RecoveryError, match="configuration|reference"):
+            recovery.backup(root, bundle, "a-long-fixture-passphrase", url=str(engine.url))
+    else:
+        recovery.backup(root, bundle, "a-long-fixture-passphrase", url=str(engine.url))
+        target_db = _database(tmp_path / "lineage-restored.sqlite")
+        recovery.restore(bundle, tmp_path / "restored", "a-long-fixture-passphrase", url=str(target_db.url))
+        with target_db.connect() as conn:
+            payload = conn.execute(select(ConfigurationSnapshot.encrypted_payload)).scalar_one()
+        assert json.loads(SecretCipher(key).decrypt(payload)) == snapshot
+    crypto.reset_default_cipher()
+
+
+def test_configuration_analysis_recovery_rejects_missing_snapshot(tmp_path, monkeypatch):
+    root, engine, _ = _source(tmp_path, monkeypatch)
+    with engine.begin() as conn:
+        conn.execute(Event.__table__.insert().values(lab_id="old-result", ts=datetime.now(),
+            actor="operator", type="configuration_introduction", payload=json.dumps({
+                "analysis_id": "abc123abc123", "ordered_snapshot_ids": ["missing"],
+                "subject_arena_id": "old-result"})))
+    with pytest.raises(recovery.RecoveryError, match="configuration"):
+        recovery.backup(root, tmp_path / "invalid-analysis.nvr", "a-long-fixture-passphrase", url=str(engine.url))

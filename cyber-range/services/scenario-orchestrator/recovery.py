@@ -133,6 +133,7 @@ def _check_references(rows):
     ids = {name: {row["id"] for row in values if "id" in row}
            for name, values in rows.items()}
     checks = (("lifecycle_recipes", "deployment_id", "deployments"),
+              ("configuration_snapshots", "arena_id", "deployments"),
               ("budget_accounts", "arena_id", "deployments"),
               ("budget_actions", "arena_id", "deployments"),
               ("poc_jobs", "arena_id", "deployments"),
@@ -150,6 +151,21 @@ def _check_references(rows):
         for row in rows[table]:
             if row[field] not in ids[target]:
                 raise RecoveryError(f"broken reference: {table}.{field}")
+    snapshots = {row["id"]: row for row in rows["configuration_snapshots"]}
+    for row in rows["events"]:
+        if row["type"] != "configuration_introduction" or not row["payload"]:
+            continue
+        analysis = json.loads(row["payload"])
+        ordered = analysis.get("ordered_snapshot_ids") or []
+        if len(ordered) < 2 or any(item not in snapshots for item in ordered):
+            raise RecoveryError("configuration analysis snapshot reference is missing")
+        if snapshots[ordered[-1]]["arena_id"] != row["lab_id"]:
+            raise RecoveryError("configuration analysis subject reference mismatch")
+        projection = {key: value for key, value in analysis.items()
+                      if key not in {"analysis_id", "analysis_digest", "subject_arena_id", "publish_to"}}
+        digest = "sha256:" + _sha(_json(projection))
+        if digest != analysis.get("analysis_digest") or digest[7:19] != analysis.get("analysis_id"):
+            raise RecoveryError("configuration analysis digest mismatch")
     for row in rows["eval_trials"]:
         if row["arena_id"] is not None and row["arena_id"] not in ids["deployments"]:
             raise RecoveryError("broken trial arena reference")
@@ -191,6 +207,22 @@ def _check_encrypted_records(rows, key):
             for value in row.values():
                 if isinstance(value, str) and value.startswith("enc:v1:") and cipher.decrypt(value) is None:
                     raise RecoveryError("saved encryption key cannot decrypt database records")
+    for row in rows["configuration_snapshots"]:
+        from configuration_lineage import verify_snapshot  # noqa: PLC0415
+
+        try:
+            if not row["encrypted_payload"].startswith("enc:v1:"):
+                raise ValueError("unencrypted configuration snapshot")
+            snapshot = json.loads(cipher.decrypt(row["encrypted_payload"]))
+            verify_snapshot(snapshot)
+            if (snapshot["snapshot_digest"] != row["snapshot_digest"]
+                    or snapshot["snapshot_id"] != row["id"]
+                    or snapshot["arena_id"] != row["arena_id"]
+                    or snapshot["target_identity"]["digest"] != row["target_digest"]
+                    or snapshot["stage"] != row["stage"]):
+                raise ValueError("configuration snapshot metadata mismatch")
+        except (TypeError, ValueError, KeyError) as exc:
+            raise RecoveryError("configuration snapshot integrity mismatch") from exc
     for row in rows["lifecycle_recipes"]:
         plaintext = cipher.decrypt(row["encrypted_payload"])
         if plaintext is None:

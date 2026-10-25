@@ -350,6 +350,21 @@ class ScenarioSpec(BaseModel):
     # lifecycle service validates and executes its bounded readiness policy.
     lifecycle: dict = Field(default_factory=dict)
 
+    @field_validator("lifecycle")
+    @classmethod
+    def _validate_lifecycle(cls, value: dict) -> dict:
+        if not isinstance(value, dict):
+            raise ValueError("lifecycle must be an object")
+        result = dict(value)
+        profile = result.get("configuration_profile")
+        if profile is not None:
+            # Local import avoids the scenario_spec -> configuration_lineage ->
+            # lifecycle_manifest -> scenario_spec import cycle at module load.
+            from configuration_lineage import validate_profile  # noqa: PLC0415
+
+            result["configuration_profile"] = validate_profile(profile)
+        return result
+
     # --- cross-field structural checks (hard errors) ----------------------
 
     @model_validator(mode="after")
@@ -374,6 +389,16 @@ class ScenarioSpec(BaseModel):
                 )
 
         known_nodes = set(node_names)
+        profile = self.lifecycle.get("configuration_profile")
+        if profile:
+            for fact in profile["facts"]:
+                for source in fact["sources"]:
+                    node = source.get("node")
+                    if node is not None and node not in known_nodes:
+                        raise ValueError(
+                            f"configuration profile fact {fact['key']!r} references "
+                            f"unknown node {node!r}; nodes: {sorted(known_nodes)}"
+                        )
         for binding in self.agents:
             if binding.node not in known_nodes:
                 raise ValueError(

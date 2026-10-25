@@ -272,6 +272,12 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
             return tools.get_http_transaction(ctx(), arena_id=arena_id, digest=digest)
 
         @mcp.tool()
+        def get_configuration_lineage(arena_id: str, analysis_id: str) -> dict:
+            """Read an operator-published configuration delta hypothesis. Sends no
+            target requests; missing history and confidence remain explicit."""
+            return tools.get_configuration_lineage(ctx(), arena_id, analysis_id)
+
+        @mcp.tool()
         def compare_http_transactions(arena_id: str, left: str, right: str) -> dict:
             """Compare two of your stored HTTP captures: status, sizes, hashes and bounded
             body diff. Sends no requests; truncation/missing evidence is explicit.

@@ -133,6 +133,12 @@ def build_recipe(
         "equivalence_digest": digest(projection),
         "captured_at": datetime.now(timezone.utc).isoformat(),
     }
+    configuration_profile = (scenario.get("lifecycle") or {}).get("configuration_profile")
+    if configuration_profile is not None:
+        from configuration_lineage import validate_profile  # noqa: PLC0415
+
+        recipe["configuration_profile"] = validate_profile(configuration_profile)
+        recipe["configuration_profile_digest"] = recipe["configuration_profile"]["digest"]
     recipe["recipe_digest"] = digest({k: v for k, v in recipe.items() if k != "captured_at"})
     return recipe
 
@@ -176,6 +182,10 @@ def public_recipe(recipe: dict) -> dict:
         "seed_recorded": recipe.get("seed") is not None,
         "readiness": readiness,
     })
+    if recipe.get("configuration_profile"):
+        public["configuration_profile"] = {
+            key: recipe["configuration_profile"][key] for key in ("id", "version", "digest")
+        }
     return public
 
 

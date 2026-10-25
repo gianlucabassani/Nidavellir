@@ -2677,6 +2677,73 @@ class DockerLocalProvider(RangeProvider):
         return {"success": True, "bridge": bridge, "segment": net.name,
                 "packets": len(flows), "flows": flows}
 
+    def observe_configuration(self, instance_id, selectors):
+        """Read supplied inputs and opt-in active values through a fixed observer."""
+        if not isinstance(selectors, list) or len(selectors) > 128:
+            raise ValueError("configuration selectors exceed limit")
+        for source in selectors:
+            if (not isinstance(source, dict)
+                    or set(source) - {"kind", "key", "node", "selector"}
+                    or source.get("kind") not in {"runtime_env", "runtime_readback", "build"}
+                    or not all(isinstance(source.get(key), str) and 0 < len(source[key]) <= 128
+                               for key in ("node", "key", "selector"))):
+                raise ValueError("invalid runtime configuration selector")
+        facts = []
+        readbacks = {}
+        containers = self.client.containers.list(all=True, filters={"label": f"{LABEL_LAB_ID}={instance_id}"})
+        by_node = {}
+        for container in containers:
+            labels = container.labels or {}
+            if labels.get(LABEL_LAB_ID) != instance_id or labels.get(LABEL_ROLE) in {"attacker", "monitor"}:
+                continue
+            node = labels.get(LABEL_NODE)
+            by_node.setdefault(node, []).append(container)
+        for source in selectors:
+            matches = by_node.get(source["node"], [])
+            if len(matches) != 1:
+                continue
+            container = matches[0]
+            container.reload()
+            attrs = container.attrs or {}
+            if (attrs.get("State") or {}).get("Status") != "running":
+                continue
+            kind = source["kind"]
+            selector = source["selector"]
+            if kind == "runtime_readback":
+                if source["node"] not in readbacks:
+                    # Operator-owned, fixed loopback observer like independent
+                    # validation. No profile command, port or URL is executed.
+                    program = (
+                        "import http.client; "
+                        "c=http.client.HTTPConnection('127.0.0.1',8081,timeout=3); "
+                        "c.request('GET','/oracle/configuration'); r=c.getresponse(); "
+                        "b=r.read(16385); assert r.status==200 and len(b)<=16384; "
+                        "print(b.decode('utf-8'))"
+                    )
+                    result = container.exec_run(["python", "-c", program], demux=False)
+                    try:
+                        payload = json.loads(result.output) if result.exit_code == 0 else {}
+                        valid = isinstance(payload, dict) and payload.get("schema") == "nidavellir/configuration-runtime/v1"
+                        values = payload.get("values") if valid else None
+                        readbacks[source["node"]] = values if isinstance(values, dict) else {}
+                    except (ValueError, TypeError):
+                        readbacks[source["node"]] = {}
+                value = readbacks[source["node"]].get(selector)
+                values = [value] if isinstance(value, (str, bool, int)) else []
+            elif kind == "runtime_env":
+                env = (attrs.get("Config") or {}).get("Env") or []
+                values = [item.split("=", 1)[1] for item in env
+                          if isinstance(item, str) and item.startswith(selector + "=")]
+            else:
+                values = [attrs.get("Image")] if selector == "image" else []
+            if len(values) != 1 or len(str(values[0])) > 4096:
+                continue
+            pristine = not container.diff()
+            facts.append({"key": source["key"], "value": values[0], "source_kind": kind,
+                          "source_ref": {**source, "image": attrs.get("Image"), "pristine": pristine},
+                          "complete": kind != "runtime_env"})
+        return {"provider": self.name, "facts": facts}
+
     def observe_lifecycle(self, instance_id):
         label_filter = {"label": f"{LABEL_LAB_ID}={instance_id}"}
         nodes = []

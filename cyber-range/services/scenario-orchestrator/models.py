@@ -41,6 +41,19 @@ class LifecycleRecipe(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
+class ConfigurationSnapshot(Base):
+    __tablename__ = "configuration_snapshots"
+    __table_args__ = (UniqueConstraint("arena_id", "snapshot_digest", name="uq_configuration_digest"),)
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    arena_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    target_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    stage: Mapped[str] = mapped_column(Text, nullable=False)
+    snapshot_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    encrypted_payload: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
 class ResetOperation(Base):
     __tablename__ = "reset_operations"
     __table_args__ = (

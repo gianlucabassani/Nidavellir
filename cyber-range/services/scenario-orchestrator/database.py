@@ -31,7 +31,7 @@ from models import (
     AgentBuild, ApiKey, Base, BudgetAccount, BudgetAction, BudgetControl, BudgetGate, Deployment,
     EvalChallenge, EvalRun, EvalSuite, EvalTrial, Evaluation, Event,
     ForwardLease, LifecycleRecipe, ModelConnection, PocJob,
-    ResetOperation,
+    ResetOperation, ConfigurationSnapshot,
 )
 from states import LabStatus, validate_transition
 
@@ -1013,6 +1013,82 @@ class Database:
             return True
 
     # --- NV-02 lifecycle recipes / reset operations -------------------------
+
+    def save_configuration_snapshot(self, snapshot):
+        from configuration_lineage import verify_snapshot  # noqa: PLC0415
+        from crypto import encryption_enabled  # noqa: PLC0415
+
+        if not encryption_enabled():
+            raise ValueError("record encryption is required for configuration snapshots")
+        verify_snapshot(snapshot)
+        snapshot_id = snapshot["snapshot_id"]
+        with self._session() as session:
+            if session.get(Deployment, snapshot["arena_id"]) is None:
+                raise ValueError("configuration snapshot arena does not exist")
+            row = session.get(ConfigurationSnapshot, snapshot_id)
+            if row is not None:
+                return self._configuration_snapshot_payload(row)
+            row = ConfigurationSnapshot(id=snapshot_id, arena_id=snapshot["arena_id"],
+                target_digest=snapshot["target_identity"]["digest"], stage=snapshot["stage"],
+                snapshot_digest=snapshot["snapshot_digest"],
+                encrypted_payload=encrypt_secret(json.dumps(snapshot, sort_keys=True)),
+                created_at=datetime.now())
+            session.add(row)
+            self._append_event(session, snapshot["arena_id"], "system", "configuration_snapshot",
+                {"snapshot_id": snapshot_id, "snapshot_digest": snapshot["snapshot_digest"],
+                 "stage": snapshot["stage"], "fact_count": len(snapshot["facts"]),
+                 "completeness": snapshot["completeness"]})
+            try:
+                session.commit()
+            except IntegrityError:
+                session.rollback()
+                row = session.get(ConfigurationSnapshot, snapshot_id)
+                if row is None:
+                    raise ValueError("configuration snapshot collision") from None
+            result = self._configuration_snapshot_payload(row)
+            if result["snapshot_digest"] != snapshot["snapshot_digest"]:
+                raise ValueError("configuration snapshot id collision")
+            return result
+
+    @staticmethod
+    def _configuration_snapshot_payload(row):
+        from configuration_lineage import verify_snapshot  # noqa: PLC0415
+
+        plaintext = decrypt_secret(row.encrypted_payload)
+        if plaintext is None:
+            raise ValueError("configuration snapshot could not be decrypted")
+        snapshot = json.loads(plaintext)
+        verify_snapshot(snapshot)
+        if snapshot["arena_id"] != row.arena_id or snapshot["snapshot_digest"] != row.snapshot_digest:
+            raise ValueError("configuration snapshot digest or arena mismatch")
+        return snapshot
+
+    def get_configuration_snapshot(self, snapshot_id):
+        with self._session() as session:
+            row = session.get(ConfigurationSnapshot, snapshot_id)
+            return self._configuration_snapshot_payload(row) if row else None
+
+    def list_configuration_snapshots(self, arena_id, *, limit=100, before=None):
+        if not 1 <= limit <= 100:
+            raise ValueError("snapshot page limit must be 1 to 100")
+        with self._session() as session:
+            query = select(ConfigurationSnapshot).where(ConfigurationSnapshot.arena_id == arena_id)
+            if before:
+                cursor = session.get(ConfigurationSnapshot, before)
+                if cursor is None or cursor.arena_id != arena_id:
+                    raise ValueError("invalid snapshot cursor")
+                query = query.where(or_(ConfigurationSnapshot.created_at < cursor.created_at,
+                    (ConfigurationSnapshot.created_at == cursor.created_at) & (ConfigurationSnapshot.id < cursor.id)))
+            rows = session.scalars(query.order_by(ConfigurationSnapshot.created_at.desc(),
+                                                  ConfigurationSnapshot.id.desc()).limit(limit)).all()
+            return [self._configuration_snapshot_payload(row) for row in rows]
+
+    def find_configuration_snapshot_by_digest(self, arena_id, digest):
+        with self._session() as session:
+            row = session.scalar(select(ConfigurationSnapshot).where(
+                ConfigurationSnapshot.arena_id == arena_id,
+                ConfigurationSnapshot.snapshot_digest == digest))
+            return self._configuration_snapshot_payload(row) if row else None
 
     def save_lifecycle_recipe(self, deployment_id, recipe):
         encoded = encrypt_secret(json.dumps(recipe, sort_keys=True))

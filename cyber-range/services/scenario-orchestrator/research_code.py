@@ -356,6 +356,78 @@ def _show_file(repo: Path, ref: str, path: str) -> str:
     return text
 
 
+def configuration_history(repo: Path, refs: list[str], profile: dict) -> dict:
+    """Extract declared source values from pinned objects without a checkout."""
+    from configuration_lineage import validate_profile  # noqa: PLC0415
+    from configuration_capture import typed_value  # noqa: PLC0415
+
+    normalized = validate_profile(profile)
+    if not isinstance(refs, list) or not 1 <= len(refs) <= 32:
+        raise ResearchCodeError("configuration history requires 1 to 32 explicit refs")
+    declarations = [(fact, source) for fact in normalized["facts"] for source in fact["sources"]
+                    if source["kind"] == "source_file"]
+    paths = {source["path"] for _, source in declarations}
+    if len(paths) > 16:
+        raise ResearchCodeError("configuration history supports at most 16 files")
+    pins = [resolve_ref(repo, ref) for ref in refs]
+    if len(set(pins)) != len(pins):
+        raise ResearchCodeError("configuration history refs must be unique")
+    states = []
+    total_bytes = 0
+    for index, pin in enumerate(pins):
+        parent_output = run_git(repo, "show", "-s", "--format=%P", pin)
+        if parent_output.truncated:
+            raise ResearchCodeError("configuration ancestry output incomplete")
+        parents = parent_output.strip().split()
+        facts, missing = [], []
+        files = {}
+        for path in sorted(paths):
+            try:
+                content = _show_file(repo, pin, path)
+                total_bytes += len(content.encode())
+                if total_bytes > MAX_SEARCH_BYTES:
+                    raise ResearchCodeError("configuration history byte limit exceeded")
+                files[path] = content
+            except ResearchCodeError:
+                missing.append(path)
+        for declaration, source in declarations:
+            content = files.get(source["path"])
+            if content is None:
+                continue
+            try:
+                if source["parser"] == "dotenv":
+                    values = []
+                    for line in content.splitlines():
+                        line = line.strip()
+                        if not line or line.startswith("#") or "=" not in line:
+                            continue
+                        name, value = line.split("=", 1)
+                        if name.strip() == source["selector"]:
+                            value = value.strip()
+                            if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+                                value = value[1:-1]
+                            values.append(value)
+                    if len(values) != 1:
+                        raise ValueError("missing or ambiguous configuration key")
+                    raw = values[0]
+                else:
+                    raw = json.loads(content)
+                    for part in source["selector"][1:].split("/"):
+                        part = part.replace("~1", "/").replace("~0", "~")
+                        raw = raw[int(part)] if isinstance(raw, list) else raw[part]
+                value = typed_value(raw, declaration)
+            except (ValueError, TypeError, KeyError, IndexError):
+                missing.append(declaration["key"])
+                continue
+            facts.append({"key": declaration["key"], "value": value,
+                          "source_kind": "source_file", "complete": True,
+                          "source_ref": {**source, "ref": pin}})
+        states.append({"ref": pin, "parent_digest": parents[0] if len(parents) == 1 else None,
+                       "adjacent_to_previous": index > 0 and parents == [pins[index - 1]],
+                       "facts": facts, "missing": sorted(set(missing))})
+    return {"states": states, "profile_digest": normalized["digest"], "counts_complete": True}
+
+
 def _local_nodes(node):
     """Walk a scope without attributing nested functions/classes to its owner."""
     yield node

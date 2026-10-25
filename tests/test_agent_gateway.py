@@ -925,3 +925,17 @@ def test_replay_cannot_silently_ignore_an_incomplete_identity_switch():
         tools.replay_http_transaction(ctx, 'a1', 'sha256:' + 'a' * 64,
                                      credential_header_names=['Authorization'])
     assert ctx.steps_used == 0
+
+
+def test_configuration_lineage_tool_is_read_only_and_traces_only_ids(tmp_path, monkeypatch):
+    ctx = _ctx(stance=Stance.attacker, trace_dir=str(tmp_path))
+    ctx.steps_used = ctx.step_budget = 1
+    monkeypatch.setattr(ctx.client, "configuration_lineage", lambda *_: {
+        "analysis_id": "abc123abc123", "confidence": "inferred",
+        "candidate_keys": ["service.auth.enabled"], "private": "do-not-trace"}, raising=False)
+    result = tools.get_configuration_lineage(ctx, "a1", "abc123abc123")
+    assert result["candidate_keys"] == ["service.auth.enabled"]
+    assert ctx.steps_used == 1
+    assert "do-not-trace" not in (tmp_path / "a1.jsonl").read_text()
+    with pytest.raises(ToolNotAllowed):
+        tools.get_configuration_lineage(_ctx(stance=Stance.defender), "a1", "abc123abc123")

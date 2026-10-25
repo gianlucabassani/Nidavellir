@@ -112,6 +112,9 @@ def _observation(snapshot, verdict, *, healthy=True):
         "controls_healthy": healthy,
         "validator_id": "http_access_control",
         "validator_version": 1,
+        "probe_digest": "sha256:" + "9" * 64,
+        "control_plan_digest": "sha256:" + "7" * 64,
+        "replay_verified": True,
         "evidence_digests": [
             "sha256:" + ("1" if verdict == "refuted" else "2") * 64
         ],
@@ -431,3 +434,65 @@ def test_analysis_never_uses_timestamp_as_history_order():
     assert analysis["confidence"] == "unknown"
     assert analysis["earliest_known_vulnerable"] is None
     assert "no_refuted_predecessor" in analysis["missing_evidence"]
+
+
+def test_analysis_requires_matched_probes_and_replay_evidence():
+    before = _history_snapshot(value=False, digest="a" * 40, captured_at="2026-10-24T13:00:00+00:00")
+    after = _history_snapshot(value=True, digest="b" * 40, captured_at="2026-10-24T13:01:00+00:00")
+    left, right = _observation(before, "refuted"), _observation(after, "confirmed")
+    right["probe_digest"] = "sha256:" + "8" * 64
+    result = lineage.analyze_history(snapshots=[before, after], observations=[left, right], research_key="root")
+    assert result["confidence"] == "unknown"
+    right["probe_digest"] = left["probe_digest"]
+    right["replay_verified"] = False
+    result = lineage.analyze_history(snapshots=[before, after], observations=[left, right], research_key="root")
+    assert result["confidence"] == "supported"
+
+
+def test_historical_candidate_does_not_hide_missing_runtime_layers():
+    snapshot = lineage.capture_snapshot(arena_id="partial-history", target_identity=_identity(),
+        profile=_profile(), facts=[_fact(False, "source_file", path="config/defaults.env")],
+        stage="historical_candidate", lineage_id="fixture")
+    assert snapshot["completeness"]["status"] == "partial"
+    assert "runtime" in snapshot["completeness"]["missing_layers"]
+
+
+def test_profile_rejects_string_booleans_and_unnormalized_paths():
+    profile = _profile()
+    profile["facts"][0]["sensitive"] = "false"
+    with pytest.raises(lineage.ConfigurationLineageError):
+        lineage.validate_profile(profile)
+    profile = _profile()
+    profile["facts"][0]["sources"][0]["path"] = "config/./defaults.env"
+    with pytest.raises(lineage.ConfigurationLineageError):
+        lineage.validate_profile(profile)
+
+
+def test_required_runtime_observation_is_checked_per_key():
+    profile = _two_fact_profile()
+    snapshot = lineage.capture_snapshot(arena_id="partial-key", target_identity=_identity(),
+        profile=profile, facts=[
+            _fact(False, "source_file", path="config/defaults.env"),
+            _fact(False, "scenario_env", node="victim"),
+            _named_fact("service.debug.enabled", False, "runtime_env", node="victim")],
+        stage="runtime", lineage_id="fixture")
+    assert snapshot["completeness"]["status"] == "partial"
+    assert "service.auth.registration_enabled@runtime" in snapshot["completeness"]["missing_facts"]
+
+
+def test_different_control_plans_cannot_prove_introduction():
+    before = _history_snapshot(value=False, digest="a" * 40, captured_at="2026-10-24T13:00:00+00:00")
+    after = _history_snapshot(value=True, digest="b" * 40, captured_at="2026-10-24T13:01:00+00:00")
+    left, right = _observation(before, "refuted"), _observation(after, "confirmed")
+    right["control_plan_digest"] = "sha256:" + "6" * 64
+    result = lineage.analyze_history(snapshots=[before, after], observations=[left, right], research_key="root")
+    assert result["confidence"] == "unknown"
+
+
+def test_unknown_sensitivity_is_withheld_instead_of_defaulting_public(encryption_on):
+    profile = _profile()
+    profile["facts"][0].pop("sensitive")
+    snapshot = lineage.capture_snapshot(arena_id="unknown-sensitivity", target_identity=_identity(),
+        profile=profile, facts=[_fact(True, "runtime_env", node="victim")], stage="runtime", lineage_id="fixture")
+    assert snapshot["facts"][0]["value_state"] == "withheld"
+    assert "value" not in snapshot["facts"][0]

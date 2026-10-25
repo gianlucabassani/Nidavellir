@@ -654,6 +654,19 @@ def get_http_transaction(ctx: GatewayContext, arena_id: str, digest: str) -> dic
     return result
 
 
+def get_configuration_lineage(ctx: GatewayContext, arena_id: str, analysis_id: str) -> dict:
+    """Read an explicitly published configuration hypothesis; spend no action."""
+    _guard(ctx, "get_configuration_lineage")
+    args = {"analysis_id": analysis_id}
+    try:
+        result = ctx.client.configuration_lineage(ctx.session.api_key, arena_id, analysis_id)
+    except Exception:
+        _trace(ctx, "get_configuration_lineage", args, ok=False, arena_id=arena_id)
+        raise
+    _trace(ctx, "get_configuration_lineage", args, ok=True, arena_id=arena_id)
+    return result
+
+
 def compare_http_transactions(ctx: GatewayContext, arena_id: str, left: str, right: str) -> dict:
     """Read a bounded A/B diff of this agent's captures without sending a request."""
     _guard(ctx, "compare_http_transactions")

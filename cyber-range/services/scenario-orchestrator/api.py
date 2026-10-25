@@ -311,6 +311,15 @@ def _record_lifecycle_recipe(
     setup: dict | None = None,
 ) -> dict:
     lifecycle = scenario_config.get("lifecycle") or {}
+    if lifecycle.get("configuration_profile"):
+        from crypto import encryption_enabled  # noqa: PLC0415
+
+        if not encryption_enabled():
+            record = db.get_deployment(deployment_id)
+            if record and record["status"] in {"pending", "deploying"}:
+                db.update_deployment(deployment_id, status="failed",
+                    error="configuration lineage requires record encryption", actor="api")
+            raise HTTPException(422, "configuration lineage requires SECRETS_ENCRYPTION_KEY")
     recipe = lifecycle_manifest.build_recipe(
         scenario=scenario_config,
         scenario_name=scenario_name,
@@ -329,7 +338,14 @@ def _record_lifecycle_recipe(
         lifecycle_manifest.public_recipe(recipe),
         actor="api",
     )
+    _capture_deployment_configuration(deployment_id, recipe)
     return recipe
+
+
+def _capture_deployment_configuration(arena_id: str, recipe: dict) -> dict | None:
+    import configuration_api  # noqa: PLC0415
+
+    return configuration_api.capture_and_save(sys.modules[__name__], arena_id, recipe)
 
 
 class DeployRequest(EngagementIntentRequest):
@@ -3103,7 +3119,7 @@ def _redact_findings_for_agent(principal: Principal, events: list[dict]) -> list
     hidden = ("matched_vuln_id", "validation")
     redacted = []
     for e in events:
-        if e.get("type") in ("finding_verification", "http_request_group"):
+        if e.get("type", "").startswith("configuration_") or e.get("type") in ("finding_verification", "http_request_group"):
             # Operator notes and manual adjudication is operator judgment and can reveal truth.
             continue
         payload = e.get("payload")
@@ -4704,7 +4720,8 @@ def _open_session_or_409(instance_id: str) -> dict:
     return sess
 
 
-def _exec_setup_command(instance_id, record, sess, node, command, timeout, actor, via):
+def _exec_setup_command(instance_id, record, sess, node, command, timeout, actor, via,
+                        configuration_step=None):
     """Shared gated exec for every setup mode (operator-scripted step / HITL
     approval / autonomous run): enforces the time-box (fail-safe auto-revoke),
     the step budget, and victim-scope, runs it on the victim, and records a
@@ -4751,7 +4768,7 @@ def _exec_setup_command(instance_id, record, sess, node, command, timeout, actor
          # Bounded; the operator + the configurator agent (via await) may see it.
          "stdout": (result.get("stdout") or "")[:SETUP_OUTPUT_CAP],
          "stderr": (result.get("stderr") or "")[:SETUP_OUTPUT_CAP],
-         "via": via, "actor": actor},
+         "via": via, "actor": actor, "configuration_step": configuration_step},
         actor=actor,
     )
     return result
@@ -4772,6 +4789,7 @@ class SetupStepRequest(BaseModel):
     node: str = Field(min_length=1, max_length=64)
     command: str = Field(min_length=1, max_length=4096)
     timeout: int = Field(default=60, ge=1, le=600)
+    configuration_step: str | None = Field(default=None, pattern=r"^[a-z0-9_-]{1,64}$")
 
 
 @app.post("/arenas/{instance_id}/setup/step")
@@ -4787,7 +4805,7 @@ def setup_step(
     sess = _open_session_or_409(instance_id)
     result = _exec_setup_command(
         instance_id, record, sess, req.node, req.command, req.timeout,
-        actor=principal.name, via="operator",
+        actor=principal.name, via="operator", configuration_step=req.configuration_step,
     )
     return {"node": req.node, **_step_response(result, sess)}
 
@@ -5167,6 +5185,13 @@ def setup_finish(instance_id: str, principal: Principal = Depends(require_princi
         f"Setup session {sess['session_id']} finished on arena {instance_id} "
         f"by '{principal.name}' ({sess['steps_run']} steps)"
     )
+    recipe = db.get_lifecycle_recipe(instance_id)
+    if recipe and recipe.get("configuration_profile"):
+        try:
+            configuration_api.capture_and_save(sys.modules[__name__], instance_id, recipe, "post_setup")
+        except (ValueError, RuntimeError, NotImplementedError):
+            db.record_event(instance_id, "configuration_capture_failed",
+                            {"stage": "post_setup", "reason": "trusted_observation_unavailable"}, actor="system")
     return {"finished": True, "session_id": sess["session_id"], "steps_run": sess["steps_run"]}
 
 
@@ -6490,6 +6515,10 @@ def research_sibling_search(req: ResearchSiblingSearch,
             research_code.repo_root(), req.ref or "HEAD", req.pattern, req.path_scope,
             offset=req.offset))
 
+
+import configuration_api  # noqa: E402
+
+configuration_api.install(app, sys.modules[__name__])
 
 if __name__ == "__main__":
     import uvicorn

@@ -41,7 +41,7 @@ def test_upgrade_head_builds_full_schema(tmp_path, monkeypatch):
     assert {
         "deployments", "api_keys", "events", "lifecycle_recipes",
         "reset_operations", "poc_jobs", "budget_gates", "budget_accounts",
-        "budget_actions", "budget_controls", "alembic_version",
+        "budget_actions", "budget_controls", "alembic_version", "configuration_snapshots",
     } <= tables
 
     dep_cols = {c["name"] for c in inspector.get_columns("deployments")}
@@ -87,7 +87,7 @@ def test_migrated_schema_matches_models_create_all(tmp_path, monkeypatch):
     for table in (
         "deployments", "api_keys", "events", "lifecycle_recipes", "reset_operations",
         "poc_jobs", "budget_gates", "budget_accounts", "budget_actions",
-        "budget_controls",
+        "budget_controls", "configuration_snapshots",
     ):
         migrated_cols = {c["name"]: c["type"].__class__.__name__
                          for c in migrated.get_columns(table)}

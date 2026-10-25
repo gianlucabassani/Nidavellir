@@ -28,6 +28,9 @@ class RangeProvider(ABC):
     #: `requires.provider_class` when a caller picks a provider explicitly.
     infra_class: str = "any"
 
+    def observe_configuration(self, instance_id: str, selectors: list[dict]) -> dict:
+        raise NotImplementedError(f"{self.name} does not support configuration observation")
+
     def open_forward_relay(self, instance_id, forward_id, foothold, target, segment, port,
                            timeout_seconds, start_guard):
         """Start a fixed-destination TCP relay and return its Docker stream.

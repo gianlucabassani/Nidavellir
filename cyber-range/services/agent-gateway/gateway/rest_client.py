@@ -187,6 +187,9 @@ class RestClient:
             "GET", f"/arenas/{arena_id}/http/transactions/{encoded}", api_key
         )
 
+    def configuration_lineage(self, api_key: str, arena_id: str, analysis_id: str) -> dict:
+        return self._request("GET", f"/arenas/{arena_id}/configuration-lineage/{analysis_id}", api_key)
+
     def http_comparison(self, api_key: str, arena_id: str, left: str, right: str) -> dict:
         query = urllib.parse.urlencode({"left": left, "right": right})
         return self._request("GET", f"/arenas/{arena_id}/http/comparison?{query}", api_key)

@@ -9,6 +9,7 @@ templates all validate against the schema.
 """
 import pytest
 from pydantic import ValidationError
+from copy import deepcopy
 
 import scenarios
 from scenario_spec import (
@@ -37,6 +38,41 @@ V3 = {
 }
 
 
+def _configuration_profile():
+    return {
+        "schema": "nidavellir/configuration-profile/v1",
+        "id": "web-auth",
+        "version": 1,
+        "precedence": ["source", "build", "scenario", "deployment", "setup", "runtime"],
+        "facts": [
+            {
+                "key": "service.auth.registration_enabled",
+                "type": "bool",
+                "sensitive": False,
+                "required": True,
+                "security_tags": ["authentication"],
+                "sources": [{
+                    "kind": "scenario_env",
+                    "node": "web",
+                    "selector": "REGISTRATION_ENABLED",
+                }],
+            },
+            {
+                "key": "service.auth.signing_secret",
+                "type": "string",
+                "sensitive": True,
+                "required": False,
+                "security_tags": ["authentication"],
+                "sources": [{
+                    "kind": "runtime_env",
+                    "node": "web",
+                    "selector": "SIGNING_SECRET",
+                }],
+            },
+        ],
+    }
+
+
 def test_valid_v3_spec_parses():
     spec = ScenarioSpec.from_raw(V3)
     assert spec.schema_version == "nidavellir/v3"
@@ -45,6 +81,88 @@ def test_valid_v3_spec_parses():
     assert spec.agents[0].stance is Stance.attacker
     assert spec.nodes[0].ports == [80]
     assert spec.warnings() == []
+
+
+def test_configuration_profile_is_validated_and_normalized():
+    raw = deepcopy(V3)
+    raw["lifecycle"] = {"configuration_profile": _configuration_profile()}
+
+    spec = ScenarioSpec.from_raw(raw)
+    profile = spec.lifecycle["configuration_profile"]
+
+    assert profile["id"] == "web-auth"
+    assert profile["digest"].startswith("sha256:")
+    assert [fact["key"] for fact in profile["facts"]] == [
+        "service.auth.registration_enabled",
+        "service.auth.signing_secret",
+    ]
+
+
+@pytest.mark.parametrize(
+    "mutate,match",
+    [
+        (lambda profile: profile.update({"command": "cat /etc/shadow"}), "unknown field"),
+        (lambda profile: profile["facts"].append(deepcopy(profile["facts"][0])), "duplicated"),
+        (lambda profile: profile["facts"][0].update({"key": "INVALID KEY"}), "key"),
+        (
+            lambda profile: profile["facts"][0]["sources"][0].update(
+                {"kind": "shell"}
+            ),
+            "source kind",
+        ),
+        (
+            lambda profile: profile["facts"][0]["sources"][0].update(
+                {"node": "ghost"}
+            ),
+            "unknown node",
+        ),
+    ],
+)
+def test_configuration_profile_rejects_invalid_shapes(mutate, match):
+    raw = deepcopy(V3)
+    profile = _configuration_profile()
+    mutate(profile)
+    raw["lifecycle"] = {"configuration_profile": profile}
+
+    with pytest.raises(ValidationError, match=match):
+        ScenarioSpec.from_raw(raw)
+
+
+def test_configuration_profile_rejects_more_than_128_facts():
+    raw = deepcopy(V3)
+    profile = _configuration_profile()
+    template = profile["facts"][0]
+    profile["facts"] = [
+        {**deepcopy(template), "key": f"service.setting.{index}"}
+        for index in range(129)
+    ]
+    raw["lifecycle"] = {"configuration_profile": profile}
+
+    with pytest.raises(ValidationError, match="128"):
+        ScenarioSpec.from_raw(raw)
+
+
+def test_configuration_profile_rejects_more_than_64_kib():
+    raw = deepcopy(V3)
+    profile = _configuration_profile()
+    template = profile["facts"][0]
+    sources = [
+        {
+            "kind": "source_file",
+            "path": f"config/{index:02d}-{'x' * 180}.env",
+            "parser": "dotenv",
+            "selector": "REGISTRATION_ENABLED",
+        }
+        for index in range(16)
+    ]
+    profile["facts"] = [
+        {**deepcopy(template), "key": f"service.setting.{index}", "sources": sources}
+        for index in range(128)
+    ]
+    raw["lifecycle"] = {"configuration_profile": profile}
+
+    with pytest.raises(ValidationError, match="64 KiB"):
+        ScenarioSpec.from_raw(raw)
 
 
 # --- legacy normalization ----------------------------------------------------

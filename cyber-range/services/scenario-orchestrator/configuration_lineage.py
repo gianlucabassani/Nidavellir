@@ -17,7 +17,7 @@ INTRODUCTION_SCHEMA = "nidavellir/configuration-introduction/v1"
 _PRECEDENCE = ("source", "build", "scenario", "deployment", "setup", "runtime")
 _STAGE_LAYERS = {
     "deployment": frozenset(_PRECEDENCE[:4]),
-    "post_setup": frozenset(_PRECEDENCE[:5]),
+    "post_setup": frozenset(_PRECEDENCE),
     "runtime": frozenset(_PRECEDENCE),
     "historical_candidate": frozenset({"source"}),
 }
@@ -28,6 +28,7 @@ _SOURCE_CLASS = {
     "deployment": "deployment",
     "setup": "setup",
     "runtime_env": "runtime",
+    "runtime_readback": "runtime",
 }
 _TYPE_NAMES = frozenset({"bool", "int", "string", "enum"})
 _ID_RE = re.compile(r"[a-z][a-z0-9-]{0,63}\Z")
@@ -51,7 +52,8 @@ def _relative_path(value: object) -> str:
     if not isinstance(value, str) or not value or len(value) > 256:
         raise ConfigurationLineageError("source path must be a bounded relative path")
     path = PurePosixPath(value)
-    if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
+    if (path.is_absolute() or value != path.as_posix() or "\\" in value
+            or any(part in {"", ".", ".."} for part in path.parts)):
         raise ConfigurationLineageError("source path must be normalized and relative")
     return path.as_posix()
 
@@ -129,6 +131,9 @@ def validate_profile(profile: dict) -> dict:
         type_name = raw.get("type")
         if type_name not in _TYPE_NAMES:
             raise ConfigurationLineageError("profile fact type is unsupported")
+        for boolean in ("sensitive", "required"):
+            if boolean in raw and not isinstance(raw[boolean], bool):
+                raise ConfigurationLineageError(f"profile {boolean} must be a boolean")
         enum_values = raw.get("enum")
         if type_name == "enum":
             if (
@@ -154,7 +159,7 @@ def validate_profile(profile: dict) -> dict:
         normalized = {
             "key": key,
             "type": type_name,
-            "sensitive": bool(raw.get("sensitive", False)),
+            "sensitive": bool(raw.get("sensitive", True)),
             "required": bool(raw.get("required", False)),
             "security_tags": sorted(set(tags)),
             "sources": sorted(
@@ -302,24 +307,31 @@ def capture_snapshot(
         _SOURCE_CLASS[source["kind"]]
         for item in normalized_profile["facts"] if item["required"]
         for source in item["sources"]
-        if _SOURCE_CLASS[source["kind"]] in _STAGE_LAYERS[stage]
     }
     observed_layers = {
         item["source_class"] for item in normalized_facts
         if item["complete"] and item["source_class"] in _STAGE_LAYERS[stage]
     }
     missing_layers = sorted(declared_layers - observed_layers)
+    required_facts = {(item["key"], _SOURCE_CLASS[source["kind"]])
+                      for item in normalized_profile["facts"] if item["required"]
+                      for source in item["sources"]}
+    observed_facts = {(item["key"], item["source_class"]) for item in normalized_facts
+                      if item["complete"] and item["source_class"] in _STAGE_LAYERS[stage]}
+    missing_facts = sorted(f"{key}@{source}" for key, source in required_facts - observed_facts)
     missing_keys = sorted(
         key for key, item in by_key.items()
         if item["required"] and key not in {value["key"] for value in effective}
     )
     completeness = {
-        "status": "complete" if not missing_layers and not missing_keys and not conflicts
+        "status": "complete" if not missing_layers and not missing_keys and not missing_facts and not conflicts
         else "partial",
         "missing_layers": missing_layers,
     }
     if missing_keys:
         completeness["missing_keys"] = missing_keys
+    if missing_facts:
+        completeness["missing_facts"] = missing_facts
     projection = {
         "schema": SNAPSHOT_SCHEMA,
         "arena_id": arena_id,
@@ -354,6 +366,17 @@ def public_snapshot(snapshot: dict) -> dict:
             if fact.get("value_state") == "withheld":
                 fact.pop("value", None)
     return projection
+
+
+def verify_snapshot(snapshot: dict) -> None:
+    """Check immutable content identity before storage, use or recovery."""
+    projection = {key: value for key, value in snapshot.items()
+                  if key not in {"snapshot_id", "snapshot_digest", "captured_at"}}
+    expected = digest(projection)
+    if (snapshot.get("schema") != SNAPSHOT_SCHEMA
+            or snapshot.get("snapshot_digest") != expected
+            or snapshot.get("snapshot_id") != expected.removeprefix("sha256:")[:12]):
+        raise ConfigurationLineageError("configuration snapshot digest mismatch")
 
 
 def agent_snapshot(snapshot: dict) -> dict:
@@ -507,11 +530,19 @@ def analyze_history(*, snapshots: list[dict], observations: list[dict],
             == later_observation.get("validator_version")
             and earlier_observation.get("validator_id") is not None
         )
+        matched_probe = bool(earlier_observation.get("probe_digest")
+                             and earlier_observation.get("probe_digest") == later_observation.get("probe_digest"))
+        matched_controls = bool(earlier_observation.get("control_plan_digest")
+            and earlier_observation.get("control_plan_digest") == later_observation.get("control_plan_digest"))
+        comparable = comparable and matched_probe and matched_controls
         if not comparable:
             missing_evidence.append("incomparable_validators")
         adjacent = bool(
             earliest_index == predecessor_index + 1
-            and (after.get("target_identity") or {}).get("adjacent_to_previous") is True
+            and ((after.get("target_identity") or {}).get("parent_digest")
+                 == (before.get("target_identity") or {}).get("digest")
+                 or later_observation.get("controlled_transition") is True
+                 or (after.get("target_identity") or {}).get("adjacent_to_previous") is True)
         )
         if not adjacent:
             missing_evidence.append("non_adjacent_history")
@@ -520,8 +551,11 @@ def analyze_history(*, snapshots: list[dict], observations: list[dict],
             missing_evidence.append("partial_configuration")
         if not delta["candidate_keys"]:
             missing_evidence.append("no_enabling_delta")
+        replayed = earlier_observation.get("replay_verified") is True and later_observation.get("replay_verified") is True
+        if not replayed:
+            missing_evidence.append("unverified_reset_replay")
         if comparable and delta["candidate_keys"]:
-            confidence = "proven" if adjacent and complete else "supported"
+            confidence = "proven" if adjacent and complete and replayed else "supported"
 
     if earliest_index is None and not observations:
         delta = compare_snapshots(snapshots[-2], snapshots[-1])
@@ -554,6 +588,7 @@ def analyze_history(*, snapshots: list[dict], observations: list[dict],
         "causal_key": candidate_keys[0]
         if confidence == "proven" and len(candidate_keys) == 1 else None,
         "confidence": confidence,
+        "introduction_scope": "selected_configuration_states",
         "missing_evidence": sorted(set(missing_evidence)),
         "delta_digest": delta.get("delta_digest") if delta else None,
         "evidence_digests": evidence_digests,

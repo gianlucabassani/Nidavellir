@@ -34,7 +34,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . /app/
 
 # Create directories for runtime data
-RUN mkdir -p /app/runs /app/data /app/keys /app/cache/terraform-plugins
+RUN mkdir -p /app/runs /app/data /app/keys /app/cache/terraform-plugins \
+    /app/terraform /app/terraform-aws /app/terraform-libvirt
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
