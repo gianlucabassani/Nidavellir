@@ -1,0 +1,141 @@
+{
+  "schema": "nidavellir/configuration-lineage-live/v1",
+  "status": "passed",
+  "date": "2026-10-25-438b4097",
+  "fixture_image": "sha256:c1433c22d148efd9edd1017b395cb5b696dd154a61e488ef8138bdcd4b44bb49",
+  "snapshots": [
+    {
+      "arena_id": "19c96b0a-8e55-49a9-920f-eb6dc80dc8f4",
+      "snapshot_id": "42d27592a139",
+      "snapshot_digest": "sha256:42d27592a13979703396160f1b7382c21256bd1324166d1400a1176a973e0337",
+      "profile": {
+        "digest": "sha256:1cc38fd3ea11528694638fe069ea3cf38637494056331ae5018dc1e5be9d0906",
+        "id": "configuration-authorization",
+        "version": 1
+      },
+      "completeness": {
+        "missing_layers": [],
+        "status": "complete"
+      }
+    },
+    {
+      "arena_id": "be815a92-460c-4725-9c79-662f776b6e9c",
+      "snapshot_id": "768d242779d2",
+      "snapshot_digest": "sha256:768d242779d27820d1d2766842ed165193d3bf337a08063edf43b89e99a9a398",
+      "profile": {
+        "digest": "sha256:1cc38fd3ea11528694638fe069ea3cf38637494056331ae5018dc1e5be9d0906",
+        "id": "configuration-authorization",
+        "version": 1
+      },
+      "completeness": {
+        "missing_layers": [],
+        "status": "complete"
+      }
+    },
+    {
+      "arena_id": "5d021a2b-cd3c-4d53-90d8-e495ea8142d5",
+      "snapshot_id": "b7632f8e62a1",
+      "snapshot_digest": "sha256:b7632f8e62a14292d7f09f9d99001c7f1f6db438047bfc4997b4b627532d82d2",
+      "profile": {
+        "digest": "sha256:1cc38fd3ea11528694638fe069ea3cf38637494056331ae5018dc1e5be9d0906",
+        "id": "configuration-authorization",
+        "version": 1
+      },
+      "completeness": {
+        "missing_layers": [],
+        "status": "complete"
+      }
+    }
+  ],
+  "findings": [
+    {
+      "arena_id": "19c96b0a-8e55-49a9-920f-eb6dc80dc8f4",
+      "finding_id": "e6c9d95dda57",
+      "verdict": "refuted"
+    },
+    {
+      "arena_id": "be815a92-460c-4725-9c79-662f776b6e9c",
+      "finding_id": "ad513bb47441",
+      "verdict": "confirmed"
+    },
+    {
+      "arena_id": "5d021a2b-cd3c-4d53-90d8-e495ea8142d5",
+      "finding_id": "b33e804a2bbc",
+      "verdict": "confirmed"
+    }
+  ],
+  "analysis": {
+    "schema": "nidavellir/configuration-introduction/v1",
+    "research_key": "e6c9d95dda57",
+    "lineage_id": "lineage-438b4097",
+    "profile_digest": "sha256:1cc38fd3ea11528694638fe069ea3cf38637494056331ae5018dc1e5be9d0906",
+    "ordered_snapshot_ids": [
+      "42d27592a139",
+      "768d242779d2",
+      "b7632f8e62a1"
+    ],
+    "predecessor": "42d27592a139",
+    "earliest_known_vulnerable": "768d242779d2",
+    "candidate_keys": [
+      "service.authorization.disabled"
+    ],
+    "causal_key": "service.authorization.disabled",
+    "confidence": "proven",
+    "introduction_scope": "selected_configuration_states",
+    "missing_evidence": [],
+    "delta_digest": "sha256:a2605c0644f37450070692dd8993dcdf1b98551f9b28bfe3accef4111777f369",
+    "evidence_digests": [
+      "sha256:01b7a08527ea2254d654a07e753f19babec376e68b1df26c00aaca4718d2962e",
+      "sha256:1e88dab86629efa6b669050f4ad519c9b21c85f93d5de2d482602a50887d707c",
+      "sha256:2f5b5cfc733493b598b8b918886a078ceb27fb1d7dbff5441f5ec0b4f7464663",
+      "sha256:31e796d1d08cfaaa2a0d095ad5cb5db2a2d1ad4292b81587be1e51167867736e",
+      "sha256:4346de6eae5a3e50aef70dfbb4f27051eb5a38497823e14bd533d7e065f1a5aa",
+      "sha256:6babe4765489b30ef189d2bd435ad064354d3d301d642708c471f281f6216c53",
+      "sha256:a149138d10ea7c3e0f6404398678aaab6e145053c7a13ad5cbe40d943e221d1b",
+      "sha256:abca8ddbc0bd672d82a37576df6b2ec84f1cbb047d043b6ae69f50e7c2fe58d4",
+      "sha256:be4a05c249f55dcf14db6db467ee496094e2f1f55c194aa54f608a4411624aac"
+    ],
+    "analysis_digest": "sha256:3ab912579c0bea7ce2cc4c089b7245744e5a49038dffd3686e4dc995144b7181",
+    "analysis_id": "3ab912579c0b",
+    "subject_arena_id": "5d021a2b-cd3c-4d53-90d8-e495ea8142d5",
+    "publish_to": [
+      "nv06-agent"
+    ]
+  },
+  "mcp": true,
+  "post_teardown": true,
+  "static_downgrade": true,
+  "budget_unchanged": true,
+  "remaining": {
+    "cd1cca60-ef11-4130-9d91-0fc0926bdb1b": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0,
+      "images": 0
+    },
+    "19c96b0a-8e55-49a9-920f-eb6dc80dc8f4": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0,
+      "images": 0
+    },
+    "33487679-be01-4293-b620-c2dc3e46031a": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0,
+      "images": 0
+    },
+    "be815a92-460c-4725-9c79-662f776b6e9c": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0,
+      "images": 0
+    },
+    "5d021a2b-cd3c-4d53-90d8-e495ea8142d5": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0,
+      "images": 0
+    }
+  }
+}

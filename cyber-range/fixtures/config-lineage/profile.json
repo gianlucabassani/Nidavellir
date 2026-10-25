@@ -1,0 +1,24 @@
+{
+  "schema": "nidavellir/configuration-profile/v1",
+  "id": "configuration-authorization",
+  "version": 1,
+  "precedence": ["source", "build", "scenario", "deployment", "setup", "runtime"],
+  "facts": [
+    {"key": "service.setup.authorization.disabled", "type": "bool", "required": false,
+     "sensitive": false, "security_tags": ["authorization"],
+     "sources": [{"kind": "setup", "node": "target", "selector": "DISABLE_AUTH", "step": "configure-auth"}]},
+    {"key": "service.debug.enabled", "type": "bool", "required": true,
+     "sensitive": false, "security_tags": ["debug"],
+     "sources": [{"kind": "scenario_env", "node": "target", "selector": "DEBUG_MODE"},
+                 {"kind": "runtime_readback", "node": "target", "selector": "DEBUG_MODE"}]},
+    {"key": "service.authorization.disabled", "type": "bool", "required": true,
+     "sensitive": false, "security_tags": ["authorization"],
+     "sources": [{"kind": "scenario_env", "node": "target", "selector": "DISABLE_AUTH"},
+                 {"kind": "runtime_readback", "node": "target", "selector": "AUTHORIZATION_MIRROR"},
+                 {"kind": "runtime_readback", "node": "target", "selector": "DISABLE_AUTH"}]},
+    {"key": "service.signing.secret", "type": "string", "required": true,
+     "sensitive": true, "security_tags": ["authentication"],
+     "sources": [{"kind": "scenario_env", "node": "target", "selector": "SIGNING_SECRET"},
+                 {"kind": "runtime_readback", "node": "target", "selector": "SIGNING_SECRET"}]}
+  ]
+}

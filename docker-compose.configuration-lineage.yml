@@ -1,0 +1,10 @@
+services:
+  orchestrator:
+    environment:
+      SECRETS_ENCRYPTION_KEY: ${LINEAGE_ENCRYPTION_KEY:?set ephemeral key}
+  worker:
+    environment:
+      SECRETS_ENCRYPTION_KEY: ${LINEAGE_ENCRYPTION_KEY:?set ephemeral key}
+  beat:
+    environment:
+      SECRETS_ENCRYPTION_KEY: ${LINEAGE_ENCRYPTION_KEY:?set ephemeral key}

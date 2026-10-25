@@ -106,6 +106,9 @@ verify-nv10-live: ## Clean-install encrypted backup and restore acceptance
 verify-vaultwarden-live: ## Non-synthetic CVE-2026-26012 calibration acceptance
 	python3 scripts/verify-vaultwarden-live.py
 
+verify-configuration-lineage-live: ## Isolated configuration-introduction REST/MCP acceptance
+	python3 scripts/verify-configuration-lineage-live.py
+
 up: ## Start the full stack via docker-compose (mock mode by default)
 	$(COMPOSE) up -d --build
 

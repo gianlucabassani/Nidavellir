@@ -1,0 +1,139 @@
+{
+  "schema": "nidavellir/configuration-lineage-live/v1",
+  "status": "failed",
+  "date": "2026-10-24-5e7d1a72",
+  "fixture_image": "sha256:c1433c22d148efd9edd1017b395cb5b696dd154a61e488ef8138bdcd4b44bb49",
+  "snapshots": [
+    {
+      "arena_id": "60784023-5ddd-4378-932c-3feb9a7ba710",
+      "snapshot_id": "6643e4213a85",
+      "snapshot_digest": "sha256:6643e4213a851ce769b5d3d1bf67c25eb745fb4cba683e8018deaedbf34057e2",
+      "profile": {
+        "digest": "sha256:1cc38fd3ea11528694638fe069ea3cf38637494056331ae5018dc1e5be9d0906",
+        "id": "configuration-authorization",
+        "version": 1
+      },
+      "completeness": {
+        "missing_layers": [],
+        "status": "complete"
+      }
+    },
+    {
+      "arena_id": "fd9e3c31-577a-48f3-8c48-f4028e83bcad",
+      "snapshot_id": "046689afd342",
+      "snapshot_digest": "sha256:046689afd342eb115749c5cd3b873357acaa157c452bd555a2294bfc40ef5abb",
+      "profile": {
+        "digest": "sha256:1cc38fd3ea11528694638fe069ea3cf38637494056331ae5018dc1e5be9d0906",
+        "id": "configuration-authorization",
+        "version": 1
+      },
+      "completeness": {
+        "missing_layers": [],
+        "status": "complete"
+      }
+    },
+    {
+      "arena_id": "d56fb72f-84c4-441e-a05e-f67ade8b2300",
+      "snapshot_id": "8cc72cd0f9e3",
+      "snapshot_digest": "sha256:8cc72cd0f9e32347517c04d927f992b934bedf21193986d3dcc6f3ad023a8256",
+      "profile": {
+        "digest": "sha256:1cc38fd3ea11528694638fe069ea3cf38637494056331ae5018dc1e5be9d0906",
+        "id": "configuration-authorization",
+        "version": 1
+      },
+      "completeness": {
+        "missing_layers": [],
+        "status": "complete"
+      }
+    }
+  ],
+  "findings": [
+    {
+      "arena_id": "60784023-5ddd-4378-932c-3feb9a7ba710",
+      "finding_id": "5a0406e25b7e",
+      "verdict": "refuted"
+    },
+    {
+      "arena_id": "fd9e3c31-577a-48f3-8c48-f4028e83bcad",
+      "finding_id": "b7d85b2249ea",
+      "verdict": "confirmed"
+    },
+    {
+      "arena_id": "d56fb72f-84c4-441e-a05e-f67ade8b2300",
+      "finding_id": "f758639b07da",
+      "verdict": "confirmed"
+    }
+  ],
+  "analysis": {
+    "schema": "nidavellir/configuration-introduction/v1",
+    "research_key": "5a0406e25b7e",
+    "lineage_id": "lineage-5e7d1a72",
+    "profile_digest": "sha256:1cc38fd3ea11528694638fe069ea3cf38637494056331ae5018dc1e5be9d0906",
+    "ordered_snapshot_ids": [
+      "6643e4213a85",
+      "046689afd342",
+      "8cc72cd0f9e3"
+    ],
+    "predecessor": "6643e4213a85",
+    "earliest_known_vulnerable": "046689afd342",
+    "candidate_keys": [
+      "service.authorization.disabled"
+    ],
+    "causal_key": "service.authorization.disabled",
+    "confidence": "proven",
+    "introduction_scope": "selected_configuration_states",
+    "missing_evidence": [],
+    "delta_digest": "sha256:1eb6037c1b15fe92f25461737c101cd0f32c97c557cad6fc1dd770366af726b6",
+    "evidence_digests": [
+      "sha256:2dc5c993dc1a588ba1b7d6d7af6e30711f6d07f42476d2e55898fd7cf19df211",
+      "sha256:3a68eecff2c1070ba37063dc4411aa3232609ec79ed3479693c795d18bbbb9c9",
+      "sha256:551bedc0b7a18cecdff87ddd4569e25a0acdec014332364b3b564133098a4f13",
+      "sha256:936f2cfd1c7e59a3179279f6a3088ca53468db45a6ecec40b19308566f4f0be8",
+      "sha256:dc8103131cbfc6b72e668947ab601c1e9de44f5b66f44c2694bf589a02efaddd",
+      "sha256:e1a65f8a9a5cbfe58bd84c4940377d982d2af4cb1d733c5c2881c5d635413751",
+      "sha256:e31b86b0952a5edfaf0dd99345a081187ab7670ced702a1c16b10f02b94bccaa",
+      "sha256:ebf392b41e657fb8537f04f33d856b8a1ef53e7a23e109fd5b6903a62b8f16e2",
+      "sha256:f550893febd5668aa09f0937b338fc7f31f8552da4880f185f804614c7ca080b"
+    ],
+    "analysis_digest": "sha256:f4931bfc2d7bf9af2231bf2881aaf96fe81491ab96d1cd1094f88c1b8dbc2f1a",
+    "analysis_id": "f4931bfc2d7b",
+    "subject_arena_id": "d56fb72f-84c4-441e-a05e-f67ade8b2300",
+    "publish_to": [
+      "nv06-agent"
+    ]
+  },
+  "error": "",
+  "service_logs": "strator-1  | INFO:     192.168.48.1:51042 - \"POST /arenas/d56fb72f-84c4-441e-a05e-f67ade8b2300/bindings HTTP/1.1\" 200 OK\norchestrator-1  | INFO:     192.168.48.1:51044 - \"POST /arenas/d56fb72f-84c4-441e-a05e-f67ade8b2300/configuration-snapshots HTTP/1.1\" 201 Created\norchestrator-1  | INFO:     192.168.48.1:51048 - \"POST /arenas/d56fb72f-84c4-441e-a05e-f67ade8b2300/http/request HTTP/1.1\" 200 OK\norchestrator-1  | 2026-10-24 11:34:57,776 - orchestrator - INFO - [d56fb72f-84c4-441e-a05e-f67ade8b2300] exec on node 'target' (provider: docker-local)\norchestrator-1  | 2026-10-24 11:34:58,041 - orchestrator - INFO - [d56fb72f-84c4-441e-a05e-f67ade8b2300] exec on node 'target' (provider: docker-local)\norchestrator-1  | 2026-10-24 11:34:58,391 - orchestrator - INFO - [d56fb72f-84c4-441e-a05e-f67ade8b2300] exec on node 'target' (provider: docker-local)\norchestrator-1  | INFO:     127.0.0.1:56408 - \"GET /health HTTP/1.1\" 200 OK\norchestrator-1  | INFO:     192.168.48.1:51054 - \"POST /arenas/d56fb72f-84c4-441e-a05e-f67ade8b2300/findings HTTP/1.1\" 200 OK\norchestrator-1  | INFO:     192.168.48.1:51068 - \"GET /deployments/d56fb72f-84c4-441e-a05e-f67ade8b2300/events HTTP/1.1\" 200 OK\norchestrator-1  | INFO:     192.168.48.1:51070 - \"POST /configuration-lineage/analyze HTTP/1.1\" 201 Created\norchestrator-1  | INFO:     192.168.48.1:51076 - \"GET /arenas/d56fb72f-84c4-441e-a05e-f67ade8b2300/budget HTTP/1.1\" 200 OK\norchestrator-1  | INFO:     192.168.48.6:35696 - \"GET /arenas/d56fb72f-84c4-441e-a05e-f67ade8b2300/configuration-lineage/f4931bfc2d7b HTTP/1.1\" 200 OK\norchestrator-1  | INFO:     192.168.48.1:53864 - \"GET /arenas/d56fb72f-84c4-441e-a05e-f67ade8b2300/budget HTTP/1.1\" 200 OK\norchestrator-1  | INFO:     192.168.48.1:53876 - \"GET /arenas/60784023-5ddd-4378-932c-3feb9a7ba710/configuration-lineage/f4931bfc2d7b HTTP/1.1\" 404 Not Found\norchestrator-1  | INFO:     192.168.48.1:53884 - \"GET /arenas/d56fb72f-84c4-441e-a05e-f67ade8b2300/configuration-snapshots HTTP/1.1\" 403 Forbidden\norchestrator-1  | INFO:     192.168.48.1:53894 - \"GET /deployments/d56fb72f-84c4-441e-a05e-f67ade8b2300/events HTTP/1.1\" 200 OK\norchestrator-1  | INFO:     192.168.48.1:53898 - \"POST /configuration-lineage/analyze HTTP/1.1\" 201 Created\nworker-1        | [2026-10-24 11:34:51,657: INFO/ForkPoolWorker-2] [efde9c40-4ecc-4f54-8cb3-85cba92a9887] Starting allowlisted package mirror\nworker-1        | [2026-10-24 11:34:51,793: INFO/ForkPoolWorker-2] [efde9c40-4ecc-4f54-8cb3-85cba92a9887] keepalive wrap on 'sha256:c1433c22d148efd9edd1017b395cb5b696dd154a61e488ef8138bdcd4b44bb49': re-run its startup then block, so the victim can't die on a headless boot\nworker-1        | [2026-10-24 11:34:51,793: INFO/ForkPoolWorker-2] [efde9c40-4ecc-4f54-8cb3-85cba92a9887] Starting node 'target' (victim): sha256:c1433c22d148efd9edd1017b395cb5b696dd154a61e488ef8138bdcd4b44bb49\nworker-1        | [2026-10-24 11:34:51,940: INFO/ForkPoolWorker-2] [efde9c40-4ecc-4f54-8cb3-85cba92a9887] Starting node 'attacker' (attacker): sha256:2dbdacd9e496c1caf2b3613628ff8f6c541352d8ebc5d27ddf4c854f81726a1a\nworker-1        | [2026-10-24 11:34:52,189: INFO/ForkPoolWorker-2] [efde9c40-4ecc-4f54-8cb3-85cba92a9887] docker-local deployment complete\nworker-1        | [2026-10-24 11:34:52,189: INFO/ForkPoolWorker-2] [efde9c40-4ecc-4f54-8cb3-85cba92a9887] Deployment successful. Updating DB.\nworker-1        | [2026-10-24 11:34:52,442: INFO/ForkPoolWorker-2] Task deploy_lab[a016ae6d-092c-4374-bb02-7682909040c3] succeeded in 0.8672492240002612s: {'success': True, 'outputs': {'provider': 'docker-local', 'lab_network': 'nidavellir-efde9c40-lab', 'lab_networks': ['nidavellir-efde9c40-lab'], 'node_target_state': 'running', 'node_target_name': 'nv-efde9c40-target', 'node_target_private_ip': '192.168.128.3', 'node_target_floating_ip': '127.0.0.1:32770', 'node_target_url': 'http://127.0.0.1:32770', 'node_target_ports': {'8080': '32770'}, 'victim_vm_private_ip': '192.168.128.3', 'victim_vm_name': 'nv-efde9c40-target', 'victim_vm_floating_ip': '127.0.0.1:32770', 'victim_web_url': 'http://127.0.0.1:32770', 'node_attacker_state': 'running', 'node_attacker_name': 'nv-efde9c40-attacker', 'node_attacker_private_ip': '192.168.128.4', 'node_attacker_ssh_command': 'docker exec -it nv-efde9c40-attacker /bin/bash', 'attack_vm_private_ip': '192.168.128.4', 'attack_vm_name': 'nv-efde9c40-attacker', 'attack_vm_ssh_command': 'docker exec -it nv-efde9c40-attacker /bin/bash', 'egress': 'blocked', 'package_mirror': 'allowlisted'}}\nworker-1        | [2026-10-24 11:34:52,606: INFO/MainProcess] Task reset_arena[c4aba402-d2af-4dfb-a852-0f4ed7402776] received\nworker-1        | [2026-10-24 11:34:52,616: INFO/ForkPoolWorker-2] [efde9c40-4ecc-4f54-8cb3-85cba92a9887] Destroy task received.\nworker-1        | [2026-10-24 11:34:52,619: INFO/ForkPoolWorker-2] [efde9c40-4ecc-4f54-8cb3-85cba92a9887] Destroy requested (provider: docker-local)\nworker-1        | [2026-10-24 11:34:52,630: INFO/ForkPoolWorker-2] [efde9c40-4ecc-4f54-8cb3-85cba92a9887] Removing container nv-efde9c40-attacker\nworker-1        | [2026-10-24 11:34:52,752: INFO/ForkPoolWorker-2] [efde9c40-4ecc-4f54-8cb3-85cba92a9887] Removing container nv-efde9c40-target\nworker-1        | [2026-10-24 11:34:52,903: INFO/ForkPoolWorker-2] [efde9c40-4ecc-4f54-8cb3-85cba92a9887] Removing container nv-efde9c40-mirror\nworker-1        | [2026-10-24 11:34:53,030: INFO/ForkPoolWorker-2] [efde9c40-4ecc-4f54-8cb3-85cba92a9887] Removing network nidavellir-efde9c40-lab\nworker-1        | [2026-10-24 11:34:53,099: INFO/ForkPoolWorker-2] [efde9c40-4ecc-4f54-8cb3-85cba92a9887] Removing network nidavellir-efde9c40-mirror\nworker-1        | [2026-10-24 11:34:53,176: INFO/ForkPoolWorker-2] [efde9c40-4ecc-4f54-8cb3-85cba92a9887] Removing network nidavellir-efde9c40-ingress\nworker-1        | [2026-10-24 11:34:53,402: INFO/ForkPoolWorker-2] [fd9e3c31-577a-48f3-8c48-f4028e83bcad] Task received. Scenario: lineage-5e7d1a72\nworker-1        | [2026-10-24 11:34:53,403: INFO/ForkPoolWorker-2] [fd9e3c31-577a-48f3-8c48-f4028e83bcad] Starting deployment of scenario 'lineage-5e7d1a72' (provider: docker-local)\nworker-1        | [2026-10-24 11:34:53,403: INFO/ForkPoolWorker-2] [fd9e3c31-577a-48f3-8c48-f4028e83bcad] Creating arena network nidavellir-fd9e3c31-lab (internal/no-egress)\nworker-1        | [2026-10-24 11:34:53,518: INFO/ForkPoolWorker-2] [fd9e3c31-577a-48f3-8c48-f4028e83bcad] Creating ingress network nidavellir-fd9e3c31-ingress (no egress)\nworker-1        | [2026-10-24 11:34:53,541: INFO/ForkPoolWorker-2] [fd9e3c31-577a-48f3-8c48-f4028e83bcad] Creating mirror egress bridge nidavellir-fd9e3c31-mirror\nworker-1        | [2026-10-24 11:34:53,565: INFO/ForkPoolWorker-2] [fd9e3c31-577a-48f3-8c48-f4028e83bcad] Starting allowlisted package mirror\nworker-1        | [2026-10-24 11:34:53,709: INFO/ForkPoolWorker-2] [fd9e3c31-577a-48f3-8c48-f4028e83bcad] keepalive wrap on 'sha256:c1433c22d148efd9edd1017b395cb5b696dd154a61e488ef8138bdcd4b44bb49': re-run its startup then block, so the victim can't die on a headless boot\nworker-1        | [2026-10-24 11:34:53,709: INFO/ForkPoolWorker-2] [fd9e3c31-577a-48f3-8c48-f4028e83bcad] Starting node 'target' (victim): sha256:c1433c22d148efd9edd1017b395cb5b696dd154a61e488ef8138bdcd4b44bb49\nworker-1        | [2026-10-24 11:34:53,847: INFO/ForkPoolWorker-2] [fd9e3c31-577a-48f3-8c48-f4028e83bcad] Starting node 'attacker' (attacker): sha256:2dbdacd9e496c1caf2b3613628ff8f6c541352d8ebc5d27ddf4c854f81726a1a\nworker-1        | [2026-10-24 11:34:54,064: INFO/ForkPoolWorker-2] [fd9e3c31-577a-48f3-8c48-f4028e83bcad] docker-local deployment complete\nworker-1        | [2026-10-24 11:34:54,064: INFO/ForkPoolWorker-2] [fd9e3c31-577a-48f3-8c48-f4028e83bcad] Deployment successful. Updating DB.\nworker-1        | [2026-10-24 11:34:54,269: INFO/ForkPoolWorker-2] Task reset_arena[c4aba402-d2af-4dfb-a852-0f4ed7402776] succeeded in 1.6616230319996248s: {'success': True, 'equivalent': True, 'source_id': 'efde9c40-4ecc-4f54-8cb3-85cba92a9887', 'replacement_id': 'fd9e3c31-577a-48f3-8c48-f4028e83bcad', 'observed_state_digest': 'sha256:fbeeeb9ff4130ebc22bf28df93cd481e772d9aeb534397e103cf5492f7390540'}\nworker-1        | [2026-10-24 11:34:55,204: INFO/MainProcess] Task run_poc_job[7735bef3-d435-4a77-91c1-ad5c9bb6ad4b] received\nworker-1        | [2026-10-24 11:34:55,436: INFO/ForkPoolWorker-2] Task run_poc_job[7735bef3-d435-4a77-91c1-ad5c9bb6ad4b] succeeded in 0.23160576400005084s: {'success': True, 'state': 'succeeded'}\nworker-1        | [2026-10-24 11:34:56,303: INFO/MainProcess] Task deploy_lab[24573d6a-2175-4ea8-89ae-17ff3e86f446] received\nworker-1        | [2026-10-24 11:34:56,304: INFO/ForkPoolWorker-2] [d56fb72f-84c4-441e-a05e-f67ade8b2300] Task received. Scenario: lineage-5e7d1a72\nworker-1        | [2026-10-24 11:34:56,306: INFO/ForkPoolWorker-2] [d56fb72f-84c4-441e-a05e-f67ade8b2300] Starting deployment of scenario 'lineage-5e7d1a72' (provider: docker-local)\nworker-1        | [2026-10-24 11:34:56,306: INFO/ForkPoolWorker-2] [d56fb72f-84c4-441e-a05e-f67ade8b2300] Creating arena network nidavellir-d56fb72f-lab (internal/no-egress)\nworker-1        | [2026-10-24 11:34:56,337: INFO/ForkPoolWorker-2] [d56fb72f-84c4-441e-a05e-f67ade8b2300] Creating ingress network nidavellir-d56fb72f-ingress (no egress)\nworker-1        | [2026-10-24 11:34:56,360: INFO/ForkPoolWorker-2] [d56fb72f-84c4-441e-a05e-f67ade8b2300] Creating mirror egress bridge nidavellir-d56fb72f-mirror\nworker-1        | [2026-10-24 11:34:56,384: INFO/ForkPoolWorker-2] [d56fb72f-84c4-441e-a05e-f67ade8b2300] Starting allowlisted package mirror\nworker-1        | [2026-10-24 11:34:56,518: INFO/ForkPoolWorker-2] [d56fb72f-84c4-441e-a05e-f67ade8b2300] keepalive wrap on 'sha256:c1433c22d148efd9edd1017b395cb5b696dd154a61e488ef8138bdcd4b44bb49': re-run its startup then block, so the victim can't die on a headless boot\nworker-1        | [2026-10-24 11:34:56,518: INFO/ForkPoolWorker-2] [d56fb72f-84c4-441e-a05e-f67ade8b2300] Starting node 'target' (victim): sha256:c1433c22d148efd9edd1017b395cb5b696dd154a61e488ef8138bdcd4b44bb49\nworker-1        | [2026-10-24 11:34:56,655: INFO/ForkPoolWorker-2] [d56fb72f-84c4-441e-a05e-f67ade8b2300] Starting node 'attacker' (attacker): sha256:2dbdacd9e496c1caf2b3613628ff8f6c541352d8ebc5d27ddf4c854f81726a1a\nworker-1        | [2026-10-24 11:34:56,882: INFO/ForkPoolWorker-2] [d56fb72f-84c4-441e-a05e-f67ade8b2300] docker-local deployment complete\nworker-1        | [2026-10-24 11:34:56,882: INFO/ForkPoolWorker-2] [d56fb72f-84c4-441e-a05e-f67ade8b2300] Deployment successful. Updating DB.\nworker-1        | [2026-10-24 11:34:57,085: INFO/ForkPoolWorker-2] Task deploy_lab[24573d6a-2175-4ea8-89ae-17ff3e86f446] succeeded in 0.7815751529997215s: {'success': True, 'outputs': {'provider': 'docker-local', 'lab_network': 'nidavellir-d56fb72f-lab', 'lab_networks': ['nidavellir-d56fb72f-lab'], 'node_target_state': 'running', 'node_target_name': 'nv-d56fb72f-target', 'node_target_private_ip': '192.168.176.3', 'node_target_floating_ip': '127.0.0.1:32772', 'node_target_url': 'http://127.0.0.1:32772', 'node_target_ports': {'8080': '32772'}, 'victim_vm_private_ip': '192.168.176.3', 'victim_vm_name': 'nv-d56fb72f-target', 'victim_vm_floating_ip': '127.0.0.1:32772', 'victim_web_url': 'http://127.0.0.1:32772', 'node_attacker_state': 'running', 'node_attacker_name': 'nv-d56fb72f-attacker', 'node_attacker_private_ip': '192.168.176.4', 'node_attacker_ssh_command': 'docker exec -it nv-d56fb72f-attacker /bin/bash', 'attack_vm_private_ip': '192.168.176.4', 'attack_vm_name': 'nv-d56fb72f-attacker', 'attack_vm_ssh_command': 'docker exec -it nv-d56fb72f-attacker /bin/bash', 'egress': 'blocked', 'package_mirror': 'allowlisted'}}\nworker-1        | [2026-10-24 11:34:57,501: INFO/MainProcess] Task run_poc_job[2fb3e85b-179f-411c-b3e8-963c78a13881] received\nworker-1        | [2026-10-24 11:34:57,752: INFO/ForkPoolWorker-2] Task run_poc_job[2fb3e85b-179f-411c-b3e8-963c78a13881] succeeded in 0.2500010399999155s: {'success': True, 'state': 'succeeded'}\n",
+  "remaining": {
+    "8f85872c-a23c-4b6f-aced-8bcc920375c1": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0,
+      "images": 0
+    },
+    "60784023-5ddd-4378-932c-3feb9a7ba710": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0,
+      "images": 0
+    },
+    "efde9c40-4ecc-4f54-8cb3-85cba92a9887": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0,
+      "images": 0
+    },
+    "fd9e3c31-577a-48f3-8c48-f4028e83bcad": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0,
+      "images": 0
+    },
+    "d56fb72f-84c4-441e-a05e-f67ade8b2300": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0,
+      "images": 0
+    }
+  }
+}
