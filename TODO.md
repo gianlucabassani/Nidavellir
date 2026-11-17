@@ -1,6 +1,8 @@
 # Nidavellir — ordered delivery checklist
 
-Updated 2026-10-18 after UI-R3 acceptance and independent review.
+Updated 2026-11-17: UX/observability review and Fable review (FR-10–40) registered.
+Priority order: FR-09 → PF-01 → UX-0 → OBS → UX-1 → trust boundary → structure → proof.
+P2 research items (NV-12/13/15) stay target-driven and can interleave.
 This is the canonical work queue. [ROADMAP.md](ROADMAP.md) retains product scope,
 design detail and legacy milestone mapping. Unchecked means unfinished.
 Verification is reproducible through the `make verify-*-live` gates, `scripts/verify-*-live.py` and `compose/acceptance/`.
@@ -182,6 +184,135 @@ as pending with the exact command.
   0009 → deploy path → 0010 column present; a revision mismatch exits non-zero. *Met on SQLite 2026-11-16 (`tests/test_fr01_migrations.py`; U4 proven); PostgreSQL copy-of-production migration and the deploy are pending the operator.*
 - [ ] **FR-09 — Finish NV-14.** Independent review + closure report; live rerun is the
   operator's. **Accept:** as `NV-14`. *2026-11-16: fix review done and accepted; live rerun (`scripts/verify-nv14-live.py`) and release gate pending.*
+
+- [ ] **PF-01 — Prove or refute the review's unverified claims (U1–U5).** U1 locked node
+  reaches host services via the bridge gateway; U2 SSRF DNS rebinding window; U3 no
+  Celery `visibility_timeout` (none found in code 2026-11-17); U4 column migrations on an
+  old schema; U5 decrypted outputs to an agent key. Add to the NV-03 containment gate a
+  check that arena ports bind `127.0.0.1` only (fixed 2026-11-17 in docker-local).
+  **Accept:** one test or recorded run per claim; each confirmed claim gets a fix package.
+
+## UX-0 — unblock human workflows (registered 2026-11-17, do next, parallel-safe)
+
+From a code-level UX review of the React console (no live session was driven). Today the
+console traps the operator: one failed refetch blanks a page, every link reloads the app,
+tools hide in hover flyouts, agent connection happens in a shell. Small fixes, one commit
+each, each with a browser check.
+
+- [ ] **UX-01 — Errors never blank a page.** `ErrorBoundary` per workspace/tab; a failed
+  background refresh keeps the last data and shows a stale banner with retry, instead of
+  `if (error) return <ErrorState/>` (`arena/index.tsx`, `benchmark/detail.tsx`, `ui.tsx`).
+  **Accept:** kill the BFF mid-session; the arena stays readable and recovers on retry.
+- [ ] **UX-02 — Client-side navigation.** All in-console links use pushState (minimal
+  router, ADR amending ADR-0017 if a library is added); post-create redirects stop using
+  `location.assign`; back/forward restore tab and scroll; breadcrumbs reflect the real
+  origin (arena opened from Range must not say "← Research").
+  **Accept:** browser check: no full reload across a launch → arena → evidence → back flow.
+- [ ] **UX-03 — Tools are visible, not behind hover.** Replace the arena flyout rail with a
+  persistent tab/side list (Prepare · Investigate · Record), keyboard reachable; live trace
+  and monitor signals are open by default, not in collapsed `<details>`.
+  **Accept:** every arena tool reachable in one click and by keyboard; screen-reader check.
+- [ ] **UX-04 — Every disabled control says why.** Launch, Refute, Grant and tool buttons
+  show the reason inline (not tooltip-only) with the action that unblocks it.
+  **Accept:** test enumerates disabled controls; each has visible reason text.
+- [ ] **UX-05 — Long actions show progress and do not lock the page.** Launch and
+  evaluation start return immediately and show per-phase progress (pull, network, nodes,
+  readiness) from events; the operator can navigate away and come back.
+  **Accept:** launching a slow target shows phases; leaving and returning keeps progress.
+- [ ] **UX-06 — Evidence by picking, not by pasting digests.** Finding forms and "Confirm
+  with evidence" offer a searchable picker of the arena's transactions/artifacts (digest
+  paste stays as fallback); findings refresh with the live stream.
+  **Accept:** confirm a finding with evidence without copying a digest.
+- [ ] **UX-07 — Connect an agent from the console.** Access tab creates a scoped agent key
+  (operator action, shown once), shows ready-to-copy MCP config for several clients, and a
+  "waiting for agent → connected" indicator from the first `agent_session` event.
+  Keeps harness neutrality and existing key/binding rules (FR-04).
+  **Accept:** from a fresh arena to a connected agent with no shell command except
+  starting the client.
+- [ ] **UX-08 — Polish blockers.** Floating assistant no longer covers table cells; ID
+  breadcrumbs not truncated; styled `<select>`/`<details>`; initial theme from
+  `prefers-color-scheme`; remove the "Legacy console" link once FR-31 parity holds.
+
+## OBS — observability of what the agent is doing (top product priority)
+
+The operator must be able to answer, live and afterwards: what is the agent doing now,
+what did each call send and get back, what did it cost, what changed in the target and
+why did it stop. Today the gateway JSONL trace never reaches the UI, the arena shows 8
+event types with no payload, and "live" is a 2 s BFF poll plus full projection refetch.
+Order: data model first, then views.
+
+- [ ] **OBS-01 — Span model (Fable FR-10).** `spans` table (trace/parent IDs, arena/
+  evaluation/trial links, actor kind, tool, timings, status incl. denied/budget_refused,
+  input/output digests, redacted previews, attrs incl. tokens/cost); operator-visibility
+  for validator/truth spans. ADR required. **Accept:** as FR-10 in the review.
+- [ ] **OBS-02 — Single action boundary (FR-11).** `actions.run` = policy → stop gate →
+  budget → span → execute → reconcile → audit; replaces `_budgeted_path`. **Accept:**
+  derived budgeted-route set equals today's; NV-04 race tests unchanged; one span per call.
+- [ ] **OBS-03 — Gateway and model calls in the same trace (FR-12).** Trace context from
+  gateway; model spans with token usage; bounded self-reported agent spans (reasoning,
+  plan), labelled and never scored. REST agents traced too.
+- [ ] **OBS-04 — Real push stream (FR-14).** Redis pub/sub on event/span insert;
+  orchestrator SSE with `Last-Event-ID` replay; BFF proxies, no polling; clients apply the
+  payload instead of refetching the whole projection. **Accept:** zero periodic polls with
+  two viewers; no event lost on reconnect; agent keys see allowlisted kinds only.
+- [ ] **OBS-05 — Agent live view (FR-15, the main screen of an active arena).** Header:
+  who is connected, stance, current step, elapsed, budget remaining (gauges), Stop/Pause
+  always visible. Body: live virtualized span timeline (tool, status, duration, actor) with
+  follow-live, filters, keyboard; inspector with request/response, linked transaction,
+  target-side effect (exec output, file changes, monitor signals) and budget delta.
+  Waterfall strip for time/concurrency. **Accept:** spans appear within 2 s without
+  refresh; failures distinct; 5,000 spans scroll smoothly; operator-only spans hidden.
+- [ ] **OBS-06 — Cross-arena "what are my agents doing" board.** Replace one-shot Research
+  "Live activity" and Agents pages with a live board: every active arena/trial, its agent,
+  last action, error rate, budget, stuck/idle detection (no action for N minutes) and
+  attention inbox (trial finished, arena failed, verdict, budget exhausted, stop engaged).
+- [ ] **OBS-07 — Platform telemetry (FR-13).** JSON logs with request ID across API,
+  worker, gateway; `/metrics`; optional OTLP export (documented, FR-37).
+- [ ] **OBS-08 — Post-run replay.** A finished run's timeline is replayable step by step
+  after teardown, with findings and verdicts linked to the spans that produced them;
+  exportable as one trace (`nv trace export`).
+
+## UX-1 — views for the full research and evaluation workflow
+
+- [ ] **UX-11 — Evaluation dashboard (FR-16)** and **UX-12 — trial comparison (FR-17)**:
+  side-by-side timelines aligned by step, first divergence highlighted.
+- [ ] **UX-13 — Tools of the job (FR-18):** node log tail, operator shell over exec (each
+  command a span), HTTP tool as panes with real ledger rows and coloured diff, global
+  search incl. digest prefix, command palette (Ctrl/Cmd-K).
+- [ ] **UX-14 — Operations page (FR-19).**
+- [ ] **UX-15 — Workflow simulation suite.** Scripted browser walkthroughs of the ideal
+  human scenarios (launch → connect agent → watch → intervene → confirm finding →
+  teardown → review; set up and read a paired evaluation), with click counts and time
+  recorded, run in CI (FR-33). Regressions in click count fail review.
+
+## Trust boundary (Fable Phase 3)
+
+- [ ] **TB-01 — Bindings and findings as tables (FR-21)** — first: fixes the 256-event
+  binding window correctness risk.
+- [ ] **TB-02 — Central deny-by-default policy (FR-20).**
+- [ ] **TB-03 — Individual human users (FR-22)** so timelines attribute each person.
+- [ ] **TB-04 — Docker authority out of the API (FR-23)**; measure today's interactive
+  latency first, then hold the 150 ms p95 budget.
+- [ ] **TB-05 — Separate Celery queues (FR-24).** **TB-06 — gateway per-connection auth
+  and multi-session (FR-25).**
+
+## Structure, distribution and proof (Fable Phases 4–5)
+
+- [ ] **ST-01 — FR-34 hygiene, before any push.** Done 2026-11-17: LICENSE, tracked runtime
+  files and internal docs removed. Remaining: root `SECURITY.md`, `CHANGELOG.md`, secret
+  scan, private addresses in docs, repo name.
+- [ ] **ST-02 — Split `api.py` (FR-26)** → **ST-03 registries (FR-27)** → **ST-04 package
+  and `nv` CLI (FR-28)** → **ST-05 scenario packs (FR-29)**. Split each into slices.
+- [ ] **ST-06 — Console structure (FR-30) and thin BFF / retire legacy console (FR-31).**
+- [ ] **ST-07 — Compose/test consolidation (FR-32) and CI/release (FR-33).**
+- [ ] **PR-01 — Proof and market (FR-35–40):** published calibration result, evidence
+  format spec and verifier, OTLP export guide, agent quickstarts, docs by audience.
+  FR-39 (first held-out challenge) is NV-15.
+
+Source for FR-numbered items: Fable review 2026-11-16 (archived at
+`AgentData/nidavellir/archive/pre-consolidation-20261117/fable/FABLE_REVIEW.md`, outside
+the repo); acceptance lines there apply unless amended here. Its line numbers and baseline
+commit are stale; locate code by symbol.
 
 ## Next — research usability
 
