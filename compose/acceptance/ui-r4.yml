@@ -1,0 +1,55 @@
+# UI-R4 acceptance overlay. Use only as:
+#   docker compose -p nidavellir-ui-r4 --project-directory . -f compose/acceptance/nv06.yml -f compose/acceptance/ui-r4.yml ...
+# scripts/verify-ui-r4-live.py drives it. The research checkout is provisioned by the
+# operator on the host and mounted read-only; no service clones or fetches it.
+name: nidavellir-ui-r4
+
+services:
+  orchestrator:
+    environment:
+      RESEARCH_REPO_DIR: /research/repo
+      RESEARCH_REPO_LABEL: ${UI_R4_REPO_LABEL:-}
+      SECRETS_ENCRYPTION_KEY: ${UI_R4_SECRETS_ENCRYPTION_KEY:-}
+    ports: !override ["127.0.0.1:18014:8000"]
+    # Replaces the base list: review needs no Docker socket and deploys no arena.
+    volumes: !override
+      - nv06-data:/app/data
+      - nv06-runs:/app/runs
+      - nv06-keys:/app/keys
+      # Startup validation requires the template directory, as in docker-compose.yml.
+      - ./cyber-range/infra/terraform:/app/terraform:ro
+      - ${UI_R4_REPO_DIR:?set UI_R4_REPO_DIR to the provisioned checkout}:/research/repo:ro
+
+  worker:
+    environment:
+      RESEARCH_REPO_DIR: /research/repo
+      RESEARCH_REPO_LABEL: ${UI_R4_REPO_LABEL:-}
+      SECRETS_ENCRYPTION_KEY: ${UI_R4_SECRETS_ENCRYPTION_KEY:-}
+    volumes: !override
+      - nv06-data:/app/data
+      - nv06-runs:/app/runs
+      - nv06-keys:/app/keys
+      # Startup validation requires the template directory, as in docker-compose.yml.
+      - ./cyber-range/infra/terraform:/app/terraform:ro
+      - ${UI_R4_REPO_DIR:?set UI_R4_REPO_DIR to the provisioned checkout}:/research/repo:ro
+
+  webui:
+    ports: !override ["127.0.0.1:15014:5000"]
+
+  # Attacker stance, as in the base file: it must not offer the review tool.
+  agent-gateway:
+    ports: !override ["127.0.0.1:19014:9000"]
+
+  operator-gateway:
+    build:
+      context: ./cyber-range/services/agent-gateway
+    environment:
+      NIDAVELLIR_API_URL: http://orchestrator:8000
+      NIDAVELLIR_AGENT_KEY: ui-r4-operator-key
+      NIDAVELLIR_STANCE: operator
+      NIDAVELLIR_GATEWAY_TRANSPORT: streamable-http
+      NIDAVELLIR_GATEWAY_HOST: 0.0.0.0
+      NIDAVELLIR_GATEWAY_PORT: "9000"
+      NIDAVELLIR_TRACE_DIR: /app/traces
+    depends_on:
+      orchestrator: {condition: service_healthy}

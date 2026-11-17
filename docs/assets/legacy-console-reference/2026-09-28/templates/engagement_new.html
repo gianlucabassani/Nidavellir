@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}New engagement{% endblock %}
+{% block crumb %}Engagements <span class="sep">/</span> New engagement{% endblock %}
+{% block content_mod %}content--form{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Engagement setup · 1 of 3</div>
+    <h1>New engagement</h1>
+    <div class="sub">Define why the work is running and what it starts from. Configuration and safety review follow.</div>
+  </div>
+</div>
+
+<form method="POST" class="stack" id="engagement-entry-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <fieldset class="choice-section card card-pad">
+    <legend>1. What is the purpose?</legend>
+    <p class="help">Purpose controls the language and result model used by later workspace and evaluation increments.</p>
+    <div class="choice-grid">
+      {% for purpose in purposes %}
+      <label class="choice-option">
+        <input type="radio" name="purpose" value="{{ purpose.id }}" {{ 'checked' if selected_purpose == purpose.id }} required>
+        <span class="choice-option__body">
+          <span class="choice-option__icon"><i class="fa-solid {{ purpose.icon }}"></i></span>
+          <span><strong>{{ purpose.label }}</strong><small>{{ purpose.description }}</small></span>
+          <i class="fa-solid fa-circle-check choice-option__check"></i>
+        </span>
+      </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  <fieldset class="choice-section card card-pad">
+    <legend>2. What does it start from?</legend>
+    <div class="choice-grid">
+      <label class="choice-option">
+        <input type="radio" name="source" value="challenge" {{ 'checked' if selected_source == 'challenge' }} required>
+        <span class="choice-option__body">
+          <span class="choice-option__icon"><i class="fa-solid fa-cubes"></i></span>
+          <span><strong>Challenge</strong><small>A predefined, custom, generated, imported, or pasted challenge specification.</small></span>
+          <i class="fa-solid fa-circle-check choice-option__check"></i>
+        </span>
+      </label>
+      <label class="choice-option">
+        <input type="radio" name="source" value="target" {{ 'checked' if selected_source == 'target' }} required>
+        <span class="choice-option__body">
+          <span class="choice-option__icon"><i class="fa-solid fa-code-branch"></i></span>
+          <span><strong>Target</strong><small>An authorized Git repository, OCI image, or local source bundle.</small></span>
+          <i class="fa-solid fa-circle-check choice-option__check"></i>
+        </span>
+      </label>
+    </div>
+  </fieldset>
+
+  <fieldset class="choice-section card card-pad">
+    <legend>3. Who will drive it?</legend>
+    <p class="help">Agent access still requires an arena binding and server-enforced stance after launch.</p>
+    <div class="choice-grid choice-grid--three">
+      {% for participant in participants %}
+      <label class="choice-option">
+        <input type="radio" name="participant_mode" value="{{ participant.id }}" {{ 'checked' if selected_participant == participant.id }} required>
+        <span class="choice-option__body">
+          <span class="choice-option__icon"><i class="fa-solid {{ 'fa-user' if participant.id == 'operator' else ('fa-robot' if participant.id == 'agent' else 'fa-people-arrows') }}"></i></span>
+          <span><strong>{{ participant.label }}</strong><small>{{ participant.description }}</small></span>
+          <i class="fa-solid fa-circle-check choice-option__check"></i>
+        </span>
+      </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  <fieldset class="choice-section card card-pad">
+    <legend>4. Runtime policy</legend>
+    <div class="grid cols-2" style="align-items:start">
+      <div class="field">
+        <label class="label" for="engagement-time-box">Engagement time box</label>
+        <select class="select" id="engagement-time-box" name="engagement_time_box_seconds" required>
+          {% for seconds, label in time_boxes.items() %}
+          <option value="{{ seconds }}" {{ 'selected' if selected_time_box == seconds }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <div class="help">Enforced as the deployment expiry; setup-specific budgets remain in target configuration.</div>
+      </div>
+      <div class="policy-fixed">
+        <span class="label">Platform-enforced defaults</span>
+        <span><i class="fa-solid fa-shield-halved"></i> Provider containment</span>
+        <span><i class="fa-solid fa-wave-square"></i> Automatic monitoring</span>
+        <span><i class="fa-solid fa-scale-balanced"></i> Manifest-aware or discovery scoring</span>
+      </div>
+    </div>
+  </fieldset>
+
+  <div class="journey-actions">
+    <a class="btn btn-ghost" href="{{ url_for('engagements') }}">Cancel</a>
+    <button class="btn btn-primary" type="submit">Continue to configuration <i class="fa-solid fa-arrow-right"></i></button>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,392 @@
+
+
+services:
+  # Trusted, operator-built image used by NV-03. This one-shot service makes
+  # `docker compose up --build` load the immutable runner on the same local
+  # daemon used by the worker; jobs themselves never pull or build images.
+  poc-runner-image:
+    build:
+      context: ./cyber-range/services/scenario-orchestrator/infra/poc-runner
+      dockerfile: Dockerfile
+    image: ${NIDAVELLIR_POC_RUNNER_IMAGE:-nidavellir/poc-runner:py311}
+    entrypoint: ["/bin/true"]
+    restart: "no"
+
+  # PostgreSQL (ADR-0004) — opt-in via the "postgres" profile:
+  #   docker compose --profile postgres up -d
+  # and point the services at it by setting in .env:
+  #   DATABASE_URL=postgresql+psycopg://nidavellir:${POSTGRES_PASSWORD}@postgres:5432/nidavellir
+  # Without the profile / DATABASE_URL, the stack stays on the SQLite file
+  # (zero extra services — the default for the local mock demo).
+  postgres:
+    image: postgres:16-alpine
+    container_name: nidavellir-postgres
+    restart: unless-stopped
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_DB: nidavellir
+      POSTGRES_USER: nidavellir
+      # Well-known default for the local demo only — ALWAYS set
+      # POSTGRES_PASSWORD in .env before exposing this profile anywhere.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nidavellir-dev-only}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nidavellir"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - nidavellir-network
+
+  # Redis - Message Broker
+  redis:
+    image: redis:7-alpine
+    container_name: nidavellir-redis
+    restart: unless-stopped
+    # FR-03 (B23): Redis is no longer published on the host and always requires
+    # a password. The default is for the local dev/mock stack only; the prod
+    # overlay makes REDIS_PASSWORD mandatory.
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-nidavellir-dev-only}"]
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:-nidavellir-dev-only}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - nidavellir-network
+
+  # FR-01 (B10, U4): one-shot schema migration to the Alembic head. API, worker
+  # and beat start only after it exits 0; on PostgreSQL they refuse to start if
+  # the revision is not head. Adopts a pre-FR-01 (create_all-built) database once.
+  migrate:
+    build:
+      context: ./cyber-range/services/scenario-orchestrator
+      dockerfile: Dockerfile
+    container_name: nidavellir-migrate
+    restart: "no"
+    command: ["python", "-m", "migrate"]
+    environment:
+      MOCK_MODE: ${MOCK_MODE:-false}
+      DATABASE_URL: ${DATABASE_URL:-}
+      DATABASE_PATH: /app/data/deployments.db
+      PYTHONPATH: /app
+    volumes:
+      - ./data:/app/data
+    networks:
+      - nidavellir-network
+
+  # Orchestrator API
+  orchestrator:
+    build:
+      context: ./cyber-range/services/scenario-orchestrator
+      dockerfile: Dockerfile
+    container_name: nidavellir-orchestrator
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    command: uvicorn api:app --host 0.0.0.0 --port 8000
+    environment:
+      # The local stack provisions REAL container arenas by default: the
+      # docker-local provider talks to the host Docker daemon (socket mounted
+      # below). Set MOCK_MODE=true for the no-infra demo — it is a hard override
+      # that forces the mock provider even though RANGE_PROVIDER stays
+      # docker-local below (no need to unset it). For cloud backends leave
+      # MOCK_MODE unset and set RANGE_PROVIDER=openstack/aws + creds.
+      MOCK_MODE: ${MOCK_MODE:-false}
+      RANGE_PROVIDER: ${RANGE_PROVIDER:-docker-local}
+
+      # API authentication (ADR-0002). The default is a well-known dev key for
+      # the local mock demo — ALWAYS override NIDAVELLIR_API_KEY in .env for
+      # any reachable deployment.
+      BOOTSTRAP_API_KEY: ${NIDAVELLIR_API_KEY:-dev-insecure-key}
+      BOOTSTRAP_API_KEY_ROLE: admin
+      
+      # OpenStack Credentials
+      OS_AUTH_URL: ${OS_AUTH_URL:-}
+      OS_USERNAME: ${OS_USERNAME:-}
+      OS_PASSWORD: ${OS_PASSWORD:-}
+      OS_PROJECT_ID: ${OS_PROJECT_ID:-}
+      OS_REGION_NAME: ${OS_REGION_NAME:-RegionOne}
+      OS_USER_DOMAIN_NAME: ${OS_USER_DOMAIN_NAME:-Default}
+      OS_PROJECT_DOMAIN_NAME: ${OS_PROJECT_DOMAIN_NAME:-Default}
+      
+      # Application Configuration
+      # DATABASE_URL (if set) wins over DATABASE_PATH — see ADR-0004 and the
+      # postgres service above.
+      DATABASE_URL: ${DATABASE_URL:-}
+      DATABASE_PATH: /app/data/deployments.db
+      DATA_DIR: /app/data
+      SOURCE_BUNDLE_MAX_UPLOAD_BYTES: ${SOURCE_BUNDLE_MAX_UPLOAD_BYTES:-33554432}
+      SOURCE_BUNDLE_MAX_EXPANDED_BYTES: ${SOURCE_BUNDLE_MAX_EXPANDED_BYTES:-134217728}
+      SOURCE_BUNDLE_STORE_MAX_BYTES: ${SOURCE_BUNDLE_STORE_MAX_BYTES:-2147483648}
+      EVIDENCE_ARTIFACT_MAX_BYTES: ${EVIDENCE_ARTIFACT_MAX_BYTES:-1048576}
+      EVIDENCE_UNTRACKED_FILE_MAX_BYTES: ${EVIDENCE_UNTRACKED_FILE_MAX_BYTES:-262144}
+      EVIDENCE_ARTIFACT_STORE_MAX_BYTES: ${EVIDENCE_ARTIFACT_STORE_MAX_BYTES:-2147483648}
+      TRANSFER_MAX_FILE_BYTES: ${TRANSFER_MAX_FILE_BYTES:-1048576}
+      TRANSFER_CHUNK_BYTES: ${TRANSFER_CHUNK_BYTES:-262144}
+      HEADLESS_BROWSER_IMAGE: ${HEADLESS_BROWSER_IMAGE:-zenika/alpine-chrome:124}
+      HEADLESS_BROWSER_TIMEOUT_SECONDS: ${HEADLESS_BROWSER_TIMEOUT_SECONDS:-20}
+      HEADLESS_BROWSER_MAX_OUTPUT_BYTES: ${HEADLESS_BROWSER_MAX_OUTPUT_BYTES:-65536}
+      HEADLESS_BROWSER_MEMORY: ${HEADLESS_BROWSER_MEMORY:-512m}
+      RUNS_DIR: /app/runs
+      CACHE_DIR: /app/cache
+      KEYS_DIR: /app/keys
+      TF_PLUGIN_CACHE_DIR: /app/cache/terraform-plugins
+
+      # Secrets encryption at rest (audit #14). Unset -> plaintext outputs.
+      # Generate a key with `python -m crypto`. Must match on orchestrator and
+      # worker (worker encrypts on write, orchestrator decrypts for /status).
+      SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:-}
+
+      # Celery Configuration
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-nidavellir-dev-only}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-nidavellir-dev-only}@redis:6379/0
+
+      # API Configuration
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      DEBUG_MODE: ${DEBUG_MODE:-false}
+      
+      # Worker Configuration
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-3}
+      WORKER_LOG_LEVEL: ${WORKER_LOG_LEVEL:-INFO}
+      EVAL_GATEWAY_URL: http://agent-gateway:9000/mcp
+      EVAL_GATEWAY_PRINCIPAL: ${EVAL_GATEWAY_PRINCIPAL:-bootstrap}
+
+      # Research checkout (read-only mount below). The API resolves refs, the
+      # worker captures source review inventories: both need the same mount.
+      RESEARCH_REPO_DIR: /research/repo
+      RESEARCH_REPO_LABEL: ${RESEARCH_REPO_LABEL:-}
+
+      # Python path
+      PYTHONPATH: /app
+    volumes:
+      # Persistent data
+      - ./data:/app/data
+      - ./runs:/app/runs
+      - ./keys:/app/keys
+      - ./traces:/app/traces
+      - tf-cache:/app/cache
+      
+      # Terraform templates (read-only)
+      - ./cyber-range/infra/terraform:/app/terraform:ro
+      - ./cyber-range/infra/terraform-aws:/app/terraform-aws:ro
+      - ./cyber-range/infra/terraform-libvirt:/app/terraform-libvirt:ro
+      # Operator-provisioned Git checkout for research queries and source
+      # review. Never cloned, fetched or written by the services. Unset -> a
+      # placeholder that is not a repository, so queries say "not provisioned".
+      - ${RESEARCH_REPO_HOST_DIR:-./cyber-range/infra/no-research-repo}:/research/repo:ro
+
+      # Docker socket: the orchestrator runs in-arena `exec` (MCP attacker
+      # stance) in-process, so it needs the daemon too. ROOT-EQUIVALENT host
+      # access — trusted/dev hosts only. Required by RANGE_PROVIDER=docker-local.
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - nidavellir-network
+    healthcheck:
+      # FR-07: /ready (unauthenticated) is 200 only when the database, Redis
+      # and — docker-local, non-mock — a worker heartbeat answer. /health
+      # stays a pure liveness probe.
+      test: ["CMD", "curl", "-f", "http://localhost:8000/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Celery Worker
+  worker:
+    build:
+      context: ./cyber-range/services/scenario-orchestrator
+      dockerfile: Dockerfile
+    container_name: nidavellir-worker
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      poc-runner-image:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      orchestrator:
+        condition: service_started
+    # FIXED: Use the correct module path (no orchestrator. prefix)
+    command: celery -A tasks worker --loglevel=info --concurrency=3
+    environment:
+      # Same environment as orchestrator — real container arenas by default;
+      # MOCK_MODE=true overrides RANGE_PROVIDER and forces the mock provider.
+      MOCK_MODE: ${MOCK_MODE:-false}
+      RANGE_PROVIDER: ${RANGE_PROVIDER:-docker-local}
+      NIDAVELLIR_POC_RUNNER_IMAGE: ${NIDAVELLIR_POC_RUNNER_IMAGE:-nidavellir/poc-runner:py311}
+      OS_AUTH_URL: ${OS_AUTH_URL:-}
+      OS_USERNAME: ${OS_USERNAME:-}
+      OS_PASSWORD: ${OS_PASSWORD:-}
+      OS_PROJECT_ID: ${OS_PROJECT_ID:-}
+      OS_REGION_NAME: ${OS_REGION_NAME:-RegionOne}
+      OS_USER_DOMAIN_NAME: ${OS_USER_DOMAIN_NAME:-Default}
+      OS_PROJECT_DOMAIN_NAME: ${OS_PROJECT_DOMAIN_NAME:-Default}
+      DATABASE_URL: ${DATABASE_URL:-}
+      DATABASE_PATH: /app/data/deployments.db
+      DATA_DIR: /app/data
+      SOURCE_BUNDLE_MAX_UPLOAD_BYTES: ${SOURCE_BUNDLE_MAX_UPLOAD_BYTES:-33554432}
+      SOURCE_BUNDLE_MAX_EXPANDED_BYTES: ${SOURCE_BUNDLE_MAX_EXPANDED_BYTES:-134217728}
+      SOURCE_BUNDLE_STORE_MAX_BYTES: ${SOURCE_BUNDLE_STORE_MAX_BYTES:-2147483648}
+      EVIDENCE_ARTIFACT_MAX_BYTES: ${EVIDENCE_ARTIFACT_MAX_BYTES:-1048576}
+      EVIDENCE_UNTRACKED_FILE_MAX_BYTES: ${EVIDENCE_UNTRACKED_FILE_MAX_BYTES:-262144}
+      EVIDENCE_ARTIFACT_STORE_MAX_BYTES: ${EVIDENCE_ARTIFACT_STORE_MAX_BYTES:-2147483648}
+      TRANSFER_MAX_FILE_BYTES: ${TRANSFER_MAX_FILE_BYTES:-1048576}
+      TRANSFER_CHUNK_BYTES: ${TRANSFER_CHUNK_BYTES:-262144}
+      HEADLESS_BROWSER_IMAGE: ${HEADLESS_BROWSER_IMAGE:-zenika/alpine-chrome:124}
+      HEADLESS_BROWSER_TIMEOUT_SECONDS: ${HEADLESS_BROWSER_TIMEOUT_SECONDS:-20}
+      HEADLESS_BROWSER_MAX_OUTPUT_BYTES: ${HEADLESS_BROWSER_MAX_OUTPUT_BYTES:-65536}
+      HEADLESS_BROWSER_MEMORY: ${HEADLESS_BROWSER_MEMORY:-512m}
+      RUNS_DIR: /app/runs
+      CACHE_DIR: /app/cache
+      KEYS_DIR: /app/keys
+      TF_PLUGIN_CACHE_DIR: /app/cache/terraform-plugins
+      # Must match the orchestrator's key (worker encrypts outputs on write).
+      SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:-}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-nidavellir-dev-only}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-nidavellir-dev-only}@redis:6379/0
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-3}
+      WORKER_LOG_LEVEL: ${WORKER_LOG_LEVEL:-INFO}
+      # Research checkout (read-only mount below). The API resolves refs, the
+      # worker captures source review inventories: both need the same mount.
+      RESEARCH_REPO_DIR: /research/repo
+      RESEARCH_REPO_LABEL: ${RESEARCH_REPO_LABEL:-}
+      # Python path
+      PYTHONPATH: /app
+    volumes:
+      # Shared volumes with orchestrator
+      - ./data:/app/data
+      - ./runs:/app/runs
+      - ./keys:/app/keys
+      - tf-cache:/app/cache
+      - ./cyber-range/infra/terraform:/app/terraform:ro
+      - ./cyber-range/infra/terraform-aws:/app/terraform-aws:ro
+      - ./cyber-range/infra/terraform-libvirt:/app/terraform-libvirt:ro
+      # Operator-provisioned Git checkout for research queries and source
+      # review. Never cloned, fetched or written by the services. Unset -> a
+      # placeholder that is not a repository, so queries say "not provisioned".
+      - ${RESEARCH_REPO_HOST_DIR:-./cyber-range/infra/no-research-repo}:/research/repo:ro
+      # Docker socket: the worker runs deploy/destroy for RANGE_PROVIDER=
+      # docker-local against the host daemon (sibling containers). ROOT-
+      # EQUIVALENT host access — trusted/dev hosts only.
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - nidavellir-network
+
+  # Celery Beat — ticks the lifecycle reaper (audit #9). One replica only:
+  # multiple beats would double-fire the schedule. The worker runs the work.
+  beat:
+    build:
+      context: ./cyber-range/services/scenario-orchestrator
+      dockerfile: Dockerfile
+    container_name: nidavellir-beat
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    command: celery -A tasks beat --loglevel=info --schedule /tmp/celerybeat-schedule
+    environment:
+      MOCK_MODE: ${MOCK_MODE:-true}
+      DATABASE_URL: ${DATABASE_URL:-}
+      DATABASE_PATH: /app/data/deployments.db
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-nidavellir-dev-only}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-nidavellir-dev-only}@redis:6379/0
+      LAB_TTL_MINUTES: ${LAB_TTL_MINUTES:-180}
+      REAPER_INTERVAL_SECONDS: ${REAPER_INTERVAL_SECONDS:-300}
+      LAB_STUCK_MINUTES: ${LAB_STUCK_MINUTES:-30}
+      PYTHONPATH: /app
+    volumes:
+      # Needs the source + the same data volume (beat reads config; the
+      # reaper task reads the DB). Beat itself stores its schedule in-image.
+      - ./data:/app/data
+    networks:
+      - nidavellir-network
+
+  # Web UI
+  webui:
+    build:
+      context: ./cyber-range/webui
+      dockerfile: Dockerfile
+    container_name: nidavellir-webui
+    restart: unless-stopped
+    depends_on:
+      - orchestrator
+    ports:
+      - "5000:5000"
+    environment:
+      ORCHESTRATOR_URL: http://orchestrator:8000
+      ORCHESTRATOR_API_KEY: ${NIDAVELLIR_API_KEY:-dev-insecure-key}
+      # Lets the UI label simulated data (mock badge, disabled dead links).
+      # Defaults to false now that the stack provisions real arenas.
+      MOCK_MODE: ${MOCK_MODE:-false}
+      FLASK_ENV: ${FLASK_ENV:-production}
+      SECRET_KEY: ${SECRET_KEY:-change-me}
+      WEBUI_USERNAME: ${WEBUI_USERNAME:-admin}
+      WEBUI_PASSWORD: ${WEBUI_PASSWORD:-nidavellir}
+      WEBUI_MAX_UPLOAD_BYTES: ${WEBUI_MAX_UPLOAD_BYTES:-35651584}
+      # / opens the Royal Command console; false restores the legacy home.
+      WEBUI_DEFAULT_CONSOLE: ${WEBUI_DEFAULT_CONSOLE:-true}
+    networks:
+      - nidavellir-network
+    healthcheck:
+      # Probe the (unauthenticated) login page. Uses python because the slim
+      # webui image ships no curl.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/login', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # MCP Agent Gateway — the only path a bring-your-own agent has into an arena
+  # (ROADMAP Phase 2). Opt-in: `docker compose --profile agent-gateway up`.
+  agent-gateway:
+    build:
+      context: ./cyber-range/services/agent-gateway
+      dockerfile: Dockerfile
+    container_name: nidavellir-agent-gateway
+    profiles: ["agent-gateway"]
+    restart: unless-stopped
+    depends_on:
+      - orchestrator
+    ports:
+      - "${AGENT_GATEWAY_PORT:-9001}:9000"
+    environment:
+      NIDAVELLIR_API_URL: http://orchestrator:8000
+      # FR-03: outside MOCK_MODE the gateway refuses an empty/admin-role key.
+      MOCK_MODE: ${MOCK_MODE:-false}
+      # The agent principal's key (role=agent). Defaults to the dev key for the
+      # local mock demo; set a real agent key for any reachable deployment.
+      NIDAVELLIR_AGENT_KEY: ${NIDAVELLIR_AGENT_KEY:-dev-insecure-key}
+      NIDAVELLIR_STANCE: ${NIDAVELLIR_STANCE:-attacker}
+      NIDAVELLIR_GATEWAY_TRANSPORT: streamable-http
+      NIDAVELLIR_GATEWAY_HOST: 0.0.0.0
+      NIDAVELLIR_GATEWAY_PORT: 9000
+      NIDAVELLIR_TRACE_DIR: /app/traces
+    volumes:
+      - ./traces:/app/traces
+    networks:
+      - nidavellir-network
+
+networks:
+  nidavellir-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local
+  tf-cache:
+    driver: local
+  postgres-data:
+    driver: local

@@ -1,0 +1,26 @@
+# NV-14 acceptance overlay. Use only as:
+#   docker compose -p nidavellir-nv14 --project-directory . -f compose/acceptance/nv06.yml -f compose/acceptance/nv14.yml ...
+# scripts/verify-nv14-live.py drives it. Arenas are real Docker-local containers, so the
+# API and worker keep the Docker socket of the base file. Ports are loopback only.
+name: nidavellir-nv14
+
+services:
+  orchestrator:
+    environment:
+      SECRETS_ENCRYPTION_KEY: ${NV14_SECRETS_ENCRYPTION_KEY:-}
+    ports: !override ["127.0.0.1:18015:8000"]
+    volumes:
+      # Startup validation requires the template directory, as in docker-compose.yml.
+      - ./cyber-range/infra/terraform:/app/terraform:ro
+
+  worker:
+    environment:
+      SECRETS_ENCRYPTION_KEY: ${NV14_SECRETS_ENCRYPTION_KEY:-}
+    volumes:
+      - ./cyber-range/infra/terraform:/app/terraform:ro
+
+  webui:
+    ports: !override ["127.0.0.1:15015:5000"]
+
+  agent-gateway:
+    ports: !override ["127.0.0.1:19015:9000"]

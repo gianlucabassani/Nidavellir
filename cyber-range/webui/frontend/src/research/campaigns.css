@@ -1,0 +1,67 @@
+.campaign-state {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.campaign-state-reported {
+  border-color: #b98a2c;
+}
+.campaign-state-fixed {
+  border-color: #3d8a5f;
+}
+.campaign-state-published {
+  border-color: #4b6fb8;
+}
+.campaign-state-regressed {
+  border-color: #b8504b;
+}
+.campaign-count {
+  display: inline-block;
+  margin: 0 10px 4px 0;
+  white-space: nowrap;
+}
+.campaign-identities {
+  margin: 0 0 12px;
+}
+.campaign-identities ul {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.campaign-identities li {
+  display: grid;
+  gap: 2px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.campaign-identities code,
+.campaign-bundles code {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+.campaign-identities small,
+.campaign-limit {
+  color: var(--muted);
+}
+.campaign-limit {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+.campaign-add {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.campaign-bundle {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.campaign-findings td small,
+.campaign-findings th small {
+  display: block;
+}

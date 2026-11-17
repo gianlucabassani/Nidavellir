@@ -1,0 +1,85 @@
+# Compose >= 2.24.4 required for !override / !reset. Base stays untouched.
+# Persistent mounts inherited from base: postgres-data, ./runs, ./traces,
+# ./data and ./keys. Retain these host paths when moving the checkout.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+x-db: &db
+  DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+  SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:?Set SECRETS_ENCRYPTION_KEY}
+services:
+  poc-runner-image:
+    mem_limit: 128m
+    logging: *logging
+  postgres:
+    mem_limit: 768m
+    logging: *logging
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+  redis:
+    ports: !reset []
+    command: !override ["redis-server", "--requirepass", "${REDIS_PASSWORD:?Set REDIS_PASSWORD}"]
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+    mem_limit: 256m
+    logging: *logging
+  migrate:
+    mem_limit: 512m
+    logging: *logging
+    environment: *db
+    depends_on:
+      postgres:
+        condition: service_healthy
+  orchestrator:
+    ports: !override ["127.0.0.1:8000:8000"]
+    mem_limit: 768m
+    logging: *logging
+    environment:
+      <<: *db
+      BOOTSTRAP_API_KEY: ${NIDAVELLIR_API_KEY:?Set NIDAVELLIR_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+  worker:
+    mem_limit: 1536m
+    logging: *logging
+    command: celery -A tasks worker --loglevel=info --concurrency=1
+    environment:
+      <<: *db
+      WORKER_CONCURRENCY: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+  beat:
+    mem_limit: 256m
+    logging: *logging
+    environment: *db
+    depends_on:
+      postgres:
+        condition: service_healthy
+  webui:
+    ports: !override ["127.0.0.1:5000:5000"]
+    mem_limit: 384m
+    logging: *logging
+    environment:
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY}
+      WEBUI_PASSWORD: ${WEBUI_PASSWORD:?Set WEBUI_PASSWORD}
+      ORCHESTRATOR_API_KEY: ${NIDAVELLIR_API_KEY:?Set NIDAVELLIR_API_KEY}
+    networks: [nidavellir-network, proxy]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: proxy
+      traefik.http.routers.nidavellir.rule: Host(`nidavellir.local`)
+      traefik.http.routers.nidavellir.service: nidavellir
+      traefik.http.services.nidavellir.loadbalancer.server.port: "5000"
+  agent-gateway:
+    environment:
+      NIDAVELLIR_AGENT_KEY: ${NIDAVELLIR_AGENT_KEY:-}
+    ports: !override ["127.0.0.1:9001:9000"]
+    mem_limit: 384m
+    logging: *logging
+networks:
+  proxy:
+    external: true

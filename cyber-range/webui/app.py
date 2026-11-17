@@ -1,0 +1,3541 @@
+import hashlib
+import hmac
+import json
+import os
+import re
+import threading
+import time
+import uuid
+from datetime import datetime, timedelta
+from pathlib import Path
+from urllib.parse import quote, urlencode, urlsplit
+
+import requests
+from flask import (
+    Flask,
+    Response,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    stream_with_context,
+    url_for,
+)
+from flask_wtf import CSRFProtect
+
+app = Flask(__name__)
+CONSOLE_SIMULATION_MODE = os.getenv("MOCK_MODE", "false").lower() in ("1", "true", "yes")
+# The Royal Command console (/console) is the default UI; set
+# WEBUI_DEFAULT_CONSOLE=false to serve the legacy home at / again.
+CONSOLE_DEFAULT = os.getenv("WEBUI_DEFAULT_CONSOLE", "true").lower() in ("1", "true", "yes")
+app.config["MAX_CONTENT_LENGTH"] = int(
+    os.getenv("WEBUI_MAX_UPLOAD_BYTES", str(34 * 1024 * 1024))
+)
+# Never hardcode the secret: it signs session cookies/flash messages.
+app.secret_key = os.getenv("SECRET_KEY", "dev-insecure-change-me")
+csrf = CSRFProtect(app)
+API_URL = os.getenv("ORCHESTRATOR_URL", "http://localhost:8000")
+
+# Key the WebUI uses to authenticate against the orchestrator API (ADR-0002).
+API_KEY = os.getenv("ORCHESTRATOR_API_KEY", "dev-insecure-key")
+API_HEADERS = {"X-API-Key": API_KEY}
+
+# Public URL a BYO agent app (Claude Code, etc.) points its MCP client at to reach
+# the agent gateway. Shown in the in-arena "connect recipe" — override per host.
+GATEWAY_PUBLIC_URL = os.getenv("GATEWAY_PUBLIC_URL", "http://localhost:9000/mcp")
+
+# Operator login for the dashboard itself.
+WEBUI_USERNAME = os.getenv("WEBUI_USERNAME", "admin")
+WEBUI_PASSWORD = os.getenv("WEBUI_PASSWORD", "nidavellir")
+
+
+_DEFAULT_SECRET_KEYS = frozenset({"", "change-me", "dev-insecure-change-me"})
+_DEFAULT_PASSWORDS = frozenset({"", "nidavellir"})
+
+
+def insecure_console_config_errors(env=None) -> list[str]:
+    """FR-03: outside MOCK_MODE the console refuses default secrets."""
+    env = os.environ if env is None else env
+    if env.get("MOCK_MODE", "false").lower() in ("1", "true", "yes"):
+        return []
+    errors = []
+    if env.get("SECRET_KEY", "dev-insecure-change-me") in _DEFAULT_SECRET_KEYS:
+        errors.append("SECRET_KEY is unset or a well-known default")
+    if env.get("WEBUI_PASSWORD", "nidavellir") in _DEFAULT_PASSWORDS:
+        errors.append("WEBUI_PASSWORD is unset or the well-known default")
+    if env.get("ORCHESTRATOR_API_KEY", "dev-insecure-key") == "dev-insecure-key":
+        errors.append("ORCHESTRATOR_API_KEY is the well-known dev key")
+    return errors
+
+
+_CONFIG_ERRORS = insecure_console_config_errors()
+if _CONFIG_ERRORS:
+    raise SystemExit("Refusing to start the console (FR-03): " + "; ".join(_CONFIG_ERRORS))
+
+if WEBUI_PASSWORD == "nidavellir":  # noqa: S105 - detecting the default, not setting it
+    app.logger.warning(
+        "WEBUI_PASSWORD is the well-known default — fine for the local demo, "
+        "NEVER for a reachable deployment."
+    )
+
+_TRANSIENT = ("pending", "deploying", "destroying")
+
+
+# --- orchestrator API helpers ------------------------------------------------
+def _api_error(resp):
+    """Best-effort human message from a non-200 orchestrator response. FastAPI
+    returns {"detail": "..."} or {"detail": [validation errors]}; fall back to
+    the status code."""
+    try:
+        detail = resp.json().get("detail")
+    except ValueError:
+        detail = None
+    if isinstance(detail, list):  # pydantic validation errors — name the field
+        parts = []
+        for e in detail:
+            loc = [str(x) for x in (e.get("loc") or []) if x != "body"]
+            field = loc[-1] if loc else None
+            msg = e.get("msg", "invalid")
+            parts.append(f"{field}: {msg}" if field else msg)
+        detail = "; ".join(parts)
+    return detail or f"HTTP {resp.status_code}"
+
+
+def _api_post(path, payload=None, timeout=15):
+    """POST JSON to the orchestrator; returns (json, status_code). On a non-200
+    the json is normalized to {"error": <message>}."""
+    try:
+        resp = requests.post(
+            f"{API_URL}{path}", json=payload or {}, headers=API_HEADERS, timeout=timeout
+        )
+    except requests.RequestException:
+        return {"error": "orchestrator unreachable"}, 502
+    try:
+        data = resp.json()
+    except ValueError:
+        data = {}
+    if resp.status_code not in (200, 201, 202):
+        data = {"error": _api_error(resp)}
+    return data, resp.status_code
+
+
+def _api_get(path, timeout=5):
+    """GET {API_URL}{path}; returns (json_or_None, ok)."""
+    try:
+        resp = requests.get(f"{API_URL}{path}", headers=API_HEADERS, timeout=timeout)
+        if resp.status_code == 200:
+            return resp.json(), True
+        if resp.status_code == 401:
+            flash("Backend rejected the WebUI API key (check ORCHESTRATOR_API_KEY)", "danger")
+        return None, False
+    except requests.RequestException:
+        return None, False
+
+
+def _deployments():
+    data, ok = _api_get("/deployments")
+    return (data or {}), ok
+
+
+def _scenarios():
+    data, _ = _api_get("/scenarios")
+    return (data or {}).get("scenarios", [])
+
+
+def _catalog():
+    data, _ = _api_get("/catalog")
+    images = (data or {}).get("images", [])
+    # .get(), not bare subscript: a catalog item missing 'kind'/'available' must
+    # not 500 the Overview/Launch/Scenarios pages (they all call _catalog).
+    attackers = [i for i in images if i.get("kind") == "attacker" and i.get("available")]
+    victims = [i for i in images if i.get("kind") == "victim" and i.get("available")]
+    return images, attackers, victims
+
+
+def _events(instance_id=None, limit=100, type=None):
+    path = f"/deployments/{instance_id}/events" if instance_id else "/events"
+    q = f"?limit={int(limit)}" + (f"&type={type}" if type else "")
+    data, _ = _api_get(f"{path}{q}")
+    return (data or {}).get("events", [])
+
+
+def _current_agent():
+    """The most recently connected BYO agent's model + provider, from the latest
+    `agent_session` event (events are newest-first). None when no agent has
+    announced itself. Powers the topbar 'connected model' chip."""
+    for e in _events(limit=50, type="agent_session"):  # type-filtered: survives activity floods
+        if e.get("type") == "agent_session":
+            p = e.get("payload") or {}
+            if not p.get("model"):
+                continue
+            return {
+                "model": p.get("model"),
+                "provider": (p.get("provider") or "").lower(),
+                "stance": p.get("stance"),
+                "arena_id": e.get("lab_id"),
+                "ts": e.get("ts"),
+                "actor": p.get("actor") or e.get("actor"),
+            }
+    return None
+
+
+# --- agents overview (the Agents console) -----------------------------------
+# Bring-your-own agents reach an arena through the MCP gateway and surface in the
+# append-only audit stream: an `agent_session` event = a connection (model /
+# provider / stance) and agent_exec / setup_* / finding events are its per-step
+# trace. This aggregates them into live connections + a recent activity timeline
+# (an attribution view over `events`, not a live socket).
+_AGENT_EVENT_TYPES = (
+    "agent_session", "agent_exec", "setup_step", "setup_proposal",
+    "setup_proposal_decision", "setup_finished", "finding",
+)
+
+
+def _ev_dt(ts):
+    try:
+        return datetime.fromisoformat(str(ts))
+    except (TypeError, ValueError):
+        try:
+            return datetime.strptime(str(ts)[:19], "%Y-%m-%d %H:%M:%S")
+        except (TypeError, ValueError):
+            return None
+
+
+def _agent_summary(e):
+    """A short human line for one agent-trace event (so the JS view stays dumb)."""
+    p = e.get("payload") or {}
+    t = e.get("type")
+    cmd = (p.get("command") or "")[:80]
+    if t == "agent_session":
+        return f"connected · {p.get('model') or '?'} ({p.get('provider') or '?'})"
+    if t in ("agent_exec", "setup_step"):
+        return f"{p.get('node', '?')} · exit {p.get('exit_code')} · {cmd}"
+    if t == "setup_proposal":
+        return f"proposed on {p.get('node', '?')} · {cmd}"
+    if t == "setup_proposal_decision":
+        ex = p.get("exit_code")
+        return p.get("decision", "decided") + (f" · exit {ex}" if ex is not None else "")
+    if t == "setup_finished":
+        return f"setup finished ({p.get('reason', '')})"
+    if t == "finding":
+        matched = " · ✓ matched" if p.get("matched_vuln_id") else ""
+        return f"{(p.get('title') or '')[:60]} · {p.get('cwe') or '—'} · {p.get('node') or 'any'}{matched}"
+    return ""
+
+
+def _agent_overview(limit=200):
+    """Connections + activity timeline aggregated from the audit stream."""
+    events = _events(limit=limit)            # newest-first across all arenas (timeline + counts)
+    # Connections come from `agent_session` events — fetched type-filtered so a
+    # burst of activity events can't flood the connection cards out of the window.
+    sessions = _events(limit=100, type="agent_session")
+    deployments, _ = _deployments()
+    name_of = {k: (v.get("user_id") or k) for k, v in deployments.items()}
+    status_of = {k: v.get("status") for k, v in deployments.items()}
+    now = datetime.now()
+
+    cmds, finds, last_act = {}, {}, {}
+    for e in events:
+        a, t = e.get("lab_id"), e.get("type")
+        if t in _AGENT_EVENT_TYPES and a not in last_act:
+            last_act[a] = e.get("ts")        # newest agent event per arena
+        if t in ("agent_exec", "setup_step"):
+            cmds[a] = cmds.get(a, 0) + 1
+        elif t == "finding":
+            finds[a] = finds.get(a, 0) + 1
+
+    conns = {}
+    for e in sessions:                        # newest-first → first per (arena, stance) wins
+        if e.get("type") != "agent_session":
+            continue
+        p = e.get("payload") or {}
+        a = e.get("lab_id")
+        stance = p.get("stance") or "agent"
+        if (a, stance) in conns:
+            continue
+        seen = last_act.get(a)
+        dt = _ev_dt(seen)
+        active = bool(
+            status_of.get(a) == "active" and dt and (now - dt) < timedelta(minutes=10)
+        )
+        conns[(a, stance)] = {
+            "arena_id": a, "arena_name": name_of.get(a, (a or "")[:8]),
+            "status": status_of.get(a), "stance": stance,
+            "model": p.get("model"), "provider": (p.get("provider") or "").lower(),
+            "actor": p.get("actor") or e.get("actor"),
+            "last_seen": seen, "active": active,
+            "commands": cmds.get(a, 0), "findings": finds.get(a, 0),
+        }
+
+    timeline = [
+        {
+            "ts": e.get("ts"), "arena_id": e.get("lab_id"),
+            "arena_name": name_of.get(e.get("lab_id"), (e.get("lab_id") or "")[:8]),
+            "type": e.get("type"), "actor": e.get("actor"),
+            "stance": (e.get("payload") or {}).get("stance"),
+            "summary": _agent_summary(e),
+        }
+        for e in events if e.get("type") in _AGENT_EVENT_TYPES
+    ][:80]
+
+    connections = sorted(conns.values(), key=lambda c: (not c["active"], c["arena_name"] or ""))
+    return {"connections": connections, "timeline": timeline, "total": len(connections)}
+
+
+def _score(instance_id):
+    """The arena's structured scorecard (ADR-0009): benchmark manifest view AND
+    the discovery-mode view (crash-oracle fault sites + confirmed findings +
+    progress). Operator-only on the API; the WebUI key is operator/admin. Returns
+    None only when the API has no score at all — NOT merely when there's no
+    manifest, so discovery arenas render their result too."""
+    data, ok = _api_get(f"/arenas/{instance_id}/score")
+    if not ok or not data:
+        return None
+    return data
+
+
+def _findings(instance_id, events=None):
+    """The arena's reported findings (operator view — includes the manifest match
+    and independent verdict). Adds the latest manual verdict separately. Newest
+    first. Fetches untyped so `finding` + `finding_verification` come together."""
+    if events is None:
+        events = _events(instance_id, limit=200)
+    verdicts = {}
+    for e in events:  # newest-first → first seen per finding wins
+        if e.get("type") == "finding_verification":
+            p = e.get("payload") or {}
+            fid = p.get("finding_id")
+            if fid and fid not in verdicts:
+                verdicts[fid] = p
+    out = []
+    for e in events:
+        if e.get("type") != "finding":
+            continue
+        p = {**(e.get("payload") or {}), "ts": e.get("ts")}
+        v = verdicts.get(p.get("finding_id"))
+        if v:
+            p["operator_verdict"] = v.get("verdict")
+            p["manual_validation"] = {
+                "confirmed": v.get("verdict") == "confirmed",
+                "method": "operator", "by": v.get("actor"), "note": v.get("note"),
+                "verdict": v.get("verdict"), "evidence_digest": v.get("evidence_digest"),
+            }
+        out.append(p)
+    return out
+
+
+def _setup_steps(instance_id):
+    """Executed configurator steps (command + real stdout/stderr) for the setup
+    console — the live feedback an operator was missing on agent-proposed steps.
+    Returned oldest→newest so the console reads top-to-bottom like a terminal."""
+    steps = []
+    for e in _events(instance_id, limit=100, type="setup_step"):
+        p = e.get("payload") or {}
+        steps.append({**p, "ts": e.get("ts")})
+    steps.reverse()  # events are newest-first
+    return steps
+
+
+def _arena_names():
+    """arena id → the operator-facing engagement name, for cross-arena indexes."""
+    deployments, _ = _deployments()
+    return {k: (v.get("user_id") or k) for k, v in deployments.items()}
+
+
+def _finding_verdict(finding):
+    validation = finding.get("validation") or {}
+    manual = finding.get("manual_validation") or {}
+    confirmed = validation.get("confirmed")
+    if manual.get("verdict") == "refuted":
+        return "refuted"
+    if manual.get("verdict") == "confirmed" and confirmed is not True:
+        return "manual_confirmed"
+    if validation.get("verdict") == "infrastructure_failure":
+        return "infrastructure_failure"
+    if confirmed is True:
+        return "confirmed"
+    if confirmed is False:
+        return "refuted"
+    return "inconclusive"
+
+
+def _all_findings(limit=200, names=None):
+    """Findings across every engagement, newest first, with the operator verdict merged.
+
+    `_findings` answers the same question for one arena; the Activity index needs it
+    globally, so it folds the two type-filtered event streams together and tags each
+    finding with the engagement it belongs to.
+    """
+    names = _arena_names() if names is None else names
+    verdicts = {}
+    for event in _events(limit=limit, type="finding_verification"):
+        payload = event.get("payload") or {}
+        finding_id = payload.get("finding_id")
+        if finding_id and finding_id not in verdicts:  # newest-first: first wins
+            verdicts[finding_id] = payload
+    out = []
+    for event in _events(limit=limit, type="finding"):
+        finding = {**(event.get("payload") or {}), "ts": event.get("ts")}
+        arena_id = event.get("lab_id")
+        finding["arena_id"] = arena_id
+        finding["arena_name"] = names.get(arena_id, (arena_id or "")[:8])
+        # An engagement record can be pruned while its finding events remain; say so
+        # rather than offering a link or a download that cannot resolve.
+        finding["arena_known"] = arena_id in names
+        verdict = verdicts.get(finding.get("finding_id"))
+        if verdict:
+            finding["manual_validation"] = {
+                "confirmed": verdict.get("verdict") == "confirmed",
+                "method": "operator",
+                "by": verdict.get("actor"),
+                "verdict": verdict.get("verdict"),
+                "evidence_digest": verdict.get("evidence_digest"),
+            }
+        finding["verdict"] = _finding_verdict(finding)
+        out.append(finding)
+    return out
+
+
+def _all_evidence(limit=200, names=None, findings=None):
+    """Cross-engagement evidence: content-addressed artifacts and monitor signals.
+
+    Artifacts are reached through the findings that reference them, so provenance
+    stays attached; signals come from the monitor's own append-only events.
+    """
+    names = _arena_names() if names is None else names
+    findings = _all_findings(limit, names) if findings is None else findings
+    artifacts = [
+        {
+            **artifact,
+            "arena_id": finding.get("arena_id"),
+            "arena_name": finding.get("arena_name"),
+            "finding_id": finding.get("finding_id"),
+            "finding_title": finding.get("title"),
+            "arena_known": finding.get("arena_known"),
+            "ts": finding.get("ts"),
+        }
+        for finding in findings
+        for artifact in (finding.get("evidence_artifacts") or [])
+    ]
+    signals = []
+    for event in _events(limit=limit, type="monitor_signal"):
+        arena_id = event.get("lab_id")
+        signals.append({
+            **(event.get("payload") or {}),
+            "arena_id": arena_id,
+            "arena_name": names.get(arena_id, (arena_id or "")[:8]),
+            "arena_known": arena_id in names,
+            "ts": event.get("ts"),
+        })
+    return artifacts, signals
+
+
+# Which actor a log line belongs to — the Logs page and the Dashboard feed group
+# events into agents (the AI under test), human (operator actions), and system
+# (lifecycle/automation). Computed server-side so the templates/JS stay dumb.
+_AGENT_SRC = ("agent_session", "agent_exec", "setup_step", "setup_proposal", "finding")
+_HUMAN_SRC = ("created", "record_deleted", "setup_proposal_decision")
+
+
+def _event_source(e):
+    t = e.get("type")
+    if t in _AGENT_SRC:
+        return "agent"
+    if t in _HUMAN_SRC:
+        return "human"
+    return "system"
+
+
+def _annotate_source(events):
+    for e in events:
+        e["source"] = _event_source(e)
+    return events
+
+
+def _read_first(path):
+    try:
+        with open(path) as fh:
+            return fh.read()
+    except OSError:
+        return ""
+
+
+def _host_metrics():
+    """Best-effort host capacity from /proc (no extra dependency). Returns
+    percentages (0-100) and uptime; any unreadable metric is None so the panel
+    degrades gracefully off-Linux."""
+    cpu = mem = disk = uptime = None
+    try:
+        load1 = float(_read_first("/proc/loadavg").split()[0])
+        ncpu = os.cpu_count() or 1
+        cpu = min(100, round(load1 / ncpu * 100))
+    except (ValueError, IndexError):
+        pass
+    meminfo = {}
+    for line in _read_first("/proc/meminfo").splitlines():
+        parts = line.split(":")
+        if len(parts) == 2:
+            meminfo[parts[0]] = parts[1].strip()
+    try:
+        total_kb = int(meminfo.get("MemTotal", "0").split()[0])
+        avail_kb = int(meminfo.get("MemAvailable", "0").split()[0])
+        if total_kb:
+            mem = round((total_kb - avail_kb) / total_kb * 100)
+            mem_used_gb = round((total_kb - avail_kb) / 1048576, 1)
+            mem_total_gb = round(total_kb / 1048576, 1)
+    except (ValueError, IndexError):
+        mem_used_gb = mem_total_gb = None
+    try:
+        st = os.statvfs("/")
+        if st.f_blocks:
+            disk = round((st.f_blocks - st.f_bfree) / st.f_blocks * 100)
+    except OSError:
+        pass
+    try:
+        secs = int(float(_read_first("/proc/uptime").split()[0]))
+        d, rem = divmod(secs, 86400)
+        h = rem // 3600
+        uptime = f"{d}d {h}h" if d else f"{h}h"
+    except (ValueError, IndexError):
+        pass
+    return {
+        "cpu": cpu, "mem": mem, "disk": disk, "uptime": uptime,
+        "mem_used_gb": mem_used_gb, "mem_total_gb": mem_total_gb,
+    }
+
+
+def _system_usage():
+    """Host capacity + arena footprint for the Dashboard gauges. Container and
+    network counts are aggregated from the live deployments' provider outputs
+    (the webui has no Docker socket); host CPU/mem/disk come from /proc."""
+    deployments, ok = _deployments()
+    active = [v for v in deployments.values()
+              if v.get("status") not in ("destroyed", "failed", "error_destroying")]
+    containers = nets = 0
+    for v in active:
+        o = v.get("outputs") or {}
+        containers += sum(1 for k in o if re.match(r"^node_(.+)_name$", k))
+        labnets = o.get("lab_networks") or ([o["lab_network"]] if o.get("lab_network") else [])
+        nets += len(labnets) if isinstance(labnets, list) else 0
+    m = _host_metrics()
+    m.update({
+        "ok": ok,
+        "containers": containers,
+        "networks": nets,
+        "active_arenas": len(active),
+    })
+    return m
+
+
+def _default_infra():
+    """Infra class ('container'|'vm'|'any') of the orchestrator's default provider
+    — lets the UI flag scenarios the default backend can't run."""
+    data, _ = _api_get("/providers")
+    if not data:
+        return "any"
+    infra = {p["name"]: p["infra_class"] for p in data.get("providers", [])}
+    return infra.get(data.get("default"), "any")
+
+
+def _parse_nodes(outputs):
+    """Flatten the provider's per-node outputs into a render-friendly list."""
+    nodes = []
+    for key in outputs:
+        m = re.match(r"^node_(.+)_name$", key)
+        if not m:
+            continue
+        n = m.group(1)
+        ssh = outputs.get(f"node_{n}_ssh_command")
+        url = outputs.get(f"node_{n}_url")
+        nodes.append({
+            "name": n,
+            "ip": outputs.get(f"node_{n}_private_ip", ""),
+            "state": outputs.get(f"node_{n}_state", "running"),
+            "url": url,
+            "ssh": ssh,
+            "foothold": bool(ssh),
+            # All published container→host port mappings, so the operator can reach
+            # non-web services on a multi-port box (not just the web Open button).
+            "ports": outputs.get(f"node_{n}_ports") or {},
+        })
+    return sorted(nodes, key=lambda x: (not x["foothold"], x["name"]))
+
+
+# --- auth --------------------------------------------------------------------
+# FR-02 (B16): login throttling. After LOGIN_MAX_FAILURES failed attempts within
+# LOGIN_WINDOW_SECONDS from one source address OR against one username, further
+# attempts are refused with 429 without checking the password. State is
+# in-process: the console runs as ONE gunicorn worker (threads), see Dockerfile.
+LOGIN_MAX_FAILURES = int(os.getenv("WEBUI_LOGIN_MAX_FAILURES", "5"))
+LOGIN_WINDOW_SECONDS = int(os.getenv("WEBUI_LOGIN_WINDOW_SECONDS", "900"))
+_LOGIN_FAILURES: dict[str, list[float]] = {}
+_LOGIN_LOCK = threading.Lock()
+
+
+def _login_keys(username: str) -> tuple[str, str]:
+    return f"src:{request.remote_addr or '-'}", f"user:{username.lower()}"
+
+
+def _login_throttled(keys, now: float) -> bool:
+    with _LOGIN_LOCK:
+        for key in keys:
+            recent = [t for t in _LOGIN_FAILURES.get(key, []) if now - t < LOGIN_WINDOW_SECONDS]
+            _LOGIN_FAILURES[key] = recent
+            if len(recent) >= LOGIN_MAX_FAILURES:
+                return True
+    return False
+
+
+def _record_login_failure(keys, now: float) -> None:
+    with _LOGIN_LOCK:
+        for key in keys:
+            _LOGIN_FAILURES.setdefault(key, []).append(now)
+
+
+# FR-02: session cookie and baseline security headers.
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.getenv("WEBUI_SECURE_COOKIES", "false").lower() in ("1", "true", "yes"),
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=int(os.getenv("WEBUI_SESSION_HOURS", "12"))),
+)
+# The React console (/console*) is a same-origin module bundle with no inline
+# script or style, so it gets a strict policy. Legacy Jinja pages still carry
+# inline <script>/style attributes and keep 'unsafe-inline' until they are retired.
+CSP_CONSOLE = ("default-src 'self'; script-src 'self'; style-src 'self'; "
+               "img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; "
+               "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
+CSP_LEGACY = ("default-src 'self'; script-src 'self' 'unsafe-inline'; "
+              "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
+              "font-src 'self' data:; connect-src 'self'; object-src 'none'; "
+              "base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
+
+
+@app.after_request
+def security_headers(response):
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "same-origin")
+    response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+    if response.mimetype == "text/html":
+        strict = request.path == "/console" or request.path.startswith("/console/")
+        response.headers.setdefault("Content-Security-Policy",
+                                    CSP_CONSOLE if strict else CSP_LEGACY)
+    return response
+
+
+@app.before_request
+def require_login():
+    if request.endpoint in ("login", "static", "favicon", "orchestrator_health"):
+        return None
+    if not session.get("logged_in"):
+        return redirect(url_for("login", next=request.full_path.rstrip("?")))
+    return None
+
+
+@app.route("/favicon.ico")
+def favicon():
+    """Browsers request this path even when <link rel="icon"> names another file."""
+    return redirect(url_for("static", filename="anvil_logo.png"))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username", "")
+        password = request.form.get("password", "")
+        keys, now = _login_keys(username), time.time()
+        if _login_throttled(keys, now):
+            app.logger.warning("login throttled for %s", keys[0])
+            flash("Too many failed sign-in attempts. Try again later.", "danger")
+            return render_template("login.html"), 429
+        if hmac.compare_digest(username, WEBUI_USERNAME) and hmac.compare_digest(password, WEBUI_PASSWORD):
+            session.permanent = True
+            session["logged_in"] = True
+            session["username"] = username
+            target = request.args.get("next") or url_for("overview")
+            # Same-site relative paths only. `startswith("/")` alone still admits
+            # protocol-relative ("//evil.com") and backslash-tricked ("/\evil.com")
+            # URLs that browsers resolve as absolute → open redirect after login.
+            parsed = urlsplit(target)
+            if (not target.startswith("/") or target.startswith("//")
+                    or "\\" in target or parsed.scheme or parsed.netloc
+                    or any(ord(char) < 32 for char in target)):
+                target = url_for("overview")
+            return redirect(target)
+        _record_login_failure(keys, now)
+        flash("Invalid credentials", "danger")
+    return render_template("login.html")
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
+# --- pages -------------------------------------------------------------------
+@app.route("/")
+def overview():
+    """Home, composed from the product objects an operator actually acts on:
+    live engagements, findings waiting on a verdict, and anything needing attention."""
+    if CONSOLE_DEFAULT and request.args.get("legacy") != "1":
+        return redirect("/console")
+    deployments, ok = _deployments()
+    scenarios = _scenarios()
+    evaluation_records, evaluations_ok = _api_get("/evaluations")
+    names = {k: (v.get("user_id") or k) for k, v in deployments.items()}
+    findings = _all_findings(limit=120, names=names)
+
+    by = {}
+    for v in deployments.values():
+        by[v.get("status")] = by.get(v.get("status"), 0) + 1
+
+    live = [
+        (k, v) for k, v in deployments.items()
+        if v.get("status") not in ("destroyed", "failed", "error_destroying")
+    ]
+    review_queue = [f for f in findings if f["verdict"] in ("inconclusive", "infrastructure_failure")]
+
+    # Attention: a run that broke, and a live arena that can reach the internet.
+    # Both are operator decisions, so Home states them instead of burying them.
+    attention = []
+    for arena_id, record in deployments.items():
+        status = record.get("status")
+        if status in ("failed", "error_destroying"):
+            attention.append({
+                "kind": "failed", "arena_id": arena_id,
+                "name": names.get(arena_id, arena_id), "status": status,
+                "detail": "The run stopped before it could finish.",
+            })
+        elif status == "active" and (record.get("outputs") or {}).get("egress") == "open":
+            attention.append({
+                "kind": "containment", "arena_id": arena_id,
+                "name": names.get(arena_id, arena_id), "status": status,
+                "detail": "This arena can reach the internet — containment is relaxed.",
+            })
+
+    stats = {
+        "live": len(live),
+        "total": len(deployments),
+        "transient": sum(by.get(s, 0) for s in _TRANSIENT),
+        "review": len(review_queue),
+        "attention": len(attention),
+        "scenarios": len(scenarios),
+        "evaluations": len((evaluation_records or {}).get("evaluations", [])) if evaluations_ok else None,
+    }
+
+    archived = [(k, v) for k, v in deployments.items() if v.get("status") == "destroyed"]
+    return render_template(
+        "overview.html", active="overview", stats=stats,
+        live=live[:6], recent=archived[:4], attention=attention[:5],
+        review_queue=review_queue[:6], backend_ok=ok,
+        events=_annotate_source(_events(limit=12)),
+    )
+
+
+@app.route("/console")
+@app.route("/console/arena/<instance_id>")
+@app.route("/console/arenas")
+@app.route("/console/arenas/new")
+@app.route("/console/arenas/custom")
+@app.route("/console/scenarios")
+@app.route("/console/scenarios/import")
+@app.route("/console/research/new")
+@app.route("/console/research/review")
+@app.route("/console/research/review/<review_session_id>")
+@app.route("/console/research/campaigns")
+@app.route("/console/research/campaigns/<campaign_id>")
+@app.route("/console/benchmark/registry")
+@app.route("/console/activity")
+@app.route("/console/library/targets")
+@app.route("/console/library/agents")
+@app.route("/console/settings")
+@app.route("/console/profile")
+@app.route("/console/evaluations")
+@app.route("/console/evaluations/new")
+@app.route("/console/evaluations/<evaluation_id>")
+def royal_console(instance_id=None, evaluation_id=None, review_session_id=None,
+                  campaign_id=None):
+    """The default React console; legacy task routes stay mounted for fallback."""
+    manifest_path = Path(app.static_folder) / "console" / ".vite" / "manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        entry = manifest["src/main.tsx"]
+    except (OSError, ValueError, KeyError):
+        return "Console assets are not built. Run npm ci and npm run build in webui/frontend.", 503
+    return render_template("console.html", entry=entry,
+                           username=session.get("username", "operator"),
+                           simulation_mode=CONSOLE_SIMULATION_MODE)
+
+
+@app.route("/api/console/arenas", methods=["POST"])
+def console_arena_create():
+    """Launch one registered container scenario through the existing service."""
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Expected a JSON arena request"}), 422
+    scenario = body.get("scenario")
+    instance_id = body.get("instance_id")
+    if (not isinstance(scenario, str) or not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", scenario)
+            or not isinstance(instance_id, str)
+            or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,39}", instance_id)):
+        return jsonify({"error": "Choose a scenario and a valid arena name"}), 422
+    purpose = body.get("engagement_purpose")
+    participant = body.get("participant_mode")
+    time_box = body.get("engagement_time_box_seconds")
+    if (not isinstance(purpose, str) or purpose not in _ENGAGEMENT_PURPOSE_BY_ID
+            or not isinstance(participant, str) or participant not in _ENGAGEMENT_PARTICIPANT_BY_ID
+            or not isinstance(time_box, int) or isinstance(time_box, bool)
+            or time_box not in _ENGAGEMENT_TIME_BOXES):
+        return jsonify({"error": "Choose a valid purpose, participant and time box"}), 422
+    catalog, ok = _api_get("/scenarios")
+    if not ok or not isinstance(catalog, dict):
+        return jsonify({"error": "Scenario catalog unavailable"}), 503
+    selected = next((item for item in catalog.get("scenarios", [])
+                     if item.get("id") == scenario), None)
+    if not selected:
+        return jsonify({"error": "Scenario is no longer registered"}), 404
+    provider = body.get("provider", "docker-local")
+    if not isinstance(provider, str) or not re.fullmatch(r"[a-z][a-z0-9-]{0,31}", provider):
+        return jsonify({"error": "Choose a valid provider"}), 422
+    if provider == "docker-local":
+        infra = "container"
+    else:
+        providers, providers_ok = _api_get("/providers")
+        if not providers_ok:
+            return jsonify({"error": "Provider catalog unavailable"}), 503
+        entry = next((item for item in (providers or {}).get("providers", [])
+                      if item.get("name") == provider), None)
+        if entry is None:
+            return jsonify({"error": "Provider is no longer available"}), 422
+        infra = entry.get("infra_class")
+    needed = selected.get("provider_class")
+    if infra != "any" and needed != "any" and infra != needed:
+        return jsonify({"error": "Scenario is incompatible with the selected provider"}), 422
+    result, status = _api_post("/deploy", {
+        "scenario": scenario, "instance_id": instance_id, "provider": provider,
+        "engagement_purpose": purpose, "participant_mode": participant,
+        "engagement_time_box_seconds": time_box,
+    })
+    return jsonify(result), status
+
+
+
+@app.route("/api/console/launch-options")
+def console_launch_options():
+    providers, providers_ok = _api_get("/providers")
+    catalog, catalog_ok = _api_get("/catalog")
+    if not providers_ok or not catalog_ok:
+        return jsonify({"error": "Launch options unavailable"}), 503
+    return jsonify({
+        "default": providers.get("default"),
+        "providers": [{"name": item.get("name"), "infra_class": item.get("infra_class"),
+                       "verification": ("live-verified" if item.get("name") == "docker-local"
+                                        else "simulation" if item.get("name") == "mock" else "unverified")}
+                      for item in providers.get("providers", []) if isinstance(item, dict)],
+        "catalog": [{key: item.get(key) for key in
+                     ("id", "name", "kind", "description", "available", "provider_class", "note")}
+                    for item in catalog.get("images", []) if isinstance(item, dict)],
+    })
+
+
+@app.route("/api/console/arenas/custom", methods=["POST"])
+def console_custom_arena_create():
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Expected a JSON topology request"}), 422
+    name = body.get("instance_id")
+    provider = body.get("provider", "docker-local")
+    purpose = body.get("engagement_purpose")
+    participant = body.get("participant_mode")
+    time_box = body.get("engagement_time_box_seconds")
+    if (not isinstance(name, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,39}", name)
+            or not isinstance(provider, str) or provider not in ("docker-local", "mock")
+            or not isinstance(purpose, str) or purpose not in _ENGAGEMENT_PURPOSE_BY_ID
+            or not isinstance(participant, str) or participant not in _ENGAGEMENT_PARTICIPANT_BY_ID
+            or not isinstance(time_box, int) or isinstance(time_box, bool)
+            or time_box not in _ENGAGEMENT_TIME_BOXES):
+        return jsonify({"error": "Choose a valid name, provider, purpose and time box"}), 422
+    selections = {}
+    for kind in ("attackers", "victims"):
+        items = body.get(kind)
+        if (not isinstance(items, list) or not 1 <= len(items) <= 8
+                or not all(isinstance(item, str) and re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", item)
+                           for item in items)):
+            return jsonify({"error": "Choose one to eight catalog entries for each side"}), 422
+        selections[kind] = items
+    result, status = _api_post("/arenas/custom", {
+        "instance_id": name, "provider": provider, **selections,
+        "engagement_purpose": purpose, "participant_mode": participant,
+        "engagement_time_box_seconds": time_box,
+    })
+    return jsonify(result), status
+
+
+def _console_research_request(body, *, launch=False):
+    """Validate the browser contract; service validation remains authoritative."""
+    if not isinstance(body, dict):
+        return None, "Expected a JSON research request"
+    kind = body.get("target_type")
+    if kind not in ("git", "oci", "bundle"):
+        return None, "Choose a Git, OCI or source-bundle target"
+    name = body.get("instance_id")
+    if not isinstance(name, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,39}", name):
+        return None, "Enter a valid arena name"
+    ports = body.get("ports", [])
+    if (not isinstance(ports, list) or len(ports) > 8
+            or any(not isinstance(port, int) or isinstance(port, bool)
+                   or port < 1 or port > 65535 for port in ports)):
+        return None, "Choose up to eight valid service ports"
+    basis = body.get("authorization_basis")
+    if basis not in ("public_oss", "owned", "authorized_assessment"):
+        return None, "Choose an authorization basis"
+    if body.get("authorization_confirmed") is not True:
+        return None, "Confirm that the target is in scope"
+    note = body.get("scope_note") or None
+    if note is not None and (not isinstance(note, str) or len(note) > 500):
+        return None, "Scope note must be at most 500 characters"
+    payload = {
+        "instance_id": name, "ports": ports, "include_attacker": body.get("include_attacker") is True,
+        "authorization_basis": basis, "authorization_confirmed": True,
+        "scope_note": note.strip() or None if note else None,
+        "provider": "docker-local",
+    }
+    purpose = body.get("engagement_purpose")
+    participant = body.get("participant_mode")
+    time_box = body.get("engagement_time_box_seconds")
+    if (not isinstance(purpose, str) or purpose not in _ENGAGEMENT_PURPOSE_BY_ID
+            or not isinstance(participant, str) or participant not in _ENGAGEMENT_PARTICIPANT_BY_ID
+            or not isinstance(time_box, int) or isinstance(time_box, bool)
+            or time_box not in _ENGAGEMENT_TIME_BOXES):
+        return None, "Choose a valid purpose, participant and engagement time box"
+    payload.update(engagement_purpose=purpose, participant_mode=participant,
+                   engagement_time_box_seconds=time_box)
+    if kind in ("git", "bundle"):
+        if kind == "bundle":
+            digest = body.get("artifact_digest")
+            if not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+                return None, "Upload and review a source bundle before launch"
+            payload["artifact_digest"] = digest
+        else:
+            repo = body.get("repo")
+            ref = body.get("ref") or None
+            if not isinstance(repo, str) or not isinstance(ref, (str, type(None))):
+                return None, "Enter a Git repository and ref"
+            if launch and (not ref or not re.fullmatch(r"[0-9a-f]{40}", ref)):
+                return None, "Review the Git target to pin its commit before launch"
+            payload.update(repo=repo.strip(), ref=ref)
+        setup_mode = body.get("setup_mode")
+        setup_time = body.get("time_box_seconds")
+        command_budget = body.get("command_budget")
+        if (setup_mode not in ("operator", "hitl")
+                or not isinstance(setup_time, int) or isinstance(setup_time, bool)
+                or not 60 <= setup_time <= 21600
+                or not isinstance(command_budget, int) or isinstance(command_budget, bool)
+                or not 1 <= command_budget <= 500):
+            return None, "Choose valid setup consent and limits"
+        payload.update(setup_mode=setup_mode,
+                       time_box_seconds=setup_time, command_budget=command_budget,
+                       setup_egress=body.get("setup_egress") is True)
+    else:
+        image = body.get("image")
+        platform = body.get("platform")
+        if (not isinstance(image, str) or not image.strip()
+                or platform not in ("linux/amd64", "linux/arm64")):
+            return None, "Enter a public OCI image and platform"
+        if launch and not re.search(r"@sha256:[0-9a-f]{64}$", image):
+            return None, "Review the OCI target to pin its digest before launch"
+        payload.update(image=image.strip(), platform=platform)
+    return (kind, payload), None
+
+
+@app.route("/api/console/research/preview", methods=["POST"])
+def console_research_preview():
+    parsed, error = _console_research_request(request.get_json(silent=True))
+    if error:
+        return jsonify({"error": error}), 422
+    kind, payload = parsed
+    endpoint = {"git": "/arenas/sut/preview", "oci": "/arenas/oci/preview",
+                "bundle": "/arenas/source-bundle/preview"}[kind]
+    result, status = _api_post(endpoint, payload, timeout=30)
+    if status != 200:
+        return jsonify(result), status
+    manifest = result.get("target_manifest") or {}
+    topology = result.get("topology") or {}
+    return jsonify({
+        "valid": result.get("valid") is True,
+        "errors": result.get("errors") or [], "warnings": result.get("warnings") or [],
+        "summary": result.get("summary") or {},
+        "topology": {"nodes": [{"name": node.get("name"), "kind": node.get("kind"),
+                                "role": node.get("role"), "ports": node.get("ports") or []}
+                               for node in topology.get("nodes") or []],
+                     "segments": [{"name": segment.get("name"),
+                                   "nodes": segment.get("nodes") or []}
+                                  for segment in topology.get("segments") or []],
+                     "egress": topology.get("egress")},
+        "resolved_ref": manifest.get("resolved_ref"),
+        "runtime_ref": manifest.get("runtime_ref"),
+        "introspection": {key: value for key, value in (result.get("introspection") or {}).items()
+                          if key in ("kind", "build_system", "declared_ports", "platform")},
+        "build_plan": {key: value for key, value in (result.get("build_plan") or {}).items()
+                       if key in ("strategy", "auto_build")},
+    })
+
+
+@app.route("/api/console/research/launch", methods=["POST"])
+def console_research_launch():
+    parsed, error = _console_research_request(request.get_json(silent=True), launch=True)
+    if error:
+        return jsonify({"error": error}), 422
+    kind, payload = parsed
+    endpoint = {"git": "/arenas/sut", "oci": "/arenas/oci",
+                "bundle": "/arenas/source-bundle"}[kind]
+    result, status = _api_post(endpoint, payload, timeout=30)
+    if status != 200:
+        return jsonify(result), status
+    return jsonify({"status": result.get("status"), "instance_id": result.get("instance_id")}), status
+
+
+def _console_trial_metrics(trial):
+    # Failed/pending runs have no measured outcome, even if a stale result exists.
+    if trial.get("state") != "completed":
+        return dict.fromkeys(("score", "passed", "cost_usd", "duration_seconds"))
+    export = (trial.get("result") or {}).get("export") or {}
+    meta = export.get("metadata") or {}
+    return {"score": (export.get("score") or {}).get("value"),
+            "passed": meta.get("pass@1"), "cost_usd": meta.get("cost_usd"),
+            "duration_seconds": meta.get("wall_clock_seconds")}
+
+
+@app.route("/api/console/evaluations/<evaluation_id>")
+def console_evaluation(evaluation_id):
+    record, ok = _api_get(f"/evaluations/{evaluation_id}", timeout=15)
+    if not ok or not isinstance(record, dict):
+        return jsonify({"error": "Evaluation state unavailable"}), 503
+    comparison = record.get("comparison") or {}
+    differences = comparison.get("differences") or {}
+    challenges = comparison.get("by_challenge") or {}
+    runs = {run.get("id"): run for run in record.get("runs") or []
+            if isinstance(run, dict)}
+    trials = [trial for trial in record.get("trials") or [] if isinstance(trial, dict)]
+    terminal_states = {"completed", "infrastructure_failure", "agent_failure"}
+    return jsonify({
+        "id": record.get("id") or evaluation_id,
+        "state": record.get("state") or "unknown",
+        "evidence_scope": comparison.get("evidence_scope") or "unknown",
+        "leakage_labels": comparison.get("leakage_labels") or [],
+        "matched_pairs": comparison.get("matched_pairs"),
+        "infrastructure_failed_pairs": comparison.get("infrastructure_failed_pairs"),
+        "progress": {"total": len(trials),
+                     "finished": sum(trial.get("state") in terminal_states for trial in trials),
+                     "running": sum(trial.get("state") == "running" for trial in trials)},
+        "differences": {key: {"mean": value.get("mean"), "pairs": value.get("pairs"),
+                              "bootstrap_95": value.get("bootstrap_95"),
+                              "interval_status": value.get("interval_status")}
+                        for key, value in differences.items() if isinstance(value, dict)},
+        "challenges": [{"id": key, "name": value.get("name") or key,
+                        "leakage_label": value.get("leakage_label"),
+                        "matched_pairs": value.get("matched_pairs"),
+                        "infrastructure_failed_pairs": value.get("infrastructure_failed_pairs"),
+                        "verified_mean": ((value.get("differences") or {}).get("verified") or {}).get("mean")}
+                       for key, value in challenges.items() if isinstance(value, dict)],
+        "trials": [{"id": trial.get("id"), "seed": trial.get("seed"),
+                    "state": trial.get("state"), "arena_id": trial.get("arena_id"),
+                    "side": runs.get(trial.get("run_id"), {}).get("side"),
+                    "challenge_id": runs.get(trial.get("run_id"), {}).get("challenge_id"),
+                    "error": str(trial.get("error"))[:500] if trial.get("error") else None,
+                    **_console_trial_metrics(trial)}
+                   for trial in trials],
+        "observed_at": datetime.now().astimezone().isoformat(),
+    })
+
+
+@app.route("/api/console/evaluations", methods=["POST"])
+def console_evaluation_create():
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Expected a JSON comparison request"}), 422
+    fields = ("suite_id", "baseline_id", "candidate_id")
+    if any(not isinstance(body.get(field), str) or not body[field].strip()
+           or len(body[field]) > 128 for field in fields):
+        return jsonify({"error": "Select one suite and two pinned builds"}), 422
+    if body["baseline_id"] == body["candidate_id"]:
+        return jsonify({"error": "Baseline and candidate must be different builds"}), 422
+    result, status = _api_post("/evaluations", {field: body[field].strip() for field in fields})
+    return jsonify(result), status
+
+
+@app.route("/api/console/arenas/<instance_id>")
+def console_arena(instance_id):
+    status, ok = _api_get(f"/status/{instance_id}")
+    if not ok or not isinstance(status, dict):
+        return jsonify({"error": "Arena state unavailable"}), 503
+    events = _events(instance_id, limit=12)
+    budget, budget_ok = _api_get(f"/arenas/{instance_id}/budget")
+    if not budget_ok:
+        budget = {}
+    policy = (budget or {}).get("policy") or {}
+    arena_gate = (budget or {}).get("arena") or {}
+    findings = _findings(instance_id)
+    jobs, _ = _api_get(f"/arenas/{instance_id}/poc-jobs")
+    lifecycle, lifecycle_ok = _api_get(f"/arenas/{instance_id}/lifecycle")
+    classification = ((lifecycle or {}).get("classification") or {}) if lifecycle_ok else {}
+    reset = classification.get("runtime_reset") or {}
+    # The lifecycle projection is operator-safe and pinned to this deployment.
+    # Only membership is sent to the browser; recipe inputs and secrets stay out.
+    recipe_nodes = ((lifecycle or {}).get("recipe") or {}).get("nodes") or [] if lifecycle_ok else []
+    outputs = status.get("outputs") or {}
+    visible_nodes = _parse_nodes(outputs)
+    visible_names = {node["name"] for node in visible_nodes}
+    memberships = {}
+    for node in recipe_nodes:
+        name = node.get("name")
+        if name not in visible_names:
+            continue
+        for segment in node.get("segments") or []:
+            if isinstance(segment, str) and segment:
+                memberships.setdefault(segment, []).append(name)
+    recipe_by_name = {node.get("name"): node for node in recipe_nodes if isinstance(node, dict)}
+    capabilities, capabilities_ok = _api_get(f"/arenas/{instance_id}/capabilities")
+    capabilities = capabilities if capabilities_ok and isinstance(capabilities, dict) else None
+    ready_by_node = {target.get("node"): target.get("ready") is True
+                     for target in ((capabilities or {}).get("targets") or [])
+                     if isinstance(target, dict)}
+    archived = status.get("status") == "destroyed"
+    topology = None
+    if recipe_nodes:
+        linked = {name for names in memberships.values() for name in names}
+        topology = {
+            "segments": [{"name": name, "nodes": names}
+                         for name, names in sorted(memberships.items())],
+            "unsegmented": sorted(visible_names - linked),
+        }
+    return jsonify({
+        "id": instance_id,
+        "name": status.get("user_id") or instance_id,
+        "state": status.get("status") or "unknown",
+        "scenario": status.get("scenario") or "Custom target",
+        "provider": outputs.get("provider") or status.get("provider") or "unknown",
+        "simulation_mode": (CONSOLE_SIMULATION_MODE or outputs.get("provider") == "mock"
+                            or status.get("effective_provider") == "mock"
+                            or status.get("provider") == "mock"),
+        "gateway_url": GATEWAY_PUBLIC_URL,
+        "expires_at": status.get("expires_at"),
+        "observed_at": datetime.now().astimezone().isoformat(),
+        "budget": {"remaining": policy.get("remaining"), "cap": policy.get("action_cap"),
+                   "gate": arena_gate.get("state")},
+        "reset": {"status": reset.get("status") or "unknown",
+                  "reason": reset.get("reason") or (None if lifecycle_ok else "Lifecycle data unavailable")},
+        "nodes": [{"name": node.get("name"),
+                   "state": ("archived" if archived else node.get("state")),
+                   "foothold": node.get("foothold"), "service_count": len(node.get("ports") or {}),
+                   "web_capable": bool(not node.get("foothold") and
+                                       (node.get("ports") or node.get("url"))),
+                   **_console_station(node, recipe_by_name.get(node.get("name")) or {},
+                                      ready_by_node, archived)}
+                  for node in visible_nodes],
+        "capabilities": _console_capabilities(capabilities),
+        "topology": topology,
+        "events": [{"type": event.get("type"), "ts": event.get("ts"),
+                    "actor": event.get("actor") or "system"} for event in events],
+        "findings": [{"id": finding.get("finding_id"), "title": finding.get("title"),
+                      "verdict": _finding_verdict(finding)} for finding in findings],
+        "poc_jobs": [{"id": job.get("id"), "status": job.get("status")}
+                     for job in (jobs or {}).get("jobs", [])],
+    })
+
+
+_CONSOLE_TOOL_OPERATIONS = ("http", "browser", "poc", "files", "forward", "exec", "setup", "observe")
+
+
+def _console_station(node, recipe, ready_by_node, archived):
+    """Tester-facing station facts. Shell commands, environment and secrets stay server-side."""
+    ports = []
+    for port in recipe.get("ports") or []:
+        try:
+            ports.append(int(port))
+        except (TypeError, ValueError):
+            continue
+    image = recipe.get("image")
+    return {
+        "role": recipe.get("role") if isinstance(recipe.get("role"), str) else None,
+        "image": image if isinstance(image, str) else None,
+        "image_pinned": recipe.get("image_pinned") is True,
+        "declared_ports": sorted(set(ports)),
+        "segments": sorted(segment for segment in recipe.get("segments") or []
+                           if isinstance(segment, str) and segment),
+        "private_ip": node.get("ip") or None,
+        "url": None if archived else node.get("url"),
+        "ready": ready_by_node.get(node.get("name")),
+    }
+
+
+def _console_capabilities(capabilities):
+    """Per-arena tool availability with the service's own reason codes."""
+    if not capabilities:
+        return None
+    operations = capabilities.get("operations") or {}
+    return {name: {"state": str(entry.get("state") or "unknown"),
+                   "reason": str(entry.get("reason") or "")}
+            for name, entry in operations.items()
+            if name in _CONSOLE_TOOL_OPERATIONS and isinstance(entry, dict)}
+
+
+@app.route("/api/console/arenas/<instance_id>/setup")
+def console_arena_setup(instance_id):
+    """Project the operator setup state without treating service failure as closed."""
+    data, ok = _api_get(f"/arenas/{instance_id}/setup")
+    if not ok or not isinstance(data, dict):
+        return jsonify({"error": "Setup state unavailable"}), 503
+    prearm_events = _events(instance_id, limit=1, type="setup_prearm")
+    prearm = (prearm_events[0].get("payload") or {}) if prearm_events else {}
+    finished = bool(_events(instance_id, limit=1, type="setup_finished"))
+    return jsonify({
+        "open": data.get("open") is True,
+        "finished": finished,
+        "expired": data.get("expired") is True,
+        "planned": {"mode": prearm.get("mode"),
+                    "time_box_seconds": prearm.get("time_box_seconds"),
+                    "command_budget": prearm.get("command_budget"),
+                    "setup_egress": prearm.get("setup_egress") is True} if prearm else None,
+        "mode": data.get("mode"),
+        "nodes": data.get("nodes") or [],
+        "connect": data.get("connect") or {},
+        "steps_run": data.get("steps_run"),
+        "command_budget": data.get("command_budget"),
+        "egress_enforced": data.get("egress_enforced") is True,
+        "steps": [{key: step.get(key) for key in
+                   ("node", "command", "stdout", "stderr", "exit_code", "ok", "via", "ts")}
+                  for step in _setup_steps(instance_id)],
+        "pending_proposals": [{"step_id": item.get("step_id"),
+                               "node": item.get("node"), "command": item.get("command"),
+                               "rationale": item.get("rationale")}
+                              for item in data.get("pending_proposals") or []
+                              if isinstance(item, dict)],
+    })
+
+
+@app.route("/api/console/arenas/<instance_id>/findings")
+def console_arena_findings(instance_id):
+    data, ok = _api_get(f"/deployments/{instance_id}/events?limit=200")
+    if not ok or not isinstance(data, dict):
+        return jsonify({"error": "Finding records unavailable"}), 503
+    findings = _findings(instance_id, events=data.get("events") or [])
+    return jsonify({"findings": [{
+        "id": item.get("finding_id"), "title": item.get("title"),
+        "cwe": item.get("cwe"), "node": item.get("node"),
+        "evidence": item.get("evidence"), "poc": item.get("poc"),
+        "source": "operator" if item.get("manual") else "agent",
+        "verdict": _finding_verdict(item),
+        "manual_verdict": (item.get("manual_validation") or {}).get("verdict"),
+        "validation_reason": (item.get("validation") or {}).get("reason_code"),
+        "artifacts": [{"digest": artifact.get("digest"), "bytes": artifact.get("bytes")}
+                      for artifact in item.get("evidence_artifacts") or []],
+        "transactions": [{"digest": transaction.get("digest"),
+                          "method": transaction.get("method"), "path": transaction.get("path"),
+                          "status": transaction.get("status")}
+                         for transaction in item.get("http_transactions") or []],
+    } for item in findings]})
+
+
+@app.route("/api/console/arenas/<instance_id>/findings/<finding_id>/review")
+def console_finding_review(instance_id, finding_id):
+    """Read the service-owned operator projection, including archived evidence."""
+    data, ok = _api_get(
+        f"/arenas/{quote(instance_id, safe='')}/findings/{quote(finding_id, safe='')}/review")
+    if not ok or not isinstance(data, dict):
+        return jsonify({"error": "Control and evidence review unavailable. Retry to resolve this record."}), 503
+    return jsonify(data)
+
+
+_CONSOLE_SLUG = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")
+
+
+@app.route("/api/console/arenas/<instance_id>/score")
+def console_arena_score(instance_id):
+    """Operator scorecard (ADR-0009). The manifest is ground truth: the console
+    hides it behind an explicit reveal; only listed fields leave the server."""
+    data, ok = _api_get(f"/arenas/{instance_id}/score")
+    if not ok or not isinstance(data, dict):
+        return jsonify({"score": None})
+    found = [item for item in data.get("found") or [] if isinstance(item, str)]
+    signals = data.get("signals") or {}
+    return jsonify({"score": {
+        "mode": data.get("mode"),
+        "value": (data.get("score") or {}).get("value"),
+        "tier": data.get("tier"),
+        "progress_rate": data.get("progress_rate"),
+        "milestones": [{"id": item.get("id"), "reached": item.get("reached") is True,
+                        "detail": item.get("detail")}
+                       for item in data.get("milestones") or [] if isinstance(item, dict)],
+        "signals": {"distinct_fault_sites": signals.get("distinct_fault_sites"),
+                    "counts": signals.get("counts") or {}},
+        "confirmed_findings": data.get("confirmed_findings"),
+        "findings_submitted": data.get("findings_submitted"),
+        "total_vulnerabilities": data.get("total_vulnerabilities"),
+        "found": found,
+        "points_earned": data.get("points_earned"),
+        "points_total": data.get("points_total"),
+        "manifest": [{"id": item.get("id"), "title": item.get("title"),
+                      "cwe": item.get("cwe"), "node": item.get("node"),
+                      "severity": item.get("severity"), "found": item.get("id") in found}
+                     for item in data.get("manifest") or [] if isinstance(item, dict)],
+    }})
+
+
+@app.route("/api/console/arenas/<instance_id>/trace")
+def console_arena_trace(instance_id):
+    """Self-declared run attribution; only present once an agent has worked the arena."""
+    agent_types = ("agent_session", "agent_exec", "agent_binding", "agent_setup_step")
+    if not any(_events(instance_id, limit=1, type=kind) for kind in agent_types):
+        return jsonify({"trace": None})
+    data, ok = _api_get(f"/arenas/{instance_id}/eval-export")
+    if not ok or not isinstance(data, dict):
+        return jsonify({"trace": None})
+    meta = data.get("metadata") or {}
+    return jsonify({"trace": {
+        "model": meta.get("gen_ai.request.model"), "provider": meta.get("gen_ai.system"),
+        "scaffold": meta.get("nv.harness"), "stance": meta.get("nv.stance"),
+        "trace_id": data.get("source_trace_id"),
+        "export": f"/api/arenas/{instance_id}/eval-export",
+    }})
+
+
+@app.route("/api/console/arenas/<instance_id>/forwards", methods=["GET", "POST"])
+def console_arena_forwards(instance_id):
+    """Short-lived service forwards from a foothold; the service enforces policy."""
+    if request.method == "POST":
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            return jsonify({"error": "Expected a JSON forward request"}), 422
+        fields = [body.get(key) for key in ("foothold", "target", "service_id")]
+        if not all(isinstance(value, str) and _CONSOLE_SLUG.fullmatch(value) for value in fields):
+            return jsonify({"error": "Choose a foothold and a declared service"}), 422
+        key = body.get("idempotency_key")
+        if not isinstance(key, str) or not re.fullmatch(r"[A-Za-z0-9._:-]{8,128}", key):
+            return jsonify({"error": "Expected a valid forward action key"}), 422
+        data, code = _api_post(f"/arenas/{instance_id}/forwards", {
+            "foothold": fields[0], "target": fields[1], "service_id": fields[2],
+            "lifetime_seconds": 120, "idempotency_key": key,
+        })
+        return jsonify(data or {}), code
+    capabilities, capabilities_ok = _api_get(f"/arenas/{instance_id}/capabilities")
+    leases, leases_ok = _api_get(f"/arenas/{instance_id}/forwards")
+    if not capabilities_ok or not leases_ok:
+        return jsonify({"error": "Forward state unavailable; retry to reconcile leases"}), 503
+    forwards = (leases or {}).get("forwards") or []
+    capabilities = capabilities or {}
+    operation = (capabilities.get("operations") or {}).get("forward") or {}
+    return jsonify({
+        "state": operation.get("state") or "unknown",
+        "reason": operation.get("reason") or "",
+        "footholds": [item for item in capabilities.get("footholds") or [] if isinstance(item, str)],
+        "services": [{"target": target.get("node"), "service": service}
+                     for target in capabilities.get("targets") or [] if isinstance(target, dict)
+                     for service in target.get("forward_services") or []],
+        "forwards": [{key: item.get(key) for key in
+                      ("id", "target", "service_id", "state", "expires_at")}
+                     for item in forwards if isinstance(item, dict)],
+    })
+
+
+@app.route("/api/console/arenas/<instance_id>/forwards/<forward_id>/revoke", methods=["POST"])
+def console_arena_forward_revoke(instance_id, forward_id):
+    if not _CONSOLE_SLUG.fullmatch(forward_id):
+        return jsonify({"error": "Unknown forward"}), 422
+    data, code = _api_post(f"/arenas/{instance_id}/forwards/{forward_id}/revoke")
+    return jsonify(data or {}), code
+
+
+def _console_delete(path):
+    """DELETE on the orchestrator, normalized to (json, status) for the console."""
+    try:
+        response = requests.delete(f"{API_URL}{path}", headers=API_HEADERS, timeout=10)
+    except requests.RequestException:
+        return {"error": "Orchestrator unavailable"}, 503
+    try:
+        body = response.json()
+    except ValueError:
+        body = {}
+    if response.status_code != 200:
+        detail = body.get("detail") if isinstance(body, dict) else None
+        return {"error": detail if isinstance(detail, str) and detail
+                else f"Delete failed (HTTP {response.status_code})"}, response.status_code
+    return body if isinstance(body, dict) else {}, 200
+
+
+@app.route("/api/console/archive/<instance_id>/delete", methods=["POST"])
+def console_archive_delete(instance_id):
+    """Remove one retained record; the service refuses records that are still live."""
+    data, code = _console_delete(f"/deployments/{instance_id}")
+    return jsonify(data), code
+
+
+@app.route("/api/console/archive/clear", methods=["POST"])
+def console_archive_clear():
+    data, code = _console_delete("/deployments")
+    return jsonify({"deleted": data.get("deleted", 0)} if code == 200 else data), code
+
+
+@app.route("/api/console/arenas/<instance_id>/evidence")
+def console_arena_evidence(instance_id):
+    data, ok = _api_get(f"/deployments/{instance_id}/events?limit=200")
+    if not ok or not isinstance(data, dict):
+        return jsonify({"error": "Evidence records unavailable"}), 503
+    events = data.get("events") or []
+    findings = _findings(instance_id, events=events)
+    artifacts = []
+    validations = []
+    transactions = []
+    for finding in findings:
+        context = {"finding_id": finding.get("finding_id"),
+                   "finding_title": finding.get("title") or "Untitled finding"}
+        artifacts.extend({**context, "digest": item.get("digest"), "bytes": item.get("bytes")}
+                         for item in finding.get("evidence_artifacts") or [])
+        validation = finding.get("validation") or {}
+        validations.extend({**context, "kind": kind, "digest": validation.get(field)}
+                           for kind, field in (("effect", "observation_digest"),
+                                               ("control", "control_digest"))
+                           if validation.get(field))
+        transactions.extend({**context, "digest": item.get("digest"),
+                             "method": item.get("method"), "path": item.get("path"),
+                             "status": item.get("status")}
+                            for item in finding.get("http_transactions") or [])
+    signals = [{"kind": (event.get("payload") or {}).get("kind"),
+                "node": (event.get("payload") or {}).get("node"),
+                "severity": (event.get("payload") or {}).get("severity"),
+                "summary": (event.get("payload") or {}).get("summary"),
+                "ts": event.get("ts")}
+               for event in events if event.get("type") == "monitor_signal"]
+    return jsonify({"artifacts": artifacts, "validations": validations,
+                    "transactions": transactions, "signals": signals,
+                    "observed_at": datetime.now().astimezone().isoformat()})
+
+
+@app.route("/api/console/arenas/<instance_id>/lifecycle", methods=["POST"])
+def console_arena_lifecycle(instance_id):
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict) or body.get("action") not in ("reset", "destroy"):
+        return jsonify({"error": "Choose reset or destroy"}), 422
+    if body["action"] == "destroy":
+        ok, message = _request_destroy(instance_id)
+        return jsonify({"status": "accepted"} if ok else {"error": message}), 200 if ok else 502
+    result, status = _api_post(f"/arenas/{instance_id}/reset", {
+        "idempotency_key": f"webui-{uuid.uuid4()}"}, timeout=15)
+    if status not in (200, 202):
+        return jsonify(result), status
+    return jsonify({"status": result.get("status"),
+                    "operation_id": result.get("operation_id"),
+                    "replacement_id": result.get("replacement_id")}), status
+
+
+@app.route("/api/console/arenas/<instance_id>/research-gate", methods=["POST"])
+def console_research_gate(instance_id):
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict) or body.get("action") not in ("stop", "resume"):
+        return jsonify({"error": "Choose stop or resume"}), 422
+    reason = body.get("reason") or f"Operator requested {body['action']} in console"
+    if not isinstance(reason, str) or len(reason) > 500:
+        return jsonify({"error": "Reason must be at most 500 characters"}), 422
+    result, status = _api_post(f"/arenas/{instance_id}/{body['action']}", {
+        "reason": reason.strip(), "idempotency_key": uuid.uuid4().hex,
+    })
+    return jsonify(result), status
+
+
+@app.route("/api/console/research")
+def console_research():
+    deployments, ok = _deployments()
+    if not ok:
+        return jsonify({"error": "Orchestrator unavailable"}), 503
+    names = {key: record.get("user_id") or key for key, record in deployments.items()}
+    findings = _all_findings(limit=80, names=names)
+    sessions = [{
+        "id": key,
+        "name": names[key],
+        "status": record.get("status") or "unknown",
+        "scenario": record.get("scenario") or "Custom target",
+        "expires_at": record.get("expires_at"),
+        "provider": record.get("provider") or record.get("infrastructure_type") or "unknown",
+        "nodes": [{"name": node.get("name"), "foothold": node.get("foothold")}
+                  for node in _parse_nodes(record.get("outputs") or {})],
+    } for key, record in deployments.items()]
+    review = [{
+        "id": finding.get("finding_id"),
+        "title": finding.get("title") or "Untitled finding",
+        "arena_id": finding.get("arena_id"),
+        "arena_name": finding.get("arena_name"),
+        "arena_known": finding.get("arena_known"),
+        "verdict": finding.get("verdict"),
+    } for finding in findings if finding.get("verdict") in ("inconclusive", "infrastructure_failure")]
+    return jsonify({"sessions": sessions, "review": review, "observed_at": datetime.now().astimezone().isoformat()})
+
+
+# --- Source review (UI-R4) ---------------------------------------------------
+# Thin proxies over the operator-only service routes. The service owns the
+# snapshot, the review rules and the integrity check; its status and message are
+# passed through so a damaged snapshot reads as an error, not as an empty page.
+_REVIEW_API = "/research/review-sessions"
+_REVIEW_SESSION_ID = re.compile(r"[0-9a-f]{32}")
+_REVIEW_SITE_KEY = re.compile(r"[0-9a-f]{64}")
+_REVIEW_LINK_ID = re.compile(r"F[1-9][0-9]?")
+_REVIEW_FINDING_ID = re.compile(r"[0-9a-f]{12}")
+_REVIEW_SITE_FILTERS = ("pattern", "offset", "limit", "status", "classification",
+                        "review_state", "file_prefix")
+
+
+def _review_proxy(method, path, *, params=None, payload=None, label="Source review"):
+    try:
+        resp = requests.request(method, f"{API_URL}{path}", params=params, json=payload,
+                                headers=API_HEADERS, timeout=30)
+    except requests.RequestException:
+        return jsonify({"error": f"{label} is unavailable: the service could not be reached."}), 502
+    try:
+        data = resp.json()
+    except ValueError:
+        data = None
+    if not isinstance(data, dict):
+        return jsonify({"error": f"{label} returned an unreadable answer."}), (
+            resp.status_code if resp.status_code >= 400 else 502)
+    if resp.status_code not in (200, 201, 202):
+        return jsonify({"error": _api_error(resp)}), (
+            resp.status_code if resp.status_code >= 400 else 502)
+    return jsonify(data), resp.status_code
+
+
+def _review_unknown(what):
+    return jsonify({"error": f"Unknown {what}"}), 404
+
+
+@app.route("/api/console/research/review-sessions", methods=["GET", "POST"])
+def console_review_sessions():
+    """List frozen source review sessions, or start one (session and CSRF required)."""
+    if request.method == "POST":
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            return jsonify({"error": "Expected a JSON session request"}), 422
+        return _review_proxy("POST", _REVIEW_API, payload=body)
+    return _review_proxy("GET", _REVIEW_API, params={
+        key: request.args[key] for key in ("before", "limit") if key in request.args})
+
+
+@app.route("/api/console/research/review-sessions/<session_id>")
+def console_review_session(session_id):
+    if not _REVIEW_SESSION_ID.fullmatch(session_id):
+        return _review_unknown("source review session")
+    return _review_proxy("GET", f"{_REVIEW_API}/{session_id}")
+
+
+@app.route("/api/console/research/review-sessions/<session_id>/sites")
+def console_review_sites(session_id):
+    if not _REVIEW_SESSION_ID.fullmatch(session_id):
+        return _review_unknown("source review session")
+    return _review_proxy("GET", f"{_REVIEW_API}/{session_id}/sites", params={
+        key: request.args[key] for key in _REVIEW_SITE_FILTERS if key in request.args})
+
+
+@app.route("/api/console/research/review-sessions/<session_id>/sites/<site_key>/review",
+           methods=["POST"])
+def console_review_site(session_id, site_key):
+    """Append one operator review state. Nothing is edited in place."""
+    if not _REVIEW_SESSION_ID.fullmatch(session_id) or not _REVIEW_SITE_KEY.fullmatch(site_key):
+        return _review_unknown("site")
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Expected a JSON review"}), 422
+    return _review_proxy("POST", f"{_REVIEW_API}/{session_id}/sites/{site_key}/review",
+                         payload=body)
+
+
+@app.route("/api/console/research/review-sessions/<session_id>/fix-links/<link_id>")
+def console_review_fix_link(session_id, link_id):
+    if not _REVIEW_SESSION_ID.fullmatch(session_id) or not _REVIEW_LINK_ID.fullmatch(link_id):
+        return _review_unknown("fix link")
+    return _review_proxy("GET", f"{_REVIEW_API}/{session_id}/fix-links/{link_id}")
+
+
+@app.route("/api/console/findings/<finding_id>")
+def console_finding_group(finding_id):
+    """The existing affected-versus-fixed finding group a candidate site links to."""
+    if not _REVIEW_FINDING_ID.fullmatch(finding_id):
+        return _review_unknown("finding")
+    return _review_proxy("GET", f"/findings/{finding_id}")
+
+
+# --- Research campaigns (NV-14) ----------------------------------------------
+# Thin proxies over the operator-only service routes. The service owns the
+# deduplication, the disclosure rules, the bundle allowlist and its integrity
+# check; statuses and messages pass through.
+_CAMPAIGN_API = "/research/campaigns"
+_CAMPAIGN_ID = re.compile(r"[0-9a-f]{32}")
+_CAMPAIGN_BUNDLE = re.compile(r"sha256:[0-9a-f]{64}")
+
+
+def _campaign_proxy(method, path, **kwargs):
+    return _review_proxy(method, path, label="Campaigns", **kwargs)
+
+
+def _campaign_body(what):
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return None, (jsonify({"error": f"Expected a JSON {what}"}), 422)
+    return body, None
+
+
+@app.route("/api/console/research/campaigns", methods=["GET", "POST"])
+def console_campaigns():
+    """List campaigns, or create one (session and CSRF required)."""
+    if request.method == "POST":
+        body, refused = _campaign_body("campaign")
+        return refused or _campaign_proxy("POST", _CAMPAIGN_API, payload=body)
+    return _campaign_proxy("GET", _CAMPAIGN_API, params={
+        key: request.args[key] for key in ("before", "limit") if key in request.args})
+
+
+@app.route("/api/console/research/campaigns/<campaign_id>")
+def console_campaign(campaign_id):
+    if not _CAMPAIGN_ID.fullmatch(campaign_id):
+        return _review_unknown("campaign")
+    return _campaign_proxy("GET", f"{_CAMPAIGN_API}/{campaign_id}")
+
+
+@app.route("/api/console/research/campaigns/<campaign_id>/findings", methods=["POST"])
+def console_campaign_add_finding(campaign_id):
+    """Add the finding group a finding belongs to; a repeat changes nothing."""
+    if not _CAMPAIGN_ID.fullmatch(campaign_id):
+        return _review_unknown("campaign")
+    body, refused = _campaign_body("finding reference")
+    return refused or _campaign_proxy(
+        "POST", f"{_CAMPAIGN_API}/{campaign_id}/findings", payload=body)
+
+
+@app.route("/api/console/research/campaigns/<campaign_id>/findings/<research_key>/disclosure",
+           methods=["POST"])
+def console_campaign_disclosure(campaign_id, research_key):
+    """Append one operator disclosure state. Nothing is edited in place."""
+    if not _CAMPAIGN_ID.fullmatch(campaign_id) or not _REVIEW_FINDING_ID.fullmatch(research_key):
+        return _review_unknown("finding group")
+    body, refused = _campaign_body("disclosure state")
+    return refused or _campaign_proxy(
+        "POST", f"{_CAMPAIGN_API}/{campaign_id}/findings/{research_key}/disclosure",
+        payload=body)
+
+
+@app.route("/api/console/research/campaigns/<campaign_id>/findings/<research_key>/bundles",
+           methods=["POST"])
+def console_campaign_bundle(campaign_id, research_key):
+    """Generate a disclosure bundle. It is stored for the operator, not sent anywhere."""
+    if not _CAMPAIGN_ID.fullmatch(campaign_id) or not _REVIEW_FINDING_ID.fullmatch(research_key):
+        return _review_unknown("finding group")
+    body, refused = _campaign_body("bundle request")
+    return refused or _campaign_proxy(
+        "POST", f"{_CAMPAIGN_API}/{campaign_id}/findings/{research_key}/bundles", payload=body)
+
+
+@app.route("/api/console/research/campaigns/<campaign_id>/bundles/<digest>")
+def console_campaign_bundle_read(campaign_id, digest):
+    if not _CAMPAIGN_ID.fullmatch(campaign_id) or not _CAMPAIGN_BUNDLE.fullmatch(digest):
+        return _review_unknown("disclosure bundle")
+    # The file is passed through byte for byte: its SHA-256 is its digest, so it
+    # must not be parsed and written out again here.
+    try:
+        resp = requests.request("GET", f"{API_URL}{_CAMPAIGN_API}/{campaign_id}/bundles/{digest}",
+                                headers=API_HEADERS, timeout=30)
+    except requests.RequestException:
+        return jsonify({"error": "Campaigns is unavailable: the service could not be reached."}), 502
+    if resp.status_code != 200:
+        return jsonify({"error": _api_error(resp)}), (
+            resp.status_code if resp.status_code >= 400 else 502)
+    content = resp.content
+    if "sha256:" + hashlib.sha256(content).hexdigest() != digest:
+        return jsonify({"error": "The bundle received does not match its digest."}), 502
+    return Response(content, status=200, mimetype="application/json",
+                    headers={"X-Bundle-Digest": digest})
+
+
+@app.route("/api/console/benchmark")
+def console_benchmark():
+    paths = {"builds": "/agent-builds", "challenges": "/eval-challenges",
+             "suites": "/eval-suites", "evaluations": "/evaluations"}
+    records = {}
+    for key, path in paths.items():
+        payload, ok = _api_get(path)
+        if not ok:
+            return jsonify({"error": f"{key.capitalize()} registry unavailable"}), 503
+        records[key] = payload.get(key, [])
+    deployments, deployments_ok = _deployments()
+    if not deployments_ok:
+        deployments = {}
+    return jsonify({
+        "builds": [{"id": item.get("id"), "name": item.get("name"),
+                    "version": item.get("version"), "driver": item.get("driver")}
+                   for item in records["builds"]],
+        "challenges": [{"id": item.get("id"), "name": item.get("name"),
+                        "version": item.get("version"), "label": item.get("label")}
+                       for item in records["challenges"]],
+        "suites": [{"id": item.get("id"), "name": item.get("name"),
+                    "version": item.get("version"), "challenge_count": len(item.get("challenge_ids") or []),
+                    "seed_count": len(item.get("seeds") or []),
+                    "challenge_ids": item.get("challenge_ids") or [],
+                    "seeds": item.get("seeds") or [],
+                    "action_cap": item.get("action_cap"),
+                    "deadline_seconds": item.get("deadline_seconds")} for item in records["suites"]],
+        "evaluations": [{"id": item.get("id"), "state": item.get("state"),
+                         "suite_id": item.get("suite_id"),
+                         "baseline_id": item.get("baseline_id"),
+                         "candidate_id": item.get("candidate_id")}
+                   for item in records["evaluations"]],
+        "source_arenas": [{"id": key, "name": item.get("user_id") or key}
+                          for key, item in deployments.items()
+                          if item.get("status") == "active" and
+                          (item.get("provider") or (item.get("outputs") or {}).get("provider"))
+                          == "docker-local"],
+        "source_arenas_available": deployments_ok,
+        "observed_at": datetime.now().astimezone().isoformat(),
+    })
+
+
+@app.route("/api/console/benchmark/builds", methods=["POST"])
+def console_benchmark_build_create():
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "A JSON build is required"}), 422
+    name, version = body.get("name"), body.get("version")
+    driver = body.get("driver")
+    if not all(isinstance(value, str) and 0 < len(value.strip()) <= 100
+               for value in (name, version)):
+        return jsonify({"error": "Name and version are required (100 characters maximum)"}), 422
+    if driver == "scripted-mcp/v1":
+        if not isinstance(body.get("plan"), list) or not 1 <= len(body["plan"]) <= 20:
+            return jsonify({"error": "A scripted build needs 1–20 plan steps"}), 422
+        payload = {"name": name.strip(), "version": version.strip(),
+                   "driver": driver, "plan": body["plan"]}
+    elif driver == "model-mcp/v1":
+        goal = body.get("goal")
+        if not isinstance(goal, str) or not 0 < len(goal.strip()) <= 500:
+            return jsonify({"error": "A model build needs a goal (500 characters maximum)"}), 422
+        payload = {"name": name.strip(), "version": version.strip(),
+                   "driver": driver, "goal": goal.strip()}
+    else:
+        return jsonify({"error": "Choose a supported build driver"}), 422
+    result, status = _api_post("/agent-builds", payload)
+    return jsonify(result), status
+
+
+@app.route("/api/console/benchmark/challenges", methods=["POST"])
+def console_benchmark_challenge_create():
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "A JSON challenge is required"}), 422
+    fields = ("name", "version", "source_arena_id")
+    if not all(isinstance(body.get(key), str) and 0 < len(body[key].strip()) <= 100
+               for key in fields):
+        return jsonify({"error": "Name, version and source arena are required"}), 422
+    if body.get("label") != "calibration":
+        return jsonify({"error": "This console can register calibration material only"}), 422
+    result, status = _api_post("/eval-challenges", {
+        **{key: body[key].strip() for key in fields}, "label": "calibration"})
+    return jsonify(result), status
+
+
+@app.route("/api/console/benchmark/suites", methods=["POST"])
+def console_benchmark_suite_create():
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "A JSON suite is required"}), 422
+    if not all(isinstance(body.get(key), str) and 0 < len(body[key].strip()) <= 100
+               for key in ("name", "version")):
+        return jsonify({"error": "Name and version are required"}), 422
+    challenges, seeds = body.get("challenge_ids"), body.get("seeds")
+    if not isinstance(challenges, list) or not 1 <= len(challenges) <= 8 or not all(
+        isinstance(item, str) and item for item in challenges
+    ):
+        return jsonify({"error": "Choose 1–8 challenges"}), 422
+    if not isinstance(seeds, list) or not 3 <= len(seeds) <= 20 or not all(
+        isinstance(item, int) and not isinstance(item, bool) for item in seeds
+    ):
+        return jsonify({"error": "Provide 3–20 numeric seeds"}), 422
+    action_cap, deadline = body.get("action_cap"), body.get("deadline_seconds")
+    if (not isinstance(action_cap, int) or isinstance(action_cap, bool) or
+            not 1 <= action_cap <= 10000 or not isinstance(deadline, int) or
+            isinstance(deadline, bool) or not 60 <= deadline <= 1800):
+        return jsonify({"error": "Action cap or deadline is outside supported limits"}), 422
+    result, status = _api_post("/eval-suites", {
+        "name": body["name"].strip(), "version": body["version"].strip(),
+        "challenge_ids": challenges, "seeds": seeds,
+        "action_cap": action_cap, "deadline_seconds": deadline})
+    return jsonify(result), status
+
+
+@app.route("/api/console/activity")
+def console_activity():
+    """Narrow cross-arena activity projection without private finding truth."""
+    data, ok = _api_get("/events?limit=200")
+    if not ok or not isinstance(data, dict):
+        return jsonify({"error": "Activity records unavailable"}), 503
+    deployments, deployments_ok = _deployments()
+    names = {key: item.get("user_id") or key for key, item in deployments.items()}
+    events = data.get("events") or []
+    verdicts = {}
+    for event in events:
+        if event.get("type") == "finding_verification":
+            payload = event.get("payload") or {}
+            finding_id = payload.get("finding_id")
+            if finding_id and finding_id not in verdicts:
+                verdicts[finding_id] = payload
+    findings, artifacts, signals = [], [], []
+    for event in events:
+        kind = event.get("type")
+        payload = event.get("payload") or {}
+        arena_id = event.get("lab_id")
+        context = {"arena_id": arena_id,
+                   "arena_name": names.get(arena_id, (arena_id or "")[:8]),
+                   "arena_known": bool(deployments_ok and arena_id in names),
+                   "ts": event.get("ts")}
+        if kind == "finding":
+            finding = {**payload}
+            verdict = verdicts.get(finding.get("finding_id"))
+            if verdict:
+                finding["manual_validation"] = {"verdict": verdict.get("verdict")}
+            findings.append({**context, "id": finding.get("finding_id"),
+                             "title": finding.get("title") or "Untitled finding",
+                             "verdict": _finding_verdict(finding),
+                             "artifact_count": len(finding.get("evidence_artifacts") or [])})
+            artifacts.extend({**context, "finding_title": finding.get("title") or "Untitled finding",
+                              "digest": item.get("digest"), "bytes": item.get("bytes")}
+                             for item in finding.get("evidence_artifacts") or [])
+        elif kind == "monitor_signal":
+            signals.append({**context, "kind": payload.get("kind"),
+                            "node": payload.get("node"), "severity": payload.get("severity"),
+                            "summary": payload.get("summary")})
+    audit = [{"type": event.get("type"), "ts": event.get("ts"),
+              "actor": event.get("actor") or "system", "source": _event_source(event),
+              "arena_id": event.get("lab_id"),
+              "arena_name": names.get(event.get("lab_id"), (event.get("lab_id") or "")[:8]),
+              "arena_known": bool(deployments_ok and event.get("lab_id") in names)}
+             for event in events]
+    return jsonify({"findings": findings, "artifacts": artifacts,
+                    "signals": signals, "audit": audit,
+                    "observed_at": datetime.now().astimezone().isoformat()})
+
+
+@app.route("/api/console/agents")
+def console_agents():
+    builds, ok = _api_get("/agent-builds")
+    if not ok or not isinstance(builds, dict):
+        return jsonify({"error": "Agent build registry unavailable"}), 503
+    overview = _agent_overview(limit=120)
+    return jsonify({
+        "builds": [{"id": item.get("id"), "name": item.get("name"),
+                    "version": item.get("version"), "driver": item.get("driver"),
+                    "digest": item.get("digest")}
+                   for item in builds.get("builds") or []],
+        "connections": [{key: item.get(key) for key in
+                         ("arena_id", "arena_name", "stance", "model", "provider", "actor",
+                          "last_seen", "active", "commands", "findings")}
+                        for item in overview.get("connections") or []],
+        "timeline": [{key: item.get(key) for key in
+                      ("ts", "arena_id", "arena_name", "type", "actor", "stance", "summary")}
+                     for item in overview.get("timeline") or []],
+        "observed_at": datetime.now().astimezone().isoformat(),
+    })
+
+
+@app.route("/api/console/settings")
+def console_settings():
+    stop, stop_ok = _api_get("/system/emergency-stop")
+    model, model_ok = _api_get("/agent/model")
+    return jsonify({
+        "system_stop": {"state": (stop or {}).get("state") if stop_ok else "unavailable"},
+        "model_connection": {"configured": bool((model or {}).get("configured")),
+                             "provider": (model or {}).get("provider") if model_ok else None,
+                             "model": (model or {}).get("model") if model_ok else None,
+                             "base_url": (model or {}).get("base_url") if model_ok else None,
+                             "available": model_ok},
+        "observed_at": datetime.now().astimezone().isoformat(),
+    })
+
+
+@app.route("/api/console/system-stop", methods=["POST"])
+def console_system_stop():
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict) or body.get("action") not in ("stop", "clear"):
+        return jsonify({"error": "Choose stop or clear"}), 422
+    reason = body.get("reason")
+    if not isinstance(reason, str) or not 0 < len(reason.strip()) <= 500:
+        return jsonify({"error": "A reason of at most 500 characters is required"}), 422
+    path = "/system/emergency-stop"
+    if body["action"] == "clear":
+        path += "/clear"
+    result, status = _api_post(path, {"reason": reason.strip(),
+                                     "idempotency_key": uuid.uuid4().hex})
+    return jsonify(result), status
+
+
+@app.route("/api/console/range")
+def console_range():
+    catalog, catalog_ok = _api_get("/scenarios")
+    deployments, deployments_ok = _deployments()
+    if not catalog_ok or not deployments_ok:
+        return jsonify({"error": "Cyber Range data unavailable"}), 503
+    return jsonify({
+        "scenarios": [{"id": item.get("id"), "name": item.get("name"),
+                       "description": item.get("description"), "nodes": item.get("nodes"),
+                       "source": item.get("source"), "provider_class": item.get("provider_class"),
+                       "tags": item.get("tags") or []}
+                      for item in catalog.get("scenarios", [])],
+        "arenas": [{"id": key, "name": value.get("user_id") or key,
+                    "status": value.get("status") or "unknown",
+                    "scenario": value.get("scenario") or "Custom topology"}
+                   for key, value in deployments.items()],
+        "simulation_mode": CONSOLE_SIMULATION_MODE,
+        "observed_at": datetime.now().astimezone().isoformat(),
+    })
+
+
+@app.route("/arenas")
+def arenas():
+    deployments, _ = _deployments()
+    current = {k: v for k, v in deployments.items() if v.get("status") != "destroyed"}
+    archived = {k: v for k, v in deployments.items() if v.get("status") == "destroyed"}
+    return render_template("arenas.html", active="arenas", current=current, archived=archived)
+
+
+@app.route("/engagements")
+def engagements():
+    """Target-language alias while the arena list remains the backing view."""
+    return arenas()
+
+
+_ENGAGEMENT_PURPOSES = (
+    {
+        "id": "benchmark",
+        "label": "Benchmark",
+        "icon": "fa-chart-line",
+        "description": "Measure an agent or workflow against known objectives.",
+    },
+    {
+        "id": "discovery",
+        "label": "Discovery",
+        "icon": "fa-magnifying-glass",
+        "description": "Find unknown weaknesses or regressions in a target.",
+    },
+    {
+        "id": "calibration",
+        "label": "Calibration",
+        "icon": "fa-sliders",
+        "description": "Validate tools, policies, containment, and scoring behavior.",
+    },
+    {
+        "id": "research",
+        "label": "Manual research",
+        "icon": "fa-flask",
+        "description": "Run an operator-led investigation without comparison semantics.",
+    },
+)
+_ENGAGEMENT_PURPOSE_BY_ID = {item["id"]: item for item in _ENGAGEMENT_PURPOSES}
+_ENGAGEMENT_SOURCES = {"challenge", "target"}
+_ENGAGEMENT_PARTICIPANTS = (
+    {"id": "operator", "label": "Operator-led", "description": "A human drives the engagement; agents may be connected later."},
+    {"id": "agent", "label": "Agent-led", "description": "A bound autonomous agent is the primary participant."},
+    {"id": "mixed", "label": "Mixed", "description": "Human and bound agents collaborate in the same engagement."},
+)
+_ENGAGEMENT_PARTICIPANT_BY_ID = {
+    item["id"]: item for item in _ENGAGEMENT_PARTICIPANTS
+}
+_ENGAGEMENT_TIME_BOXES = {1800: "30 minutes", 3600: "1 hour", 7200: "2 hours", 14400: "4 hours"}
+
+
+def _engagement_purpose(value):
+    return _ENGAGEMENT_PURPOSE_BY_ID.get(value)
+
+
+def _engagement_participant(value):
+    return _ENGAGEMENT_PARTICIPANT_BY_ID.get(value)
+
+
+def _engagement_time_box(value):
+    try:
+        seconds = int(value)
+    except (TypeError, ValueError):
+        return None
+    return seconds if seconds in _ENGAGEMENT_TIME_BOXES else None
+
+
+@app.route("/engagements/new", methods=["GET", "POST"])
+def new_engagement():
+    """Choose engagement intent and source before entering an existing builder."""
+    selected_purpose = request.values.get("purpose", "")
+    selected_source = request.values.get("source", "")
+    selected_participant = request.values.get("participant_mode", "operator")
+    selected_time_box = _engagement_time_box(
+        request.values.get("engagement_time_box_seconds", 3600)
+    )
+    if request.method == "POST":
+        if selected_purpose not in _ENGAGEMENT_PURPOSE_BY_ID:
+            flash("Choose the engagement purpose.", "warning")
+        elif selected_source not in _ENGAGEMENT_SOURCES:
+            flash("Choose a challenge or target source.", "warning")
+        elif selected_participant not in _ENGAGEMENT_PARTICIPANT_BY_ID:
+            flash("Choose who will drive the engagement.", "warning")
+        elif selected_time_box is None:
+            flash("Choose a supported engagement time box.", "warning")
+        else:
+            endpoint = "launch" if selected_source == "challenge" else "wizard"
+            return redirect(
+                url_for(
+                    endpoint,
+                    purpose=selected_purpose,
+                    participant_mode=selected_participant,
+                    engagement_time_box_seconds=selected_time_box,
+                )
+            )
+    return render_template(
+        "engagement_new.html",
+        active="engagement_new",
+        purposes=_ENGAGEMENT_PURPOSES,
+        participants=_ENGAGEMENT_PARTICIPANTS,
+        time_boxes=_ENGAGEMENT_TIME_BOXES,
+        selected_purpose=selected_purpose,
+        selected_source=selected_source,
+        selected_participant=selected_participant,
+        selected_time_box=selected_time_box,
+    )
+
+
+@app.route("/launch")
+def launch():
+    _, attackers, victims = _catalog()
+    default_infra = _default_infra()
+    scenarios = _scenarios()
+    # Compatible scenarios first, so the (auto-selected) first option is runnable.
+    scenarios.sort(key=lambda s: default_infra not in ("any", s.get("provider_class")))
+    return render_template("launch.html", active="launch", scenarios=scenarios,
+                           attackers=attackers, victims=victims, default_infra=default_infra,
+                           engagement_purpose=_engagement_purpose(request.args.get("purpose")),
+                           engagement_participant=_engagement_participant(request.args.get("participant_mode")),
+                           engagement_time_box=_engagement_time_box(request.args.get("engagement_time_box_seconds")),
+                           engagement_time_box_label=_ENGAGEMENT_TIME_BOXES.get(_engagement_time_box(request.args.get("engagement_time_box_seconds"))),
+                           engagement_source="Challenge",
+                           selected_scenario=request.args.get("scenario", ""))
+
+
+@app.route("/wizard")
+def wizard():
+    """Guided arena authoring (P3-3): a step-by-step SUT flow — target → setup
+    consent → review (no-deploy topology) → launch."""
+    return render_template(
+        "wizard.html",
+        active="wizard",
+        engagement_purpose=_engagement_purpose(request.args.get("purpose")),
+        engagement_participant=_engagement_participant(request.args.get("participant_mode")),
+        engagement_time_box=_engagement_time_box(request.args.get("engagement_time_box_seconds")),
+        engagement_time_box_label=_ENGAGEMENT_TIME_BOXES.get(_engagement_time_box(request.args.get("engagement_time_box_seconds"))),
+        engagement_source="Target",
+    )
+
+
+@app.route("/api/arenas/sut/preview", methods=["POST"])
+def sut_preview_proxy():
+    """No-deploy review for Git or OCI targets in the research wizard."""
+    body = request.get_json(silent=True) or {}
+    target_type = body.get("target_type") or "git"
+    payload = {
+        "instance_id": (body.get("instance_id") or "wizard-preview").strip() or "wizard-preview",
+        "engagement_purpose": body.get("engagement_purpose") or None,
+        "participant_mode": body.get("participant_mode") or None,
+        "engagement_time_box_seconds": body.get("engagement_time_box_seconds") or None,
+        "ports": body.get("ports") or [],
+        "include_attacker": bool(body.get("include_attacker", True)),
+        "authorization_basis": body.get("authorization_basis") or "public_oss",
+        "authorization_confirmed": bool(body.get("authorization_confirmed")),
+        "scope_note": (body.get("scope_note") or "").strip() or None,
+    }
+    if target_type == "oci":
+        payload["image"] = (body.get("image") or "").strip()
+        payload["platform"] = body.get("platform") or "linux/amd64"
+        endpoint = "/arenas/oci/preview"
+    elif target_type == "bundle":
+        payload["artifact_digest"] = (body.get("artifact_digest") or "").strip()
+        payload["setup_mode"] = body.get("setup_mode") or "operator"
+        payload["setup_egress"] = bool(body.get("setup_egress", True))
+        payload["time_box_seconds"] = body.get("time_box_seconds") or 1800
+        payload["command_budget"] = body.get("command_budget") or 50
+        endpoint = "/arenas/source-bundle/preview"
+    else:
+        payload["repo"] = (body.get("repo") or "").strip()
+        payload["ref"] = (body.get("ref") or "").strip() or None
+        endpoint = "/arenas/sut/preview"
+    data, code = _api_post(endpoint, payload)
+    return jsonify(data), code
+
+
+@app.route("/api/targets/source-bundles", methods=["POST"])
+def source_bundle_upload_proxy():
+    """Stream one local bundle to the orchestrator's bounded intake endpoint."""
+    upload = request.files.get("file")
+    if upload is None or not upload.filename:
+        return jsonify({"error": "select a .tar, .tar.gz, or .tgz source bundle"}), 422
+    try:
+        response = requests.post(
+            f"{API_URL}/targets/source-bundles",
+            files={
+                "file": (
+                    upload.filename,
+                    upload.stream,
+                    upload.mimetype or "application/octet-stream",
+                )
+            },
+            headers=API_HEADERS,
+            timeout=60,
+        )
+    except requests.RequestException:
+        return jsonify({"error": "orchestrator unreachable"}), 502
+    try:
+        data = response.json()
+    except ValueError:
+        data = {}
+    if response.status_code != 200:
+        return jsonify({"error": _api_error(response)}), response.status_code
+    return jsonify(data), 200
+
+
+@app.route("/scenarios")
+def scenarios():
+    _, attackers, victims = _catalog()
+    return render_template("scenarios.html", active="scenarios",
+                           scenarios=_scenarios(), attackers=attackers, victims=victims)
+
+
+@app.route("/library/challenges")
+def challenge_library():
+    """Target-language alias for the current scenario catalog."""
+    return scenarios()
+
+
+# The engagement/run workspace (ROADMAP C3, ADR-0012). One contextual surface per
+# concern, in the order an operator works through them; only applicable tabs render.
+_WORKSPACE_TABS = (
+    ("overview", "Overview", "fa-gauge-high"),
+    ("live", "Live", "fa-wave-square"),
+    ("target", "Target", "fa-bullseye"),
+    ("http", "HTTP", "fa-paper-plane"),
+    ("poc", "PoC", "fa-terminal"),
+    ("findings", "Findings", "fa-bug"),
+    ("evidence", "Evidence", "fa-box-archive"),
+    ("changes", "Changes", "fa-code-compare"),
+    ("agent", "Agent", "fa-chess"),
+    ("trace", "Trace", "fa-route"),
+    ("score", "Score", "fa-flag-checkered"),
+    ("infrastructure", "Infrastructure", "fa-server"),
+)
+
+
+def _workspace_tabs(applicable, counts=None):
+    """Ordered tab descriptors for the tabs that actually have something to show.
+
+    A count rides beside the label so an operator can see where the substance is —
+    how many findings, artifacts, or changed workspaces — without opening each tab.
+    """
+    counts = counts or {}
+    return [
+        {"id": tab, "label": label, "icon": icon, "count": counts.get(tab)}
+        for tab, label, icon in _WORKSPACE_TABS
+        if applicable.get(tab)
+    ]
+
+
+@app.route("/arena/<instance_id>")
+def arena_detail(instance_id):
+    data, ok = _api_get(f"/status/{instance_id}")
+    if not ok or data is None:
+        flash(f"Arena {instance_id} not found.", "warning")
+        return redirect(url_for("engagements"))
+    outputs = data.get("outputs", {}) or {}
+    events = _events(instance_id, limit=30)
+    engagement_intent = next(
+        (
+            event.get("payload") or {}
+            for event in events
+            if event.get("type") == "engagement_intent"
+        ),
+        None,
+    )
+    scenario = data.get("scenario", "") or ""
+    # A "configurable" (software-under-test) arena is one whose victim must be
+    # brought up before the engagement — the wizard (`sut:<repo>`), a clone/source
+    # node (`*_setup_shell` / `*_sut_source`), or one with a recorded setup phase.
+    # Predefined vulnerable labs are already armed, so the configurator is hidden
+    # for them; only agent positioning applies.
+    ev_types = {e.get("type") for e in events}
+    is_sut = (
+        scenario.startswith("sut:")
+        or any(k.endswith(("_setup_shell", "_sut_source")) for k in outputs)
+        or bool(ev_types & {"setup_prearm", "setup_session", "setup_step"})
+    )
+    state = data.get("status", "unknown")
+    score = _score(instance_id)
+    findings = _findings(instance_id)
+    setup_steps = _setup_steps(instance_id)
+
+    # A destroyed arena is a read-only record: its evidence stays readable, but
+    # nothing may be launched, granted, or changed against infrastructure that is gone.
+    read_only = state == "destroyed"
+
+    monitor_signals = [
+        {**(e.get("payload") or {}), "ts": e.get("ts")}
+        for e in events
+        if e.get("type") == "monitor_signal"
+    ]
+    evidence_artifacts = [
+        {**artifact, "finding_id": f.get("finding_id"), "finding_title": f.get("title")}
+        for f in findings
+        for artifact in (f.get("evidence_artifacts") or [])
+    ]
+    preflight, preflight_ok = _api_get(f"/arenas/{instance_id}/preflight")
+    lifecycle, lifecycle_ok = _api_get(f"/arenas/{instance_id}/lifecycle")
+    if not isinstance(lifecycle, dict) or not isinstance(lifecycle.get("classification"), dict):
+        lifecycle = None
+        lifecycle_ok = False
+    workspaces_data, _ = _api_get(f"/arenas/{instance_id}/workspaces")
+    workspaces = (workspaces_data or {}).get("workspaces") or []
+    # Trace/attribution only exists once a BYO agent has actually worked the arena.
+    has_agent_activity = bool(
+        ev_types & {"agent_session", "agent_exec", "agent_binding", "agent_setup_step"}
+    )
+    trace = _api_get(f"/arenas/{instance_id}/eval-export")[0] if has_agent_activity else None
+
+    # HTTP research tab (R1 slice 6): present wherever the arena has (or had)
+    # a web-capable target, or any stored transaction — so a destroyed arena's
+    # records stay reviewable. Driving is refused server-side when read-only.
+    http_total = (_api_get(f"/arenas/{instance_id}/http/transactions?limit=1")[0] or {}).get("total", 0)
+    poc_jobs = (_api_get(f"/arenas/{instance_id}/poc-jobs")[0] or {}).get("jobs", [])
+    budget = _api_get(f"/arenas/{instance_id}/budget")[0] or {}
+    capabilities = _api_get(f"/arenas/{instance_id}/capabilities")[0] or {}
+    forwards = (_api_get(f"/arenas/{instance_id}/forwards")[0] or {}).get("forwards", [])
+    web_capable = any(
+        (n.get("ports") or n.get("url")) and not n.get("foothold")
+        for n in _parse_nodes(outputs)
+    )
+
+    tabs = _workspace_tabs({
+        "overview": True,
+        "live": True,
+        "target": is_sut or bool(preflight_ok and preflight),
+        "http": bool(http_total) or web_capable,
+        "poc": bool(poc_jobs) or (state == "active" and web_capable),
+        "findings": True,
+        "evidence": bool(evidence_artifacts or monitor_signals),
+        "changes": bool(workspaces),
+        "agent": True,
+        "trace": bool(trace),
+        "score": bool(score),
+        "infrastructure": True,
+    }, counts={
+        "findings": len(findings),
+        "evidence": len(evidence_artifacts) + len(monitor_signals),
+        "changes": len(workspaces),
+        "http": http_total,
+        "poc": len(poc_jobs),
+    })
+
+    return render_template(
+        "arena_detail.html", active="arenas",
+        instance_id=instance_id,
+        instance_name=data.get("user_id", instance_id),
+        state=state,
+        outputs=outputs,
+        nodes=_parse_nodes(outputs),
+        unhealthy=outputs.get("unhealthy_nodes"),
+        provider=outputs.get("provider") or data.get("provider"),
+        events=events,
+        engagement_intent=engagement_intent,
+        score=score,
+        findings=findings,
+        setup_steps=setup_steps,
+        scenario=scenario,
+        is_sut=is_sut,
+        gateway_url=GATEWAY_PUBLIC_URL,
+        tabs=tabs,
+        read_only=read_only,
+        monitor_signals=monitor_signals,
+        evidence_artifacts=evidence_artifacts,
+        trace=trace,
+        created_at=data.get("created_at"),
+        expires_at=data.get("expires_at"),
+        lifecycle=lifecycle if lifecycle_ok else None,
+        poc_jobs=poc_jobs,
+        budget=budget,
+        capabilities=capabilities,
+        forwards=forwards,
+    )
+
+
+@app.route("/arena/<instance_id>/forwards", methods=["POST"])
+def arena_forward_form(instance_id):
+    selection = request.form.get("service") or ""
+    if ":" not in selection:
+        flash("Choose a declared service", "danger")
+        return redirect(url_for("arena_detail", instance_id=instance_id))
+    target, service_id = selection.split(":", 1)
+    data, code = _api_post(f"/arenas/{instance_id}/forwards", {
+        "foothold": request.form.get("foothold") or "",
+        "target": target,
+        "service_id": service_id,
+        "lifetime_seconds": 120,
+        "idempotency_key": uuid.uuid4().hex,
+    })
+    flash("Forward lease opened" if code == 200 else data.get("error", "Forward failed"),
+          "success" if code == 200 else "danger")
+    return redirect(url_for("arena_detail", instance_id=instance_id))
+
+
+@app.route("/arena/<instance_id>/forwards/<forward_id>/revoke", methods=["POST"])
+def arena_forward_revoke_form(instance_id, forward_id):
+    data, code = _api_post(f"/arenas/{instance_id}/forwards/{forward_id}/revoke")
+    flash("Forward lease revoked" if code == 200 else data.get("error", "Revoke failed"),
+          "success" if code == 200 else "danger")
+    return redirect(url_for("arena_detail", instance_id=instance_id))
+
+
+@app.route("/arena/<instance_id>/stop", methods=["POST"])
+def arena_stop_form(instance_id):
+    data, code = _api_post(f"/arenas/{instance_id}/stop", {
+        "reason": (request.form.get("reason") or "Operator stopped research")[:500],
+        "idempotency_key": uuid.uuid4().hex,
+    })
+    flash("Arena research stopped" if code == 200 else data.get("error", "Stop failed"),
+          "success" if code == 200 else "danger")
+    return redirect(url_for("arena_detail", instance_id=instance_id))
+
+
+@app.route("/arena/<instance_id>/resume", methods=["POST"])
+def arena_resume_form(instance_id):
+    data, code = _api_post(f"/arenas/{instance_id}/resume", {
+        "reason": (request.form.get("reason") or "Operator resumed research")[:500],
+        "idempotency_key": uuid.uuid4().hex,
+    })
+    flash("Arena research resumed" if code == 200 else data.get("error", "Resume failed"),
+          "success" if code == 200 else "danger")
+    return redirect(url_for("arena_detail", instance_id=instance_id))
+
+
+@app.route("/agents")
+def agents():
+    return render_template("agents.html", active="agents", overview=_agent_overview())
+
+
+@app.route("/activity/agents")
+def agent_activity():
+    """Target-language alias for live agent attribution and connections."""
+    return agents()
+
+
+@app.route("/audit")
+def audit():
+    return render_template("audit.html", active="audit",
+                           events=_annotate_source(_events(limit=150)))
+
+
+@app.route("/activity/audit")
+def audit_trail():
+    """Target-language alias for the append-only audit view."""
+    return audit()
+
+
+@app.route("/settings")
+def settings():
+    system_stop = _api_get("/system/emergency-stop")[0] or {}
+    return render_template("settings.html", active="settings", system_stop=system_stop)
+
+
+@app.route("/settings/emergency-stop", methods=["POST"])
+def system_stop_form():
+    reason = (request.form.get("reason") or "Operator emergency stop")[:500]
+    data, code = _api_post("/system/emergency-stop", {
+        "reason": reason, "idempotency_key": uuid.uuid4().hex,
+    })
+    flash("System research stopped" if code == 200 else data.get("error", "Stop failed"),
+          "success" if code == 200 else "danger")
+    return redirect(url_for("settings"))
+
+
+@app.route("/settings/emergency-stop/clear", methods=["POST"])
+def system_stop_clear_form():
+    reason = (request.form.get("reason") or "Operator cleared emergency stop")[:500]
+    data, code = _api_post("/system/emergency-stop/clear", {
+        "reason": reason, "idempotency_key": uuid.uuid4().hex,
+    })
+    flash("System research resumed" if code == 200 else data.get("error", "Clear failed"),
+          "success" if code == 200 else "danger")
+    return redirect(url_for("settings"))
+
+
+@app.route("/administration/settings")
+def administration_settings():
+    """Target-language alias for the current console settings."""
+    return settings()
+
+
+_FOUNDATION_PAGES = {
+    "targets": {
+        "group": "Library",
+        "title": "Targets",
+        "icon": "fa-bullseye",
+        "description": "Reusable Git, OCI, and source-bundle identities will live here.",
+        "current": "Target intake is available now when creating a target-based engagement.",
+        "link_endpoint": "new_engagement",
+        "link_label": "Create from a target",
+    },
+    "providers": {
+        "group": "Administration",
+        "title": "Providers & capacity",
+        "icon": "fa-server",
+        "description": "Provider health, capacity, quotas, and placement policy will be managed here.",
+        "current": "Current host capacity and orchestrator health remain visible on Home.",
+        "link_endpoint": "overview",
+        "link_label": "Open Home",
+    },
+    "security": {
+        "group": "Administration",
+        "title": "Security",
+        "icon": "fa-shield-halved",
+        "description": "Ownership, roles, credentials, and containment policy will be managed here.",
+        "current": "The current access posture and model connection are documented in Settings.",
+        "link_endpoint": "administration_settings",
+        "link_label": "Open Settings",
+    },
+}
+
+
+def _foundation_page(page_key):
+    page = _FOUNDATION_PAGES[page_key]
+    return render_template("foundation.html", active=page_key, page=page)
+
+
+@app.route("/evaluations")
+def evaluations():
+    builds, _ = _api_get("/agent-builds")
+    challenges, _ = _api_get("/eval-challenges")
+    suites, _ = _api_get("/eval-suites")
+    records, _ = _api_get("/evaluations")
+    return render_template("evaluations.html", active="evaluations",
+        builds=(builds or {}).get("builds", []),
+        challenges=(challenges or {}).get("challenges", []),
+        suites=(suites or {}).get("suites", []),
+        evaluations=(records or {}).get("evaluations", []))
+
+
+@app.route("/evaluations/builds", methods=["POST"])
+def evaluation_build_create():
+    try:
+        plan = json.loads(request.form.get("plan", "[]"))
+    except ValueError:
+        flash("Script must be valid JSON", "danger")
+        return redirect(url_for("evaluations"))
+    result, status = _api_post("/agent-builds", {
+        "name": request.form.get("name", ""), "version": request.form.get("version", ""),
+        "plan": plan})
+    flash("Agent build registered" if status == 201 else result.get("error", "Registration failed"),
+          "success" if status == 201 else "danger")
+    return redirect(url_for("evaluations"))
+
+
+@app.route("/evaluations/challenges", methods=["POST"])
+def evaluation_challenge_create():
+    result, status = _api_post("/eval-challenges", {
+        "name": request.form.get("name", ""), "version": request.form.get("version", ""),
+        "source_arena_id": request.form.get("source_arena_id", ""),
+        "label": request.form.get("label", "calibration")})
+    flash("Challenge pinned" if status == 201 else result.get("error", "Registration failed"),
+          "success" if status == 201 else "danger")
+    return redirect(url_for("evaluations"))
+
+
+@app.route("/evaluations/suites", methods=["POST"])
+def evaluation_suite_create():
+    try:
+        seeds = [int(value.strip()) for value in request.form.get("seeds", "").split(",")]
+        action_cap = int(request.form.get("action_cap", "100"))
+        deadline = int(request.form.get("deadline_seconds", "600"))
+    except ValueError:
+        flash("Seeds and limits must be numbers", "danger")
+        return redirect(url_for("evaluations"))
+    result, status = _api_post("/eval-suites", {
+        "name": request.form.get("name", ""), "version": request.form.get("version", ""),
+        "challenge_ids": request.form.getlist("challenge_ids"), "seeds": seeds,
+        "action_cap": action_cap, "deadline_seconds": deadline})
+    flash("Suite registered" if status == 201 else result.get("error", "Registration failed"),
+          "success" if status == 201 else "danger")
+    return redirect(url_for("evaluations"))
+
+
+@app.route("/evaluations/new", methods=["POST"])
+def evaluation_create():
+    result, status = _api_post("/evaluations", {
+        "suite_id": request.form.get("suite_id", ""),
+        "baseline_id": request.form.get("baseline_id", ""),
+        "candidate_id": request.form.get("candidate_id", "")})
+    if status == 202:
+        return redirect(url_for("evaluation_detail", evaluation_id=result["id"]))
+    flash(result.get("error", "Evaluation could not start"), "danger")
+    return redirect(url_for("evaluations"))
+
+
+@app.route("/evaluations/<evaluation_id>")
+def evaluation_detail(evaluation_id):
+    record, ok = _api_get(f"/evaluations/{evaluation_id}", timeout=15)
+    if not ok:
+        flash("Evaluation unavailable", "danger")
+        return redirect(url_for("evaluations"))
+    return render_template("evaluation_detail.html", active="evaluations", record=record)
+
+
+@app.route("/library/targets")
+def target_library():
+    return _foundation_page("targets")
+
+
+@app.route("/library/agents")
+def agent_library():
+    builds, _ = _api_get("/agent-builds")
+    return render_template("agent_builds.html", active="agent_library",
+                           builds=(builds or {}).get("builds", []))
+
+
+@app.route("/activity/findings")
+def findings_index():
+    """Every finding, across engagements, with the operator verdict that decides it."""
+    findings = _all_findings()
+    counts = {
+        "all": len(findings),
+        "unverified": sum(1 for f in findings if f["verdict"] in
+                          ("inconclusive", "infrastructure_failure")),
+        "inconclusive": sum(1 for f in findings if f["verdict"] == "inconclusive"),
+        "infrastructure_failure": sum(1 for f in findings if f["verdict"] == "infrastructure_failure"),
+        "confirmed": sum(1 for f in findings if f["verdict"] == "confirmed"),
+        "manual_confirmed": sum(1 for f in findings if f["verdict"] == "manual_confirmed"),
+        "refuted": sum(1 for f in findings if f["verdict"] == "refuted"),
+    }
+    return render_template(
+        "findings_index.html", active="findings", findings=findings, counts=counts
+    )
+
+
+@app.route("/activity/evidence")
+def evidence_index():
+    """Artifacts and observed signals across engagements, each linking back to its own."""
+    names = _arena_names()
+    findings = _all_findings(names=names)
+    artifacts, signals = _all_evidence(names=names, findings=findings)
+    return render_template(
+        "evidence_index.html", active="evidence",
+        artifacts=artifacts, signals=signals,
+    )
+
+
+@app.route("/administration/providers")
+def providers_capacity():
+    return _foundation_page("providers")
+
+
+@app.route("/administration/security")
+def security():
+    return _foundation_page("security")
+
+
+@app.route("/profile")
+def profile():
+    return render_template("profile.html", active="profile",
+                           username=session.get("username", "operator"))
+
+
+@app.route("/api/system-usage")
+def system_usage():
+    """Host capacity + arena footprint for the Dashboard gauges."""
+    return jsonify(_system_usage())
+
+
+# --- actions -----------------------------------------------------------------
+@app.route("/create", methods=["POST"])
+def create_lab():
+    try:
+        resp = requests.post(f"{API_URL}/deploy", json={
+            "scenario": request.form.get("scenario"),
+            "instance_id": request.form.get("instance_id"),
+            "engagement_purpose": request.form.get("engagement_purpose") or None,
+            "participant_mode": request.form.get("participant_mode") or None,
+            "engagement_time_box_seconds": _engagement_time_box(request.form.get("engagement_time_box_seconds")),
+        }, headers=API_HEADERS, timeout=5)
+        if resp.status_code == 422:
+            try:
+                detail = resp.json()["detail"][0]["msg"]
+            except (ValueError, LookupError):
+                detail = "invalid input"
+            flash(f"Launch rejected: {detail}", "warning")
+        elif resp.status_code != 200:
+            flash(f"Deploy failed (HTTP {resp.status_code})", "danger")
+        else:
+            flash(f"Launching '{request.form.get('instance_id')}'…", "info")
+    except requests.RequestException as e:
+        flash(f"Deploy failed: {e}", "danger")
+    return redirect(url_for("engagements"))
+
+
+@app.route("/build-custom", methods=["POST"])
+def build_custom():
+    instance_id = request.form.get("instance_id")
+    # Multiple attack machines (P1-7): the form sends `attackers` (multi-select);
+    # fall back to a single `attacker` for older markup.
+    attackers = request.form.getlist("attackers") or (
+        [request.form.get("attacker")] if request.form.get("attacker") else []
+    )
+    victims = request.form.getlist("victims")
+    try:
+        resp = requests.post(f"{API_URL}/arenas/custom", json={
+            "instance_id": instance_id, "attackers": attackers, "victims": victims,
+            "engagement_purpose": request.form.get("engagement_purpose") or None,
+            "participant_mode": request.form.get("participant_mode") or None,
+            "engagement_time_box_seconds": _engagement_time_box(request.form.get("engagement_time_box_seconds")),
+        }, headers=API_HEADERS, timeout=10)
+        if resp.status_code == 200:
+            flash(f"Building '{instance_id}': {' + '.join(attackers)} vs "
+                  f"{', '.join(victims)} (images pulled on first use)", "info")
+        elif resp.status_code == 422:
+            try:
+                detail = resp.json()["detail"]
+                if isinstance(detail, list):
+                    detail = detail[0].get("msg", "invalid input")
+            except (ValueError, LookupError, AttributeError):
+                detail = "invalid selection"
+            flash(f"Build rejected: {detail}", "warning")
+        else:
+            flash(f"Build failed (HTTP {resp.status_code})", "danger")
+    except requests.RequestException as e:
+        flash(f"Build failed: {e}", "danger")
+    return redirect(url_for("engagements"))
+
+
+@app.route("/build-sut", methods=["POST"])
+def build_sut():
+    """Launch a Git checkout or immutable OCI software-under-test arena."""
+    f = request.form
+    engagement_purpose = f.get("engagement_purpose", "")
+    participant_mode = f.get("participant_mode", "")
+    engagement_time_box = _engagement_time_box(f.get("engagement_time_box_seconds"))
+    wizard_args = {}
+    if _engagement_purpose(engagement_purpose):
+        wizard_args["purpose"] = engagement_purpose
+    if _engagement_participant(participant_mode):
+        wizard_args["participant_mode"] = participant_mode
+    if engagement_time_box:
+        wizard_args["engagement_time_box_seconds"] = engagement_time_box
+    wizard_url = url_for(
+        "wizard",
+        **wizard_args,
+    )
+    target_type = f.get("target_type", "git")
+    ports = [int(p) for p in re.findall(r"\d+", f.get("ports", ""))][:8]
+    payload = {
+        "instance_id": f.get("instance_id"),
+        "engagement_purpose": engagement_purpose or None,
+        "participant_mode": f.get("participant_mode") or None,
+        "engagement_time_box_seconds": _engagement_time_box(f.get("engagement_time_box_seconds")),
+        "ports": ports,
+        "include_attacker": f.get("include_attacker") == "on",
+        "authorization_basis": f.get("authorization_basis", "public_oss"),
+        "authorization_confirmed": f.get("authorization_confirmed") == "on",
+        "scope_note": (f.get("scope_note") or "").strip() or None,
+    }
+    if target_type == "oci":
+        payload["image"] = (f.get("image") or "").strip()
+        payload["platform"] = f.get("platform") or "linux/amd64"
+        endpoint = "/arenas/oci"
+        source = payload["image"]
+    elif target_type == "bundle":
+        artifact_digest = (f.get("artifact_digest") or "").strip()
+        if not artifact_digest:
+            upload = request.files.get("file")
+            if upload is None or not upload.filename:
+                flash("Source-bundle launch rejected: select an archive.", "warning")
+                return redirect(wizard_url)
+            try:
+                intake_response = requests.post(
+                    f"{API_URL}/targets/source-bundles",
+                    files={
+                        "file": (
+                            upload.filename,
+                            upload.stream,
+                            upload.mimetype or "application/octet-stream",
+                        )
+                    },
+                    headers=API_HEADERS,
+                    timeout=60,
+                )
+            except requests.RequestException as exc:
+                flash(f"Source-bundle upload failed: {exc}", "danger")
+                return redirect(wizard_url)
+            if intake_response.status_code != 200:
+                flash(
+                    f"Source-bundle upload rejected: {_api_error(intake_response)}",
+                    "warning",
+                )
+                return redirect(wizard_url)
+            artifact_digest = intake_response.json()["artifact"]["digest"]
+        payload["artifact_digest"] = artifact_digest
+        payload["setup_mode"] = f.get("setup_mode", "operator")
+        payload["setup_egress"] = f.get("setup_egress") == "on"
+        if f.get("time_box_seconds"):
+            payload["time_box_seconds"] = int(
+                re.sub(r"\D", "", f["time_box_seconds"]) or 0
+            )
+        if f.get("command_budget"):
+            payload["command_budget"] = int(
+                re.sub(r"\D", "", f["command_budget"]) or 0
+            )
+        endpoint = "/arenas/source-bundle"
+        source = request.files.get("file").filename if request.files.get("file") else artifact_digest
+    else:
+        payload["repo"] = (f.get("repo") or "").strip()
+        payload["ref"] = (f.get("ref") or "").strip() or None
+        payload["setup_mode"] = f.get("setup_mode", "operator")
+        payload["setup_egress"] = f.get("setup_egress") == "on"
+        if f.get("time_box_seconds"):
+            payload["time_box_seconds"] = int(
+                re.sub(r"\D", "", f["time_box_seconds"]) or 0
+            )
+        if f.get("command_budget"):
+            payload["command_budget"] = int(
+                re.sub(r"\D", "", f["command_budget"]) or 0
+            )
+        endpoint = "/arenas/sut"
+        source = payload["repo"]
+    try:
+        resp = requests.post(
+            f"{API_URL}{endpoint}", json=payload, headers=API_HEADERS, timeout=15
+        )
+        if resp.status_code == 200:
+            suffix = (
+                "native image startup will be verified by preflight."
+                if target_type == "oci"
+                else "setup opens automatically once it's active."
+            )
+            flash(f"Building SUT arena '{payload['instance_id']}' from {source} — {suffix}", "info")
+        else:
+            flash(f"SUT launch rejected: {_api_error(resp)}", "warning")
+    except requests.RequestException as e:
+        flash(f"SUT launch failed: {e}", "danger")
+    return redirect(url_for("engagements"))
+
+
+def _request_destroy(instance_id):
+    try:
+        resp = requests.delete(f"{API_URL}/destroy/{instance_id}", headers=API_HEADERS, timeout=10)
+    except requests.RequestException:
+        return False, "Backend offline"
+    if resp.status_code != 200:
+        try:
+            detail = resp.json().get("detail", "")
+        except ValueError:
+            detail = ""
+        return False, detail or f"Destroy rejected (HTTP {resp.status_code})"
+    return True, "Destroy started"
+
+
+@app.route("/api/destroy/<instance_id>", methods=["POST"])
+def destroy_lab(instance_id):
+    ok, message = _request_destroy(instance_id)
+    if not ok:
+        return jsonify({"error": message}), 502
+    return jsonify({"status": "ok"})
+
+
+@app.route("/destroy/<instance_id>", methods=["POST"])
+def destroy_lab_form(instance_id):
+    ok, message = _request_destroy(instance_id)
+    flash(message, "info" if ok else "danger")
+    return redirect(url_for("engagements"))
+
+
+@app.route("/reset/<instance_id>", methods=["POST"])
+def reset_lab_form(instance_id):
+    data, status = _api_post(
+        f"/arenas/{instance_id}/reset",
+        {"idempotency_key": f"webui-{uuid.uuid4()}"},
+        timeout=15,
+    )
+    if status not in (200, 202):
+        flash(data.get("error", "Reset rejected"), "danger")
+    else:
+        flash(
+            f"Reset started; replacement arena {data.get('replacement_id')}",
+            "info",
+        )
+    return redirect(url_for("arena_detail", instance_id=instance_id))
+
+
+@app.route("/archive/delete/<instance_id>", methods=["POST"])
+def archive_delete(instance_id):
+    try:
+        resp = requests.delete(f"{API_URL}/deployments/{instance_id}", headers=API_HEADERS, timeout=10)
+        if resp.status_code != 200:
+            try:
+                detail = resp.json().get("detail", "")
+            except ValueError:
+                detail = ""
+            flash(detail or f"Delete failed (HTTP {resp.status_code})", "danger")
+    except requests.RequestException:
+        flash("Backend offline", "danger")
+    return redirect(url_for("engagements"))
+
+
+@app.route("/archive/clear", methods=["POST"])
+def archive_clear():
+    try:
+        resp = requests.delete(f"{API_URL}/deployments", headers=API_HEADERS, timeout=10)
+        if resp.status_code == 200:
+            flash(f"Archive cleared ({resp.json().get('deleted', 0)} record(s))", "info")
+        else:
+            flash(f"Clear failed (HTTP {resp.status_code})", "danger")
+    except requests.RequestException:
+        flash("Backend offline", "danger")
+    return redirect(url_for("engagements"))
+
+
+@app.route("/api/health")
+def orchestrator_health():
+    try:
+        resp = requests.get(f"{API_URL}/health", timeout=3)
+        ok = resp.status_code == 200
+    except requests.RequestException:
+        ok = False
+    return jsonify({"status": "ok" if ok else "offline"})
+
+
+@app.route("/api/current-agent")
+def current_agent():
+    """JSON for the topbar 'connected model' chip (polled by app.js)."""
+    agent = _current_agent()
+    if not agent:
+        return jsonify({"connected": False})
+    return jsonify({"connected": True, **agent})
+
+
+@app.route("/api/agents")
+def api_agents():
+    """JSON for the Agents console poller — connections + activity trace."""
+    return jsonify(_agent_overview())
+
+
+@app.route("/api/model-connection", methods=["GET"])
+def model_connection_get():
+    """Masked model-connection status for the topbar bubble (proxies the
+    orchestrator's GET /agent/model). Never carries the key."""
+    data, _ = _api_get("/agent/model")
+    return jsonify(data or {"configured": False})
+
+
+@app.route("/api/model-connection", methods=["PUT"])
+def model_connection_set():
+    """Store the operator's bring-your-own model key (proxies orchestrator
+    PUT /agent/model). The key transits webui→orchestrator over the internal
+    network and is encrypted at rest there; the webui never stores or logs it.
+    CSRF-protected (the JS sends X-CSRFToken)."""
+    body = request.get_json(silent=True) or {}
+    payload = {
+        "provider": (body.get("provider") or "").strip().lower(),
+        "model": (body.get("model") or "").strip(),
+        "api_key": body.get("api_key") or "",
+        "base_url": (body.get("base_url") or "").strip() or None,  # P3-4
+    }
+    try:
+        resp = requests.put(
+            f"{API_URL}/agent/model", json=payload, headers=API_HEADERS, timeout=5
+        )
+    except requests.RequestException:
+        return jsonify({"error": "orchestrator unreachable"}), 502
+    if resp.status_code == 200:
+        return jsonify(resp.json())
+    return jsonify({"error": _api_error(resp)}), resp.status_code
+
+
+@app.route("/api/model-connection", methods=["DELETE"])
+def model_connection_delete():
+    """Forget the operator's stored model credential (proxies DELETE
+    /agent/model). CSRF-protected."""
+    try:
+        resp = requests.delete(
+            f"{API_URL}/agent/model", headers=API_HEADERS, timeout=5
+        )
+    except requests.RequestException:
+        return jsonify({"error": "orchestrator unreachable"}), 502
+    if resp.status_code == 200:
+        return jsonify(resp.json())
+    return jsonify({"error": _api_error(resp)}), resp.status_code
+
+
+@app.route("/api/model-connection/verify", methods=["POST"])
+def model_connection_verify():
+    """Best-effort 'test connection' for the operator's model key (proxies
+    POST /agent/model/verify). With provider+api_key in the body, tests the
+    supplied key (pre-save); otherwise tests the stored one. CSRF-protected."""
+    body = request.get_json(silent=True) or {}
+    payload = {
+        "provider": (body.get("provider") or "").strip().lower() or None,
+        "model": (body.get("model") or "").strip() or None,
+        "api_key": body.get("api_key") or None,
+        "base_url": (body.get("base_url") or "").strip() or None,  # P3-4
+    }
+    try:
+        resp = requests.post(
+            f"{API_URL}/agent/model/verify", json=payload, headers=API_HEADERS, timeout=8
+        )
+    except requests.RequestException:
+        return jsonify({"verified": False, "checked": False, "detail": "orchestrator unreachable"}), 502
+    if resp.status_code == 200:
+        return jsonify(resp.json())
+    return jsonify({"verified": False, "checked": False, "detail": _api_error(resp)}), resp.status_code
+
+
+@app.route("/api/copilot", methods=["POST"])
+def copilot():
+    """Stream a co-pilot reply (proxies the orchestrator's streaming /agent/chat).
+    The model + key live in the orchestrator's custody; the webui only relays the
+    text stream. CSRF-protected (the JS sends X-CSRFToken)."""
+    body = request.get_json(silent=True) or {}
+    payload = {"arena_id": body.get("arena_id"), "messages": body.get("messages") or []}
+
+    def generate():
+        try:
+            with requests.post(
+                f"{API_URL}/agent/chat", json=payload, headers=API_HEADERS,
+                stream=True, timeout=125,
+            ) as r:
+                if r.status_code != 200:
+                    yield f"[co-pilot] {_api_error(r)}".encode()
+                    return
+                for chunk in r.iter_content(chunk_size=None):
+                    if chunk:
+                        yield chunk
+        except requests.RequestException:
+            yield b"[co-pilot] orchestrator unreachable"
+
+    return Response(stream_with_context(generate()), mimetype="text/plain; charset=utf-8")
+
+
+@app.route("/api/setup/<instance_id>", methods=["GET"])
+def setup_status_proxy(instance_id):
+    """Configurator setup-session status for the arena-detail panel."""
+    data, _ = _api_get(f"/arenas/{instance_id}/setup")
+    return jsonify(data or {"open": False})
+
+
+@app.route("/api/setup/<instance_id>/start", methods=["POST"])
+def setup_start_proxy(instance_id):
+    body = request.get_json(silent=True) or {}
+    payload = {
+        "mode": body.get("mode", "operator"),
+        "time_box_seconds": int(body.get("time_box_seconds", 1800)),
+        "command_budget": int(body.get("command_budget", 50)),
+        "setup_egress": bool(body.get("setup_egress", False)),
+    }
+    data, code = _api_post(f"/arenas/{instance_id}/setup/start", payload)
+    return jsonify(data), code
+
+
+@app.route("/api/setup/<instance_id>/step", methods=["POST"])
+def setup_step_proxy(instance_id):
+    body = request.get_json(silent=True) or {}
+    data, code = _api_post(
+        f"/arenas/{instance_id}/setup/step",
+        {"node": body.get("node", ""), "command": body.get("command", "")},
+    )
+    return jsonify(data), code
+
+
+@app.route("/api/setup/<instance_id>/finish", methods=["POST"])
+def setup_finish_proxy(instance_id):
+    data, code = _api_post(f"/arenas/{instance_id}/setup/finish")
+    return jsonify(data), code
+
+
+@app.route("/api/setup/<instance_id>/proposals/<step_id>/<decision>", methods=["POST"])
+def setup_decision_proxy(instance_id, step_id, decision):
+    if decision not in ("approve", "reject"):
+        return jsonify({"error": "bad decision"}), 400
+    data, code = _api_post(f"/arenas/{instance_id}/setup/proposals/{step_id}/{decision}")
+    return jsonify(data), code
+
+
+@app.route("/api/setup/<instance_id>/generate-proposals", methods=["POST"])
+def setup_generate_proposals_proxy(instance_id):
+    """Have the operator's connected model draft HITL setup proposals (Field-C).
+    The model call can be slow, so allow a longer timeout. CSRF-protected."""
+    data, code = _api_post(f"/arenas/{instance_id}/setup/generate-proposals", timeout=120)
+    return jsonify(data), code
+
+
+# --- scenario authoring & import (P1-7) + topology preview (P7-9) -----------
+@app.route("/api/scenarios/preview", methods=["POST"])
+def scenario_preview_proxy():
+    """Dry-run validate + topology for the launch / import previews (proxies
+    POST /scenarios/preview). CSRF-protected."""
+    body = request.get_json(silent=True) or {}
+    payload = {}
+    if body.get("picks") is not None:
+        payload["picks"] = body.get("picks")
+    if body.get("spec") is not None:
+        payload["spec"] = body.get("spec")
+    data, code = _api_post("/scenarios/preview", payload)
+    return jsonify(data), code
+
+
+@app.route("/api/scenarios/generate", methods=["POST"])
+def scenario_generate_proxy():
+    """Generate a candidate v3 spec from a prompt using the operator's connected
+    model (proxies POST /scenarios/generate). Returns the spec + topology for
+    review — never deploys/saves. The model call can be slow, so allow a longer
+    timeout. CSRF-protected."""
+    body = request.get_json(silent=True) or {}
+    payload = {"prompt": (body.get("prompt") or "").strip()}
+    if body.get("provider_class"):
+        payload["provider_class"] = str(body["provider_class"]).strip()
+    data, code = _api_post("/scenarios/generate", payload, timeout=120)
+    return jsonify(data), code
+
+
+@app.route("/api/scenarios/import", methods=["POST"])
+def scenario_import_proxy():
+    """Persist an operator-pasted scenario as a reusable pack (proxies
+    POST /scenarios). CSRF-protected."""
+    body = request.get_json(silent=True) or {}
+    payload = {
+        "spec": body.get("spec"),
+        "id": body.get("id") or None,
+        "overwrite": bool(body.get("overwrite")),
+    }
+    data, code = _api_post("/scenarios", payload)
+    return jsonify(data), code
+
+
+@app.route("/api/scenarios/import/vulhub", methods=["POST"])
+def scenario_import_vulhub_proxy():
+    """Convert a Vulhub environment into a v3 pack (proxies
+    POST /scenarios/import/vulhub). ``dry_run`` previews; otherwise it saves.
+    CSRF-protected."""
+    body = request.get_json(silent=True) or {}
+    payload = {
+        "ref": (body.get("ref") or "").strip() or "master",
+        "include_attacker": body.get("include_attacker", True),
+        "dry_run": bool(body.get("dry_run")),
+        "overwrite": bool(body.get("overwrite")),
+    }
+    if body.get("path"):
+        payload["path"] = str(body["path"]).strip()
+    if body.get("compose") is not None:
+        payload["compose"] = body.get("compose")
+    if body.get("id"):
+        payload["id"] = body.get("id")
+    if body.get("name"):
+        payload["name"] = body.get("name")
+    data, code = _api_post("/scenarios/import/vulhub", payload)
+    return jsonify(data), code
+
+
+@app.route("/api/scenarios/<scenario_id>/topology", methods=["GET"])
+def scenario_topology_proxy(scenario_id):
+    """Topology graph of a registered scenario for the pre-deploy preview."""
+    data, ok = _api_get(f"/scenarios/{scenario_id}/topology")
+    return jsonify(data or {"topology": None}), (200 if ok else 404)
+
+
+@app.route("/api/arenas/<instance_id>/events", methods=["GET"])
+def arena_events_proxy(instance_id):
+    """Recent audit events for this arena — feeds the in-arena live activity log
+    (every agent tool call, finding, connection, setup step). Read-only."""
+    limit = request.args.get("limit", 40)
+    return jsonify({"events": _events(instance_id, limit=limit)}), 200
+
+
+# Workspace live stream (ROADMAP C3). The browser holds one connection instead of
+# three timers; the console still only presents — it derives frames from orchestrator
+# reads. When the orchestrator grows its own change feed, this generator can consume
+# it without changing the contract the workspace already speaks.
+_STREAM_INTERVAL_SECONDS = float(os.getenv("WEBUI_STREAM_INTERVAL_SECONDS", "2"))
+_STREAM_MAX_SECONDS = float(os.getenv("WEBUI_STREAM_MAX_SECONDS", "1800"))
+_STREAM_BACKFILL = 40
+
+
+def _sse(name, payload, event_id=None):
+    head = f"id: {event_id}\n" if event_id is not None else ""
+    return f"{head}event: {name}\ndata: {json.dumps(payload)}\n\n"
+
+
+@app.route("/api/arenas/<instance_id>/stream")
+def arena_stream(instance_id):
+    """Server-sent workspace updates: arena state, outputs, and new audit events.
+
+    Audit events carry a monotonic id, so a reconnecting browser resumes exactly
+    where it stopped via the standard `Last-Event-ID` header — no duplicates, no gap.
+    """
+    try:
+        cursor = int(request.headers.get("Last-Event-ID", ""))
+    except ValueError:
+        cursor = None
+
+    def generate(cursor):
+        deadline = time.monotonic() + _STREAM_MAX_SECONDS
+        previous = None
+        while time.monotonic() < deadline:
+            status, ok = _api_get(f"/status/{instance_id}")
+            if not ok or not isinstance(status, dict) or not status:
+                # Close instead of advertising healthy heartbeats for stale state.
+                # Native EventSource retry keeps its cursor and reconciles on open.
+                return
+            if ok and status:
+                state = {
+                    "status": status.get("status", "unknown"),
+                    "outputs": status.get("outputs") or {},
+                }
+                if state != previous:
+                    previous = state
+                    yield _sse("state", state)
+
+            events = list(reversed(_events(instance_id, limit=_STREAM_BACKFILL)))
+            if cursor is None:
+                fresh = events                       # first connection: recent context
+            else:
+                fresh = [e for e in events if (e.get("id") or 0) > cursor]
+            if fresh:
+                cursor = max((e.get("id") or 0) for e in fresh)
+                yield _sse("activity", {"events": fresh}, event_id=cursor)
+            else:
+                yield ": keepalive\n\n"            # keeps proxies from idling us out
+            time.sleep(_STREAM_INTERVAL_SECONDS)
+
+    return Response(
+        stream_with_context(generate(cursor)),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # never buffer a stream behind a reverse proxy
+        },
+    )
+
+
+@app.route("/api/arenas/<instance_id>/eval-export", methods=["GET"])
+def arena_eval_export_proxy(instance_id):
+    """The run's eval-dataset row (ADR-0010) for download from the Trace tab."""
+    data, ok = _api_get(f"/arenas/{instance_id}/eval-export")
+    if not ok or data is None:
+        return jsonify({"error": "eval export unavailable"}), 502
+    return Response(
+        json.dumps(data, indent=2),
+        mimetype="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="{instance_id}-eval.json"'
+        },
+    )
+
+
+@app.route("/api/arenas/<instance_id>/workspaces", methods=["GET"])
+def arena_workspaces_proxy(instance_id):
+    """Source workspaces visible to the operator for the change viewer."""
+    data, ok = _api_get(f"/arenas/{instance_id}/workspaces")
+    return jsonify(data or {"workspaces": []}), (200 if ok else 502)
+
+
+# HTTP research primitive (R1 slice 6): the console only presents and forwards —
+# scope resolution, binding checks, bounding and hashing stay orchestrator-side.
+
+@app.route("/api/console/arenas/<instance_id>/browser/visit", methods=["POST"])
+def console_browser_visit(instance_id):
+    """Render one arena-relative page and expose only bounded operator evidence."""
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Expected a JSON browser request"}), 422
+    node, path, params, wait_ms = (body.get(key) for key in ("node", "path", "params", "wait_ms"))
+    if not isinstance(node, str) or not 1 <= len(node) <= 64:
+        return jsonify({"error": "Choose a target node"}), 422
+    if not isinstance(path, str) or not 1 <= len(path) <= 2048:
+        return jsonify({"error": "Enter an arena-relative path"}), 422
+    parsed = urlsplit(path)
+    if (not path.startswith("/") or path.startswith("//") or parsed.scheme
+            or parsed.netloc or parsed.query or parsed.fragment or "\x00" in path):
+        return jsonify({"error": "Path must be arena-relative; put query values in parameters"}), 422
+    if (not isinstance(params, dict) or len(params) > 32
+            or any(not isinstance(key, str) or not isinstance(value, str)
+                   or not 1 <= len(key) <= 128 or len(value) > 4096
+                   for key, value in params.items())):
+        return jsonify({"error": "Choose up to 32 bounded text parameters"}), 422
+    if not isinstance(wait_ms, int) or isinstance(wait_ms, bool) or not 0 <= wait_ms <= 5000:
+        return jsonify({"error": "Wait must be between 0 and 5000 milliseconds"}), 422
+    result, status = _api_post(f"/arenas/{instance_id}/browser/visit",
+                               {"node": node, "path": path, "params": params,
+                                "wait_ms": wait_ms}, timeout=30)
+    if status != 200:
+        return jsonify(result), status
+    return jsonify({key: result.get(key) for key in
+                    ("node", "success", "title", "rendered_dom", "dom_bytes",
+                     "dom_sha256", "truncated", "executed")})
+
+
+_WEBUI_TRANSFER_MAX_BYTES = 1024 * 1024
+
+
+@app.route("/api/console/arenas/<instance_id>/files/upload", methods=["POST"])
+def console_file_upload(instance_id):
+    """Forward one bounded base64 file; the service owns path and foothold scope."""
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Expected a JSON file upload"}), 422
+    path, content = body.get("path"), body.get("content_b64")
+    if not isinstance(path, str) or not 1 <= len(path) <= 512:
+        return jsonify({"error": "Enter a transfer-root relative path"}), 422
+    if not isinstance(content, str):
+        return jsonify({"error": "Expected base64 file content"}), 422
+    if len(content) > ((_WEBUI_TRANSFER_MAX_BYTES + 2) // 3 * 4) + 8:
+        return jsonify({"error": "Transfer file exceeds the console's 1 MiB limit"}), 413
+    node = body.get("node")
+    if node is not None and (not isinstance(node, str) or not 1 <= len(node) <= 64):
+        return jsonify({"error": "Choose a foothold node"}), 422
+    result, status = _api_post(f"/arenas/{instance_id}/files/upload",
+                               {"path": path, "content_b64": content, "node": node},
+                               timeout=30)
+    if status != 200:
+        return jsonify(result), status
+    return jsonify({key: result.get(key) for key in ("uploaded", "node", "path", "bytes", "digest")})
+
+
+@app.route("/api/console/arenas/<instance_id>/files/download", methods=["POST"])
+def console_file_download(instance_id):
+    """Forward one bounded chunk and its service-computed full-file digest."""
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Expected a JSON file download"}), 422
+    path, offset, max_bytes = (body.get(key) for key in ("path", "offset", "max_bytes"))
+    if not isinstance(path, str) or not 1 <= len(path) <= 512:
+        return jsonify({"error": "Enter a transfer-root relative path"}), 422
+    if (not isinstance(offset, int) or isinstance(offset, bool) or offset < 0
+            or not isinstance(max_bytes, int) or isinstance(max_bytes, bool)
+            or not 1 <= max_bytes <= 262144):
+        return jsonify({"error": "Choose a valid bounded download chunk"}), 422
+    node = body.get("node")
+    if node is not None and (not isinstance(node, str) or not 1 <= len(node) <= 64):
+        return jsonify({"error": "Choose a foothold node"}), 422
+    result, status = _api_post(f"/arenas/{instance_id}/files/download",
+                               {"path": path, "node": node, "offset": offset,
+                                "max_bytes": max_bytes}, timeout=30)
+    if status != 200:
+        return jsonify(result), status
+    return jsonify({key: result.get(key) for key in
+                    ("node", "path", "content_b64", "offset", "returned_bytes",
+                     "file_bytes", "next_offset", "digest")})
+
+@app.route("/api/console/arenas/<instance_id>/http/transactions/<digest>/preview")
+def console_http_preview(instance_id, digest):
+    data, ok = _api_get(f"/arenas/{quote(instance_id, safe='')}/http/transactions/{quote(digest, safe='')}/preview")
+    return jsonify(data or {"error": "Transaction preview unavailable"}), (200 if ok else 503)
+
+
+@app.route("/api/console/arenas/<instance_id>/http/comparison")
+def console_http_comparison(instance_id):
+    query = urlencode({key: request.args.get(key, "") for key in ("left", "right")})
+    data, ok = _api_get(f"/arenas/{quote(instance_id, safe='')}/http/comparison?{query}")
+    return jsonify(data or {"error": "Comparison unavailable; verify both retained transactions and retry"}), (200 if ok else 503)
+
+
+@app.route("/api/console/arenas/<instance_id>/http/request-groups", methods=["GET", "POST"])
+def console_http_request_groups(instance_id):
+    path = f"/arenas/{quote(instance_id, safe='')}/http/request-groups"
+    if request.method == "POST":
+        data, code = _api_post(path, request.get_json(silent=True) or {})
+        return jsonify(data), code
+    query = urlencode({key: request.args[key] for key in ("before", "limit") if key in request.args})
+    data, ok = _api_get(path + (f"?{query}" if query else ""))
+    return jsonify(data or {"error": "Saved request groups unavailable"}), (200 if ok else 503)
+
+
+@app.route("/api/arenas/<instance_id>/http/transactions", methods=["GET"])
+def http_transactions_proxy(instance_id):
+    """Stored HTTP transactions for this arena, newest first."""
+    params = {
+        key: request.args[key]
+        for key in ("limit", "offset")
+        if key in request.args
+    }
+    query = f"?{urlencode(params)}" if params else ""
+    data, ok = _api_get(f"/arenas/{instance_id}/http/transactions{query}")
+    return jsonify(data or {"total": 0, "transactions": []}), (200 if ok else 502)
+
+
+@app.route("/api/arenas/<instance_id>/http/transactions/<digest>", methods=["GET"])
+def http_transaction_proxy(instance_id, digest):
+    """One stored HTTP transaction envelope by digest."""
+    data, ok = _api_get(
+        f"/arenas/{instance_id}/http/transactions/{quote(digest, safe='')}"
+    )
+    return jsonify(data or {"error": "not found"}), (200 if ok else 404)
+
+
+@app.route("/api/arenas/<instance_id>/validation-evidence/<digest>", methods=["GET"])
+def validation_evidence_proxy(instance_id, digest):
+    """Operator-only digest review through the orchestrator service."""
+    data, ok = _api_get(
+        f"/arenas/{instance_id}/validation-evidence/{quote(digest, safe='')}"
+    )
+    return jsonify(data or {"error": "not found"}), (200 if ok else 404)
+
+
+@app.route("/api/arenas/<instance_id>/http/request", methods=["POST"])
+def http_request_proxy(instance_id):
+    """Drive one arena-target HTTP transaction from the workspace."""
+    body = request.get_json(silent=True) or {}
+    data, code = _api_post(f"/arenas/{instance_id}/http/request", body)
+    return jsonify(data), code
+
+
+@app.route(
+    "/api/arenas/<instance_id>/http/transactions/<digest>/replay",
+    methods=["POST"],
+)
+def http_replay_proxy(instance_id, digest):
+    """Re-send a stored transaction with edits; the original stays immutable."""
+    body = request.get_json(silent=True) or {}
+    data, code = _api_post(
+        f"/arenas/{instance_id}/http/transactions/"
+        f"{quote(digest, safe='')}/replay",
+        body,
+    )
+    return jsonify(data), code
+
+
+@app.route("/api/arenas/<instance_id>/poc-jobs", methods=["GET", "POST"])
+def poc_jobs_proxy(instance_id):
+    """Thin console proxy; confinement and authorization remain in the API."""
+    if request.method == "GET":
+        data, ok = _api_get(f"/arenas/{instance_id}/poc-jobs")
+        return jsonify(data or {"jobs": []}), (200 if ok else 502)
+    body = request.get_json(silent=True) or {}
+    data, code = _api_post(f"/arenas/{instance_id}/poc-jobs", body)
+    return jsonify(data), code
+
+
+@app.route("/api/arenas/<instance_id>/poc-jobs/<job_id>", methods=["GET"])
+def poc_job_proxy(instance_id, job_id):
+    data, ok = _api_get(f"/arenas/{instance_id}/poc-jobs/{quote(job_id, safe='')}")
+    return jsonify(data or {"error": "not found"}), (200 if ok else 404)
+
+
+@app.route("/api/arenas/<instance_id>/poc-jobs/<job_id>/cancel", methods=["POST"])
+def poc_job_cancel_proxy(instance_id, job_id):
+    data, code = _api_post(
+        f"/arenas/{instance_id}/poc-jobs/{quote(job_id, safe='')}/cancel", {}
+    )
+    return jsonify(data), code
+
+
+@app.route("/api/arenas/<instance_id>/preflight", methods=["GET"])
+def arena_preflight_proxy(instance_id):
+    """Immutable target identity and infrastructure readiness for the arena."""
+    data, ok = _api_get(f"/arenas/{instance_id}/preflight")
+    return jsonify(data or {"status": "unavailable"}), (200 if ok else 404)
+
+
+@app.route(
+    "/api/arenas/<instance_id>/workspaces/<workspace_node>/diff",
+    methods=["GET"],
+)
+def arena_workspace_diff_proxy(instance_id, workspace_node):
+    """Proxy a bounded change page; only the orchestrator chooses the source path."""
+    params = {
+        key: request.args[key]
+        for key in ("base", "path", "context_lines", "start_line", "max_lines")
+        if key in request.args
+    }
+    try:
+        resp = requests.get(
+            f"{API_URL}/arenas/{instance_id}/workspaces/"
+            f"{requests.utils.quote(workspace_node, safe='')}/diff",
+            params=params,
+            headers=API_HEADERS,
+            timeout=10,
+        )
+    except requests.RequestException:
+        return jsonify({"error": "orchestrator unreachable"}), 502
+    try:
+        data = resp.json()
+    except ValueError:
+        data = {}
+    if resp.status_code != 200:
+        return jsonify({"error": _api_error(resp)}), resp.status_code
+    return jsonify(data), 200
+
+
+@app.route(
+    "/api/arenas/<instance_id>/workspaces/<workspace_node>/patch-artifacts",
+    methods=["POST"],
+)
+def arena_workspace_patch_proxy(instance_id, workspace_node):
+    """Create a content-addressed patch through the shared workspace primitive."""
+    body = request.get_json(silent=True) or {}
+    payload = {
+        "base": body.get("base") or "HEAD",
+        "path": body.get("path") or None,
+        "context_lines": body.get("context_lines", 3),
+        "include_untracked_paths": body.get("include_untracked_paths") or [],
+    }
+    data, code = _api_post(
+        f"/arenas/{instance_id}/workspaces/"
+        f"{requests.utils.quote(workspace_node, safe='')}/patch-artifacts",
+        payload,
+    )
+    return jsonify(data), code
+
+
+@app.route("/api/arenas/<instance_id>/evidence-artifacts/<digest>", methods=["GET"])
+def evidence_artifact_proxy(instance_id, digest):
+    """Stream a verified arena-scoped artifact without exposing the API key."""
+    try:
+        resp = requests.get(
+            f"{API_URL}/arenas/{instance_id}/evidence-artifacts/"
+            f"{requests.utils.quote(digest, safe=':')}",
+            headers=API_HEADERS,
+            timeout=10,
+        )
+    except requests.RequestException:
+        return jsonify({"error": "orchestrator unreachable"}), 502
+    if resp.status_code != 200:
+        return jsonify({"error": _api_error(resp)}), resp.status_code
+    return Response(
+        resp.content,
+        status=200,
+        content_type=resp.headers.get("Content-Type", "text/x-diff"),
+        headers={
+            "Content-Disposition": resp.headers.get(
+                "Content-Disposition", "attachment; filename=evidence.patch"
+            ),
+            "ETag": resp.headers.get("ETag", ""),
+        },
+    )
+
+
+@app.route("/api/arenas/<instance_id>/bindings", methods=["GET"])
+def list_bindings_proxy(instance_id):
+    """Active agent↔arena bindings (D1) for the operator console."""
+    data, ok = _api_get(f"/arenas/{instance_id}/bindings")
+    return jsonify(data or {"bindings": []}), (200 if ok else 502)
+
+
+@app.route("/api/arenas/<instance_id>/bindings", methods=["POST"])
+def grant_binding_proxy(instance_id):
+    """Authorize a BYO agent key to drive this arena in a stance (proxies
+    POST /arenas/<id>/bindings). CSRF-protected."""
+    body = request.get_json(silent=True) or {}
+    payload = {
+        "agent_name": (body.get("agent_name") or "").strip(),
+        "stance": (body.get("stance") or "").strip() or None,
+    }
+    data, code = _api_post(f"/arenas/{instance_id}/bindings", payload)
+    return jsonify(data), code
+
+
+@app.route("/api/arenas/<instance_id>/bindings/<agent_name>", methods=["DELETE"])
+def revoke_binding_proxy(instance_id, agent_name):
+    """Revoke an agent's binding (proxies DELETE). CSRF-protected."""
+    try:
+        resp = requests.delete(
+            f"{API_URL}/arenas/{instance_id}/bindings/{agent_name}",
+            headers=API_HEADERS, timeout=10,
+        )
+    except requests.RequestException:
+        return jsonify({"error": "orchestrator unreachable"}), 502
+    if resp.status_code == 200:
+        return jsonify(resp.json())
+    return jsonify({"error": _api_error(resp)}), resp.status_code
+
+
+@app.route("/api/arenas/<instance_id>/findings/manual", methods=["POST"])
+def manual_finding_proxy(instance_id):
+    """Operator-entered finding (proxies POST /arenas/<id>/findings/manual).
+    CSRF-protected."""
+    body = request.get_json(silent=True) or {}
+    payload = {
+        "title": (body.get("title") or "").strip(),
+        "cwe": (body.get("cwe") or "").strip() or None,
+        "node": (body.get("node") or "").strip() or None,
+        "evidence": (body.get("evidence") or "").strip() or None,
+        "poc": (body.get("poc") or "").strip() or None,
+        "evidence_artifact_digests": body.get("evidence_artifact_digests") or [],
+        "transaction_digests": body.get("transaction_digests") or [],
+    }
+    data, code = _api_post(f"/arenas/{instance_id}/findings/manual", payload)
+    return jsonify(data), code
+
+
+@app.route("/api/arenas/<instance_id>/findings/<finding_id>/verify", methods=["POST"])
+def verify_finding_proxy(instance_id, finding_id):
+    """Operator verdict on a finding (proxies POST …/verify). CSRF-protected."""
+    body = request.get_json(silent=True) or {}
+    payload = {
+        "verdict": (body.get("verdict") or "").strip(),
+        "note": (body.get("note") or "").strip() or None,
+        "evidence_digest": (body.get("evidence_digest") or "").strip() or None,
+    }
+    data, code = _api_post(f"/arenas/{instance_id}/findings/{finding_id}/verify", payload)
+    return jsonify(data), code
+
+
+@app.route("/api/arenas/<instance_id>/bindings/<agent_name>/pause", methods=["POST"])
+def pause_binding_proxy(instance_id, agent_name):
+    """Pause (kill-switch) an agent's binding (proxies POST …/pause). CSRF-protected."""
+    data, code = _api_post(f"/arenas/{instance_id}/bindings/{agent_name}/pause")
+    return jsonify(data), code
+
+
+@app.route("/api/arenas/<instance_id>/bindings/<agent_name>/resume", methods=["POST"])
+def resume_binding_proxy(instance_id, agent_name):
+    """Resume a paused binding (proxies POST …/resume). CSRF-protected."""
+    data, code = _api_post(f"/arenas/{instance_id}/bindings/{agent_name}/resume")
+    return jsonify(data), code
+
+
+@app.route("/api/scenarios/<scenario_id>", methods=["DELETE"])
+def scenario_delete_proxy(scenario_id):
+    """Delete an imported scenario pack (proxies DELETE /scenarios/<id>).
+    CSRF-protected."""
+    try:
+        resp = requests.delete(
+            f"{API_URL}/scenarios/{scenario_id}", headers=API_HEADERS, timeout=10
+        )
+    except requests.RequestException:
+        return jsonify({"error": "orchestrator unreachable"}), 502
+    if resp.status_code == 200:
+        return jsonify(resp.json())
+    return jsonify({"error": _api_error(resp)}), resp.status_code
+
+
+@app.route("/api/poll/<instance_id>")
+def poll_status(instance_id):
+    try:
+        resp = requests.get(f"{API_URL}/status/{instance_id}", headers=API_HEADERS, timeout=5)
+        data = resp.json()
+    except (requests.RequestException, ValueError):
+        return jsonify({"status": "offline"})
+    # A non-200 (404 destroyed/unknown, 5xx) carries no `status` key — the poller
+    # reads d.status, so normalize it instead of handing back {"detail": ...} that
+    # would render a permanent UNKNOWN and stall the active-state transition.
+    if resp.status_code != 200:
+        return jsonify({"status": data.get("status", "unknown")})
+    return jsonify(data)
+
+
+if __name__ == "__main__":
+    debug = os.getenv("FLASK_DEBUG", "false").lower() == "true"
+    # Werkzeug's interactive debugger claims /console, which is our React UI.
+    # Keep the development reloader without exposing that debugger or its PIN.
+    app.run(host="0.0.0.0", port=5000, debug=debug, use_debugger=False)  # nosec B104

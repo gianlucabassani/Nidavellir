@@ -1,0 +1,1 @@
+{"run_id": "rh-80cb09011f", "scenario": "container_web_pentest", "error": "RuntimeError: GET /status/rh-80cb09011f -> 404: {\"detail\":\"Instance not found\"}", "metadata": {"error": "RuntimeError: GET /status/rh-80cb09011f -> 404: {\"detail\":\"Instance not found\"}"}, "score": null}

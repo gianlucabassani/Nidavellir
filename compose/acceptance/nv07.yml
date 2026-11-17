@@ -1,0 +1,11 @@
+# NV-07 overlay on nv06.yml (paired evaluations). Driven by scripts/verify-nv07-live.py.
+name: nidavellir-nv07
+services:
+  orchestrator:
+    environment:
+      SECRETS_ENCRYPTION_KEY: ${NV07_SECRETS_ENCRYPTION_KEY:-}
+  worker:
+    environment:
+      EVAL_GATEWAY_URL: http://agent-gateway:9000/mcp
+      EVAL_GATEWAY_PRINCIPAL: nv06-agent
+      SECRETS_ENCRYPTION_KEY: ${NV07_SECRETS_ENCRYPTION_KEY:-}

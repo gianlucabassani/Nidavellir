@@ -1,0 +1,59 @@
+# GitHub Pages: publishes the public documentation site (docs/index.html).
+# Explicit allow-list: only files the site renders or links to are published.
+# Internal material (operator-notes, reviews, research, verification, superpowers,
+# UI plans, JOURNAL, FINDINGS) stays out of the site. Add new public docs here.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/index.html"
+      - "docs/assets/anvil_logo.png"
+      - "docs/assets/logo.svg"
+      - "docs/*.md"
+      - "docs/scenario.schema.json"
+      - "docs/adr/**"
+      - "ROADMAP.md"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble public site
+        run: |
+          set -euo pipefail
+          mkdir -p site/assets
+          cp docs/index.html site/
+          cp docs/assets/anvil_logo.png docs/assets/logo.svg site/assets/
+          cp docs/OVERVIEW.md docs/VISION.md docs/API.md docs/MCP.md docs/SCENARIOS.md site/
+          cp docs/OPERATIONS.md docs/SECURITY.md docs/INTERNALS.md docs/scenario.schema.json site/
+          cp ROADMAP.md site/
+          cp -r docs/adr site/adr
+          touch site/.nojekyll
+          find site -type f | sort
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

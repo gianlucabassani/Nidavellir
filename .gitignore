@@ -1,0 +1,81 @@
+# --- TERRAFORM ---
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars
+.terraform.lock.hcl
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# --- OPENSTACK KEYS ---
+*.pem
+*.pub
+ssh_keys/
+id_rsa
+nidavellir_ssh_key*
+
+# --- PYTHON ---
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+.env
+.env.*
+!.env.example
+
+# --- DEV / TEST ARTIFACTS ---
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.egg-info/
+
+# --- RUNTIME STATE (generated, never commit) ---
+/runs/
+/data/
+/cache/
+/keys/
+
+# MCP gateway JSONL traces (compose mounts ./traces on gateway runs)
+/traces/
+
+# --- AI AGENT WORKSPACE (local working notes, never commit) ---
+/AGENT.md
+/.agent/
+/.lab.yaml
+
+# Built operator console assets (reproduced from frontend/package-lock.json)
+/cyber-range/webui/static/console/
+
+# Local deployment receipts (must not dirty the release checkout)
+/deployments/
+
+# Internal material: kept local, never published (public repos)
+docs/operator-notes/
+docs/reviews/
+
+# --- OSS publication guard: never re-track operator/internal material ---
+/dev/
+.env*
+!.env.example
+/data/
+/keys/
+/CODEX-BRIEF.md
+/REVIEW_*.md
+/FABLE_*.md
+/OSS_CLEANUP_RESULT.md
+*.operator.md
+/docs/verification/
+/docs/research/
+/traces/*.jsonl
+
+# --- UN-VERSIONED (public tree) ---
+/ISSUES.md
+docs/JOURNAL.md
+cyber-range/data/
+/OSS_FIX_RESULT.md

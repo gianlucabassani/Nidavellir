@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nidavellir · Sign in</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='anvil_logo.png') }}">
+</head>
+<body>
+<div class="auth">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <span class="mark"><img src="{{ url_for('static', filename='anvil_logo.png') }}" style="width:100%;height:100%;object-fit:cover;display:block;" alt="Logo"></span>
+      Nidavellir
+    </div>
+    <div class="auth-sub">Agentic arena forge · operator console</div>
+
+    <div class="flashes">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+        <div class="flash flash--{{ category }}">
+          <i class="fa-solid fa-circle-exclamation"></i><span>{{ message }}</span>
+        </div>
+        {% endfor %}
+      {% endwith %}
+    </div>
+
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field">
+        <label class="label">Username</label>
+        <input class="input" type="text" name="username" autofocus required>
+      </div>
+      <div class="field">
+        <label class="label">Password</label>
+        <input class="input" type="password" name="password" required>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">
+        <i class="fa-solid fa-arrow-right-to-bracket"></i> Sign in
+      </button>
+    </form>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Evaluations{% endblock %}
+{% block crumb %}Evaluations{% endblock %}
+{% block content %}
+<div class="page-head eval-hero">
+  <div>
+    <div class="eyebrow">Evaluation workbench</div>
+    <h1>Measure a change, not a claim.</h1>
+    <div class="sub">Run two pinned scripted builds against the same resettable challenges, then inspect the verified difference.</div>
+    <div class="eval-hero__tags"><span>Docker-local</span><span>Scripted MCP</span><span>Calibration evidence</span></div>
+  </div>
+  <a class="btn btn-primary" href="#comparisons"><i class="fa-solid fa-play"></i> Start a comparison</a>
+</div>
+
+<div class="grid cols-4 eval-stats" aria-label="Evaluation registry summary">
+  <a class="card kpi" href="#builds"><span class="glyph"><i class="fa-solid fa-robot"></i></span><div class="n accent">{{ builds|length }}</div><div class="l">Scripted builds</div><div class="delta">versioned tool plans</div></a>
+  <a class="card kpi" href="#challenges"><span class="glyph"><i class="fa-solid fa-cubes"></i></span><div class="n def">{{ challenges|length }}</div><div class="l">Pinned challenges</div><div class="delta">resettable source arenas</div></a>
+  <a class="card kpi" href="#suites"><span class="glyph"><i class="fa-solid fa-layer-group"></i></span><div class="n">{{ suites|length }}</div><div class="l">Suites</div><div class="delta">challenges × seeds</div></a>
+  <a class="card kpi" href="#recent"><span class="glyph"><i class="fa-solid fa-code-compare"></i></span><div class="n ok">{{ evaluations|length }}</div><div class="l">Evaluations</div><div class="delta">durable paired records</div></a>
+</div>
+
+<div class="eval-notice" role="note">
+  <i class="fa-solid fa-circle-info"></i>
+  <div><strong>What this proves</strong><span>Public synthetic fixtures are calibration. A verified regression here checks the workbench, not an agent's held-out capability. The current durable driver replays a fixed MCP plan; model-driven builds are not connected yet.</span></div>
+</div>
+
+<nav class="eval-steps" aria-label="Evaluation setup steps">
+  <a href="#builds"><span>01</span><strong>Builds</strong><small>What executes</small></a>
+  <a href="#challenges"><span>02</span><strong>Challenges</strong><small>What is tested</small></a>
+  <a href="#suites"><span>03</span><strong>Suite</strong><small>Seeds &amp; limits</small></a>
+  <a href="#comparisons"><span>04</span><strong>Compare</strong><small>Baseline vs candidate</small></a>
+</nav>
+
+<section class="eval-section" id="builds">
+  <div class="eval-section__head"><div><div class="eyebrow">01 · Execution</div><h2>Scripted builds</h2><p>Each build is a versioned MCP tool plan. Register two versions before comparing.</p></div><a class="btn btn-sm" href="{{ url_for('agent_library') }}">Open build registry <i class="fa-solid fa-arrow-right"></i></a></div>
+  <div class="eval-two-col">
+    <div class="card eval-list">
+      <div class="card-head"><span class="label">Registered builds</span><span class="badge badge--idle">{{ builds|length }}</span></div>
+      {% for build in builds %}
+      <div class="eval-list__row"><i class="fa-solid fa-robot"></i><div class="grow"><strong>{{ build.name }}</strong><small>{{ build.version }} · {{ build.driver }}</small></div><code title="Pinned digest">{{ (build.digest or '')[:18] }}…</code></div>
+      {% else %}<div class="eval-empty"><i class="fa-solid fa-robot"></i><strong>No builds yet</strong><span>Register a fixed plan on the right. A model connection alone is not a durable evaluation build.</span></div>{% endfor %}
+    </div>
+    <form action="{{ url_for('evaluation_build_create') }}" method="post" class="card card-pad eval-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <h3>Register a scripted agent build</h3><p class="muted">Give the plan an identity so every trial can be traced back to exactly this version.</p>
+      <div class="grid cols-2"><div class="field"><label class="label" for="build-name">Name</label><input class="input" id="build-name" name="name" required maxlength="100" placeholder="web-researcher"></div><div class="field"><label class="label" for="build-version">Version</label><input class="input" id="build-version" name="version" required maxlength="100" placeholder="v1"></div></div>
+      <div class="field"><label class="label" for="build-plan">MCP steps · JSON array</label><textarea class="input mono" id="build-plan" name="plan" rows="6" required spellcheck="false" placeholder='[{"tool":"http_request","args":{"node":"target","path":"/objects/B"}}]'></textarea><div class="help">Use <code>$last_transaction_digest</code> in a later finding's <code>transaction_digests</code>. Arena IDs are assigned per trial.</div></div>
+      <button class="btn btn-primary" type="submit">Register build <i class="fa-solid fa-arrow-right"></i></button>
+    </form>
+  </div>
+</section>
+
+<section class="eval-section" id="challenges">
+  <div class="eval-section__head"><div><div class="eyebrow">02 · Target</div><h2>Pinned challenges</h2><p>A challenge pins a reset-eligible source arena, its target identity and validator.</p></div></div>
+  <div class="eval-two-col">
+    <div class="card eval-list">
+      <div class="card-head"><span class="label">Available challenges</span><span class="badge badge--idle">{{ challenges|length }}</span></div>
+      {% for challenge in challenges %}
+      <div class="eval-list__row"><i class="fa-solid fa-cube"></i><div class="grow"><strong>{{ challenge.name }}</strong><small>{{ challenge.version }} · {{ challenge.label }}</small></div><span class="badge {{ 'badge--warn' if challenge.label == 'calibration' else 'badge--def' }}">{{ challenge.label }}</span></div>
+      {% else %}<div class="eval-empty"><i class="fa-solid fa-cube"></i><strong>No pinned challenges</strong><span>First create a resettable source engagement; then pin its arena ID here.</span></div>{% endfor %}
+    </div>
+    <form action="{{ url_for('evaluation_challenge_create') }}" method="post" class="card card-pad eval-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <h3>Pin a calibration challenge</h3><p class="muted">An ordinary scenario in the Library is not automatically an evaluation challenge. It needs an active, reset-eligible source arena.</p>
+      <div class="grid cols-2"><div class="field"><label class="label" for="challenge-name">Name</label><input class="input" id="challenge-name" name="name" required maxlength="100" placeholder="authorization-check"></div><div class="field"><label class="label" for="challenge-version">Version</label><input class="input" id="challenge-version" name="version" required maxlength="100" placeholder="v1"></div></div>
+      <div class="field"><label class="label" for="challenge-source">Source arena ID</label><input class="input mono" id="challenge-source" name="source_arena_id" required placeholder="active reset-eligible arena UUID"><div class="help"><a href="{{ url_for('engagements') }}">Find an active engagement</a> or <a href="{{ url_for('new_engagement') }}">create one</a>. A mock demo is for UI exploration, not validation.</div></div>
+      <div class="field"><label class="label" for="challenge-label">Leakage label</label><select class="select" id="challenge-label" name="label" required><option value="calibration">Calibration · public/synthetic</option><option value="held-out">Held-out · private truth only</option></select><div class="help">The API refuses to relabel a public synthetic fixture as held-out.</div></div>
+      <button class="btn btn-primary" type="submit">Pin challenge <i class="fa-solid fa-arrow-right"></i></button>
+    </form>
+  </div>
+</section>
+
+<section class="eval-section" id="suites">
+  <div class="eval-section__head"><div><div class="eyebrow">03 · Conditions</div><h2>Suites and limits</h2><p>Choose challenges, repeat over seeds and set the per-trial action and time bounds.</p></div></div>
+  <div class="eval-two-col">
+    <div class="card eval-list"><div class="card-head"><span class="label">Saved suites</span><span class="badge badge--idle">{{ suites|length }}</span></div>
+      {% for suite in suites %}<div class="eval-list__row"><i class="fa-solid fa-layer-group"></i><div class="grow"><strong>{{ suite.name }}</strong><small>{{ suite.version }} · {{ suite.challenge_ids|length }} challenges · {{ suite.seeds|length }} seeds</small></div></div>
+      {% else %}<div class="eval-empty"><i class="fa-solid fa-layer-group"></i><strong>No suites yet</strong><span>Pin at least one challenge to define a repeatable suite.</span></div>{% endfor %}
+    </div>
+    <form action="{{ url_for('evaluation_suite_create') }}" method="post" class="card card-pad eval-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <h3>Create a suite</h3><p class="muted">Matched trials compare both builds on equivalent starting states.</p>
+      <div class="grid cols-2"><div class="field"><label class="label" for="suite-name">Name</label><input class="input" id="suite-name" name="name" required maxlength="100" placeholder="web-calibration"></div><div class="field"><label class="label" for="suite-version">Version</label><input class="input" id="suite-version" name="version" required maxlength="100" placeholder="v1"></div></div>
+      <div class="field"><label class="label" for="suite-challenges">Challenges</label><select class="select" id="suite-challenges" name="challenge_ids" multiple required size="{{ [challenges|length, 3]|max }}">{% for challenge in challenges %}<option value="{{ challenge.id }}">{{ challenge.name }} · {{ challenge.version }} ({{ challenge.label }})</option>{% endfor %}</select><div class="help">Select one or more (Ctrl/Cmd for multiple). Five seeds allow a non-degenerate interval when results vary.</div></div>
+      <div class="grid cols-3"><div class="field"><label class="label" for="suite-seeds">Seeds</label><input class="input mono" id="suite-seeds" name="seeds" value="1,2,3,4,5" required></div><div class="field"><label class="label" for="suite-actions">Actions / trial</label><input class="input" id="suite-actions" name="action_cap" type="number" min="1" max="10000" value="100" required></div><div class="field"><label class="label" for="suite-deadline">Seconds / trial</label><input class="input" id="suite-deadline" name="deadline_seconds" type="number" min="60" max="1800" value="600" required></div></div>
+      <button class="btn btn-primary" type="submit" {{ 'disabled' if not challenges }}>Create suite <i class="fa-solid fa-arrow-right"></i></button>
+      {% if not challenges %}<div class="help">Pin a challenge first; this action is unavailable until then.</div>{% endif %}
+    </form>
+  </div>
+</section>
+
+<section class="eval-section" id="comparisons">
+  <div class="eval-section__head"><div><div class="eyebrow">04 · Result</div><h2>Compare two builds</h2><p>Nidavellir runs both builds on the suite, matches equivalent trials and separates infrastructure failures from agent outcomes.</p></div></div>
+  <div class="eval-two-col">
+    <form action="{{ url_for('evaluation_create') }}" method="post" class="card card-pad eval-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <h3>Run paired evaluation</h3>
+      <div class="field"><label class="label" for="compare-suite">Suite</label><select class="select" id="compare-suite" name="suite_id" required>{% for suite in suites %}<option value="{{ suite.id }}">{{ suite.name }} · {{ suite.version }}</option>{% endfor %}</select></div>
+      <div class="grid cols-2"><div class="field"><label class="label" for="compare-baseline">Baseline build</label><select class="select" id="compare-baseline" name="baseline_id" required>{% for build in builds %}<option value="{{ build.id }}">{{ build.name }} · {{ build.version }}</option>{% endfor %}</select></div><div class="field"><label class="label" for="compare-candidate">Candidate build</label><select class="select" id="compare-candidate" name="candidate_id" required>{% for build in builds %}<option value="{{ build.id }}">{{ build.name }} · {{ build.version }}</option>{% endfor %}</select></div></div>
+      <button class="btn btn-primary" type="submit" {{ 'disabled' if not suites or builds|length < 2 }}>Launch evaluation <i class="fa-solid fa-arrow-right"></i></button>
+      {% if not suites or builds|length < 2 %}<div class="help">Needs one saved suite and two registered builds.</div>{% endif %}
+    </form>
+    <div class="card eval-list" id="recent"><div class="card-head"><span class="label">Recent evaluations</span><span class="badge badge--idle">{{ evaluations|length }}</span></div>
+      {% for item in evaluations %}<a class="eval-list__row" href="{{ url_for('evaluation_detail', evaluation_id=item.id) }}"><i class="fa-solid fa-code-compare"></i><div class="grow"><strong>Evaluation {{ item.id[:8] }}</strong><small class="mono">{{ item.id }}</small></div><span class="badge {{ 'badge--ok' if item.state == 'completed' else 'badge--idle' }}">{{ item.state }}</span><i class="fa-solid fa-arrow-right"></i></a>
+      {% else %}<div class="eval-empty"><i class="fa-solid fa-code-compare"></i><strong>No comparisons yet</strong><span>Completed and interrupted evaluations will remain here with their trial records.</span></div>{% endfor %}
+    </div>
+  </div>
+</section>
+{% endblock %}

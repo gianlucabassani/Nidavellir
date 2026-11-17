@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}Findings{% endblock %}
+{% block crumb %}Activity <span class="sep">/</span> Findings{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Activity</div>
+    <h1>Findings</h1>
+    <div class="sub">Every reported weakness across engagements, with independent and manual verdicts shown separately.</div>
+  </div>
+  <div class="head-actions">
+    <span class="badge {{ 'badge--warn' if counts.unverified else 'badge--idle' }}">{{ counts.unverified }} awaiting review</span>
+  </div>
+</div>
+
+<div class="toolbar">
+  <div class="seg" id="findings-seg" style="padding:3px">
+    <button class="on" data-f="all">All <span class="ws-tab-count">{{ counts.all }}</span></button>
+    <button data-f="inconclusive">Inconclusive <span class="ws-tab-count">{{ counts.inconclusive }}</span></button>
+    <button data-f="infrastructure_failure">Probe failure <span class="ws-tab-count">{{ counts.infrastructure_failure }}</span></button>
+    <button data-f="confirmed">Confirmed <span class="ws-tab-count">{{ counts.confirmed }}</span></button>
+    <button data-f="manual_confirmed">Manual <span class="ws-tab-count">{{ counts.manual_confirmed }}</span></button>
+    <button data-f="refuted">Refuted <span class="ws-tab-count">{{ counts.refuted }}</span></button>
+  </div>
+  <div style="position:relative; min-width:200px; flex:1; max-width:320px">
+    <i class="fa-solid fa-magnifying-glass" style="position:absolute; left:12px; top:11px; color:var(--faint); font-size:13px"></i>
+    <input class="input" id="findings-search" style="padding-left:34px" placeholder="Filter by title, CWE, node or engagement…">
+  </div>
+</div>
+
+<div class="card pad-0">
+  {% if findings %}
+  <table class="table">
+    <thead><tr><th>Finding</th><th>CWE</th><th>Engagement</th><th>Node</th><th>Source</th><th>Verdict</th><th>Reported</th></tr></thead>
+    <tbody id="findings-rows">
+      {% for f in findings %}
+      <tr class="findings-row" data-src="{{ f.verdict }}"
+          data-search="{{ ((f.title or '') ~ ' ' ~ (f.cwe or '') ~ ' ' ~ (f.node or '') ~ ' ' ~ (f.arena_name or '') ~ ' ' ~ (f.arena_id or '')) | lower }}">
+        <td>
+          <b>{{ f.title }}</b>
+          {% if f.evidence_artifacts %}
+          <span class="chip-tag" title="Evidence artifacts attached"><i class="fa-solid fa-paperclip"></i> {{ f.evidence_artifacts|length }}</span>
+          {% endif %}
+          {% if f.evidence %}
+          <div class="faint" style="font-size:11.5px;max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ f.evidence }}">{{ f.evidence }}</div>
+          {% endif %}
+        </td>
+        <td class="mono">{{ f.cwe or '—' }}</td>
+        <td>
+          {# Reachable from its own context — live arena or read-only record — unless
+             that record has been pruned, in which case the finding stands alone. #}
+          {% if f.arena_known %}
+          <a href="{{ url_for('arena_detail', instance_id=f.arena_id) }}#findings">{{ f.arena_name }}</a>
+          {% else %}
+          <span class="muted" title="The engagement record was removed; the finding remains on the audit trail">{{ f.arena_name }} <i class="fa-solid fa-link-slash faint"></i></span>
+          {% endif %}
+        </td>
+        <td class="mono">{{ f.node or '—' }}</td>
+        <td>{% if f.manual %}<span class="badge">operator</span>{% else %}<span class="badge badge--info">agent</span>{% endif %}</td>
+        <td>
+          {% if f.verdict == 'confirmed' %}<span class="badge badge--ok"><i class="fa-solid fa-check"></i> confirmed</span>
+          {% elif f.verdict == 'manual_confirmed' %}<span class="badge badge--info">manual confirmation</span>
+          {% elif f.verdict == 'refuted' %}<span class="badge badge--warn">refuted</span>
+          {% elif f.verdict == 'infrastructure_failure' %}<span class="badge badge--warn">probe failure</span>
+          {% else %}<span class="badge badge--idle">inconclusive</span>{% endif %}
+        </td>
+        <td class="mono faint">{{ (f.ts or '')[:19] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="empty" id="findings-empty" hidden style="padding:30px">No findings match this filter.</div>
+  {% else %}
+  <div class="empty"><i class="fa-solid fa-bug"></i>No findings yet — they appear here as agents report them or you record them in an engagement.</div>
+  {% endif %}
+</div>
+
+<p class="faint" style="margin-top:14px;font-size:12.5px">
+  <i class="fa-solid fa-circle-info"></i>
+  Verdicts are recorded inside the engagement workspace, where the evidence sits next to the claim.
+</p>
+{% endblock %}
+
+{% block scripts %}<script>Nidavellir.initActivityIndex("findings");</script>{% endblock %}

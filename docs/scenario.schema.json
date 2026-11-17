@@ -1,0 +1,548 @@
+{
+  "$defs": {
+    "AgentBinding": {
+      "additionalProperties": false,
+      "description": "Wires a BYO agent stance onto a node (consumed by the Phase 2 gateway).",
+      "properties": {
+        "stance": {
+          "$ref": "#/$defs/Stance"
+        },
+        "node": {
+          "title": "Node",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stance",
+        "node"
+      ],
+      "title": "AgentBinding",
+      "type": "object"
+    },
+    "Network": {
+      "properties": {
+        "segments": {
+          "items": {
+            "$ref": "#/$defs/Segment"
+          },
+          "title": "Segments",
+          "type": "array"
+        }
+      },
+      "title": "Network",
+      "type": "object"
+    },
+    "Node": {
+      "description": "One machine in the topology \u2014 a container or a VM, per provider.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "role": {
+          "default": "node",
+          "title": "Role",
+          "type": "string"
+        },
+        "image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image"
+        },
+        "service": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Service"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "size": {
+          "default": "small",
+          "title": "Size",
+          "type": "string"
+        },
+        "segments": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Segments",
+          "type": "array"
+        },
+        "ports": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Ports",
+          "type": "array"
+        },
+        "environment": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Environment",
+          "type": "object"
+        },
+        "entrypoint": {
+          "default": false,
+          "title": "Entrypoint",
+          "type": "boolean"
+        },
+        "command": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Command"
+        },
+        "services": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Services",
+          "type": "array"
+        },
+        "tools": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tools",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Node",
+      "type": "object"
+    },
+    "Objective": {
+      "description": "A scored goal. Full scoring is Phase 4; this keeps the authoring shape.",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "points": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Points"
+        }
+      },
+      "required": [
+        "description"
+      ],
+      "title": "Objective",
+      "type": "object"
+    },
+    "ProviderClass": {
+      "enum": [
+        "vm",
+        "container",
+        "any"
+      ],
+      "title": "ProviderClass",
+      "type": "string"
+    },
+    "Requires": {
+      "properties": {
+        "provider_class": {
+          "$ref": "#/$defs/ProviderClass",
+          "default": "any"
+        },
+        "egress": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Egress"
+        },
+        "mirror": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mirror"
+        }
+      },
+      "title": "Requires",
+      "type": "object"
+    },
+    "Segment": {
+      "additionalProperties": false,
+      "description": "A named network segment nodes can be attached to.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "cidr": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cidr"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Segment",
+      "type": "object"
+    },
+    "Service": {
+      "additionalProperties": false,
+      "description": "A node's workload for software-under-test (SUT) arenas: point a victim\nnode at an arbitrary open-source project. **Packaged-first** \u2014 prefer an\nexisting published `image`; build from `source` (or install a `package`) only\nwhen no approved image exists (avoids version/build mismatch). `whitebox`\nexposes the source to the agent for source-aware testing (ADR-0007).",
+      "properties": {
+        "image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceBuild"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "package": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Package"
+        },
+        "whitebox": {
+          "default": false,
+          "title": "Whitebox",
+          "type": "boolean"
+        }
+      },
+      "title": "Service",
+      "type": "object"
+    },
+    "SourceBuild": {
+      "additionalProperties": false,
+      "description": "Build a node's workload from source \u2014 e.g. a GitHub project (P1-6, SUT\narenas). Pin `ref` (commit/tag) for reproducibility. The *execution* (clone +\nbuild) runs on docker-local via the daemon, but is **OFF by default** because\nbuilding untrusted code executes it at build time: enable explicitly with\n``NIDAVELLIR_ALLOW_SOURCE_BUILD=true`` (see SECURITY.md). When disabled, prefer\na packaged `Service.image`. `service.package` install is a separate follow-up.",
+      "properties": {
+        "repo": {
+          "title": "Repo",
+          "type": "string"
+        },
+        "ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ref"
+        },
+        "build": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Build"
+        },
+        "dockerfile": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dockerfile"
+        },
+        "context": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Context"
+        }
+      },
+      "required": [
+        "repo"
+      ],
+      "title": "SourceBuild",
+      "type": "object"
+    },
+    "Stance": {
+      "enum": [
+        "attacker",
+        "mitm",
+        "defender"
+      ],
+      "title": "Stance",
+      "type": "string"
+    },
+    "Vulnerability": {
+      "description": "A planted, KNOWN weakness \u2014 the scenario's hidden ground truth. The\nbenchmark goal is for an attacker agent to DISCOVER these, so the manifest is\noperator-only (never exposed to an agent) and matched against self-reported\nfindings by CWE + node. This is the replacement for a CTF flag: success is\n*identifying the known vulnerability*, not capturing a token.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "cwe": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cwe"
+        },
+        "node": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Node"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Severity"
+        },
+        "points": {
+          "default": 1,
+          "title": "Points",
+          "type": "integer"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        }
+      },
+      "required": [
+        "id",
+        "title"
+      ],
+      "title": "Vulnerability",
+      "type": "object"
+    }
+  },
+  "description": "A validated v3 scenario: an N-node topology over named segments.",
+  "properties": {
+    "schema": {
+      "default": "nidavellir/v3",
+      "title": "Schema",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "title": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Title"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "difficulty": {
+      "default": "unknown",
+      "title": "Difficulty",
+      "type": "string"
+    },
+    "requires": {
+      "$ref": "#/$defs/Requires"
+    },
+    "network": {
+      "$ref": "#/$defs/Network"
+    },
+    "nodes": {
+      "items": {
+        "$ref": "#/$defs/Node"
+      },
+      "minItems": 1,
+      "title": "Nodes",
+      "type": "array"
+    },
+    "agents": {
+      "items": {
+        "$ref": "#/$defs/AgentBinding"
+      },
+      "title": "Agents",
+      "type": "array"
+    },
+    "objectives": {
+      "items": {
+        "$ref": "#/$defs/Objective"
+      },
+      "title": "Objectives",
+      "type": "array"
+    },
+    "vulnerabilities": {
+      "items": {
+        "$ref": "#/$defs/Vulnerability"
+      },
+      "title": "Vulnerabilities",
+      "type": "array"
+    },
+    "ttl_hours": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ttl Hours"
+    },
+    "tags": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Tags",
+      "type": "array"
+    }
+  },
+  "required": [
+    "name",
+    "nodes"
+  ],
+  "title": "ScenarioSpec",
+  "type": "object"
+}

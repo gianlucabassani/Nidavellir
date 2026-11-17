@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>Nidavellir Forge · Console</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='anvil_logo.png') }}">
+  {% for css in entry.css or [] %}<link rel="stylesheet" href="{{ url_for('static', filename='console/' ~ css) }}">{% endfor %}
+  <script type="module" src="{{ url_for('static', filename='console/' ~ entry.file) }}" defer></script>
+</head>
+<body>
+  <div id="root" data-username="{{ username }}" data-simulation="{{ 'true' if simulation_mode else 'false' }}"></div>
+</body>
+</html>

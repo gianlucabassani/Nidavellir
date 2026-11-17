@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Agent builds{% endblock %}
+{% block crumb %}Library <span class="sep">/</span> Agent builds{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><div class="eyebrow">Library · evaluation assets</div><h1>Agent builds</h1><div class="sub">Versioned plans that a paired evaluation can replay. The current durable driver is scripted MCP; connecting a model in the top bar does not register a build here.</div></div>
+  <a class="btn btn-primary" href="{{ url_for('evaluations') }}#builds"><i class="fa-solid fa-plus"></i> Register scripted build</a>
+</div>
+<div class="eval-notice" role="note"><i class="fa-solid fa-circle-info"></i><div><strong>Build versus connection</strong><span>A build pins the steps and version under test. A model connection powers optional UI assistance, but model-driven durable trials are not yet supported.</span></div></div>
+<div class="grid cols-3" aria-label="Registered agent builds">
+  {% for build in builds %}
+  <article class="card card-pad eval-build-card">
+    <div class="eval-build-card__top"><span class="eval-build-card__icon"><i class="fa-solid fa-robot"></i></span><span class="badge badge--accent">{{ build.driver }}</span></div>
+    <h2>{{ build.name }}</h2><p>Version {{ build.version }}</p>
+    <div class="eval-build-card__digest"><span class="label">Pinned identity</span><code title="{{ build.digest }}">{{ build.digest }}</code></div>
+  </article>
+  {% else %}
+  <div class="card card-pad eval-build-empty"><i class="fa-solid fa-robot"></i><h2>No registered builds</h2><p>Start with a versioned scripted MCP plan. Once two builds exist, you can compare them on a suite.</p><a class="btn btn-primary" href="{{ url_for('evaluations') }}#builds">Register the first build</a></div>
+  {% endfor %}
+</div>
+{% endblock %}

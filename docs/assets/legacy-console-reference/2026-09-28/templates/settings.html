@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block crumb %}Administration <span class="sep">/</span> Settings{% endblock %}
+{% block content_mod %}content--form{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Configuration</div>
+    <h1>Settings</h1>
+    <div class="sub">Model connection, console preferences, and access.</div>
+  </div>
+</div>
+
+<div class="grid" style="grid-template-columns:1fr; gap:16px">
+  <div class="card pad-0">
+    <div class="card-head"><span class="label">System emergency stop</span>
+      <span class="badge badge--idle" style="margin-left:auto">{{ system_stop.state or 'unavailable' }}</span></div>
+    <div class="set-row">
+      <div class="info"><div class="t">Research admission</div>
+        <div class="d">Stops new work across arenas and drains disposable helpers. Clearing requires verified cleanup.</div></div>
+      {% if system_stop.state == 'open' %}
+      <form method="post" action="{{ url_for('system_stop_form') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="reason" value="Operator emergency stop from console">
+        <button class="btn btn-danger">Emergency stop</button>
+      </form>
+      {% elif system_stop.state == 'stopped' %}
+      <form method="post" action="{{ url_for('system_stop_clear_form') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="reason" value="Operator cleared emergency stop from console">
+        <button class="btn btn-secondary">Clear stop</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  <!-- model connection -->
+  <div class="card pad-0">
+    <div class="card-head"><span class="label">Model connection</span>
+      <span class="badge badge--idle" id="set-model-badge" style="margin-left:auto">not connected</span></div>
+    <div class="set-row">
+      <span class="model-bubble" id="set-model-logo" style="width:38px;height:38px;background:var(--surface-3)"></span>
+      <div class="info"><div class="t" id="set-model-name">Bring your own model</div>
+        <div class="d" id="set-model-detail">Connect a provider key — Fernet-encrypted at rest, never returned in plaintext. Used on demand by scenario generation and agent-mode arenas.</div></div>
+      <button class="btn btn-sm btn-primary" onclick="Nidavellir.openModelModal()">Manage</button>
+    </div>
+  </div>
+
+  <!-- console preferences (client-side) -->
+  <div class="card pad-0">
+    <div class="card-head"><span class="label">Console preferences</span></div>
+    <div class="set-row"><div class="info"><div class="t">Theme</div><div class="d">Mission-control dark. A light theme is on the roadmap.</div></div>
+      <div class="seg" style="padding:3px"><button class="on">Dark</button><button disabled style="opacity:.5">Light</button></div></div>
+    <div class="set-row"><div class="info"><div class="t">Compact density</div><div class="d">Tighter rows and cards for larger fleets (this session).</div></div>
+      <div class="switch" data-pref="density"></div></div>
+    <div class="set-row"><div class="info"><div class="t">Confirm destructive actions</div><div class="d">Ask before destroying an arena or clearing the archive.</div></div>
+      <div class="switch on" data-pref="confirm"></div></div>
+  </div>
+
+  <!-- access -->
+  <div class="card pad-0">
+    <div class="card-head"><span class="label">Access &amp; keys</span></div>
+    <div class="set-row"><span class="badge badge--accent"><i class="fa-solid fa-key"></i> orchestrator</span>
+      <div class="info"><div class="t">API authentication</div>
+        <div class="d">The console talks to the orchestrator with a server-held API key (ADR-0002). Agent keys for the MCP gateway are issued out-of-band and bound per arena.</div></div></div>
+    <div class="set-row"><div class="info"><div class="t">Ownership &amp; RBAC</div>
+        <div class="d">Per-workspace ownership, SSO, and graduated roles (auditor / operator / admin / owner) are future hosted-product work.</div></div>
+      <span class="badge badge--idle">planned</span></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}<script>Nidavellir.initSettings && Nidavellir.initSettings();</script>{% endblock %}

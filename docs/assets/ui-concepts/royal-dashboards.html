@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Royal dashboards · Nidavellir Forge</title>
+  <link rel="stylesheet" href="royal-dashboards.css">
+  <script src="royal-dashboards.js" defer></script>
+</head>
+<body class="mode-command">
+  <a class="skip-link" href="#content">Skip to content</a>
+  <div class="prototype-bar">
+    <span><span class="prototype-light" aria-hidden="true"></span> Interactive mockups · sample data · no action reaches a server</span>
+    <div class="switcher" role="group" aria-label="Choose a concept">
+      <button type="button" data-mode="command" aria-pressed="true">01 <strong>Royal Command</strong></button>
+      <button type="button" data-mode="canvas" aria-pressed="false">02 <strong>Forge Canvas</strong></button>
+    </div>
+  </div>
+  <header class="floating-shell">
+    <div class="floating-nav">
+      <a class="floating-brand" href="#dashboard" data-route="dashboard" aria-label="Nidavellir Forge, Research home"><span class="floating-brand-mark" aria-hidden="true">N</span><span>NIDAVELLIR <small>FORGE</small></span></a>
+      <nav class="realm-nav" aria-label="Primary workspaces">
+        <a href="#dashboard" class="realm-link current" data-route="dashboard" aria-current="page" aria-label="Research: investigate pinned targets and retain proof">
+          <svg class="realm-rune" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 21V3M5 5l14 7-14 7M19 12V3M19 12v9"/></svg>
+          <span>Research</span><small class="nav-tooltip">Investigate pinned targets and retain proof.</small>
+        </a>
+        <a href="#benchmark" class="realm-link" data-route="benchmark" aria-label="Benchmark: compare pinned agent builds on matched trials">
+          <svg class="realm-rune" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 3l14 18M19 3L5 21M5 3h14M5 21h14"/></svg>
+          <span>Benchmark</span><small class="nav-tooltip">Compare pinned agent builds on matched trials.</small>
+        </a>
+        <a href="#range" class="realm-link" data-route="range" aria-label="Cyber Range: launch and observe isolated arena topologies">
+          <svg class="realm-rune" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 2l9 5v10l-9 5-9-5V7zM12 2v20M3 7l18 10M21 7L3 17"/></svg>
+          <span>Cyber Range</span><small class="nav-tooltip">Launch and observe isolated arena topologies.</small>
+        </a>
+      </nav>
+      <details class="profile-menu" id="profile-menu">
+        <summary aria-label="Open profile and platform settings"><span class="profile-avatar">GB</span><span class="profile-label">Operator <small>Local workspace</small></span><span class="profile-chevron" aria-hidden="true">⌄</span></summary>
+        <div class="profile-popover"><div class="profile-popover-head"><strong>Operator</strong><small>Local workspace · demo</small></div><div class="profile-popover-title">PLATFORM</div><a href="#settings" data-route="settings">Platform settings <span>↗</span></a><span class="profile-info">Appearance <b>Royal light</b></span><span class="profile-info">Provider <b>Docker-local</b></span><span class="profile-info">Model connection <b>Not configured</b></span></div>
+      </details>
+    </div>
+  </header>
+
+  <!-- Concept 01: a focused, asymmetric operations board. -->
+  <div class="command-app concept-shell">
+    <aside class="command-sidebar">
+      <div class="command-brand"><span class="forge-mark" aria-hidden="true"><span>N</span></span><span>NIDAVELLIR <small>THE FORGE</small></span></div>
+      <div class="sidebar-caption">WORKSPACES</div>
+      <nav aria-label="Royal Command primary navigation">
+        <a href="#dashboard" class="nav-active" data-route="dashboard"><span class="nav-glyph">◈</span> Research <span class="nav-count">03</span></a>
+        <span aria-disabled="true"><span class="nav-glyph">◇</span> Benchmark</span>
+        <span aria-disabled="true"><span class="nav-glyph">⬡</span> Cyber Range</span>
+      </nav>
+      <div class="sidebar-caption secondary-caption">LIBRARY</div>
+      <nav aria-label="Royal Command resources"><span aria-disabled="true">Target</span><span aria-disabled="true">Agents</span><span aria-disabled="true">Evidence</span><span aria-disabled="true">Activity</span></nav>
+      <div class="command-sidebar-bottom"><div class="presence"><span></span> Demo connection state</div><div class="operator"><span class="operator-avatar">GB</span><span>Operator <small>local environment</small></span><span class="operator-more">···</span></div></div>
+    </aside>
+    <div class="command-main">
+      <div class="command-top"><div class="top-crumb"><span>Workspace</span><span class="crumb-chevron">›</span><strong>Research</strong></div><div class="top-actions"><span class="environment">LOCAL / DOCKER</span><span class="top-avatar">GB</span></div></div>
+      <main id="content" class="dashboard dashboard-command" data-screen="dashboard">
+        <div class="command-heading"><div><p class="overline">OVERVIEW / 27 SEPTEMBER 2026</p><h1>Research</h1><p>Sessions, evidence and decisions in one place.</p></div><button type="button" class="gold-button" data-route="import"><span aria-hidden="true">＋</span> New research</button></div>
+        <div class="command-grid">
+          <article class="active-feature">
+            <div class="feature-top"><span class="signal"><i></i> ACTIVE SESSION</span><span class="feature-id">RS-2048 <span>↗</span></span></div>
+            <div class="feature-main"><div><p class="feature-kicker">PINNED TARGET · OCI</p><h2>grant-service</h2><p class="feature-copy">Manual research · cross-account authorization</p><div class="feature-tags"><span>attacker</span><span>Docker-local</span><span>48 / 50 actions</span></div></div>
+              <div class="topology" aria-label="Demo topology: operator connected to grant-service inside the arena network">
+                <div class="topology-line"></div><div class="topology-node topology-operator"><span>◈</span><small>OPERATOR</small></div><div class="topology-node topology-target"><span>⬡</span><small>GRANT-SERVICE</small></div><div class="topology-orbit"></div>
+              </div>
+            </div>
+            <div class="feature-bottom"><div><span>IDENTITY</span><strong>sha256:63b0db58…a194f0b9</strong></div><div><span>LAST SEEN</span><strong>12:42 · 27 Sep</strong></div><button type="button" class="feature-action" data-route="arena">Open workspace <span aria-hidden="true">↗</span></button></div>
+          </article>
+          <article class="review-card">
+            <div class="card-label"><span>01 / NEEDS REVIEW</span><span class="label-icon">✦</span></div>
+            <h2>Needs review<span class="accent-dot">.</span></h2><p>One finding awaits independent validation.</p>
+            <div class="review-item"><span class="review-indicator"></span><div><strong>Grant cross-account</strong><small>grant-service · evidence attached</small></div><span class="review-arrow">↗</span></div>
+            <button type="button" class="text-action" data-route="finding">Review finding <span aria-hidden="true">→</span></button>
+          </article>
+          <section class="session-board" aria-labelledby="session-board-title">
+            <div class="module-heading"><div><p class="module-kicker">YOUR WORK</p><h2 id="session-board-title">Recent sessions</h2></div><span class="module-meta">3 records</span></div>
+            <div class="session-table" role="table" aria-label="Recent sessions"><div class="table-head" role="row"><span>SESSION</span><span>STATUS</span><span>LAST ACTIVITY</span><span></span></div>
+              <button type="button" class="table-row" data-route="arena"><span class="table-name"><i class="target-icon">⬡</i><span><strong>grant-service</strong><small>RS-2048 · pinned OCI digest</small></span></span><span><b class="status live">Active</b></span><span class="table-time">12:42 today</span><span class="row-arrow">↗</span></button>
+              <button type="button" class="table-row" data-route="archive"><span class="table-name"><i class="target-icon muted-icon">◇</i><span><strong>authz-fixture</strong><small>RS-2037 · Git 8d98c4a</small></span></span><span><b class="status archived">Archived</b></span><span class="table-time">yesterday</span><span class="row-arrow">↗</span></button>
+              <button type="button" class="table-row" data-route="import"><span class="table-name"><i class="target-icon purple-icon">◈</i><span><strong>grant-service · v2</strong><small>Draft · identity to review</small></span></span><span><b class="status draft">Draft</b></span><span class="table-time">25 Sep</span><span class="row-arrow">↗</span></button>
+            </div>
+          </section>
+          <section class="activity-card" aria-labelledby="activity-title"><div class="module-heading"><div><p class="module-kicker">TRACE</p><h2 id="activity-title">Recent evidence</h2></div><span class="module-meta">RS-2048</span></div>
+            <div class="activity-list"><div class="activity-event"><span class="activity-symbol gold-symbol">⌘</span><div><strong>PoC completed</strong><p>Exit 0 · cleanup complete</p><small>12:42</small></div></div><div class="activity-event"><span class="activity-symbol purple-symbol">◇</span><div><strong>Artifact captured</strong><p>response.json · digest verified</p><small>12:41</small></div></div><div class="activity-event"><span class="activity-symbol blue-symbol">↗</span><div><strong>HTTP transaction</strong><p>Request attributed to the operator</p><small>12:38</small></div></div></div>
+            <button type="button" class="text-action" data-route="archive">View evidence chain <span aria-hidden="true">→</span></button>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Concept 02: a wider canvas and an explicit proof desk. -->
+  <div class="canvas-app concept-shell" hidden>
+    <header class="canvas-header"><div class="canvas-brand"><span class="canvas-mark">N</span><span>NIDAVELLIR <small>FORGE</small></span></div><nav aria-label="Forge Canvas primary navigation"><a href="#dashboard" class="canvas-active" data-route="dashboard">Research</a><span aria-disabled="true">Benchmark</span><span aria-disabled="true">Cyber Range</span></nav><div class="canvas-header-right"><span>DOCKER-LOCAL</span><span class="canvas-avatar">GB</span></div></header>
+    <main class="dashboard dashboard-canvas" data-screen="dashboard">
+      <div class="canvas-heading"><div><p class="overline">WORKSPACE / RESEARCH</p><h1>Research<span class="accent-dot">.</span></h1><p>Three sessions · one finding to review</p></div><button type="button" class="canvas-create" data-route="import"><span>＋</span> New research</button></div>
+      <div class="canvas-rule"><span>01 — ACTIVE WORK</span><span>27.09.2026 / LOCAL</span></div>
+      <div class="canvas-grid">
+        <section class="canvas-sessions" aria-labelledby="canvas-sessions-title"><div class="canvas-section-head"><p>SELECT A SESSION</p><h2 id="canvas-sessions-title">In progress <span>03</span></h2></div>
+          <button type="button" class="canvas-session selected" data-route="arena"><span class="canvas-session-index">01</span><span><strong>grant-service</strong><small>OCI · sha256:63b0db58…</small></span><span class="canvas-session-arrow">↗</span><em>ACTIVE</em></button>
+          <button type="button" class="canvas-session" data-route="archive"><span class="canvas-session-index">02</span><span><strong>authz-fixture</strong><small>Git · 8d98c4a</small></span><span class="canvas-session-arrow">↗</span><em>ARCHIVED</em></button>
+          <button type="button" class="canvas-session" data-route="import"><span class="canvas-session-index">03</span><span><strong>grant-service / v2</strong><small>Identity to review</small></span><span class="canvas-session-arrow">↗</span><em>DRAFT</em></button>
+          <div class="canvas-session-foot">The record retains evidence and provenance after teardown.</div>
+        </section>
+        <article class="blueprint">
+          <div class="blueprint-top"><span class="blueprint-tag"><i></i> ACTIVE ARENA</span><span>RS-2048 / TOPOLOGY</span></div>
+          <div class="blueprint-title"><p>CURRENT INVESTIGATION</p><h2>grant-service</h2><span>Manual research · authorization</span></div>
+          <div class="blueprint-map" aria-label="Operator connected to grant-service inside the isolated arena network"><div class="map-grid"></div><div class="map-wire"></div><div class="map-origin"><span>◎</span><strong>Operator</strong><small>attacker</small></div><div class="map-destination"><span>⬡</span><strong>grant-service</strong><small>HTTP :8080</small></div><span class="map-path">ARENA SEGMENT / ISOLATED</span></div>
+          <div class="blueprint-bottom"><div><span>TARGET IDENTITY</span><strong>sha256:63b0db58…a194f0b9</strong></div><div><span>BUDGET</span><strong>48 / 50 actions</strong></div><button type="button" data-route="arena">Open workspace <span>↗</span></button></div>
+        </article>
+        <aside class="proof-desk"><div class="proof-desk-head"><span>02 — PROOF DESK</span><span class="proof-star">✳</span></div><h2>Review queue</h2><p>1 finding awaits independent validation.</p><div class="proof-divider"></div><div class="proof-stat"><span>FINDING TO REVIEW</span><strong>01</strong></div><button type="button" class="proof-item" data-route="finding"><span class="proof-item-icon">↗</span><span><strong>Grant cross-account</strong><small>2 linked digests · grant-service</small></span><span>→</span></button><div class="proof-footer"><span class="proof-green"></span> Evidence retained after teardown</div></aside>
+      </div>
+      <div class="canvas-bottom"><span>LAST OBSERVATION <strong>12:42 · 27 SEP</strong></span><span>LIVE-VERIFIED PROVIDER <strong>DOCKER-LOCAL</strong></span><button type="button" data-route="archive">Open evidence record ↗</button></div>
+    </main>
+  </div>
+
+  <!-- Arena workspace mock: same information architecture in either selected concept. -->
+  <section class="arena-app" data-screen="arena" hidden aria-label="Arena workspace mockup">
+    <header class="arena-topbar">
+      <div class="arena-brand"><span class="mini-mark">N</span><span>NIDAVELLIR <small>FORGE</small></span><span class="arena-top-divider"></span><span class="arena-breadcrumb">Research <b>/</b> grant-service</span></div>
+      <button type="button" data-route="dashboard">← Back to Research</button>
+    </header>
+    <main class="arena-main">
+      <div class="arena-page-head">
+        <div><p class="overline">RESEARCH / RS-2048 / ARENA</p><h1>grant-service <span class="arena-live-dot"></span></h1><p>Manual research on a pinned OCI image · Last observed 12:42, 27 Sep</p></div>
+        <div class="arena-head-actions"><span class="arena-mock-label">MOCK DATA</span><button type="button" data-route="archive">View retained record ↗</button></div>
+      </div>
+      <div class="arena-context" aria-label="Current research context">
+        <div><span>TARGET IDENTITY</span><strong title="sha256:63b0db58e934d14ba6fd8795fa3421a7c1174fd9e80cbb8424cc91d4a194f0b9">sha256:63b0db58…a194f0b9</strong></div>
+        <div><span>ARENA STATE</span><strong><i class="arena-state-dot"></i> Active</strong></div>
+        <div><span>STANCE</span><strong>Operator / attacker</strong></div>
+        <div><span>ACTIONS LEFT</span><strong>48 of 50</strong></div>
+        <div><span>TIME LEFT</span><strong>1 h 38 m</strong></div>
+      </div>
+      <nav class="arena-tabs" aria-label="Arena workspace sections">
+        <a href="#arena" data-route="arena" aria-current="page">Overview</a>
+        <a href="#poc" data-route="poc">PoC <span>1</span></a>
+        <a href="#finding" data-route="finding">Findings <span>1</span></a>
+        <a href="#archive" data-route="archive">Evidence <span>2</span></a>
+        <span aria-disabled="true">Agent</span><span aria-disabled="true">Infrastructure</span>
+      </nav>
+      <div class="arena-grid">
+        <section class="arena-topology-card nordic-card" aria-labelledby="arena-topology-title">
+          <div class="arena-card-head"><div><p class="arena-card-kicker">01 / ENVIRONMENT</p><h2 id="arena-topology-title">Topology &amp; readiness</h2></div><span class="readiness"><i></i> 2 nodes ready</span></div>
+          <div class="arena-diagram">
+            <div class="arena-diagram-pattern"></div>
+            <div class="arena-link-line"><span>ISOLATED ARENA SEGMENT</span></div>
+            <div class="arena-diagram-node"><span class="arena-node-glyph">◈</span><strong>researcher</strong><small>attacker foothold</small><em>READY</em></div>
+            <div class="arena-diagram-node target-node"><span class="arena-node-glyph">⬡</span><strong>grant-service</strong><small>HTTP :8080</small><em>HEALTHY</em></div>
+          </div>
+          <div class="arena-card-foot"><span><b>Provider</b> Docker-local</span><span><b>Reset</b> replacement arena</span><span><b>Network</b> no external egress</span></div>
+        </section>
+        <aside class="arena-side">
+          <section class="arena-state-card nordic-card" aria-labelledby="arena-state-title">
+            <div class="arena-card-head"><div><p class="arena-card-kicker">02 / CONTROL</p><h2 id="arena-state-title">Research state</h2></div></div>
+            <div class="arena-state-list"><div><span>Current phase</span><strong>Active research</strong></div><div><span>Action budget</span><strong>48 available</strong></div><div><span>Session deadline</span><strong>14:20 local</strong></div><div><span>Last refresh</span><strong>12:42 local</strong></div></div>
+            <div class="arena-state-note"><span class="state-note-glyph">◇</span> This view is a snapshot. Controls must recheck server state.</div>
+          </section>
+          <section class="arena-activity-card nordic-card" aria-labelledby="arena-activity-title">
+            <div class="arena-card-head"><div><p class="arena-card-kicker">03 / ACTIVITY</p><h2 id="arena-activity-title">Recent trace</h2></div><span class="arena-small-tag">LIVE · DEMO</span></div>
+            <ol><li><time>12:42</time><span><strong>PoC job completed</strong><small>Exit 0 · helper reclaimed</small></span></li><li><time>12:41</time><span><strong>Artifact stored</strong><small>response.json · digest recorded</small></span></li><li><time>12:38</time><span><strong>HTTP transaction</strong><small>Operator · grant-service</small></span></li></ol>
+          </section>
+        </aside>
+        <section class="arena-tools nordic-card" aria-labelledby="arena-tools-title">
+          <div class="arena-card-head"><div><p class="arena-card-kicker">04 / WORKBENCH</p><h2 id="arena-tools-title">Research tools</h2></div><span class="arena-small-tag">SCOPE-BOUND</span></div>
+          <div class="tool-cards">
+            <button type="button" class="tool-card" data-route="poc"><span class="tool-icon">⌘</span><strong>Confined PoC</strong><small>Run Python against the selected service. View output, artifacts and cleanup.</small><em>Open tool ↗</em></button>
+            <div class="tool-card"><span class="tool-icon purple-tool">↗</span><strong>HTTP transactions</strong><small>Capture, inspect and replay requests within the arena scope.</small><em>Available in full UI</em></div>
+            <div class="tool-card"><span class="tool-icon blue-tool">◇</span><strong>File transfer</strong><small>Move selected files to the helper and inspect protected artifacts.</small><em>Available in full UI</em></div>
+          </div>
+        </section>
+        <section class="arena-evidence nordic-card" aria-labelledby="arena-evidence-title">
+          <div class="arena-card-head"><div><p class="arena-card-kicker">05 / PROVENANCE</p><h2 id="arena-evidence-title">Evidence linked to this session</h2></div><button type="button" data-route="archive">View record →</button></div>
+          <div class="arena-evidence-row"><span class="evidence-type">HTTP</span><div><strong>Cross-account grant response</strong><small>sha256:34a90cc1…b70c24ef · Operator request</small></div><span>12:38</span></div>
+          <div class="arena-evidence-row"><span class="evidence-type artifact-type">FILE</span><div><strong>response.json</strong><small>sha256:9e7bf46a…3ed19f02 · PoC job artifact</small></div><span>12:41</span></div>
+        </section>
+      </div>
+    </main>
+  </section>
+
+  <section class="settings-screen" data-screen="settings" hidden aria-label="Platform settings mockup">
+    <main class="settings-main">
+      <div class="settings-heading"><div><p class="overline">PROFILE / PLATFORM</p><h1>Platform settings</h1><p>Operator preferences and connection state for this local workspace.</p></div><span>MOCK DATA</span></div>
+      <div class="settings-grid">
+        <article class="nordic-card"><h2>Operator profile</h2><dl><div><dt>Account</dt><dd>Operator</dd></div><div><dt>Workspace</dt><dd>Local</dd></div><div><dt>Access</dt><dd>Console operator</dd></div></dl></article>
+        <article class="nordic-card"><h2>Appearance</h2><dl><div><dt>Theme</dt><dd>Royal light</dd></div><div><dt>Layout</dt><dd>Floating navigation</dd></div><div><dt>Reduced motion</dt><dd>System setting</dd></div></dl></article>
+        <article class="nordic-card"><h2>Connections</h2><dl><div><dt>Provider</dt><dd>Docker-local</dd></div><div><dt>Model</dt><dd>Not configured</dd></div><div><dt>Gateway</dt><dd>Demo state</dd></div></dl></article>
+      </div>
+      <button type="button" class="settings-back" data-route="dashboard">← Back to Research</button>
+    </main>
+  </section>
+
+  <section class="primary-workspace benchmark-screen" data-screen="benchmark" hidden aria-label="Benchmark workspace mockup">
+    <main class="primary-main">
+      <header class="primary-head"><div><p class="overline">WORKSPACE / BENCHMARK</p><h1>Benchmark</h1><p>Compare pinned agent builds on matched, resettable calibration trials.</p></div><button type="button" class="gold-button" data-route="benchmark-new">New comparison ↗</button></header>
+      <div class="workspace-notice"><span class="notice-rune">◇</span><div><strong>Calibration scope</strong><span>These public synthetic challenges test the workbench. They are not held-out capability evidence.</span></div><span class="workspace-notice-tag">SCRIPTED DRIVER</span></div>
+      <div class="benchmark-grid">
+        <article class="nordic-card benchmark-feature"><div class="arena-card-head"><div><p class="arena-card-kicker">01 / LATEST EVALUATION</p><h2>Grant regression · build A vs B</h2></div><span class="readiness">COMPLETE</span></div><div class="benchmark-pair"><div><span>BASELINE</span><strong>grant-agent / 1.4.2</strong><small>scripted-mcp/v1</small></div><span class="pair-link" aria-hidden="true">⇄</span><div><span>CANDIDATE</span><strong>grant-agent / 1.5.0</strong><small>scripted-mcp/v1</small></div></div><div class="benchmark-feature-foot"><span><b>Suite</b> authz + grant · v1</span><span><b>Matched pairs</b> 10</span><span><b>Infrastructure failures</b> 0</span><button type="button" data-route="comparison">Inspect comparison ↗</button></div></article>
+        <article class="nordic-card benchmark-queue"><div class="arena-card-head"><div><p class="arena-card-kicker">02 / READY TO USE</p><h2>Registry</h2></div></div><div class="registry-row"><span class="registry-icon">◈</span><div><strong>Agent builds</strong><small>2 pinned scripted builds</small></div><b>02</b></div><div class="registry-row"><span class="registry-icon">◇</span><div><strong>Challenges</strong><small>2 versioned calibration classes</small></div><b>02</b></div><div class="registry-row"><span class="registry-icon">⬡</span><div><strong>Suites</strong><small>Matched seeds and limits</small></div><b>01</b></div></article>
+        <section class="nordic-card benchmark-history" aria-labelledby="benchmark-history-title"><div class="arena-card-head"><div><p class="arena-card-kicker">03 / EVALUATIONS</p><h2 id="benchmark-history-title">Recent comparisons</h2></div></div><button type="button" data-route="comparison" class="benchmark-row"><span class="benchmark-row-mark">◈</span><span><strong>Grant regression</strong><small>authz + grant · 5 seeds · 20 trials</small></span><em>CALIBRATION</em><b>Completed ↗</b></button><div class="benchmark-row"><span class="benchmark-row-mark muted-mark">◇</span><span><strong>Authorization baseline</strong><small>authorization · 5 seeds · 10 trials</small></span><em>CALIBRATION</em><b>Archived</b></div></section>
+        <section class="nordic-card benchmark-explainer" aria-labelledby="benchmark-readout-title"><div class="arena-card-head"><div><p class="arena-card-kicker">04 / READOUT</p><h2 id="benchmark-readout-title">What changed</h2></div></div><div class="readout-item"><span>Verified effect difference</span><strong>−1.0 <small>grant class</small></strong></div><div class="readout-item"><span>Authorization class</span><strong>0.0 <small>no change</small></strong></div><div class="readout-item"><span>Interval</span><strong>Degenerate <small>constant pairs</small></strong></div><button type="button" class="text-action" data-route="comparison">Inspect proof and failures →</button></section>
+      </div>
+    </main>
+  </section>
+
+  <section class="primary-workspace" data-screen="benchmark-new" hidden aria-label="New comparison mockup">
+    <main class="primary-main narrow-main"><header class="primary-head"><div><p class="overline">BENCHMARK / NEW COMPARISON</p><h1>Configure matched trials</h1><p>Pin both builds, select a versioned calibration suite, and review limits.</p></div><button type="button" class="quiet-button" data-route="benchmark">← Benchmark</button></header>
+      <form id="benchmark-form" class="nordic-card comparison-form"><div class="form-grid"><label>Baseline build <select><option>grant-agent / 1.4.2 · scripted-mcp/v1</option></select></label><label>Candidate build <select><option>grant-agent / 1.5.0 · scripted-mcp/v1</option></select></label><label>Challenge suite <select><option>authz + grant · v1 · calibration</option></select></label><label>Matched seeds <input value="1, 2, 3, 4, 5" readonly></label><label>Action cap <input value="50 per trial" readonly></label><label>Deadline <input value="10 minutes per trial" readonly></label></div><div class="form-review"><span>10 matched pairs · 20 trials · Docker-local only</span><button type="submit" class="gold-button">Preview comparison ↗</button></div><p class="form-footnote">Mockup only. This form does not schedule an evaluation.</p></form>
+    </main>
+  </section>
+
+  <section class="primary-workspace" data-screen="comparison" hidden aria-label="Evaluation comparison mockup">
+    <main class="primary-main"><header class="primary-head"><div><p class="overline">BENCHMARK / EVALUATION EV-041</p><h1>Grant regression</h1><p>Matched calibration trials · grant-agent 1.4.2 → 1.5.0</p></div><button type="button" class="quiet-button" data-route="benchmark">← All comparisons</button></header>
+      <div class="comparison-context"><span><small>SUITE</small><strong>authz + grant / v1</strong></span><span><small>SEEDS</small><strong>1–5 matched</strong></span><span><small>TRIALS</small><strong>20 complete</strong></span><span><small>INFRASTRUCTURE FAILURES</small><strong>0 pairs</strong></span><span><small>CLAIM CLASS</small><strong>Public calibration</strong></span></div>
+      <div class="comparison-grid"><section class="nordic-card comparison-summary"><div class="arena-card-head"><div><p class="arena-card-kicker">01 / INDEPENDENT RESULTS</p><h2>Verified effects</h2></div><span class="arena-small-tag">10 MATCHED PAIRS</span></div><div class="comparison-bars"><div><span>Authorization</span><div class="bar-track"><i style="width:100%"></i><em>0.0 difference</em></div></div><div><span>Single-use grant</span><div class="bar-track"><i class="regression-bar" style="width:45%"></i><em>−1.0 difference</em></div></div></div><p class="comparison-note">The candidate lost the grant effect in every matched seed. The authorization class did not change.</p></section><aside class="nordic-card comparison-uncertainty"><div class="arena-card-head"><div><p class="arena-card-kicker">02 / INTERPRETATION</p><h2>Uncertainty &amp; failures</h2></div></div><dl><div><dt>Grant interval</dt><dd>Degenerate · constant pairs</dd></div><div><dt>Authorization interval</dt><dd>Degenerate · constant pairs</dd></div><div><dt>Infrastructure failures</dt><dd>0 matched pairs</dd></div><div><dt>Driver</dt><dd>Scripted MCP</dd></div></dl><p>Model-driven variance is not established by these scripted trials.</p></aside><section class="nordic-card comparison-trials"><div class="arena-card-head"><div><p class="arena-card-kicker">03 / TRACEABLE RECORDS</p><h2>Trial evidence</h2></div></div><div class="trial-row"><span>AUTHZ / SEEDS 1–5</span><strong>Both builds verified</strong><em>10 trials</em></div><div class="trial-row"><span>GRANT / SEEDS 1–5</span><strong>Baseline verified · candidate refuted</strong><em>10 trials</em></div><div class="trial-row"><span>CONTROL</span><strong>Independent validator and negative control</strong><em>retained</em></div></section></div>
+    </main>
+  </section>
+
+  <section class="primary-workspace" data-screen="range" hidden aria-label="Cyber Range workspace mockup">
+    <main class="primary-main"><header class="primary-head"><div><p class="overline">WORKSPACE / CYBER RANGE</p><h1>Cyber Range</h1><p>Choose a scenario, review its topology and permissions, then launch a controlled arena.</p></div><button type="button" class="gold-button" data-route="range-live">Launch scenario ↗</button></header>
+      <div class="workspace-notice"><span class="notice-rune">◇</span><div><strong>Provider support</strong><span>Docker-local is live-verified. Other provider drivers are not presented as launch options in this mockup.</span></div><span class="workspace-notice-tag">DOCKER-LOCAL</span></div>
+      <div class="range-grid"><section class="nordic-card range-catalog"><div class="arena-card-head"><div><p class="arena-card-kicker">01 / SCENARIOS</p><h2>Catalog</h2></div></div><button type="button" class="range-scenario selected" data-route="range-live"><span class="range-list-rune">⬡</span><span><strong>Grant authorization lab</strong><small>2 nodes · 1 segment · HTTP</small></span><em>SELECTED</em></button><div class="range-scenario"><span class="range-list-rune">◇</span><span><strong>Single-use grant lab</strong><small>2 nodes · 1 segment · HTTP</small></span><em>CALIBRATION</em></div><div class="range-catalog-note">Scenario is an engine topology. A challenge adds brief, visibility and private truth.</div></section><section class="nordic-card range-preview"><div class="arena-card-head"><div><p class="arena-card-kicker">02 / PREVIEW</p><h2>Grant authorization lab</h2></div><span class="arena-small-tag">SCENARIO V3</span></div><div class="range-topology"><div class="range-track"></div><div class="range-node"><span>◈</span><strong>researcher</strong><small>attacker foothold</small></div><div class="range-node"><span>⬡</span><strong>grant-service</strong><small>HTTP :8080</small></div></div><div class="range-specs"><div><span>SEGMENT</span><strong>arena-private</strong></div><div><span>EGRESS</span><strong>None</strong></div><div><span>RESET</span><strong>Replacement arena</strong></div></div></section><aside class="nordic-card range-roles"><div class="arena-card-head"><div><p class="arena-card-kicker">03 / ACCESS</p><h2>Roles &amp; permissions</h2></div></div><div class="role-row"><span>◈</span><div><strong>Attacker</strong><small>Scoped HTTP and confined PoC</small></div></div><div class="role-row"><span>◇</span><div><strong>Operator</strong><small>Lifecycle, evidence and validation</small></div></div><div class="range-review"><strong>Before launch</strong><p>2 nodes · isolated segment · no external egress · 1 hour time box</p><button type="button" data-route="range-live">Review &amp; launch ↗</button></div></aside></div>
+    </main>
+  </section>
+
+  <section class="primary-workspace" data-screen="range-live" hidden aria-label="Live Cyber Range mockup">
+    <main class="primary-main"><header class="primary-head"><div><p class="overline">CYBER RANGE / ARENA CR-024</p><h1>Grant authorization lab</h1><p>Controlled Docker-local topology · sample state observed at 12:42</p></div><div class="range-live-actions"><button type="button" class="quiet-button" data-route="range">← Scenarios</button><button type="button" class="danger-outline" id="stop-range">Stop arena</button></div></header>
+      <div class="comparison-context"><span><small>STATE</small><strong id="range-state">Active · demo</strong></span><span><small>NODES</small><strong>2 ready</strong></span><span><small>SEGMENT</small><strong>arena-private</strong></span><span><small>EGRESS</small><strong>None</strong></span><span><small>LAST OBSERVED</small><strong>12:42 local</strong></span></div>
+      <div class="range-live-grid"><section class="nordic-card range-preview"><div class="arena-card-head"><div><p class="arena-card-kicker">01 / TOPOLOGY</p><h2>Nodes &amp; segment</h2></div><span class="readiness">2 NODES READY</span></div><div class="range-topology"><div class="range-track"></div><div class="range-node"><span>◈</span><strong>researcher</strong><small>attacker foothold</small></div><div class="range-node"><span>⬡</span><strong>grant-service</strong><small>HTTP :8080</small></div></div><div class="range-specs"><div><span>PROVIDER</span><strong>Docker-local</strong></div><div><span>NETWORK</span><strong>Isolated</strong></div><div><span>RESET</span><strong>Replacement</strong></div></div></section><aside class="nordic-card range-live-trace"><div class="arena-card-head"><div><p class="arena-card-kicker">02 / AUDIT</p><h2>Recent events</h2></div></div><div class="trial-row"><span>12:42</span><strong>Readiness confirmed</strong><em>system</em></div><div class="trial-row"><span>12:41</span><strong>Two nodes provisioned</strong><em>worker</em></div><div class="trial-row"><span>12:40</span><strong>Scenario reviewed</strong><em>operator</em></div><p>Event attribution and retained trace remain available after teardown.</p></aside></div>
+    </main>
+  </section>
+  <dialog id="range-confirm"><form method="dialog"><p class="overline">CONFIRM LIFECYCLE ACTION</p><h2>Stop arena CR-024?</h2><p>New research actions will be refused and any running helper will be cancelled. Evidence remains in the record.</p><div><button value="cancel" class="quiet-button">Keep running</button><button value="confirm" class="danger-button">Stop demo arena</button></div></form></dialog>
+
+  <!-- Same task in both concepts; all controls here are local prototype interactions. -->
+  <section class="workflow" data-screen="workflow" hidden aria-label="Demo research path">
+    <header class="workflow-top"><div class="workflow-brand"><span class="mini-mark">N</span> NIDAVELLIR / RESEARCH</div><button type="button" data-route="dashboard">← Back to dashboard</button></header>
+    <div class="workflow-wrap">
+      <div class="workflow-heading"><div><p class="overline">RS-2048 / DEMO RESEARCH PATH</p><h1>Research on grant-service</h1><p>Pinned identity · confined PoC · finding · retained record</p></div><span class="workflow-state" id="workflow-state">DRAFT</span></div>
+      <div class="workflow-context"><span><small>TARGET</small><strong>sha256:63b0db58…a194f0b9</strong></span><span><small>ARENA</small><strong id="workflow-arena">Preparing</strong></span><span><small>STANCE</small><strong>Operator / attacker</strong></span><span><small>BUDGET</small><strong id="workflow-budget">50 available</strong></span></div>
+      <nav class="workflow-steps" aria-label="Demo research stages"><a href="#import" data-route="import"><i>01</i><span>Import &amp; setup</span></a><a href="#poc" data-route="poc"><i>02</i><span>PoC</span></a><a href="#finding" data-route="finding"><i>03</i><span>Finding</span></a><a href="#archive" data-route="archive"><i>04</i><span>Archive</span></a></nav>
+      <div class="workflow-panel" id="import" data-stage="import"><div class="stage-heading"><div><p class="overline">01 / TARGET</p><h2>Review the pinned identity</h2><p>Review the image, seed and reset recipe before creating the session.</p></div><span class="stage-badge">PINNED OCI</span></div><div class="stage-grid"><article class="stage-card"><p>EXACT REFERENCE</p><strong class="digest">registry.local/grant-service@sha256:63b0db58e934d14ba6fd8795fa3421a7c1174fd9e80cbb8424cc91d4a194f0b9</strong><span>linux/amd64 · Docker-local</span></article><article class="stage-card"><p>RESET RECIPE</p><dl><div><dt>Configuration</dt><dd>config-v3 · digest verified</dd></div><div><dt>Seed</dt><dd>seed-authz-02 · 2 accounts</dd></div><div><dt>Strategy</dt><dd>Replacement arena</dd></div></dl></article></div><div class="stage-footer"><span>A mutable tag cannot prove which build was tested.</span><button type="button" class="stage-primary" data-route="poc">Confirm and open PoC →</button></div></div>
+      <div class="workflow-panel" id="poc" data-stage="poc" hidden><div class="stage-heading"><div><p class="overline">02 / EXECUTION</p><h2>Confined PoC</h2><p>The helper can reach only grant-service:8080.</p></div><span class="stage-badge purple-badge">ISOLATED HELPER</span></div><div class="poc-grid"><div class="editor"><div class="editor-bar"><strong>poc.py</strong><span>Python · local draft</span></div><label class="visually-hidden" for="new-poc-code">PoC code</label><textarea id="new-poc-code" spellcheck="false">from nidavellir import request
+
+response = request("/api/grants/g-104")
+print("status:", response.status_code)
+print("body:", response.text[:300])</textarea></div><aside class="poc-limits"><p>JOB LIMITS</p><div><span>Target</span><strong>grant-service:8080</strong></div><div><span>Time</span><strong>30 seconds</strong></div><div><span>Network</span><strong>HTTP(S) to target only</strong></div><div><span>Output</span><strong>stdout · stderr · artifact</strong></div><small>No runtime package install or generic TCP/UDP access.</small></aside></div><div class="stage-footer"><span id="run-status" role="status">Demo run ready.</span><div><button type="button" class="stage-secondary" id="cancel-run" disabled>Cancel job</button><button type="button" class="stage-primary" id="run-demo">Run PoC →</button></div></div><div class="run-output" id="run-output" hidden><strong>DEMO JOB · EXIT 0 · CLEANUP COMPLETE</strong><pre>status: 200
+body: {"owner":"account-a","grant_id":"g-104"}
+artifact: response.json · sha256:9e7bf46a…3ed19f02</pre><button type="button" data-route="finding">Attach to finding →</button></div></div>
+      <div class="workflow-panel" id="finding" data-stage="finding" hidden><div class="stage-heading"><div><p class="overline">03 / EVIDENCE</p><h2>Record finding</h2><p>Keep the claim, observed effect and verdict distinct.</p></div><span class="stage-badge gray-badge">INCONCLUSIVE</span></div><div class="finding-layout"><form id="new-finding-form" class="finding-form"><label for="new-finding-title">Title</label><input id="new-finding-title" required value="Cross-account access to a grant"><label for="new-finding-effect">Observed effect</label><textarea id="new-finding-effect" rows="5" required>The response contains a grant owned by account A in a request attributed to account B. A negative control is required before confirmation.</textarea><button class="stage-primary" type="submit">Record finding →</button><span id="finding-message" role="status">Draft held only in this page.</span></form><aside class="attached-evidence"><p>ATTACHED EVIDENCE</p><label><input type="checkbox" checked><span><strong>HTTP transaction</strong><small>sha256:34a90cc1…b70c24ef</small></span></label><label><input type="checkbox" id="new-artifact"><span><strong>PoC artifact / response.json</strong><small>sha256:9e7bf46a…3ed19f02</small></span></label><div class="evidence-caution">This mockup does not simulate independent validation.</div></aside></div></div>
+      <div class="workflow-panel" id="archive" data-stage="archive" hidden><div class="stage-heading"><div><p class="overline">04 / RECORD</p><h2>Evidence after teardown</h2><p>Infrastructure destroyed. The retained record is read-only.</p></div><span class="stage-badge gray-badge">ARCHIVED</span></div><div class="archive-facts"><div><span>RESOURCES</span><strong>0 running nodes</strong></div><div><span>FINDING</span><strong id="saved-finding">Grant cross-account</strong></div><div><span>VERDICT</span><strong>Inconclusive</strong></div></div><div class="archive-chain"><div><i>01</i><span><strong>Pinned target</strong><small>sha256:63b0db58…a194f0b9</small></span><em>retained</em></div><div><i>02</i><span><strong>HTTP transaction</strong><small>sha256:34a90cc1…b70c24ef</small></span><em>protected</em></div><div><i>03</i><span><strong>PoC artifact</strong><small>sha256:9e7bf46a…3ed19f02</small></span><em>protected</em></div><div><i>04</i><span><strong>Finding and notes</strong><small>Independent control required</small></span><em>review needed</em></div></div></div>
+    </div>
+  </section>
+</body>
+</html>

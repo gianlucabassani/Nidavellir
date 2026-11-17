@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}Evidence{% endblock %}
+{% block crumb %}Activity <span class="sep">/</span> Evidence{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Activity</div>
+    <h1>Evidence</h1>
+    <div class="sub">What a verdict can rest on: content-addressed artifacts and signals observed on the targets themselves.</div>
+  </div>
+  <div class="head-actions">
+    <span class="badge badge--idle">{{ artifacts|length }} artifact{{ 's' if artifacts|length != 1 }}</span>
+    <span class="badge {{ 'badge--danger' if signals else 'badge--idle' }}">{{ signals|length }} signal{{ 's' if signals|length != 1 }}</span>
+  </div>
+</div>
+
+<div class="toolbar">
+  <div style="position:relative; min-width:200px; flex:1; max-width:320px">
+    <i class="fa-solid fa-magnifying-glass" style="position:absolute; left:12px; top:11px; color:var(--faint); font-size:13px"></i>
+    <input class="input" id="evidence-search" style="padding-left:34px" placeholder="Filter by engagement, digest, node or kind…">
+  </div>
+</div>
+
+<div class="stack">
+  <div class="card pad-0">
+    <div class="card-head">
+      <h3><i class="fa-solid fa-paperclip"></i> Artifacts</h3>
+      <span class="muted" style="font-weight:400;font-size:12.5px">— patches collected from an arena workspace, verified by SHA-256</span>
+      <div class="spacer"></div><span class="muted" style="font-size:12px">{{ artifacts|length }}</span>
+    </div>
+    {% if artifacts %}
+    <table class="table">
+      <thead><tr><th>Digest</th><th>Attached to</th><th>Engagement</th><th>Size</th><th>Collected</th><th></th></tr></thead>
+      <tbody id="evidence-rows">
+        {% for a in artifacts %}
+        <tr class="evidence-row" data-src="artifact"
+            data-search="{{ ((a.digest or '') ~ ' ' ~ (a.finding_title or '') ~ ' ' ~ (a.arena_name or '') ~ ' ' ~ (a.arena_id or '')) | lower }}">
+          <td class="mono" title="{{ a.digest }}">{{ a.digest[-16:] }}</td>
+          <td>
+            {% if a.arena_known %}
+            <a href="{{ url_for('arena_detail', instance_id=a.arena_id) }}#findings">{{ a.finding_title or a.finding_id or '—' }}</a>
+            {% else %}{{ a.finding_title or a.finding_id or '—' }}{% endif %}
+          </td>
+          <td>
+            {% if a.arena_known %}
+            <a href="{{ url_for('arena_detail', instance_id=a.arena_id) }}#evidence">{{ a.arena_name }}</a>
+            {% else %}
+            <span class="muted" title="The engagement record was removed; the artifact is no longer retrievable">{{ a.arena_name }} <i class="fa-solid fa-link-slash faint"></i></span>
+            {% endif %}
+          </td>
+          <td class="mono">{{ a.bytes }} B</td>
+          <td class="mono faint">{{ (a.ts or '')[:19] }}</td>
+          <td>
+            {# The bytes live with the arena: no record, no download to offer. #}
+            {% if a.arena_known %}
+            <a class="btn btn-sm" href="/api/arenas/{{ a.arena_id }}/evidence-artifacts/{{ a.digest }}">
+              <i class="fa-solid fa-download"></i> Download</a>
+            {% else %}<span class="faint">unavailable</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="empty" id="evidence-empty" hidden style="padding:30px">No artifacts match this filter.</div>
+    {% else %}
+    <div class="card-pad muted" style="padding:18px">
+      No artifacts yet — export a workspace patch from an engagement's Changes tab and attach it to a finding.
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="card pad-0">
+    <div class="card-head">
+      <h3><i class="fa-solid fa-heart-pulse"></i> Monitor signals</h3>
+      <span class="muted" style="font-weight:400;font-size:12.5px">— crashes, sanitizer aborts, unhandled 5xx and resource exhaustion observed on targets</span>
+      <div class="spacer"></div><span class="muted" style="font-size:12px">{{ signals|length }}</span>
+    </div>
+    {% if signals %}
+    <table class="table">
+      <thead><tr><th>Kind</th><th>Engagement</th><th>Node</th><th>Severity</th><th>Summary</th><th>Observed</th></tr></thead>
+      <tbody>
+        {% for s in signals %}
+        <tr>
+          <td><span class="badge badge--danger">{{ (s.kind or '?') | replace('_', ' ') }}</span></td>
+          <td>
+            {% if s.arena_known %}<a href="{{ url_for('arena_detail', instance_id=s.arena_id) }}#evidence">{{ s.arena_name }}</a>
+            {% else %}<span class="muted">{{ s.arena_name }}</span>{% endif %}
+          </td>
+          <td class="mono">{{ s.node or '—' }}</td>
+          <td class="mono">{{ s.severity or '—' }}</td>
+          <td class="mono" style="max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ s.summary }}">{{ s.summary or '—' }}</td>
+          <td class="mono faint">{{ (s.ts or '')[:19] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="card-pad muted" style="padding:18px">
+      No signals recorded — the monitor writes here when a target crashes, aborts, or exhausts its resources.
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<p class="faint" style="margin-top:14px;font-size:12.5px">
+  <i class="fa-solid fa-fingerprint"></i>
+  Artifact bytes never enter the audit trail — only digests, sizes, and the engagement they belong to.
+</p>
+{% endblock %}
+
+{% block scripts %}<script>Nidavellir.initActivityIndex("evidence");</script>{% endblock %}

@@ -1,0 +1,45 @@
+schema: nidavellir/v3
+name: random_vulnhub
+title: "Random VulnHub"
+version: "2.0"
+difficulty: medium
+description: >
+  Random VulnHub arena: a Kali foothold plus a dynamically selected vulnerable
+  victim image. The image map resolves `vulnhub-random` to an imported disk
+  (VulnHub importer wiring is P1-5).
+
+requires:
+  provider_class: vm   # VulnHub images are full VM disks
+
+network:
+  segments:
+    - name: vulnhub_network
+      cidr: "10.0.2.0/24"
+      description: "simple: attacker + random victim"
+
+nodes:
+  - name: attacker
+    role: attacker
+    image: "kali-rolling-2024"
+    size: medium
+    segments: [vulnhub_network]
+    entrypoint: true
+
+  - name: victim
+    role: victim
+    image: "vulnhub-random"
+    size: small
+    segments: [vulnhub_network]
+
+agents:
+  - {stance: attacker, node: attacker}
+
+objectives:
+  - description: "Work with unexpected vulnerable targets"
+  - description: "Adapt exploitation techniques"
+
+metadata:
+  author: Nidavellir
+  tags: ["vulnhub", "random", "practice"]
+  max_users: 2
+  estimated_duration_hours: 4

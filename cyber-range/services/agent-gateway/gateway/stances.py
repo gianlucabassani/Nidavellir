@@ -1,0 +1,93 @@
+"""
+Agent stances and their tool allow-lists.
+
+A stance is how a bring-your-own agent is wired into an arena. Every session
+may call the shared *lifecycle* tools; the per-stance *execution* toolsets are
+defined in `STANCE_TOOLS` below — `attacker` (recon + `run_command` +
+`report_finding`) and `defender` (`query_events`) are implemented and
+registered; `mitm` is still empty (lands in a later increment). `allowed_tools()`
+is the single source of truth the gateway uses to gate a call, so an unbound or
+wrong-stance session cannot reach a tool it should not.
+"""
+from enum import Enum
+
+
+class Stance(str, Enum):
+    attacker = "attacker"
+    mitm = "mitm"
+    defender = "defender"
+    configurator = "configurator"
+    # Not an in-arena agent stance: the OPERATOR driving scenario authoring over
+    # MCP with their operator/admin key (generate + import). Registered here so
+    # the gateway can expose an operator toolset, but it never gets attacker
+    # tools — and the orchestrator independently enforces operator-only on the
+    # authoring endpoints, so an agent key can never reach these tools.
+    operator = "operator"
+
+
+# Shared lifecycle tools — available to every authenticated session.
+# `announce_agent` is harness plumbing (declares the connected model/provider for
+# the operator console); it's lifecycle-grade — available to any stance.
+LIFECYCLE_TOOLS = frozenset(
+    {"list_scenarios", "deploy_arena", "arena_status", "get_briefing",
+     "destroy_arena", "announce_agent", "session_preflight", "budget_status",
+     "runtime_capabilities"}
+)
+
+# Per-stance execution/recon toolsets, gated by stance.
+#   attacker — recon the arena and run commands from the foothold (offensive).
+#   defender — read the arena's audit/event stream to detect activity (blue).
+#   configurator — bring a SUT service up on the victim during the setup phase,
+#     time-boxed + victim-scoped + revoked before the engagement (ADR-0007 /
+#     P2-10). NO attacker tools. HITL: propose/await; autonomous (double-locked):
+#     run. The orchestrator is the enforcement point.
+#   mitm — observe in-flight traffic on the shared segment (`observe_traffic`);
+#     in-path *modify* lands in a later increment.
+#   operator — authoring (NOT an arena agent): generate a scenario spec from a
+#     prompt (the operator's BYO model) and import it. Review gate stays on the
+#     orchestrator; both endpoints are operator-only there.
+STANCE_TOOLS: dict[Stance, frozenset[str]] = {
+    Stance.attacker: frozenset(
+        {"get_topology", "list_targets", "run_command", "report_finding",
+         "workspace_status", "workspace_diff", "workspace_patch_artifact",
+         "upload_file", "download_file", "browser_visit",
+         "http_request", "list_http_transactions", "get_http_transaction",
+         "replay_http_transaction", "compare_http_transactions", "submit_poc", "poc_status", "poc_result",
+         "cancel_poc", "open_forward", "forward_status", "revoke_forward"}
+    ),
+    Stance.defender: frozenset({"get_topology", "query_events"}),
+    Stance.mitm: frozenset({"get_topology", "observe_traffic"}),
+    Stance.configurator: frozenset(
+        {"get_setup_brief", "propose_setup_step", "await_setup_step",
+         "run_setup_step", "upload_file", "finish_setup",
+         "workspace_status", "workspace_diff", "workspace_patch_artifact"}
+    ),
+    Stance.operator: frozenset({"scaffold_scenario", "import_scenario",
+                               "stop_arena", "resume_arena", "emergency_stop",
+                               "clear_emergency_stop", "research_fix_lookup",
+                               "research_layer_diff", "research_sibling_search",
+                               # Read-only. Review state is an operator judgment made
+                               # in the console; no stance has a tool that writes it.
+                               "source_review_read"}),
+}
+
+
+def parse_stance(value: str | None) -> Stance | None:
+    """Coerce a stance string to a Stance, or None when unbound."""
+    if value is None or value == "":
+        return None
+    try:
+        return Stance(value)
+    except ValueError:
+        raise ValueError(
+            f"unknown stance {value!r}; expected one of "
+            f"{[s.value for s in Stance]}"
+        ) from None
+
+
+def allowed_tools(stance: Stance | None) -> frozenset[str]:
+    """The full set of tools a session bound to `stance` may call."""
+    tools = set(LIFECYCLE_TOOLS)
+    if stance is not None:
+        tools |= STANCE_TOOLS.get(stance, frozenset())
+    return frozenset(tools)

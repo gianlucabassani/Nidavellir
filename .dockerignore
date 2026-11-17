@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+**/venv/
+**/.venv/
+env/
+ENV/
+*.egg-info/
+.env
+.env.*
+!.env.example
+
+# Data directories (mounted as volumes)
+data/
+runs/
+keys/
+cache/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Documentation
+docs/
+*.md
+!requirements.txt
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars

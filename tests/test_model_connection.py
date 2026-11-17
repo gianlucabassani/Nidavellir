@@ -1,0 +1,426 @@
+"""
+Operator's bring-your-own model connection (the topbar bubble → store an API
+key). Security-by-design contract: the key is encrypted at rest, never returned
+in plaintext, operator-only (agents can't manage it), and a blank key on update
+keeps the stored one.
+"""
+import hashlib
+import json
+
+import pytest
+from fastapi.testclient import TestClient
+
+
+def _client(role, name=None):
+    import api
+    import auth
+    from database import Database
+
+    key = auth.generate_api_key()
+    Database().create_api_key(
+        auth.hash_api_key(key), name=name or f"{role}-mc", role=role
+    )
+    c = TestClient(api.app)
+    c.headers["X-API-Key"] = key
+    c.principal_name = name or f"{role}-mc"
+    return c
+
+
+@pytest.fixture()
+def operator():
+    return _client("operator", name="op-mc")
+
+
+@pytest.fixture()
+def agent():
+    return _client("agent", name="agent-mc")
+
+
+def test_put_stores_masked_and_get_round_trips(operator):
+    r = operator.put(
+        "/agent/model",
+        json={"provider": "anthropic", "model": "claude-opus-4-8", "api_key": "sk-ant-secret-9999"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    # masked: provider/model/last4/status, NEVER the key
+    assert body["configured"] is True
+    assert body["provider"] == "anthropic"
+    assert body["model"] == "claude-opus-4-8"
+    assert body["key_last4"] == "9999"
+    assert body["status"] == "standby"
+    assert "api_key" not in body and "encrypted_key" not in body
+    assert "sk-ant-secret-9999" not in r.text
+
+    g = operator.get("/agent/model").json()
+    assert g["configured"] is True and g["provider"] == "anthropic"
+    assert "sk-ant-secret-9999" not in str(g)
+
+
+def test_key_recoverable_in_process_only(operator):
+    from database import Database
+
+    operator.put(
+        "/agent/model",
+        json={"provider": "openai", "model": "gpt-4o", "api_key": "sk-openai-abcd"},
+    )
+    cred = Database().get_decrypted_model_credential("op-mc")
+    assert cred["api_key"] == "sk-openai-abcd"  # in-process decrypt works
+    assert cred["provider"] == "openai"
+
+
+def test_key_encrypted_at_rest_when_cipher_enabled(operator, monkeypatch):
+    import crypto
+    from cryptography.fernet import Fernet
+    from database import Database
+    from models import ModelConnection
+
+    monkeypatch.setenv("SECRETS_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    crypto.reset_default_cipher()
+    try:
+        operator.put(
+            "/agent/model",
+            json={"provider": "deepseek", "model": "deepseek-chat", "api_key": "sk-deepseek-zzzz"},
+        )
+        db = Database()
+        with db._session() as s:  # noqa: SLF001 - test reaches into storage on purpose
+            row = s.get(ModelConnection, "op-mc")
+            assert row.encrypted_key != "sk-deepseek-zzzz"  # ciphertext at rest
+            assert "sk-deepseek-zzzz" not in row.encrypted_key
+        assert db.get_decrypted_model_credential("op-mc")["api_key"] == "sk-deepseek-zzzz"
+    finally:
+        monkeypatch.delenv("SECRETS_ENCRYPTION_KEY", raising=False)
+        crypto.reset_default_cipher()
+
+
+def test_blank_key_on_update_keeps_stored_key(operator):
+    from database import Database
+
+    operator.put(
+        "/agent/model",
+        json={"provider": "anthropic", "model": "claude-opus-4-8", "api_key": "sk-keep-1234"},
+    )
+    # update only the model, leave the key blank
+    r = operator.put(
+        "/agent/model",
+        json={"provider": "anthropic", "model": "claude-sonnet-4-6", "api_key": ""},
+    )
+    assert r.status_code == 200
+    assert r.json()["model"] == "claude-sonnet-4-6"
+    assert r.json()["key_last4"] == "1234"  # unchanged
+    assert Database().get_decrypted_model_credential("op-mc")["api_key"] == "sk-keep-1234"
+
+
+def test_cloud_provider_requires_key(operator):
+    r = operator.put("/agent/model", json={"provider": "gemini", "model": "gemini-2.0-flash", "api_key": ""})
+    assert r.status_code == 422
+    assert "requires an API key" in r.text
+
+
+def test_keyless_local_provider_allowed_without_key(operator):
+    r = operator.put("/agent/model", json={"provider": "ollama", "model": "llama3", "api_key": ""})
+    assert r.status_code == 200
+    assert r.json()["provider"] == "ollama"
+    assert r.json()["key_last4"] is None
+
+
+def test_unknown_provider_rejected(operator):
+    r = operator.put("/agent/model", json={"provider": "skynet", "model": "x", "api_key": "k"})
+    assert r.status_code == 422
+
+
+def test_delete_forgets_connection(operator):
+    operator.put("/agent/model", json={"provider": "openai", "model": "gpt-4o", "api_key": "sk-del-1234"})
+    assert operator.delete("/agent/model").json()["removed"] is True
+    assert operator.get("/agent/model").json() == {"configured": False}
+    assert operator.delete("/agent/model").json()["removed"] is False  # idempotent
+
+
+def test_agent_role_cannot_manage_credentials(agent):
+    assert agent.get("/agent/model").status_code == 403
+    assert agent.put(
+        "/agent/model", json={"provider": "anthropic", "model": "m", "api_key": "k"}
+    ).status_code == 403
+    assert agent.delete("/agent/model").status_code == 403
+
+
+# --- P3-4: per-connection base_url + new OpenAI-compatible providers ----------
+
+def test_base_url_stored_masked_and_recoverable(operator):
+    from database import Database
+    r = operator.put("/agent/model", json={
+        "provider": "openrouter", "model": "anthropic/claude-3.5", "api_key": "sk-or-1234",
+        "base_url": "https://openrouter.ai/api/v1"})
+    assert r.status_code == 200
+    assert r.json()["base_url"] == "https://openrouter.ai/api/v1"
+    # masked GET surfaces it (non-secret); in-process credential carries it too.
+    assert operator.get("/agent/model").json()["base_url"] == "https://openrouter.ai/api/v1"
+    cred = Database().get_decrypted_model_credential("op-mc")
+    assert cred["base_url"] == "https://openrouter.ai/api/v1"
+
+
+def test_new_providers_accepted(operator):
+    for prov, model in (("openrouter", "x/y"), ("huggingface", "meta/z")):
+        assert operator.put("/agent/model", json={
+            "provider": prov, "model": model, "api_key": "k"}).status_code == 200
+
+
+def test_custom_provider_is_keyless_with_base_url(operator):
+    # A self-hosted OpenAI-compatible endpoint may run without a key.
+    r = operator.put("/agent/model", json={
+        "provider": "custom", "model": "my-model", "api_key": "",
+        "base_url": "http://vllm.internal:8000/v1"})
+    assert r.status_code == 200 and r.json()["base_url"] == "http://vllm.internal:8000/v1"
+
+
+# --- MODEL-R1: extra_headers ---------------------------------------------
+
+def _digest(headers):
+    return hashlib.sha256(
+        json.dumps(headers, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+HEADERS = {"User-Agent": "opencode-test/1.0", "x-opencode-session": "sess-123"}
+
+
+def test_extra_headers_masked_names_and_digest_no_values(operator):
+    r = operator.put("/agent/model", json={
+        "provider": "custom", "model": "m", "api_key": "",
+        "base_url": "http://vllm.internal:8000/v1",
+        "extra_headers": HEADERS})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["header_names"] == ["User-Agent", "x-opencode-session"]
+    assert body["headers_digest"] == _digest(HEADERS)
+    assert "opencode-test" not in r.text and "sess-123" not in r.text
+
+    g = operator.get("/agent/model").json()
+    assert g["header_names"] == ["User-Agent", "x-opencode-session"]
+    assert g["headers_digest"] == _digest(HEADERS)
+    assert "opencode-test" not in str(g) and "sess-123" not in str(g)
+
+    from database import Database
+    cred = Database().get_decrypted_model_credential("op-mc")
+    assert cred["extra_headers"] == HEADERS
+
+
+def test_extra_headers_blank_keeps_stored_and_empty_clears(operator):
+    operator.put("/agent/model", json={
+        "provider": "custom", "model": "m", "api_key": "",
+        "base_url": "http://vllm.internal:8000/v1",
+        "extra_headers": HEADERS})
+    # blank update (no extra_headers key) keeps stored headers
+    r = operator.put("/agent/model", json={
+        "provider": "custom", "model": "m2", "api_key": "",
+        "base_url": "http://vllm.internal:8000/v1"})
+    assert r.status_code == 200
+    assert r.json()["header_names"] == ["User-Agent", "x-opencode-session"]
+    # explicit {} clears them
+    r = operator.put("/agent/model", json={
+        "provider": "custom", "model": "m2", "api_key": "",
+        "base_url": "http://vllm.internal:8000/v1",
+        "extra_headers": {}})
+    assert r.status_code == 200
+    assert r.json()["header_names"] == []
+    assert r.json()["headers_digest"] is None
+
+
+def test_extra_headers_no_headers_means_empty(operator):
+    r = operator.put("/agent/model", json={
+        "provider": "openai", "model": "gpt-4o", "api_key": "sk-no-headers"})
+    assert r.status_code == 200
+    assert r.json()["header_names"] == []
+    assert r.json()["headers_digest"] is None
+
+
+def test_extra_headers_rejections(operator):
+    bad_many = {f"X-H-{i}": "v" for i in range(17)}
+    cases = [
+        {"X-Bad": "a\r\nb"},  # CRLF injection
+        {"X-Bad": "a\nb"},
+        bad_many,  # >16
+        {"Authorization": "Bearer evil"},  # reserved
+        {"authorization": "Bearer evil"},  # reserved, case-insensitive
+        {"X-Api-Key": "k"},  # reserved
+        {"Host": "evil.example"},  # reserved
+        {"X-Dup": "a", "x-dup": "b"},  # case-duplicate
+        {"Bad Name!": "v"},  # illegal name chars
+        {"X-Big": "v" * 1025},  # value too long
+    ]
+    for headers in cases:
+        r = operator.put("/agent/model", json={
+            "provider": "custom", "model": "m", "api_key": "",
+            "base_url": "http://vllm.internal:8000/v1",
+            "extra_headers": headers})
+        assert r.status_code == 422, (headers, r.text)
+
+
+def test_extra_headers_encrypted_at_rest(operator, monkeypatch):
+    import crypto
+    from cryptography.fernet import Fernet
+    from database import Database
+    from models import ModelConnection
+
+    monkeypatch.setenv("SECRETS_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    crypto.reset_default_cipher()
+    try:
+        operator.put("/agent/model", json={
+            "provider": "custom", "model": "m", "api_key": "",
+            "base_url": "http://vllm.internal:8000/v1",
+            "extra_headers": HEADERS})
+        db = Database()
+        with db._session() as s:  # noqa: SLF001 - test reaches into storage on purpose
+            row = s.get(ModelConnection, "op-mc")
+            assert row.encrypted_headers is not None
+            assert "opencode-test" not in row.encrypted_headers
+            assert "sess-123" not in row.encrypted_headers
+        assert db.get_decrypted_model_credential("op-mc")["extra_headers"] == HEADERS
+    finally:
+        monkeypatch.delenv("SECRETS_ENCRYPTION_KEY", raising=False)
+        crypto.reset_default_cipher()
+
+def test_verify_supplied_key(operator, monkeypatch):
+    import model_verify
+
+    seen = {}
+
+    def fake(provider, model, api_key, base_url=None, headers=None):
+        seen.update(provider=provider, model=model, api_key=api_key)
+        return {"verified": True, "detail": "ok", "checked": True}
+
+    monkeypatch.setattr(model_verify, "verify_credential", fake)
+    r = operator.post(
+        "/agent/model/verify",
+        json={"provider": "OpenAI", "model": "gpt-4o", "api_key": "sk-test"},
+    )
+    assert r.status_code == 200 and r.json()["verified"] is True
+    assert seen == {"provider": "openai", "model": "gpt-4o", "api_key": "sk-test"}
+
+
+def test_verify_uses_stored_decrypted_key_when_body_empty(operator, monkeypatch):
+    import model_verify
+
+    operator.put("/agent/model", json={"provider": "openai", "model": "gpt-4o", "api_key": "sk-stored-9"})
+    captured = {}
+
+    def fake(provider, model, api_key, base_url=None, headers=None):
+        captured.update(provider=provider, api_key=api_key)
+        return {"verified": True, "detail": "ok", "checked": True}
+
+    monkeypatch.setattr(model_verify, "verify_credential", fake)
+    r = operator.post("/agent/model/verify", json={})
+    assert r.status_code == 200
+    assert captured["provider"] == "openai" and captured["api_key"] == "sk-stored-9"
+
+
+def test_verify_without_connection_404(operator):
+    operator.delete("/agent/model")
+    assert operator.post("/agent/model/verify", json={}).status_code == 404
+
+
+def test_verify_is_operator_only(agent):
+    assert agent.post("/agent/model/verify", json={}).status_code == 403
+
+
+def test_model_verify_classifies_provider_responses(monkeypatch):
+    import model_verify
+
+    class _Resp:
+        def __init__(self, code):
+            self.status_code = code
+
+    monkeypatch.setattr(model_verify.requests, "get", lambda *a, **k: _Resp(200))
+    assert model_verify.verify_credential("anthropic", "m", "k")["verified"] is True
+
+    monkeypatch.setattr(model_verify.requests, "get", lambda *a, **k: _Resp(401))
+    bad = model_verify.verify_credential("openai", "m", "bad")
+    assert bad["verified"] is False and bad["checked"] is True  # key rejected, but checked
+
+
+def test_model_verify_network_failure_is_unchecked(monkeypatch):
+    import requests as _requests
+
+    import model_verify
+
+    def _boom(*a, **k):
+        raise _requests.ConnectionError("no route to host")
+
+    monkeypatch.setattr(model_verify.requests, "get", _boom)
+    res = model_verify.verify_credential("openai", "m", "k")
+    assert res["verified"] is False and res["checked"] is False  # unverified, not invalid
+
+
+def test_model_verify_local_endpoint_not_checked():
+    import model_verify
+
+    res = model_verify.verify_credential("local", "m", "k")
+    assert res["checked"] is False  # base url unknown server-side
+
+
+# --- co-pilot chat ----------------------------------------------------------
+
+def test_chat_streams_using_the_connected_model(operator, monkeypatch):
+    import model_chat
+
+    operator.put("/agent/model", json={"provider": "openai", "model": "gpt-4o", "api_key": "sk-chat-1"})
+    seen = {}
+
+    def fake_stream(provider, model, api_key, system, messages, max_tokens=1024, base_url=None):
+        seen.update(provider=provider, api_key=api_key, system=system, messages=messages)
+        yield "Hello "
+        yield "operator."
+
+    monkeypatch.setattr(model_chat, "stream_chat", fake_stream)
+    r = operator.post("/agent/chat", json={"messages": [{"role": "user", "content": "hi"}]})
+    assert r.status_code == 200
+    assert r.text == "Hello operator."          # streamed body, in order
+    assert seen["provider"] == "openai" and seen["api_key"] == "sk-chat-1"
+    assert seen["messages"][-1]["content"] == "hi"
+
+
+def test_chat_context_includes_arena_details(operator, monkeypatch):
+    import model_chat
+    from database import Database
+
+    db = Database()
+    iid = "chat-ctx"
+    db.create_deployment(iid, iid, "container_web_pentest", provider=None, actor="test")
+    db.update_deployment(iid, status="deploying", actor="test")
+    db.update_deployment(
+        iid, status="active",
+        outputs={"node_victim_name": "v", "node_kali_name": "k",
+                 "node_kali_ssh_command": "sh"},
+        actor="test",
+    )
+    operator.put("/agent/model", json={"provider": "openai", "model": "gpt-4o", "api_key": "sk-ctx"})
+    holder = {}
+    monkeypatch.setattr(
+        model_chat, "stream_chat",
+        lambda p, m, k, system, msgs, max_tokens=1024, base_url=None: (holder.update(s=system), iter(["ok"]))[1],
+    )
+    operator.post("/agent/chat", json={"arena_id": iid, "messages": [{"role": "user", "content": "?"}]}).text
+    assert iid in holder["s"] and "container_web_pentest" in holder["s"]
+    assert "foothold" in holder["s"]            # kali (has a shell cmd) marked foothold
+
+
+def test_chat_requires_a_connected_model(operator):
+    operator.delete("/agent/model")
+    r = operator.post("/agent/chat", json={"messages": [{"role": "user", "content": "hi"}]})
+    assert r.status_code == 409
+
+
+def test_chat_is_operator_only(agent):
+    assert agent.post(
+        "/agent/chat", json={"messages": [{"role": "user", "content": "x"}]}
+    ).status_code == 403
+
+
+def test_connections_are_per_operator(operator):
+    operator.put("/agent/model", json={"provider": "openai", "model": "gpt-4o", "api_key": "sk-op-1111"})
+    other = _client("operator", name="op2-mc")
+    assert other.get("/agent/model").json() == {"configured": False}
+    other.put("/agent/model", json={"provider": "gemini", "model": "gemini-2.0-flash", "api_key": "k-2222"})
+    # each operator sees only their own
+    assert operator.get("/agent/model").json()["provider"] == "openai"
+    assert other.get("/agent/model").json()["provider"] == "gemini"

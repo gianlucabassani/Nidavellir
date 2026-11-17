@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ page.title }}{% endblock %}
+{% block crumb %}{{ page.group }} <span class="sep">/</span> {{ page.title }}{% endblock %}
+{% block content_mod %}content--form{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">{{ page.group }}</div>
+    <h1>{{ page.title }}</h1>
+    <div class="sub">{{ page.description }}</div>
+  </div>
+  <span class="badge badge--idle">foundation</span>
+</div>
+
+<div class="card foundation-card">
+  <span class="foundation-card__icon"><i class="fa-solid {{ page.icon }}"></i></span>
+  <div class="grow">
+    <div class="label">Current product boundary</div>
+    <p>{{ page.current }}</p>
+    <p class="muted">This destination establishes the console route and ownership now; its durable data model and workflows ship in the roadmap increment that owns them.</p>
+  </div>
+  <a class="btn" href="{{ url_for(page.link_endpoint) }}">{{ page.link_label }} <i class="fa-solid fa-arrow-right"></i></a>
+</div>
+{% endblock %}

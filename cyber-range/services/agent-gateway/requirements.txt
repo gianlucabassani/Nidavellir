@@ -1,0 +1,8 @@
+# Nidavellir MCP agent gateway (ROADMAP Phase 2).
+# Official MCP Python SDK (FastMCP server, stdio + streamable-HTTP transports).
+# MCP 2.x changes the HTTP/ASGI dependency stack and server surface.  Treat that
+# as a deliberate migration instead of accepting a silent major-version upgrade.
+mcp>=1.2,<2.0
+
+# Thin HTTP client over the orchestrator REST API.
+requests>=2.28.0

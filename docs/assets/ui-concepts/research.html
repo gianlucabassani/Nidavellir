@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Research concepts · Nidavellir Forge</title>
+  <link rel="stylesheet" href="research.css">
+  <script src="research.js" defer></script>
+</head>
+<body class="concept-a">
+  <a class="skip" href="#main">Vai al contenuto</a>
+  <div class="prototype-note" role="note">
+    Prototipo navigabile · dati dimostrativi · nessuna operazione viene inviata al server
+    <span class="concept-switch" aria-label="Confronta i concept">
+      <button type="button" id="choose-a" aria-pressed="true">A · Atelier</button>
+      <button type="button" id="choose-b" aria-pressed="false">B · Instrument</button>
+    </span>
+  </div>
+  <div class="app-shell">
+    <aside class="rail" aria-label="Navigazione principale">
+      <a class="brand" href="#import" data-go="import" aria-label="Nidavellir Forge, Ricerca"><span class="brand-mark" aria-hidden="true">N</span><span>Nidavellir <small>FORGE</small></span></a>
+      <nav>
+        <div class="nav-label">WORKSPACES</div>
+        <a class="nav-link active" href="#import" data-go="import" aria-current="page">◈ <span>Ricerca</span></a>
+        <span class="nav-link disabled" aria-disabled="true">◇ <span>Benchmark</span><small>anteprima</small></span>
+        <span class="nav-link disabled" aria-disabled="true">⬡ <span>Cyber Range</span><small>anteprima</small></span>
+        <div class="nav-label resources">RISORSE</div>
+        <span class="nav-link disabled" aria-disabled="true">Target</span>
+        <span class="nav-link disabled" aria-disabled="true">Evidenze</span>
+        <span class="nav-link disabled" aria-disabled="true">Attività</span>
+      </nav>
+      <div class="rail-foot"><span class="avatar">OP</span><span>Operatore <small>ambiente locale</small></span></div>
+    </aside>
+    <div class="page">
+      <header class="topbar"><div class="breadcrumb">Ricerca <span aria-hidden="true">/</span> <strong>grant-service</strong></div><div class="top-meta"><span class="status-dot" aria-hidden="true"></span><span id="record-state">Bozza · non avviata</span></div></header>
+      <main id="main">
+        <header class="page-head">
+          <div><p class="eyebrow">SESSIONE DI RICERCA <span class="eyebrow-rule"></span> RS-2048</p><h1>Ricerca su grant-service</h1><p class="intro">Verifica un’identità immutabile, prova un effetto e conserva le evidenze dopo lo smantellamento.</p></div>
+          <div class="head-side"><span class="scope-pill">Docker-local</span><span class="scope-pill">Operatore · attacker</span></div>
+        </header>
+        <div class="context-strip" aria-label="Contesto della sessione">
+          <div><span>IDENTITÀ TARGET</span><strong title="sha256:63b0db58e934d14ba6fd8795fa3421a7c1174fd9e80cbb8424cc91d4a194f0b9">sha256:63b0db58…a194f0b9</strong></div>
+          <div><span>STATO ARENA</span><strong id="arena-state">In preparazione</strong></div>
+          <div><span>BUDGET AZIONI</span><strong id="budget-state">50 disponibili</strong></div>
+          <div><span>ULTIMA OSSERVAZIONE</span><strong id="observed-state">Nessuna</strong></div>
+        </div>
+        <div class="workspace">
+          <nav class="journey" aria-label="Fasi della ricerca">
+            <p class="journey-label">PERCORSO</p>
+            <a href="#import" data-go="import" class="step active" aria-current="step"><span class="step-no">01</span><span><strong>Identità &amp; setup</strong><small>Rivedi prima di avviare</small></span></a>
+            <a href="#poc" data-go="poc" class="step"><span class="step-no">02</span><span><strong>PoC confinato</strong><small>Codice, limiti, output</small></span></a>
+            <a href="#finding" data-go="finding" class="step"><span class="step-no">03</span><span><strong>Finding</strong><small>Effetto ed evidenze</small></span></a>
+            <a href="#archive" data-go="archive" class="step"><span class="step-no">04</span><span><strong>Record archiviato</strong><small>Revisione dopo teardown</small></span></a>
+            <div class="journey-hint">La verità della challenge e il verdetto indipendente restano fuori dall’accesso dell’agente.</div>
+          </nav>
+          <div class="work-content">
+            <section id="import" class="view" aria-labelledby="import-title">
+              <div class="section-top"><div><p class="section-kicker">01 / PREPARAZIONE</p><h2 id="import-title">Rivedi il target</h2><p>La sessione partirà da un’immagine OCI bloccata per digest.</p></div><span class="flag">Identità fissata</span></div>
+              <div class="content-grid">
+                <article class="panel"><h3>Identità immutabile</h3><dl class="details"><div><dt>Origine</dt><dd>registry.local/grant-service</dd></div><div><dt>Riferimento</dt><dd class="mono wrap">registry.local/grant-service@sha256:63b0db58e934d14ba6fd8795fa3421a7c1174fd9e80cbb8424cc91d4a194f0b9</dd></div><div><dt>Architettura</dt><dd>linux/amd64</dd></div><div><dt>Ambiente</dt><dd>Docker-local · rete isolata</dd></div></dl></article>
+                <article class="panel"><h3>Ricetta riproducibile</h3><dl class="details"><div><dt>Configurazione</dt><dd>config-v3 · digest verificato</dd></div><div><dt>Dati iniziali</dt><dd>seed-authz-02 · 2 account</dd></div><div><dt>Reset</dt><dd>Sostituzione arena + stato iniziale</dd></div><div><dt>Dipendenze</dt><dd>Immagine e seed locali dichiarati</dd></div></dl></article>
+              </div>
+              <div class="notice"><strong>Prima dell’avvio</strong><span>Un tag mutabile non basta per dimostrare quale build è stata testata. Il digest resta nel record e nelle evidenze.</span></div>
+              <div class="actions"><button class="primary" type="button" data-next="poc">Conferma identità e apri strumenti <span aria-hidden="true">→</span></button><span>Anteprima: nessuna arena verrà avviata.</span></div>
+            </section>
+            <section id="poc" class="view" aria-labelledby="poc-title" hidden>
+              <div class="section-top"><div><p class="section-kicker">02 / ESECUZIONE</p><h2 id="poc-title">Esegui PoC confinato</h2><p>Il codice raggiunge solo il servizio selezionato; output e artifact restano nel record.</p></div><span class="flag flag-purple">Helper isolato</span></div>
+              <div class="poc-layout"><div class="panel code-panel"><div class="panel-bar"><strong>poc.py</strong><span>Python 3.11 · bozza locale</span></div><label class="sr-only" for="poc-code">Codice PoC</label><textarea id="poc-code" spellcheck="false">from nidavellir import request
+
+response = request("/api/grants/g-104")
+print("status:", response.status_code)
+print("body:", response.text[:300])</textarea></div><aside class="panel limits-panel"><h3>Contesto esecuzione</h3><dl class="details"><div><dt>Target consentito</dt><dd>grant-service:8080</dd></div><div><dt>File in ingresso</dt><dd>Nessuno</dd></div><div><dt>Tempo massimo</dt><dd>30 s</dd></div><div><dt>Rete</dt><dd>Solo HTTP(S) al target</dd></div><div><dt>Artifact</dt><dd>/workspace/artifacts</dd></div></dl><div class="limits-foot">Nessun pacchetto installabile a runtime. Nessun accesso TCP/UDP generico.</div></aside></div>
+              <div class="actions"><button class="primary" id="run-poc" type="button">Esegui PoC</button><button class="secondary" id="cancel-poc" type="button" disabled>Annulla job</button><span id="poc-message" role="status">Pronto per una simulazione locale.</span></div>
+              <div class="panel output-panel" id="poc-output" hidden><div class="panel-bar"><strong>Job dimostrativo · completato</strong><span>Exit 0 · cleanup completato</span></div><pre>status: 200
+body: {"owner":"account-a","grant_id":"g-104"}
+
+Artifact: response.json · sha256:9e7bf46a…3ed19f02</pre><div class="output-link"><button class="text-button" type="button" data-next="finding">Allega al finding <span aria-hidden="true">→</span></button></div></div>
+            </section>
+            <section id="finding" class="view" aria-labelledby="finding-title" hidden>
+              <div class="section-top"><div><p class="section-kicker">03 / RISULTATO</p><h2 id="finding-title">Registra finding</h2><p>Collega l’asserzione all’effetto osservato e ai digest delle prove.</p></div><span class="flag flag-neutral">Verdetto: inconclusivo</span></div>
+              <div class="content-grid finding-grid"><form class="panel finding-form" id="finding-form"><label for="finding-name">Titolo del finding</label><input id="finding-name" value="Accesso cross-account a un grant" required><label for="finding-effect">Effetto osservato</label><textarea id="finding-effect" rows="5" required>La richiesta con account B ha restituito il grant di account A. Verificare con controllo negativo prima di confermare.</textarea><label for="finding-note">Nota operatore</label><textarea id="finding-note" rows="3">Ripetere sullo stato iniziale dopo reset.</textarea><button class="primary" type="submit">Registra finding</button><p class="form-status" id="finding-status" role="status">I dati di questo concept restano solo nella pagina.</p></form><aside class="panel evidence-panel"><h3>Evidenze collegate</h3><label class="evidence-choice"><input type="checkbox" checked><span><strong>HTTP transaction</strong><small>sha256:34a90cc1…b70c24ef</small></span></label><label class="evidence-choice"><input type="checkbox" id="artifact-choice"><span><strong>PoC artifact · response.json</strong><small>sha256:9e7bf46a…3ed19f02</small></span></label><div class="evidence-foot"><strong>Provenienza</strong><p>Target fissato · richiesta attribuita · artifact con digest. Il verdetto richiede un controllo indipendente.</p></div></aside></div>
+            </section>
+            <section id="archive" class="view" aria-labelledby="archive-title" hidden>
+              <div class="section-top"><div><p class="section-kicker">04 / RECORD</p><h2 id="archive-title">Evidenze dopo teardown</h2><p>L’arena è stata distrutta. Il record è in sola lettura e conserva la provenienza.</p></div><span class="flag flag-neutral">Archiviato · sola lettura</span></div>
+              <div class="archive-summary"><div><span>STATO RISORSE</span><strong>0 nodi in esecuzione</strong></div><div><span>FINDING</span><strong id="archive-finding">Accesso cross-account a un grant</strong></div><div><span>VERDETTO</span><strong>Inconclusivo · controllo richiesto</strong></div></div>
+              <div class="panel archive-list"><h3>Catena delle evidenze</h3><div class="record-row"><span class="record-type">01 · target</span><div><strong>grant-service@sha256:63b0db58…a194f0b9</strong><small>Identità e ricetta di reset registrate</small></div><span class="record-tag">conservato</span></div><div class="record-row"><span class="record-type">02 · richiesta</span><div><strong>HTTP transaction · sha256:34a90cc1…b70c24ef</strong><small>Account B → grant di account A · 200</small></div><span class="record-tag">protetto</span></div><div class="record-row"><span class="record-type">03 · artifact</span><div><strong>response.json · sha256:9e7bf46a…3ed19f02</strong><small>PoC job · exit 0 · cleanup completato</small></div><span class="record-tag">protetto</span></div><div class="record-row"><span class="record-type">04 · finding</span><div><strong>Nota e verdict history</strong><small>Nessuna conferma indipendente nel concept</small></div><span class="record-tag">da verificare</span></div></div>
+              <div class="notice"><strong>Stato registrato</strong><span>Il badge “archiviato” descrive l’ultimo stato confermato. Una pagina in cache non autorizza nuove azioni sull’arena.</span></div>
+            </section>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>
