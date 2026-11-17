@@ -1450,9 +1450,16 @@ class DockerLocalProvider(RangeProvider):
         )
         container = self.client.containers.run(**run_kwargs)
 
-        # Attach to the remaining segments this node straddles.
+        # Attach to the remaining segments this node straddles. Every attachment
+        # carries the scenario node name as a DNS alias: a peer must be able to
+        # resolve a node by name (OpenCms resolves its database as `mysql` at
+        # first boot). Docker's run(network=…) cannot set aliases, so the
+        # primary attachment is re-created with them once the container exists.
         for seg in attach:
-            networks[seg].connect(container)
+            networks[seg].connect(container, aliases=[node["name"]])
+        primary = self.client.networks.get(run_net)
+        primary.disconnect(container, force=True)
+        primary.connect(container, aliases=[node["name"]])
 
         # With a mirror, normalize a foothold's apt to the allowlisted direct
         # CDN (the default Kali host is a redirector to mirrors we can't allow).

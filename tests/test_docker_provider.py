@@ -371,12 +371,26 @@ class _FakeNetwork:
         # Mirror docker SDK: attaching a running container adds an interface
         # (and an IP) on this network. `aliases` registers DNS names (used by
         # the package mirror, reachable as `mirror` on each arena segment).
-        self.connected.append(container)
+        if container not in self.connected:
+            self.connected.append(container)
         self.aliases = getattr(self, "aliases", {})
         self.aliases[container.name] = list(aliases or [])
-        container.attrs["NetworkSettings"]["Networks"][self.name] = {
-            "IPAddress": "172.99.7.7"
-        }
+        nets = container.attrs["NetworkSettings"]["Networks"]
+        # Re-attaching restores the address captured on disconnect (docker-local
+        # reconnects the primary endpoint once, to add the node-name alias).
+        detached = getattr(self, "_detached", {}).pop(container.name, None)
+        nets.setdefault(self.name, detached or {"IPAddress": "172.99.7.7"})
+
+    def disconnect(self, container, force=False):
+        # Mirror docker SDK: detaching removes the interface; a subsequent
+        # connect can re-add it with a different alias set.
+        if container in self.connected:
+            self.connected.remove(container)
+        getattr(self, "aliases", {}).pop(container.name, None)
+        nets = container.attrs.get("NetworkSettings", {}).get("Networks", {})
+        self._detached = getattr(self, "_detached", {})
+        if self.name in nets:
+            self._detached[container.name] = nets.pop(self.name)
 
     def remove(self):
         self.removed = True
@@ -394,10 +408,16 @@ class _FakeContainers:
         # The git-clone helper runs un-named on the default bridge (no `name`/
         # `network`), so tolerate their absence.
         node = kwargs.get("labels", {}).get(LABEL_NODE)
+        network = kwargs.get("network")
+        if network is None:
+            # docker-local joins the primary network through an explicit
+            # networking_config so it can carry a node-name DNS alias.
+            endpoints = getattr(kwargs.get("networking_config"), "endpoints_config", None) or {}
+            network = next(iter(endpoints), None)
         container = _FakeContainer(
             kwargs.get("name", "auto"),
             kwargs.get("labels", {}),
-            kwargs.get("network"),
+            network,
             list((kwargs.get("ports") or {}).keys()),
             state="exited" if node in self.exit_nodes else "running",
         )
@@ -420,6 +440,12 @@ class _FakeNetworks:
         network = _FakeNetwork(name, labels or {}, internal=internal, options=options)
         self.created.append(network)
         return network
+
+    def get(self, name):
+        for network in self.created:
+            if network.name == name:
+                return network
+        raise KeyError(name)
 
     def list(self, filters=None):
         label = filters["label"]
