@@ -1,0 +1,37 @@
+# Authorized public-OSS research target: Gitea 28.4.0, single container (SQLite).
+# Whitebox source is an isolated research copy on the foothold; the victim never sees it.
+schema: nidavellir/v3
+name: Gitea 28.4.0 whitebox
+requires:
+  provider_class: container
+network:
+  segments:
+    - name: git
+nodes:
+  - name: victim
+    role: victim
+    segments: [git]
+    ports: [3000]
+    environment:
+      GITEA__database__DB_TYPE: sqlite3
+      GITEA__security__INSTALL_LOCK: "true"
+      GITEA__service__DISABLE_REGISTRATION: "false"
+      GITEA__server__ROOT_URL: http://victim:3000/
+    service:
+      image: gitea/gitea:28.4.0
+      whitebox: true
+      source:
+        repo: https://github.com/go-gitea/gitea.git
+        ref: 0b5dfdeeeaadf6350314246c5936b53cce38170c
+  - name: attacker
+    role: attacker
+    image: kali
+    entrypoint: true
+    segments: [git]
+agents:
+  - stance: attacker
+    node: attacker
+objectives:
+  - id: investigate
+    description: Authorized whitebox research on public open-source software; no vulnerability asserted.
+ttl_hours: 4
