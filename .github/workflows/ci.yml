@@ -8,7 +8,7 @@ on:
 jobs:
   quality:
     name: Lint, security scan & tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       MOCK_MODE: "true"
     steps:
@@ -29,7 +29,7 @@ jobs:
     # ADR-0004: SQLite is the default test backend (job above); this job
     # proves the same suite passes against the deployed-environment backend.
     name: Tests on PostgreSQL
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       MOCK_MODE: "true"
       DATABASE_URL: postgresql+psycopg://nidavellir:ci-only-pw@localhost:5432/nidavellir
@@ -63,7 +63,7 @@ jobs:
 
   docker-build:
     name: Build container images
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
