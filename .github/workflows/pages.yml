@@ -10,6 +10,10 @@ on:
     paths:
       - "docs/index.html"
       - "docs/assets/anvil_logo.png"
+      - "docs/assets/anvil_emblem.png"
+      - "docs/assets/shots/**"
+      - "docs/assets/fonts/**"
+      - "docs/assets/social.png"
       - "docs/assets/logo.svg"
       - "docs/*.md"
       - "docs/scenario.schema.json"
@@ -38,6 +42,8 @@ jobs:
           mkdir -p site/assets
           cp docs/index.html site/
           cp docs/assets/anvil_logo.png docs/assets/logo.svg site/assets/
+          cp docs/assets/anvil_emblem.png docs/assets/social.png site/assets/
+          cp -r docs/assets/shots docs/assets/fonts site/assets/
           cp docs/OVERVIEW.md docs/VISION.md docs/API.md docs/MCP.md docs/SCENARIOS.md site/
           cp docs/OPERATIONS.md docs/SECURITY.md docs/INTERNALS.md docs/scenario.schema.json site/
           cp ROADMAP.md site/
