@@ -19,8 +19,10 @@ with (root/"calls").open("a") as f: f.write(json.dumps(a)+"\n")
 if a[0]=="compose":
  if "config" in a: print((root/"config.json").read_text())
  elif "ps" in a:
-  if a[-1]=="postgres": print("old-postgres")
-  else: print("old-orchestrator\nold-postgres\nold-poc-runner-image\nold-worker")
+  if a[-1]=="postgres":
+   if os.environ.get("FAIL_POSTGRES_PS")=="1": sys.exit(1)
+   print("old-postgres")
+  elif os.environ.get("NO_OLD_IDS")!="1": print("old-orchestrator\nold-postgres\nold-poc-runner-image\nold-worker")
  elif "up" in a and os.environ.get("FAIL_UP")=="1" and "--no-build" not in a: sys.exit(1)
  elif "run" in a and "tar" in a:
   # Stand-in for the one-off root container: map its mount back to the host path
@@ -157,6 +159,24 @@ class DeploymentToolingTests(unittest.TestCase):
         self.assertTrue(any("up" in c and "--no-build" in c and "never" in c for c in calls))
         self.assertTrue(any("dropdb" in c and "nidavellir" == c[-1] for c in calls))
         self.assertNotIn(SECRET, r.stdout + r.stderr)
+
+    def test_postgres_status_error_aborts_without_changing_stack(self):
+        result = self.invoke("deploy", "v-test", FAIL_POSTGRES_PS="1", NO_OLD_IDS="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Unable to determine PostgreSQL status", result.stderr)
+        self.assertEqual(self.git("rev-parse", "HEAD").strip(), self.previous)
+        self.assertFalse(any(any(op in call for op in ("build", "run", "exec", "up", "stop"))
+                             for call in self.calls()))
+        self.assertEqual(self.receipts()[0]["status"], "failed")
+
+    def test_deploy_does_not_require_ripgrep(self):
+        ripgrep = self.root / "bin" / "rg"
+        ripgrep.write_text("#!/bin/sh\nexit 127\n")
+        ripgrep.chmod(0o755)
+        result = self.invoke("deploy", "v-test")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.receipts()[0]["status"], "success")
+        self.assertTrue((Path(self.receipts()[0]["backup"]) / "complete").is_file())
 
     def test_success_and_repeat_are_clean_and_recorded(self):
         for _ in range(2):

@@ -98,7 +98,11 @@ finish() {
 trap finish EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-if "${COMPOSE[@]}" ps --status running -q postgres | rg -q .; then
+if ! RUNNING_POSTGRES=$("${COMPOSE[@]}" ps --status running -q postgres); then
+    echo 'Unable to determine PostgreSQL status; abort without changing it.' >&2
+    exit 1
+fi
+if [[ -n $RUNNING_POSTGRES ]]; then
     TOUCHED=true
     quiet env NIDAVELLIR_DEPLOY_LOCKED=1 NIDAVELLIR_BACKUP_LEAVE_STOPPED=1 bash "$SNAPSHOT/backup.sh"
     # backup output is private, but its non-secret path is needed for recovery.
