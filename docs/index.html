@@ -131,14 +131,15 @@
     /* Run timeline */
     .timeline { position: relative; display: grid; gap: 72px; max-width: 940px; margin: 0 auto; }
     .spine { position: absolute; top: 12px; bottom: 12px; left: 50%; width: 1px; background: var(--line); transform: translateX(-0.5px); }
-    .spine i { position: absolute; inset: 0; background: linear-gradient(var(--gold-deep), var(--gold) 85%, var(--gold-pale)); transform-origin: top; transform: scaleY(var(--progress, 0)); }
+    .spine i { position: absolute; inset: 0; background: linear-gradient(var(--gold-deep), var(--gold) 85%, var(--gold-pale)); transform-origin: top; transform: scaleY(var(--progress, 1)); }
+    .js .spine i { transform: scaleY(var(--progress, 0)); }
     .stage { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 96px minmax(0, 1fr); align-items: center; }
     .stage-body { grid-column: 1; text-align: right; }
     .stage:nth-child(odd) .stage-body { grid-column: 3; text-align: left; }
     .stage-art { grid-column: 3; grid-row: 1; justify-self: start; }
     .stage:nth-child(odd) .stage-art { grid-column: 1; justify-self: end; }
     .stage-node { grid-column: 2; grid-row: 1; justify-self: center; position: relative; width: 15px; height: 15px; rotate: 45deg; border: 1px solid var(--gold-deep); background: var(--night); transition: background 500ms ease, border-color 500ms ease, box-shadow 700ms ease; }
-    .stage.lit .stage-node { background: var(--gold); border-color: var(--gold-pale); box-shadow: 0 0 0 6px rgba(230, 187, 104, 0.1), 0 0 26px rgba(230, 187, 104, 0.6); }
+    html:not(.js) .stage-node, .stage.lit .stage-node { background: var(--gold); border-color: var(--gold-pale); box-shadow: 0 0 0 6px rgba(230, 187, 104, 0.1), 0 0 26px rgba(230, 187, 104, 0.6); }
     .numeral { display: block; margin-bottom: 6px; color: var(--gold); font: italic 500 var(--t-heading)/1 var(--serif); }
     .stage-body p { margin-top: 10px; color: var(--muted); }
     .stage-art svg { width: 132px; height: 132px; fill: none; stroke: var(--gold); stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; overflow: visible; }
@@ -199,6 +200,7 @@
     .arch .wire { fill: none; stroke: var(--gold); stroke-width: 1.1; stroke-dasharray: 3 6; opacity: 0.8; }
     .arch .wire.quiet { stroke: var(--subtle); }
     .arch .zone-label { fill: var(--gold); font-size: 11px; font-weight: 600; letter-spacing: 0.2em; }
+    .arch-hint { display: none; margin-top: 12px; color: var(--subtle); font-size: var(--t-small); }
     .arch-notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; margin-top: 36px; }
     .arch-notes h3 { font: 600 var(--t-body)/1.4 var(--sans); letter-spacing: 0; }
     .arch-notes p { margin-top: 6px; color: var(--muted); font-size: var(--t-small); line-height: 1.65; }
@@ -236,16 +238,16 @@
 
     /* Motion: slow, few, and off entirely under reduced motion. */
     @media (prefers-reduced-motion: no-preference) {
-      .reveal { opacity: 0; transform: translateY(18px); transition: opacity 800ms ease, transform 800ms var(--ease); }
-      .reveal.in { opacity: 1; transform: none; }
+      .js .reveal { opacity: 0; transform: translateY(18px); transition: opacity 800ms ease, transform 800ms var(--ease); }
+      .js .reveal.in { opacity: 1; transform: none; }
       .strings .glint { animation: glint 11s linear infinite; }
       .strings .glint:nth-of-type(2) { animation-delay: -4.5s; animation-duration: 14s; }
       .sigil .halo-outer { animation: turn 120s linear infinite; }
-      .stage-body, .stage-art { opacity: 0.25; transition: opacity 700ms ease, transform 900ms var(--ease); }
-      .stage-body { transform: translateY(14px); }
-      .stage.lit .stage-body, .stage.lit .stage-art { opacity: 1; transform: none; }
-      .stage-art .draw { stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset 1400ms var(--ease) 150ms; }
-      .stage.lit .stage-art .draw { stroke-dashoffset: 0; }
+      .js .stage-body, .js .stage-art { opacity: 0.25; transition: opacity 700ms ease, transform 900ms var(--ease); }
+      .js .stage-body { transform: translateY(14px); }
+      .js .stage.lit .stage-body, .js .stage.lit .stage-art { opacity: 1; transform: none; }
+      .js .stage-art .draw { stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset 1400ms var(--ease) 150ms; }
+      .js .stage.lit .stage-art .draw { stroke-dashoffset: 0; }
       .arch .wire { animation: wire 2.4s linear infinite; }
     }
     @keyframes glint { 0% { stroke-dashoffset: 6; opacity: 0; } 8% { opacity: 0.9; } 60% { opacity: 0.9; } 70%, 100% { stroke-dashoffset: -100; opacity: 0; } }
@@ -272,6 +274,9 @@
     }
     @media (max-width: 720px) {
       .head { margin-bottom: 48px; }
+      .arch { padding: 24px 16px 16px; }
+      .arch svg { min-width: 760px; }
+      .arch-hint { display: block; }
       .timeline { gap: 56px; }
       .spine { left: 7px; }
       .stage { grid-template-columns: 15px minmax(0, 1fr); column-gap: 28px; align-items: start; }
@@ -566,6 +571,7 @@
             <text class="role-text" x="970" y="468">disposable · no network</text>
           </svg>
         </div>
+        <p class="arch-hint" aria-hidden="true">Swipe the diagram sideways to see all of it →</p>
         <div class="arch-notes">
           <div><h3>One place decides</h3><p>The console and the gateway hold no authority of their own. Every request is authorized by the API, which also owns validation and scoring.</p></div>
           <div><h3>The gateway is optional</h3><p>It starts only with the <code>agent-gateway</code> profile, and an agent key must be bound to an arena and a stance before any tool call is accepted.</p></div>
@@ -663,87 +669,6 @@
     </div>
   </footer>
 
-  <script>
-    (function () {
-      // Entrances: mark elements as they scroll into view. Without JS everything is visible.
-      var reveals = document.querySelectorAll('.reveal');
-      var stages = document.querySelectorAll('.stage');
-      if (!('IntersectionObserver' in window)) {
-        reveals.forEach(function (el) { el.classList.add('in'); });
-        stages.forEach(function (el) { el.classList.add('lit'); });
-      } else {
-        var seen = new IntersectionObserver(function (entries) {
-          entries.forEach(function (entry) { if (entry.isIntersecting) { entry.target.classList.add('in'); seen.unobserve(entry.target); } });
-        }, { threshold: 0.12 });
-        reveals.forEach(function (el) { seen.observe(el); });
-        var lit = new IntersectionObserver(function (entries) {
-          entries.forEach(function (entry) { if (entry.isIntersecting) { entry.target.classList.add('lit'); lit.unobserve(entry.target); } });
-        }, { rootMargin: '0px 0px -38% 0px' });
-        stages.forEach(function (el) { lit.observe(el); });
-      }
-
-      // Timeline: the gold spine fills as the reader moves through the stages.
-      var timeline = document.getElementById('timeline');
-      var frame = 0;
-      function progress() {
-        frame = 0;
-        var box = timeline.getBoundingClientRect();
-        var mark = window.innerHeight * 0.62;
-        var value = Math.min(1, Math.max(0, (mark - box.top) / box.height));
-        timeline.style.setProperty('--progress', value.toFixed(3));
-      }
-      function schedule() { if (!frame) frame = requestAnimationFrame(progress); }
-      window.addEventListener('scroll', schedule, { passive: true });
-      window.addEventListener('resize', schedule);
-      progress();
-
-      // Gallery tabs.
-      var captions = {
-        research: '<strong>Research.</strong> The session in progress, what needs an operator verdict, and the proof desk in one place.',
-        session: '<strong>Session.</strong> A live arena: state, access gate, remaining action budget, the topology and the selected station.',
-        audit: '<strong>Audit trail.</strong> Every event attributed to a human, an agent or the system, kept after the arena is gone.',
-        range: '<strong>Cyber Range.</strong> The scenario catalog and the declared topology, reviewed before anything is launched.'
-      };
-      var tabs = Array.prototype.slice.call(document.querySelectorAll('.gallery-tabs [role="tab"]'));
-      var shots = document.querySelectorAll('.frame-stage img');
-      var stage = document.getElementById('gallery-stage');
-      var caption = document.getElementById('gallery-caption');
-      function show(tab, focus) {
-        tabs.forEach(function (other) { var on = other === tab; other.setAttribute('aria-selected', String(on)); other.tabIndex = on ? 0 : -1; });
-        shots.forEach(function (img) { img.classList.toggle('on', img.dataset.shot === tab.dataset.shot); });
-        stage.setAttribute('aria-labelledby', tab.id);
-        caption.innerHTML = captions[tab.dataset.shot];
-        if (focus) tab.focus();
-      }
-      tabs.forEach(function (tab, index) {
-        tab.addEventListener('click', function () { show(tab, false); });
-        tab.addEventListener('keydown', function (event) {
-          var step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
-          if (!step) return;
-          event.preventDefault();
-          show(tabs[(index + step + tabs.length) % tabs.length], true);
-        });
-      });
-
-      // Copy the quickstart commands.
-      document.querySelectorAll('.copy').forEach(function (button) {
-        var text = button.querySelector('span');
-        button.addEventListener('click', function () {
-          var done = function () { text.textContent = 'Copied'; setTimeout(function () { text.textContent = 'Copy'; }, 1800); };
-          // The async clipboard needs HTTPS; the textarea route covers plain-HTTP previews.
-          var legacy = function () {
-            var area = document.createElement('textarea');
-            area.value = button.dataset.copy; area.setAttribute('readonly', ''); area.style.position = 'fixed'; area.style.opacity = '0';
-            document.body.appendChild(area); area.select();
-            var ok = false; try { ok = document.execCommand('copy'); } catch (error) { ok = false; }
-            document.body.removeChild(area);
-            if (ok) done(); else text.textContent = 'Select and copy';
-          };
-          if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(button.dataset.copy).then(done, legacy);
-          else legacy();
-        });
-      });
-    })();
-  </script>
+  <script src="assets/site.js" defer></script>
 </body>
 </html>
