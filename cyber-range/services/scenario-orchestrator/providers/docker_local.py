@@ -1440,10 +1440,13 @@ class DockerLocalProvider(RangeProvider):
             vol, path = sut_sources[node["name"]]
             run_kwargs.setdefault("volumes", {})[vol] = {"bind": path, "mode": "rw"}
 
-        # Publish declared service ports on random host ports so the operator's
-        # browser can reach e.g. DVWA (via the ingress bridge when locked).
+        # Publish declared service ports on random LOOPBACK host ports so the
+        # operator's browser can reach e.g. DVWA (via the ingress bridge when
+        # locked). Never bind 0.0.0.0: a deliberately vulnerable target must not
+        # be reachable from the host's LAN/Wi-Fi. Agents reach targets over the
+        # arena network; the console's "Open" URL already points at 127.0.0.1.
         if has_ports:
-            run_kwargs["ports"] = {f"{p}/tcp": None for p in node["ports"]}
+            run_kwargs["ports"] = {f"{p}/tcp": ("127.0.0.1", None) for p in node["ports"]}
 
         logger.info(
             f"[{instance_id}] Starting node {node['name']!r} ({role}): {image}"

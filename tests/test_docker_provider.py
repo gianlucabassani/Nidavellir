@@ -998,6 +998,17 @@ LOCKED_SCENARIO = {
 }
 
 
+def test_published_ports_bind_loopback_only():
+    """A vulnerable target must never be published on 0.0.0.0 (LAN/Wi-Fi)."""
+    client = _FakeClient()
+    provider = DockerLocalProvider(client=client)
+    provider.deploy(LOCKED_SCENARIO, "loopaaaa-uuid")
+    published = [kw["ports"] for kw in client.containers.run_kwargs if kw.get("ports")]
+    assert published
+    for ports in published:
+        assert all(binding == ("127.0.0.1", None) for binding in ports.values())
+
+
 def test_locked_arena_uses_internal_nets_and_a_no_masquerade_ingress():
     client = _FakeClient()
     provider = DockerLocalProvider(client=client)
