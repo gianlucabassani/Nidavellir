@@ -1,6 +1,6 @@
-# Current Docker-local does not assign node-name DNS aliases. Before startup,
-# the operator must add alias mysql on this arena's database network attachment;
-# see DEPLOY.md. This file does not change the provider.
+# Authorized public-OSS research target: OpenCms 22.0 with its MariaDB node.
+# docker-local attaches every node with its scenario name as a DNS alias, so the
+# victim reaches the database as `mysql` at first boot.
 schema: nidavellir/v3
 name: OpenCms 22 whitebox
 requires:
@@ -14,6 +14,10 @@ nodes:
     segments: [cms]
     ports: [8080]
     native_startup: true
+    # JVM + Jetty + OpenCMS need more than the 1 GiB default; 1024 was
+    # OOM-killed during first-boot initialization.
+    resources:
+      memory_mb: 2560
     environment:
       DB_HOST: mysql
       DB_USER: root
