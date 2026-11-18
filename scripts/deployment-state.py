@@ -185,8 +185,13 @@ def snapshot(destination, ids):
 
 
 def manifest(destination, sha, previous, status, backup, ids):
-    """Write the receipt; an unresolvable image is recorded, never fatal."""
-    images, uninspectable = {}, []
+    """Write the receipt; an unresolvable image is recorded, never fatal.
+
+    The first container of a service is kept under ``images``; later ones go to
+    ``duplicates`` and containers without a compose service label to
+    ``unlabelled_containers``. Nothing is overwritten.
+    """
+    images, uninspectable, duplicates, unlabelled = {}, [], {}, []
     for cid in ids:
         try:
             c = docker("inspect", cid)[0]
@@ -204,7 +209,13 @@ def manifest(destination, sha, previous, status, backup, ids):
                      "resolved_image_id": current.get("Id"),
                      "repo_digests": current.get("RepoDigests") or [],
                      "image_resolvable": False}
-        images[service_label(c) or cid] = entry
+        name = service_label(c)
+        if not name:
+            unlabelled.append({"container": cid, **entry})
+        elif name in images:
+            duplicates.setdefault(name, []).append({"container": cid, **entry})
+        else:
+            images[name] = entry
     record = {
         "schema": "nidavellir-deployment/v1",
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -213,6 +224,10 @@ def manifest(destination, sha, previous, status, backup, ids):
     }
     if uninspectable:
         record["uninspectable_containers"] = uninspectable
+    if duplicates:
+        record["duplicates"] = duplicates
+    if unlabelled:
+        record["unlabelled_containers"] = unlabelled
     path = pathlib.Path(destination)
     temporary = path.with_suffix(".tmp")
     temporary.write_text(json.dumps(record, indent=2) + "\n")

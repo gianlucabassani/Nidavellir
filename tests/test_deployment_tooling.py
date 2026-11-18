@@ -489,6 +489,22 @@ class DeploymentToolingTests(unittest.TestCase):
         self.assertEqual(receipt["status"], "success")
         self.assertFalse(receipt["images"]["poc-runner-image"]["image_resolvable"])
 
+    def test_manifest_keeps_duplicates_and_label_less_containers(self):
+        output = self.root / "receipt.json"
+        self.state("manifest", str(output), "sha", "prev", "success", "", "old-worker",
+                   "old-worker@other", "old-worker@worker", "old-stray",
+                   NO_LABEL="old-stray", UNRESOLVABLE="sha256:old-other")
+        receipt = json.loads(output.read_text())
+        self.assertEqual(receipt["images"]["worker"]["image_id"], "sha256:old-worker")  # first kept
+        self.assertEqual(set(receipt["images"]), {"worker"})
+        self.assertEqual([(d["container"], d["image_id"], d["image_resolvable"])
+                          for d in receipt["duplicates"]["worker"]],
+                         [("old-worker@other", "sha256:old-other", False),
+                          ("old-worker@worker", "sha256:old-worker", True)])
+        self.assertEqual(receipt["unlabelled_containers"], [{
+            "container": "old-stray", "image_id": "sha256:old-stray", "repo_digests": [],
+            "image_resolvable": True}])
+
     def test_retention_keeps_newest_three_stamps_only(self):
         stamps = ["20261101T000000-9", "20261102T000000-1", "20261102T000000-10",
                   "20261103T000000-5", "20261104T000000-7"]
