@@ -12,6 +12,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SECRET = "0123456789abcdef0123456789abcdef"
+STAMP = "20261118T120000-42"
 FAKE_DOCKER = r'''#!/usr/bin/env python3
 import json, os, pathlib, sys
 a=sys.argv[1:]; root=pathlib.Path(os.environ["FIXTURE_STATE"])
@@ -53,6 +54,9 @@ elif a[:2]==["image","inspect"]:
  if a[2] in os.environ.get("UNRESOLVABLE","").split(","): sys.exit(1)
  ident=a[2] if a[2].startswith("sha256:") else "sha256:now-"+a[2].replace("/","-").replace(":","-")
  print(json.dumps([{"RepoDigests":[],"Id":ident}]))
+elif a[0]=="tag":
+ if os.environ.get("FAIL_TAG")=="1": sys.exit(1)
+ with (root/"tags").open("a") as f: f.write(a[2]+"\n")
 else: sys.exit(2)
 '''
 
@@ -161,7 +165,15 @@ class DeploymentToolingTests(unittest.TestCase):
         self.assertEqual(receipt["previous_sha"], self.previous)
         self.assertTrue((Path(receipt["backup"]) / "complete").is_file())
         calls = self.calls()
-        self.assertTrue(any("up" in c and "--no-build" in c and "never" in c for c in calls))
+        restart = next(c for c in calls if "up" in c and "--no-build" in c and "never" in c)
+        overlay = json.loads(Path(restart[restart.index("up") - 1]).read_text())
+        stamp = next((self.repo / "deployments").glob("*.json")).stem
+        self.assertEqual(overlay["x-nidavellir-rollback"]["stamp"], stamp)
+        for name, service in overlay["services"].items():
+            self.assertEqual(service["image"], f"nidavellir-rollback/{name}:{stamp}")
+            self.assertIn(["tag", f"sha256:old-{name}", service["image"]], calls)
+        self.assertEqual(overlay["services"]["worker"]["environment"]["NIDAVELLIR_POC_RUNNER_IMAGE"],
+                         f"nidavellir-rollback/poc-runner-image:{stamp}")
         self.assertTrue(any("dropdb" in c and "nidavellir" == c[-1] for c in calls))
         self.assertNotIn(SECRET, r.stdout + r.stderr)
 
@@ -288,15 +300,57 @@ class DeploymentToolingTests(unittest.TestCase):
 
     def state(self, *args, check=True, **variables):
         return subprocess.run(["python3", "scripts/deployment-state.py", *args], cwd=self.repo,
-                              env=self.env | variables,
+                              env=self.env | {"NIDAVELLIR_ROLLBACK_STAMP": STAMP} | variables,
                               text=True, capture_output=True, check=check, timeout=30)
+
+    def tag_calls(self):
+        return [c for c in self.calls() if c[0] == "tag"]
 
     def test_rollback_pins_runtime_runner(self):
         output = self.root / "images.json"
         self.state("snapshot", str(output), "old-orchestrator", "old-worker", "old-poc-runner-image")
         services = json.loads(output.read_text())["services"]
-        self.assertEqual(services["worker"]["environment"]["NIDAVELLIR_POC_RUNNER_IMAGE"],
-                         "sha256:old-poc-runner-image")
+        runner = f"nidavellir-rollback/poc-runner-image:{STAMP}"
+        for name in ("worker", "orchestrator"):
+            self.assertEqual(services[name]["environment"]["NIDAVELLIR_POC_RUNNER_IMAGE"], runner)
+        self.assertIn(["tag", "sha256:old-poc-runner-image", runner], self.tag_calls())
+
+    def test_snapshot_pins_rollback_tags_with_config_image_fallback(self):
+        output = self.root / "images.json"
+        r = self.state("snapshot", str(output), "old-orchestrator", "old-worker",
+                       "old-poc-runner-image", UNRESOLVABLE="sha256:old-orchestrator")
+        overlay = json.loads(output.read_text())
+        for name in ("orchestrator", "worker", "poc-runner-image"):
+            self.assertEqual(overlay["services"][name]["image"], f"nidavellir-rollback/{name}:{STAMP}")
+            self.assertEqual(overlay["services"][name]["pull_policy"], "never")
+        self.assertNotIn("sha256:", json.dumps(overlay["services"]))
+        record = overlay["x-nidavellir-rollback"]
+        self.assertEqual(record["stamp"], STAMP)
+        self.assertEqual(record["services"]["orchestrator"],
+                         {"source": "config_image", "reference": "nidavellir/orchestrator:latest",
+                          "tag": f"nidavellir-rollback/orchestrator:{STAMP}"})
+        self.assertEqual(record["services"]["worker"]["source"], "image_id")
+        self.assertIn(["tag", "nidavellir/orchestrator:latest", f"nidavellir-rollback/orchestrator:{STAMP}"],
+                      self.tag_calls())
+        self.assertIn(["tag", "sha256:old-worker", f"nidavellir-rollback/worker:{STAMP}"], self.tag_calls())
+        self.assertIn("orchestrator", r.stderr)
+
+    def test_snapshot_fails_closed_and_deploy_touches_nothing(self):
+        r = self.invoke("deploy", "v-test", UNRESOLVABLE="sha256:old-worker,nidavellir/worker:latest")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("service worker", r.stderr)
+        self.assertEqual(self.git("rev-parse", "HEAD").strip(), self.previous)
+        self.assertFalse(any(c[0] in ("tag", "rmi") or any(op in c for op in ("build", "run", "exec", "up", "stop"))
+                             for c in self.calls()))
+        self.assertFalse((self.repo / "deployments").exists())
+        self.assertFalse((self.root / "home").exists())  # no backup was taken either
+        # Same for the worker's runner when no initializer container exists.
+        r = self.state("snapshot", str(self.root / "images.json"), "old-worker", check=False,
+                       UNRESOLVABLE="nidavellir/poc-runner:py311")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("poc-runner-image", r.stderr)
+        self.assertEqual(self.tag_calls(), [])
+        self.assertFalse((self.root / "images.json").exists())
 
     def test_manifest_records_unresolvable_image_instead_of_raising(self):
         output = self.root / "receipt.json"
@@ -335,6 +389,10 @@ class DeploymentToolingTests(unittest.TestCase):
     def test_runner_pin_without_initializer_container(self):
         output = self.root / "images.json"
         self.state("snapshot", str(output), "old-worker")
-        services = json.loads(output.read_text())["services"]
-        self.assertEqual(services["worker"]["environment"]["NIDAVELLIR_POC_RUNNER_IMAGE"],
-                         "sha256:now-nidavellir-poc-runner-py311")
+        overlay = json.loads(output.read_text())
+        runner = f"nidavellir-rollback/poc-runner-image:{STAMP}"
+        self.assertEqual(overlay["services"]["worker"]["environment"]["NIDAVELLIR_POC_RUNNER_IMAGE"], runner)
+        self.assertNotIn("poc-runner-image", overlay["services"])
+        self.assertIn(["tag", "nidavellir/poc-runner:py311", runner], self.tag_calls())
+        self.assertEqual(overlay["x-nidavellir-rollback"]["services"]["poc-runner-image"]["source"],
+                         "worker_runner")

@@ -35,7 +35,7 @@ except urllib.error.HTTPError as e:
  if e.code not in (400,406): raise'
 }
 if [[ $DRY_RUN == true ]]; then
-    echo '+ capture previous service image IDs with docker inspect into a private rollback overlay'
+    echo "+ tag previous service images nidavellir-rollback/<service>:$STAMP and pin those tags in a private rollback overlay"
     echo "# Existing installation backup branch:"
     env NIDAVELLIR_BACKUP_LEAVE_STOPPED=1 bash "$HERE/backup.sh" --dry-run
     show git checkout --detach "$TARGET"
@@ -59,7 +59,8 @@ cp "$HERE/backup.sh" "$HERE/deployment-common.sh" "$HERE/deployment-state.py" "$
 OLD_CONTAINERS=$("${COMPOSE[@]}" ps -aq)
 OLD_IDS=()
 if [[ -n $OLD_CONTAINERS ]]; then mapfile -t OLD_IDS <<< "$OLD_CONTAINERS"; fi
-python3 "$SNAPSHOT/deployment-state.py" snapshot "$SNAPSHOT/images.json" "${OLD_IDS[@]}"
+# Fails closed before anything is touched (no trap yet): no rollback, no deploy.
+NIDAVELLIR_ROLLBACK_STAMP=$STAMP python3 "$SNAPSHOT/deployment-state.py" snapshot "$SNAPSHOT/images.json" "${OLD_IDS[@]}"
 echo "Rollback images: $SNAPSHOT/images.json" >>"$LOG"
 
 rollback() {

@@ -189,7 +189,7 @@ and images; see also the encrypted recovery workflow in `docs/OPERATIONS.md`.
 
 Any upgrade failure after stopping applications triggers automatic recovery:
 checkout the previous SHA, restore the completed backup if available, and start
-with the saved immutable image IDs (including the worker's runtime PoC runner) using `--no-build --pull never`. It repeats
+with the saved `nidavellir-rollback/<service>:<stamp>` image tags (including the worker's runtime PoC runner) using `--no-build --pull never`. It repeats
 health wait and smoke. The deploy command still exits nonzero; receipt status is
 `rolled_back`, `rollback_failed` or `failed`. On a first install it stops new
 application services and returns to the previous ref; PostgreSQL/Redis and their
