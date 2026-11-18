@@ -32,6 +32,18 @@ The current console exposes arena stop in the workspace and system stop under
 Settings. Operator MCP tools expose the same stop controls; all stances can
 read their bound arena budget.
 
+**Time-box extension (F1).** `POST /arenas/{id}/extend` `{"seconds": 300–86400,
+"idempotency_key"?}` moves the reaper TTL (`expires_at`) and the budget deadline
+forward together, from now or from the current deadline while it is still in the
+future, and records an `arena_extended` event. Operators may extend any live arena;
+an agent only through a `configurator` binding to that arena, never while a stop is
+active. A retry with the same key replays the first result. Total lifetime stays
+under `ARENA_MAX_LIFETIME_SECONDS` (default 7 days). Refusals return
+`{"detail": {"code", "message"}}` with `arena_not_extendable` (destroying/destroyed),
+`stop_active`, `max_lifetime_exceeded` or `idempotency_key_reused`. Extension never
+lifts a stop and is not charged an action. `GET /arenas/{id}/capabilities` reports
+the new `expires_at` and `budget.deadline`.
+
 Token and cost caps are unavailable for external BYO agents because the
 orchestrator cannot reserve trusted pre-execution model usage. Requests with
 `token_budget` or `cost_budget_usd` at engagement creation, token/cost headers

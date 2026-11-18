@@ -59,10 +59,10 @@ STANCE_TOOLS: dict[Stance, frozenset[str]] = {
     Stance.mitm: frozenset({"get_topology", "observe_traffic"}),
     Stance.configurator: frozenset(
         {"get_setup_brief", "propose_setup_step", "await_setup_step",
-         "run_setup_step", "upload_file", "finish_setup",
+         "run_setup_step", "upload_file", "finish_setup", "extend_arena",
          "workspace_status", "workspace_diff", "workspace_patch_artifact"}
     ),
-    Stance.operator: frozenset({"scaffold_scenario", "import_scenario",
+    Stance.operator: frozenset({"scaffold_scenario", "import_scenario", "extend_arena",
                                "stop_arena", "resume_arena", "emergency_stop",
                                "clear_emergency_stop", "research_fix_lookup",
                                "research_layer_diff", "research_sibling_search",

@@ -71,6 +71,13 @@ class RestClient:
     def budget_status(self, api_key: str, arena_id: str) -> dict:
         return self._request("GET", f"/arenas/{arena_id}/budget", api_key)
 
+    def extend_arena(self, api_key: str, arena_id: str, seconds: int,
+                     idempotency_key: str | None = None) -> dict:
+        body: dict = {"seconds": seconds}
+        if idempotency_key:
+            body["idempotency_key"] = idempotency_key
+        return self._request("POST", f"/arenas/{arena_id}/extend", api_key, json=body)
+
     def runtime_capabilities(self, api_key: str, arena_id: str) -> dict:
         return self._request("GET", f"/arenas/{arena_id}/capabilities", api_key)
 

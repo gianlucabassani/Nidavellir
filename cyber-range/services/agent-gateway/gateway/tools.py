@@ -75,6 +75,20 @@ def runtime_capabilities(ctx: GatewayContext, arena_id: str) -> dict:
     return result
 
 
+def extend_arena(ctx: GatewayContext, arena_id: str, seconds: int,
+                 idempotency_key: str | None = None) -> dict:
+    """F1: move a bound arena's time box forward; the orchestrator decides."""
+    _guard(ctx, "extend_arena")
+    try:
+        result = ctx.client.extend_arena(ctx.session.api_key, arena_id, seconds,
+                                         idempotency_key)
+    except Exception:
+        _trace(ctx, "extend_arena", {"seconds": seconds}, ok=False, arena_id=arena_id)
+        raise
+    _trace(ctx, "extend_arena", {"seconds": seconds}, ok=True, arena_id=arena_id)
+    return result
+
+
 def open_forward(ctx: GatewayContext, arena_id: str, foothold: str, target: str,
                  service_id: str, lifetime_seconds: int = 120,
                  idempotency_key: str | None = None) -> dict:
