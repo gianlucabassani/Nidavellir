@@ -53,7 +53,9 @@ STANCE_TOOLS: dict[Stance, frozenset[str]] = {
          "upload_file", "download_file", "browser_visit",
          "http_request", "list_http_transactions", "get_http_transaction",
          "replay_http_transaction", "compare_http_transactions", "submit_poc", "poc_status", "poc_result",
-         "cancel_poc", "open_forward", "forward_status", "revoke_forward"}
+         "cancel_poc", "open_forward", "forward_status", "revoke_forward",
+         # Research integrity (R1): hypothesis contracts.
+         "register_hypothesis", "list_hypotheses", "mark_hypothesis_tested"}
     ),
     Stance.defender: frozenset({"get_topology", "query_events"}),
     Stance.mitm: frozenset({"get_topology", "observe_traffic"}),

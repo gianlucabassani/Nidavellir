@@ -20,6 +20,13 @@ class GatewayRestError(Exception):
     """An upstream REST call failed (non-2xx) or could not be reached."""
 
 
+def _with_hypothesis(body: dict, hypothesis_id: str | None) -> dict:
+    """R1: cite a hypothesis only when one is given (research-mode arenas)."""
+    if hypothesis_id:
+        body["hypothesis_id"] = hypothesis_id
+    return body
+
+
 class RestClient:
     def __init__(self, base_url: str, timeout: float = 15.0, http=None):
         self.base_url = base_url.rstrip("/")
@@ -123,10 +130,11 @@ class RestClient:
         return self._request("GET", "/deployments", api_key)
 
     def exec_command(self, api_key: str, arena_id: str, node: str, command: str,
-                     timeout: int = 30) -> dict:
+                     timeout: int = 30, hypothesis_id: str | None = None) -> dict:
         return self._request(
             "POST", f"/arenas/{arena_id}/exec", api_key,
-            json={"node": node, "command": command, "timeout": timeout},
+            json=_with_hypothesis({"node": node, "command": command, "timeout": timeout},
+                                  hypothesis_id),
         )
 
     def transfer_upload(
@@ -154,21 +162,24 @@ class RestClient:
     def browser_visit(
         self, api_key: str, arena_id: str, node: str, path: str = "/",
         params: dict[str, str] | None = None, wait_ms: int = 1500,
+        hypothesis_id: str | None = None,
     ) -> dict:
         return self._request(
             "POST", f"/arenas/{arena_id}/browser/visit", api_key,
-            json={
+            json=_with_hypothesis({
                 "node": node, "path": path, "params": params or {},
                 "wait_ms": int(wait_ms),
-            },
+            }, hypothesis_id),
         )
 
     def http_request(
         self, api_key: str, arena_id: str, node: str, path: str = "/",
         params: dict[str, str] | None = None, method: str = "GET",
         headers: dict[str, str] | None = None, body: str | None = None,
+        hypothesis_id: str | None = None,
     ) -> dict:
-        payload: dict = {"node": node, "path": path, "method": method}
+        payload: dict = _with_hypothesis({"node": node, "path": path, "method": method},
+                                         hypothesis_id)
         if params:
             payload["params"] = params
         if headers:
@@ -210,9 +221,10 @@ class RestClient:
         replace_params: bool = False,
         credential_source_digest: str | None = None,
         credential_header_names: list[str] | None = None,
+        hypothesis_id: str | None = None,
     ) -> dict:
         encoded = urllib.parse.quote(digest, safe="")
-        payload: dict = {}
+        payload: dict = _with_hypothesis({}, hypothesis_id)
         for key, val in (
             ("node", node), ("path", path), ("params", params),
             ("headers", headers), ("method", method), ("body", body),
@@ -233,18 +245,38 @@ class RestClient:
         target_node: str | None = None, transfer_files: list[str] | None = None,
         timeout_seconds: int = 30, memory_mb: int = 128,
         cpu_millis: int = 500, pids: int = 32,
-        idempotency_key: str,
+        idempotency_key: str, hypothesis_id: str | None = None,
     ) -> dict:
         return self._request(
             "POST", f"/arenas/{arena_id}/poc-jobs", api_key,
-            json={
+            json=_with_hypothesis({
                 "source": source, "target_node": target_node,
                 "transfer_files": transfer_files or [],
                 "timeout_seconds": timeout_seconds, "memory_mb": memory_mb,
                 "cpu_millis": cpu_millis, "pids": pids,
                 "idempotency_key": idempotency_key,
-            },
+            }, hypothesis_id),
         )
+
+    # --- R1 research integrity: hypothesis contracts ---------------------------
+
+    def register_hypothesis(self, api_key: str, arena_id: str, contract: dict) -> dict:
+        return self._request("POST", f"/arenas/{arena_id}/hypotheses", api_key,
+                             json=contract)
+
+    def list_hypotheses(self, api_key: str, arena_id: str) -> dict:
+        return self._request("GET", f"/arenas/{arena_id}/hypotheses", api_key)
+
+    def mark_hypothesis_tested(self, api_key: str, arena_id: str, hypothesis_id: str,
+                               outcome: str, note: str | None = None,
+                               finding_ids: list[str] | None = None) -> dict:
+        encoded = urllib.parse.quote(hypothesis_id, safe="")
+        body: dict = {"contract_id": hypothesis_id, "outcome": outcome,
+                      "finding_ids": finding_ids or []}
+        if note:
+            body["note"] = note
+        return self._request("POST", f"/arenas/{arena_id}/hypotheses/{encoded}/tested",
+                             api_key, json=body)
 
     def poc_job(self, api_key: str, arena_id: str, job_id: str) -> dict:
         return self._request("GET", f"/arenas/{arena_id}/poc-jobs/{job_id}", api_key)

@@ -1,7 +1,7 @@
 """
 FastAPI REST Layer - Production Architecture (Redis/Celery)
 """
-from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile, WebSocket
+from fastapi import Body, Depends, FastAPI, File, HTTPException, Query, Request, UploadFile, WebSocket
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -39,6 +39,7 @@ import dockerfile_synth
 import evidence_artifact
 import event_visibility
 import research_digest
+import research_integrity
 import eval_export
 import eval_model_driver
 import generator
@@ -2177,6 +2178,8 @@ def get_status(instance_id: str, principal: Principal = Depends(require_principa
 
 
 class ExecRequest(BaseModel):
+    # R1: research-mode arenas require agents to cite an open hypothesis.
+    hypothesis_id: str | None = Field(default=None, min_length=1, max_length=64)
     node: str = Field(min_length=1, max_length=64)
     command: str = Field(min_length=1, max_length=4096)
     timeout: int = Field(default=30, ge=1, le=120)
@@ -2203,6 +2206,8 @@ class TransferDownloadRequest(BaseModel):
 
 
 class BrowserVisitRequest(BaseModel):
+    # R1: research-mode arenas require agents to cite an open hypothesis.
+    hypothesis_id: str | None = Field(default=None, min_length=1, max_length=64)
     node: str = Field(min_length=1, max_length=64)
     path: str = Field(default="/", min_length=1, max_length=2048)
     params: dict[str, str] = Field(default_factory=dict)
@@ -2231,6 +2236,8 @@ class BrowserVisitRequest(BaseModel):
 
 
 class HttpRequestRequest(BaseModel):
+    # R1: research-mode arenas require agents to cite an open hypothesis.
+    hypothesis_id: str | None = Field(default=None, min_length=1, max_length=64)
     node: str = Field(min_length=1, max_length=64)
     path: str = Field(default="/", min_length=1, max_length=2048)
     params: dict[str, str] = Field(default_factory=dict)
@@ -2279,6 +2286,8 @@ class HttpRequestRequest(BaseModel):
 
 
 class PocJobRequest(BaseModel):
+    # R1: research-mode arenas require agents to cite an open hypothesis.
+    hypothesis_id: str | None = Field(default=None, min_length=1, max_length=64)
     source: str = Field(min_length=1, max_length=config.POC_MAX_SOURCE_BYTES)
     target_node: str | None = Field(default=None, min_length=1, max_length=64)
     transfer_files: list[str] = Field(
@@ -2338,6 +2347,7 @@ def create_poc_job(
     key = req.idempotency_key or request.headers.get("Idempotency-Key")
     if not key or not re.fullmatch(r"[A-Za-z0-9._:-]{8,128}", key):
         raise HTTPException(status_code=422, detail="an 8-128 character Idempotency-Key is required")
+    _research_probe_gate(principal, instance_id, req.hypothesis_id, "poc_job")
 
     orch = Orchestrator(provider_name=provider_name)
     files = []
@@ -2574,6 +2584,7 @@ def browser_visit(
     """Render one arena target page; arbitrary/external URLs are never accepted."""
     record = _active_arena_or_error(instance_id)
     _require_binding(principal, instance_id, bindings.CAP_EXEC)
+    _research_probe_gate(principal, instance_id, req.hypothesis_id, "browser_visit")
     try:
         result = _run_arena_browser(
             record, req.node, req.path, req.params, wait_ms=req.wait_ms, principal=principal
@@ -2612,6 +2623,7 @@ def arena_http_request(
     metadata and digests only — never request or response bodies."""
     record = _active_arena_or_error(instance_id)
     _require_binding(principal, instance_id, bindings.CAP_EXEC)
+    _research_probe_gate(principal, instance_id, req.hypothesis_id, "http_request")
     return _execute_and_record_http(record, req, principal)
 
 
@@ -2807,6 +2819,8 @@ class HttpReplayRequest(BaseModel):
     method and body REPLACE when provided. The stored record is never mutated —
     a replay always produces a new linked transaction."""
 
+    # R1: research-mode arenas require agents to cite an open hypothesis.
+    hypothesis_id: str | None = Field(default=None, min_length=1, max_length=64)
     replace_params: bool = False
     credential_source_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
     credential_header_names: list[str] = Field(default_factory=list, max_length=16)
@@ -2878,6 +2892,7 @@ def replay_arena_http_transaction(
     immutable and the new record links to it via `replay_of`."""
     record = _active_arena_or_error(instance_id)
     _require_binding(principal, instance_id, bindings.CAP_EXEC)
+    _research_probe_gate(principal, instance_id, req.hypothesis_id, "http_replay")
     _, stored = _comparison_transaction(instance_id, digest, principal)
     sreq = stored.get("request") or {}
     merged_headers = {key.lower(): (key, value)
@@ -3027,6 +3042,7 @@ def exec_in_arena(
     # D1: an agent may only exec on an arena it is bound to. Checked before node
     # enumeration so an unbound agent can't probe another arena's node names.
     binding = _require_binding(principal, instance_id, bindings.CAP_EXEC)
+    _research_probe_gate(principal, instance_id, req.hypothesis_id, "exec")
     # Server-side foothold-scope for the attacker stance (the gateway also screens
     # this client-side; the orchestrator is now authoritative — D1). A None-stance
     # (own-sandbox) binding and operator callers are unrestricted.
@@ -3828,6 +3844,170 @@ def arena_digest(instance_id: str, principal: Principal = Depends(require_princi
         can_extend=can_extend,
     )
     return Response(content=research_digest.render(doc), media_type="application/json")
+
+
+# --- Research integrity layer (work order 2026-11-18, phase 2) ---------------
+# Opt-in per arena through the operator-set `research_mode` flag (default off).
+# State is append-only audit events; every check-then-append goes through
+# `Database.guarded_append`, so concurrent probes cannot overspend a budget.
+
+def _research_refused(exc: research_integrity.ResearchRefused) -> HTTPException:
+    return HTTPException(status_code=exc.status, detail=exc.detail())
+
+
+def _research_mode(instance_id: str) -> bool:
+    """Newest operator `research_mode` event wins; no event means off."""
+    events = db.list_events(instance_id, limit=1, types=(research_integrity.MODE_EVENT,))
+    return bool(events and (events[0].get("payload") or {}).get("enabled") is True)
+
+
+def _research_guarded(instance_id: str, decide):
+    try:
+        return db.guarded_append(f"research\x1f{instance_id}", decide)
+    except research_integrity.ResearchRefused as exc:
+        raise _research_refused(exc) from exc
+
+
+def _research_probe_gate(principal: Principal, instance_id: str,
+                         hypothesis_id: str | None, action: str) -> None:
+    """R1: in a research-mode arena an agent's probe (exec, HTTP request or
+    replay, browser visit, PoC job) must cite an open hypothesis with budget
+    left; the probe is charged before it runs. Operators and arenas with
+    research mode off are unaffected."""
+    if principal.role in OPERATOR_ROLES or not _research_mode(instance_id):
+        return
+    if not hypothesis_id:
+        raise HTTPException(status_code=422, detail={
+            "code": "hypothesis_required",
+            "message": "research mode is on: cite a registered hypothesis_id "
+                       "(POST /arenas/{id}/hypotheses)"})
+
+    def decide(read):
+        views = research_integrity.hypothesis_views(
+            read(lab_id=instance_id, types=research_integrity.HYPOTHESIS_EVENT_TYPES))
+        research_integrity.require_probe_allowed(views, hypothesis_id)
+        return [(instance_id, principal.name, research_integrity.HYPOTHESIS_PROBE,
+                 {"hypothesis_id": hypothesis_id, "action": action})], None
+
+    _research_guarded(instance_id, decide)
+
+
+class ResearchModeRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    enabled: bool
+    reason: str = Field(min_length=1, max_length=500)
+
+
+@app.post("/arenas/{instance_id}/research-mode")
+def set_research_mode(instance_id: str, req: ResearchModeRequest,
+                      principal: Principal = Depends(require_principal)):
+    """Operator opt-in for the research integrity layer on one arena."""
+    _require_operator(principal)
+    if db.get_deployment(instance_id) is None:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    db.record_event(instance_id, research_integrity.MODE_EVENT,
+                    {"enabled": req.enabled, "reason": req.reason}, actor=principal.name)
+    return {"arena_id": instance_id, "research_mode": req.enabled}
+
+
+@app.get("/research/hypothesis-schema")
+def hypothesis_schema(principal: Principal = Depends(require_principal)):
+    """R1: the JSON schema every hypothesis contract is validated against."""
+    return research_integrity.hypothesis_json_schema()
+
+
+@app.post("/arenas/{instance_id}/hypotheses", status_code=201)
+def register_hypothesis(instance_id: str, body: dict = Body(...),
+                        principal: Principal = Depends(require_principal)):
+    """R1: register a hypothesis contract. A contract missing any required field
+    is refused with the field named; an id already used on this arena is 409."""
+    if db.get_deployment(instance_id) is None:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    _require_binding(principal, instance_id, bindings.CAP_EXEC)
+    try:
+        contract = research_integrity.validate_contract(body)
+    except research_integrity.ResearchRefused as exc:
+        raise _research_refused(exc) from exc
+    digest = research_integrity.contract_digest(contract)
+
+    def decide(read):
+        views = research_integrity.hypothesis_views(
+            read(lab_id=instance_id, types=research_integrity.HYPOTHESIS_EVENT_TYPES))
+        if contract["id"] in views:
+            raise research_integrity.ResearchRefused(
+                "hypothesis_exists", f"hypothesis {contract['id']!r} is already registered")
+        return [(instance_id, principal.name, research_integrity.HYPOTHESIS_REGISTERED,
+                 {"schema": research_integrity.HYPOTHESIS_SCHEMA, "contract": contract,
+                  "contract_digest": digest})], None
+
+    _research_guarded(instance_id, decide)
+    return {"arena_id": instance_id, "id": contract["id"], "status": "open",
+            "contract_digest": digest, "research_mode": _research_mode(instance_id)}
+
+
+@app.get("/arenas/{instance_id}/hypotheses")
+def list_hypotheses(instance_id: str, principal: Principal = Depends(require_principal)):
+    """R1: every hypothesis on the arena with its status, outcome and probe use."""
+    if db.get_deployment(instance_id) is None:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    _require_arena_member(principal, instance_id)
+    views = research_integrity.hypothesis_views(db.list_events(
+        instance_id, limit=None, types=research_integrity.HYPOTHESIS_EVENT_TYPES))
+    return {"arena_id": instance_id, "research_mode": _research_mode(instance_id),
+            "counts": research_integrity.hypothesis_counts(views),
+            "hypotheses": list(views.values())}
+
+
+class HypothesisTestedRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    contract_id: str = Field(min_length=1, max_length=64)
+    outcome: Literal[research_integrity.OUTCOMES]  # type: ignore[valid-type]
+    note: str | None = Field(default=None, max_length=1024)
+    finding_ids: list[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("finding_ids")
+    @classmethod
+    def _finding_id_shape(cls, values: list[str]) -> list[str]:
+        if any(not re.fullmatch(r"[0-9a-f]{12}", v) for v in values):
+            raise ValueError("finding_ids must be 12-hex finding ids")
+        return values
+
+
+@app.post("/arenas/{instance_id}/hypotheses/{hypothesis_id}/tested")
+def mark_hypothesis_tested(instance_id: str, hypothesis_id: str,
+                           req: HypothesisTestedRequest,
+                           principal: Principal = Depends(require_principal)):
+    """R1: the only way to mark a hypothesis tested. The body must repeat the
+    registered contract id; a hypothesis is closed once and stays closed."""
+    if db.get_deployment(instance_id) is None:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    _require_binding(principal, instance_id, bindings.CAP_EXEC)
+    if req.contract_id != hypothesis_id:
+        raise HTTPException(status_code=422, detail={
+            "code": "contract_id_mismatch",
+            "message": "contract_id must equal the hypothesis id being marked tested"})
+
+    def decide(read):
+        views = research_integrity.hypothesis_views(
+            read(lab_id=instance_id, types=research_integrity.HYPOTHESIS_EVENT_TYPES))
+        view = views.get(hypothesis_id)
+        if view is None:
+            raise research_integrity.ResearchRefused(
+                "unknown_hypothesis", f"hypothesis {hypothesis_id!r} is not registered",
+                status=404)
+        if view["status"] != "open":
+            raise research_integrity.ResearchRefused(
+                "hypothesis_closed", f"hypothesis {hypothesis_id!r} is already tested")
+        return [(instance_id, principal.name, research_integrity.HYPOTHESIS_TESTED,
+                 {"hypothesis_id": hypothesis_id,
+                  "contract_digest": view["contract_digest"], "outcome": req.outcome,
+                  "note": req.note, "finding_ids": req.finding_ids})], view
+
+    view = _research_guarded(instance_id, decide)
+    return {"arena_id": instance_id, "id": hypothesis_id, "status": "tested",
+            "outcome": req.outcome, "probes_used": view["probes_used"]}
 
 
 @app.post("/arenas/{instance_id}/budget/policy")

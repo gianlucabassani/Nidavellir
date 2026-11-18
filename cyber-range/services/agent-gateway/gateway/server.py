@@ -206,10 +206,12 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
 
         @mcp.tool()
         def run_command(arena_id: str, command: str, node: str | None = None,
-                        timeout: int = 30) -> dict:
-            """Run a shell command from the arena foothold; returns its output."""
+                        timeout: int = 30, hypothesis_id: str | None = None) -> dict:
+            """Run a shell command from the arena foothold; returns its output.
+            In a research-mode arena pass the open `hypothesis_id` it tests."""
             return tools.run_command(
-                ctx(), arena_id=arena_id, command=command, node=node, timeout=timeout
+                ctx(), arena_id=arena_id, command=command, node=node, timeout=timeout,
+                hypothesis_id=hypothesis_id,
             )
 
         @mcp.tool()
@@ -217,13 +219,14 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
             arena_id: str, source: str, target_node: str | None = None,
             transfer_files: list[str] | None = None, timeout_seconds: int = 30,
             memory_mb: int = 128, cpu_millis: int = 500, pids: int = 32,
-            idempotency_key: str | None = None,
+            idempotency_key: str | None = None, hypothesis_id: str | None = None,
         ) -> dict:
             """Run Python in a disposable networkless helper. For target HTTP,
             import nidavellir and call nidavellir.request(relative_path)."""
             return tools.submit_poc(
                 ctx(), arena_id, source, target_node, transfer_files,
                 timeout_seconds, memory_mb, cpu_millis, pids, idempotency_key,
+                hypothesis_id=hypothesis_id,
             )
 
         @mcp.tool()
@@ -245,12 +248,13 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
         def browser_visit(
             arena_id: str, node: str, path: str = "/",
             params: dict[str, str] | None = None, wait_ms: int = 1500,
+            hypothesis_id: str | None = None,
         ) -> dict:
             """Render a page with JavaScript on an arena target. Supply a node
             and relative path/query params; arbitrary URLs are not accepted."""
             return tools.browser_visit(
                 ctx(), arena_id=arena_id, node=node, path=path,
-                params=params, wait_ms=wait_ms,
+                params=params, wait_ms=wait_ms, hypothesis_id=hypothesis_id,
             )
 
         @mcp.tool()
@@ -258,6 +262,7 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
             arena_id: str, node: str, path: str = "/",
             params: dict[str, str] | None = None, method: str = "GET",
             headers: dict[str, str] | None = None, body: str | None = None,
+            hypothesis_id: str | None = None,
         ) -> dict:
             """Perform ONE HTTP transaction against an arena target's web
             service. Supply a node and relative path; arbitrary URLs are not
@@ -266,6 +271,7 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
             return tools.http_request(
                 ctx(), arena_id=arena_id, node=node, path=path,
                 params=params, method=method, headers=headers, body=body,
+                hypothesis_id=hypothesis_id,
             )
 
         @mcp.tool()
@@ -301,6 +307,7 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
             replace_params: bool = False,
             credential_source_digest: str | None = None,
             credential_header_names: list[str] | None = None,
+            hypothesis_id: str | None = None,
         ) -> dict:
             """Re-send a stored transaction with edits. params/headers merge
             onto the stored ones; node/path/method/body replace when given.
@@ -312,6 +319,7 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
                 path=path, params=params, headers=headers, method=method,
                 body=body, replace_params=replace_params, credential_source_digest=credential_source_digest,
                 credential_header_names=credential_header_names,
+                hypothesis_id=hypothesis_id,
             )
 
         @mcp.tool()
@@ -362,6 +370,32 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
                 evidence_artifact_digests=evidence_artifact_digests,
                 transaction_digests=transaction_digests, variant_of=variant_of,
             )
+
+        @mcp.tool()
+        def register_hypothesis(arena_id: str, contract: dict) -> dict:
+            """Register a falsifiable hypothesis before probing it. `contract`
+            needs every field: id, source (fix-diff|primitive|history|invariant|
+            fuzz|paper), provenance, preconditions[], invariant, source_sink
+            {source, sink}, expected_observable, negative_control, dedup_key,
+            probe_budget, stop_condition. In a research-mode arena every probe
+            (run_command, http_request, replay, browser_visit, submit_poc) must
+            pass an open hypothesis_id and spends one unit of its probe_budget."""
+            return tools.register_hypothesis(ctx(), arena_id=arena_id, contract=contract)
+
+        @mcp.tool()
+        def list_hypotheses(arena_id: str) -> dict:
+            """Hypotheses on this arena with status, outcome and probes used."""
+            return tools.list_hypotheses(ctx(), arena_id=arena_id)
+
+        @mcp.tool()
+        def mark_hypothesis_tested(arena_id: str, hypothesis_id: str, outcome: str,
+                                   note: str | None = None,
+                                   finding_ids: list[str] | None = None) -> dict:
+            """Close a hypothesis: outcome is supported, refuted or inconclusive.
+            A tested hypothesis can no longer be cited by probes."""
+            return tools.mark_hypothesis_tested(
+                ctx(), arena_id=arena_id, hypothesis_id=hypothesis_id, outcome=outcome,
+                note=note, finding_ids=finding_ids)
 
     elif stance is Stance.defender:
         @mcp.tool()
