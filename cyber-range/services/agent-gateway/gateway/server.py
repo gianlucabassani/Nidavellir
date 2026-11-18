@@ -50,7 +50,8 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
             "Nidavellir cyber-range arena over MCP. Do this in order:\n"
             "1. FIRST call announce_agent(arena_id, model, provider) once, before "
             "anything else, so the operator console shows which agent is driving "
-            "the arena.\n"
+            "the arena. Then call digest(arena_id) to recover state instead of "
+            "re-reading your own logs.\n"
             "2. Call get_briefing and get_topology to orient (objective, targets, "
             "rules of engagement).\n"
             "3. Work the target with the stance's tools (e.g. run_command from the "
@@ -91,6 +92,14 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
     def budget_status(arena_id: str) -> dict:
         """Read the durable action allowance, deadline and stop state."""
         return tools.budget_status(ctx(), arena_id=arena_id)
+
+    @mcp.tool()
+    def digest(arena_id: str) -> dict:
+        """Start every cycle here instead of re-reading your own logs: a
+        ≤ 2 KB snapshot of arena state, time and budget left, cycle count,
+        hypothesis/finding counts and titles, the last 3 activity lines and up to
+        3 suggested next steps. Deterministic; cheap to call."""
+        return tools.digest(ctx(), arena_id=arena_id)
 
     @mcp.tool()
     def runtime_capabilities(arena_id: str) -> dict:

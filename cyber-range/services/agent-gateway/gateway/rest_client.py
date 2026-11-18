@@ -78,6 +78,9 @@ class RestClient:
             body["idempotency_key"] = idempotency_key
         return self._request("POST", f"/arenas/{arena_id}/extend", api_key, json=body)
 
+    def digest(self, api_key: str, arena_id: str) -> dict:
+        return self._request("GET", f"/arenas/{arena_id}/digest", api_key)
+
     def runtime_capabilities(self, api_key: str, arena_id: str) -> dict:
         return self._request("GET", f"/arenas/{arena_id}/capabilities", api_key)
 

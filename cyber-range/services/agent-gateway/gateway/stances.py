@@ -31,7 +31,7 @@ class Stance(str, Enum):
 LIFECYCLE_TOOLS = frozenset(
     {"list_scenarios", "deploy_arena", "arena_status", "get_briefing",
      "destroy_arena", "announce_agent", "session_preflight", "budget_status",
-     "runtime_capabilities"}
+     "runtime_capabilities", "digest"}
 )
 
 # Per-stance execution/recon toolsets, gated by stance.

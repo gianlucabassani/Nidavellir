@@ -62,7 +62,11 @@ orchestrator re-checks the stance's capability on every call (defence in depth).
 
 Every stance also has the lifecycle tools: `announce_agent`, `get_briefing`,
 `arena_status`, `session_preflight`, `list_scenarios`, `deploy_arena`,
-`destroy_arena`.
+`destroy_arena`, `digest`.
+
+`digest(arena_id)` is the cheap way to start each research cycle: a ≤ 2 KB snapshot
+(time and budget left, cycle count, hypothesis/finding counts and titles, last 3
+activity lines, up to 3 next steps) instead of re-reading the agent's own logs.
 
 `session_preflight(arena_id)` should be called before research begins. It returns
 the immutable target identity, authorization basis, reset contract, readiness
