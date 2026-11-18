@@ -305,7 +305,8 @@ class RestClient:
                        oast_token: str | None = None, poc: str | None = None,
                        evidence_artifact_digests: list[str] | None = None,
                        transaction_digests: list[str] | None = None,
-                       variant_of: str | None = None) -> dict:
+                       variant_of: str | None = None,
+                       root_cause: dict | None = None) -> dict:
         body: dict = {"title": title}
         # Only send set fields; path/param/payload/oast_token are the optional
         # verification inputs that let the orchestrator ACTIVELY confirm a finding;
@@ -320,7 +321,13 @@ class RestClient:
             body["evidence_artifact_digests"] = evidence_artifact_digests
         if transaction_digests:
             body["transaction_digests"] = transaction_digests
+        if root_cause:
+            body["root_cause"] = root_cause
         return self._request("POST", f"/arenas/{arena_id}/findings", api_key, json=body)
+
+    def dedup_lookup(self, api_key: str, arena_id: str, root_cause: dict) -> dict:
+        return self._request("POST", f"/arenas/{arena_id}/dedup/lookup", api_key,
+                             json=root_cause)
 
     def announce_agent(self, api_key: str, arena_id: str, model: str, provider: str,
                        stance: str | None = None) -> dict:

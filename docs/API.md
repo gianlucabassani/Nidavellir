@@ -1642,6 +1642,28 @@ unknown_hypothesis`, `409 hypothesis_closed`). Each admitted probe appends a
 `429 probe_budget_exhausted`. The check and the charge are one serialized step.
 Operators are not gated.
 
+**R2 — root-cause fingerprint and dedup.** `POST …/findings` (and `…/findings/manual`)
+accept `root_cause` `{invariant, owner_lifetime, source, sink, missing_check, oracle}`;
+in research mode it is required (`422 root_cause_required`). Each part is normalised
+(NFKC; line refs, `0x…` addresses and dotted versions removed; camel/snake/kebab case
+split; case-folded; punctuation collapsed) and the five root-cause parts are hashed
+into `fingerprint` (`rcfp1:<sha256>`); the oracle is hashed separately into
+`oracle_digest`. Raw and normalised parts are stored alongside. In research mode the
+report is compared, under a per-lineage lock, with earlier findings of the same
+**lineage** — the `lineage` named in `POST …/research-mode` (`program:<name>`; use one
+name for a program's vulnerable and backported builds), else `scenario:<id>` for a
+registered scenario, else `arena:<id>`. The record carries `dedup: {relation,
+related_finding_id, lineage}`: `duplicate` (same fingerprint and oracle),
+`variant` (same fingerprint, other oracle) or `independent`. A related finding also
+shares its `research_key`. A duplicate is never confirmed: an automatic confirmation is
+stored as `confirmed: false, verdict: unverified, reason_code: duplicate_finding`, and
+an operator `verify` with `confirmed` is `409 duplicate_finding`.
+
+`POST /arenas/{id}/dedup/lookup` with the same six fields (arena member; agents only in
+research mode, else `409 research_mode_off`) returns `fingerprint`, `oracle_digest`,
+`normalised`, the `relation`/`related_finding_id` a report would get now and
+`matches[{finding_id, arena_id, reported_at, relation}]` — ids only, no titles.
+
 ## Testing with mock mode
 
 When `MOCK_MODE=true`, deployments simulate infrastructure without real provisioning:

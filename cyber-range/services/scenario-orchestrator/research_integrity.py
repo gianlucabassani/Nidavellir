@@ -9,11 +9,17 @@ whose operator has not switched research mode on.
 
 R1 — hypothesis contract: a probe in research mode must cite a registered,
      still-open hypothesis whose declared ``probe_budget`` is not spent.
+R2 — root-cause fingerprint: a finding in research mode states its root cause;
+     the normalised fingerprint links it to earlier findings of the same
+     lineage as ``duplicate``/``variant``/``independent``, and a duplicate can
+     never be confirmed.
 """
 from __future__ import annotations
 
 import hashlib
 import json
+import re
+import unicodedata
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
@@ -173,3 +179,95 @@ def require_probe_allowed(views: dict[str, dict], hypothesis_id: str) -> dict:
                               f"{view['probe_budget']}; mark it tested or register a new one",
                               status=429)
     return view
+
+
+# --- R2: root-cause fingerprint -------------------------------------------------
+
+FINGERPRINT_VERSION = "rcfp1"
+ROOT_CAUSE_PARTS = ("invariant", "owner_lifetime", "source", "sink", "missing_check")
+DUPLICATE, VARIANT, INDEPENDENT = "duplicate", "variant", "independent"
+
+Part = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=512)]
+
+
+class RootCause(BaseModel):
+    """What is wrong, independent of how the finding was titled or which build
+    showed it. ``oracle`` is the observable behaviour that proves it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    invariant: Part
+    owner_lifetime: Part
+    source: Part
+    sink: Part
+    missing_check: Part
+    oracle: Part
+
+
+# Build-specific noise that must not split one root cause into many: source
+# line references, memory addresses and dotted version numbers.
+_LINE_REF = re.compile(r":\d+(?::\d+)?\b|#L\d+\b|\bline\s+\d+\b", re.IGNORECASE)
+_HEX_ADDR = re.compile(r"\b0x[0-9a-fA-F]+\b")
+_VERSION = re.compile(r"\bv?\d+(?:\.\d+)+(?:[-+][0-9A-Za-z.]+)?\b")
+_CAMEL = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
+_NON_WORD = re.compile(r"[\W_]+")
+
+
+def normalise_part(text: str) -> str:
+    """Canonical form of one root-cause part: NFKC, build noise removed,
+    camelCase/snake_case/kebab-case split into words, case-folded, punctuation
+    collapsed. ``readResource``, ``read_resource`` and ``Read-Resource`` agree."""
+    text = unicodedata.normalize("NFKC", text)
+    for noise in (_LINE_REF, _HEX_ADDR, _VERSION):
+        text = noise.sub(" ", text)
+    text = _CAMEL.sub(" ", text).casefold()
+    return " ".join(_NON_WORD.sub(" ", text).split())
+
+
+def fingerprint(root_cause: dict) -> dict:
+    """Normalise, then hash. The human-readable parts are kept alongside."""
+    normalised = {name: normalise_part(root_cause[name]) for name in ROOT_CAUSE_PARTS}
+    # Hash the token stream without separators: whether a writer split
+    # ``cmsobject`` into words or not must not change the root cause.
+    key = "\x1f".join(normalised[name].replace(" ", "") for name in ROOT_CAUSE_PARTS)
+    oracle = normalise_part(root_cause["oracle"])
+    return {
+        "fingerprint": f"{FINGERPRINT_VERSION}:" + hashlib.sha256(key.encode()).hexdigest(),
+        "oracle_digest": "sha256:" + hashlib.sha256(oracle.replace(" ", "").encode()).hexdigest(),
+        "normalised": {**normalised, "oracle": oracle},
+        "parts": {name: root_cause[name] for name in (*ROOT_CAUSE_PARTS, "oracle")},
+    }
+
+
+def lineage_matches(finding_events: list[dict], lineage: str, fp: str,
+                    exclude_finding_id: str | None = None) -> list[dict]:
+    """Earlier findings of ``lineage`` with fingerprint ``fp``, oldest first."""
+    matches = []
+    for event in reversed(finding_events):
+        payload = event.get("payload") or {}
+        root = payload.get("root_cause") or {}
+        if (root.get("lineage") == lineage and root.get("fingerprint") == fp
+                and payload.get("finding_id") != exclude_finding_id):
+            matches.append({"finding_id": payload.get("finding_id"),
+                            "arena_id": event.get("lab_id"),
+                            "oracle_digest": root.get("oracle_digest"),
+                            "reported_at": event.get("ts")})
+    return matches
+
+
+def classify(matches: list[dict], oracle_digest: str) -> dict:
+    """``duplicate``: same root cause and same behaviour oracle; ``variant``:
+    same root cause, different oracle; ``independent``: no earlier match. The
+    related finding is the oldest match of the winning relation."""
+    same_oracle = [m for m in matches if m["oracle_digest"] == oracle_digest]
+    if same_oracle:
+        return {"relation": DUPLICATE, "related_finding_id": same_oracle[0]["finding_id"]}
+    if matches:
+        return {"relation": VARIANT, "related_finding_id": matches[0]["finding_id"]}
+    return {"relation": INDEPENDENT, "related_finding_id": None}
+
+
+def match_view(match: dict, oracle_digest: str) -> dict:
+    return {"finding_id": match["finding_id"], "arena_id": match["arena_id"],
+            "reported_at": match["reported_at"],
+            "relation": DUPLICATE if match["oracle_digest"] == oracle_digest else VARIANT}

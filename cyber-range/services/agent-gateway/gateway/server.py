@@ -353,7 +353,8 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
                            poc: str | None = None,
                            evidence_artifact_digests: list[str] | None = None,
                            transaction_digests: list[str] | None = None,
-                           variant_of: str | None = None) -> dict:
+                           variant_of: str | None = None,
+                           root_cause: dict | None = None) -> dict:
             """Report a discovered vulnerability (the engagement goal). Include the
             `cwe` (e.g. 'CWE-89') and `node` so it can be scored. To have the finding
             PROVEN (not just claimed), also pass the verification inputs: `path` +
@@ -362,14 +363,27 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
             reproducible proof a human can run to verify it (a curl/HTTP request, a
             shell command, or numbered steps, with the observed result). When this
             run confirms the same issue on another build, pass `variant_of` with
-            the reference finding id so the operator can compare the two."""
+            the reference finding id so the operator can compare the two.
+            In a research-mode arena `root_cause` is required: {invariant,
+            owner_lifetime, source, sink, missing_check, oracle}; call
+            dedup_lookup with it first."""
             return tools.report_finding(
                 ctx(), arena_id=arena_id, title=title, cwe=cwe, node=node,
                 evidence=evidence, path=path, param=param, payload=payload,
                 oast_token=oast_token, poc=poc,
                 evidence_artifact_digests=evidence_artifact_digests,
                 transaction_digests=transaction_digests, variant_of=variant_of,
+                root_cause=root_cause,
             )
+
+        @mcp.tool()
+        def dedup_lookup(arena_id: str, root_cause: dict) -> dict:
+            """Before probing, check whether this root cause is already on record
+            in the arena's lineage. `root_cause` = {invariant, owner_lifetime,
+            source, sink, missing_check, oracle}. Returns the normalised
+            fingerprint, the relation a new report would get (duplicate |
+            variant | independent) and the matching finding ids."""
+            return tools.dedup_lookup(ctx(), arena_id=arena_id, root_cause=root_cause)
 
         @mcp.tool()
         def register_hypothesis(arena_id: str, contract: dict) -> dict:

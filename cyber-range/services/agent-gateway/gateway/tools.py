@@ -56,6 +56,20 @@ def register_hypothesis(ctx: GatewayContext, arena_id: str, contract: dict) -> d
     return result
 
 
+def dedup_lookup(ctx: GatewayContext, arena_id: str, root_cause: dict) -> dict:
+    """R2: earlier findings in this lineage with the same root-cause fingerprint."""
+    _guard(ctx, "dedup_lookup")
+    try:
+        result = ctx.client.dedup_lookup(ctx.session.api_key, arena_id, root_cause)
+    except Exception:
+        _trace(ctx, "dedup_lookup", {}, ok=False, arena_id=arena_id)
+        raise
+    _trace(ctx, "dedup_lookup", {"fingerprint": result.get("fingerprint"),
+                                 "relation": result.get("relation")},
+           ok=True, arena_id=arena_id)
+    return result
+
+
 def list_hypotheses(ctx: GatewayContext, arena_id: str) -> dict:
     _guard(ctx, "list_hypotheses")
     result = ctx.client.list_hypotheses(ctx.session.api_key, arena_id)
@@ -839,6 +853,7 @@ def report_finding(
     evidence_artifact_digests: list[str] | None = None,
     transaction_digests: list[str] | None = None,
     variant_of: str | None = None,
+    root_cause: dict | None = None,
 ) -> dict:
     """Report a discovered vulnerability. The engagement goal is to DISCOVER the
     arena's known weaknesses; this records your finding for scoring. Pass the
@@ -861,6 +876,7 @@ def report_finding(
             path=path, param=param, payload=payload, oast_token=oast_token, poc=poc,
             evidence_artifact_digests=evidence_artifact_digests,
             transaction_digests=transaction_digests, variant_of=variant_of,
+            **({"root_cause": root_cause} if root_cause else {}),
         )
     except Exception:
         _trace(ctx, "report_finding", trace_args, ok=False, arena_id=arena_id)
