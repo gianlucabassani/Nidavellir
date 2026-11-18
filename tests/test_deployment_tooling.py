@@ -54,9 +54,16 @@ elif a[:2]==["image","inspect"]:
  if a[2] in os.environ.get("UNRESOLVABLE","").split(","): sys.exit(1)
  ident=a[2] if a[2].startswith("sha256:") else "sha256:now-"+a[2].replace("/","-").replace(":","-")
  print(json.dumps([{"RepoDigests":[],"Id":ident}]))
-elif a[0]=="tag":
- if os.environ.get("FAIL_TAG")=="1": sys.exit(1)
- with (root/"tags").open("a") as f: f.write(a[2]+"\n")
+elif a[0] in ("tag","rmi") or a[:2]==["image","ls"]:
+ tags=root/"tags"; known=tags.read_text().splitlines() if tags.exists() else []
+ if a[0]=="tag":
+  if os.environ.get("FAIL_TAG")=="1": sys.exit(1)
+  known.append(a[2])
+ elif a[0]=="rmi":
+  if os.environ.get("FAIL_RMI")=="1" or "-f" in a or a[1] not in known: sys.exit(1)
+  known.remove(a[1])
+ else: print("\n".join(known))
+ tags.write_text("".join(t+"\n" for t in known))
 else: sys.exit(2)
 '''
 
@@ -174,6 +181,7 @@ class DeploymentToolingTests(unittest.TestCase):
             self.assertIn(["tag", f"sha256:old-{name}", service["image"]], calls)
         self.assertEqual(overlay["services"]["worker"]["environment"]["NIDAVELLIR_POC_RUNNER_IMAGE"],
                          f"nidavellir-rollback/poc-runner-image:{stamp}")
+        self.assertFalse(any(c[0] == "rmi" for c in calls))
         self.assertTrue(any("dropdb" in c and "nidavellir" == c[-1] for c in calls))
         self.assertNotIn(SECRET, r.stdout + r.stderr)
 
@@ -375,6 +383,41 @@ class DeploymentToolingTests(unittest.TestCase):
         receipt = self.receipts()[0]
         self.assertEqual(receipt["status"], "success")
         self.assertFalse(receipt["images"]["poc-runner-image"]["image_resolvable"])
+
+    def test_retention_keeps_newest_three_stamps_only(self):
+        stamps = ["20261101T000000-9", "20261102T000000-1", "20261102T000000-10",
+                  "20261103T000000-5", "20261104T000000-7"]
+        rollback = [f"nidavellir-rollback/{svc}:{s}" for s in stamps for svc in ("worker", "webui")]
+        others = ["nidavellir/worker:latest", "postgres:16-alpine",
+                  "nidavellir-rollback-x/worker:20200101T000000-1", "nidavellir-rollback/worker:manual"]
+        (self.root / "tags").write_text("".join(t + "\n" for t in rollback + others))
+        self.state("prune-rollback", "3")
+        kept = [t for t in rollback if t.rsplit(":", 1)[1] in stamps[2:]]
+        self.assertEqual(sorted((self.root / "tags").read_text().splitlines()), sorted(kept + others))
+        removed = [c for c in self.calls() if c[0] == "rmi"]
+        self.assertEqual(sorted(c[1] for c in removed), sorted(set(rollback) - set(kept)))
+        self.assertTrue(all(len(c) == 2 for c in removed))  # never -f
+        self.assertFalse(any("prune" in c for c in self.calls()))
+
+    def test_retention_runs_after_success_only_and_never_fails_deploy(self):
+        old = [f"nidavellir-rollback/worker:2000010{d}T000000-1" for d in range(1, 5)]
+        (self.root / "tags").write_text("".join(t + "\n" for t in old))
+        r = self.invoke("deploy", "v-test")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        remaining = set((self.root / "tags").read_text().splitlines())
+        self.assertEqual(remaining & set(old), set(old[2:]))
+        stamp = next((self.repo / "deployments").glob("*.json")).stem
+        self.assertIn(f"nidavellir-rollback/orchestrator:{stamp}", remaining)
+        # A retention failure is logged and changes neither status nor exit code.
+        r = self.invoke("deploy", "v-test", FAIL_RMI="1")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("retention failed", r.stderr)
+        self.assertEqual([x["status"] for x in self.receipts()], ["success", "success"])
+        # A failed deploy never prunes.
+        count = len(self.calls())
+        r = self.invoke("deploy", "v-test", FAIL_GATE="1")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(any(c[0] == "rmi" or c[:2] == ["image", "ls"] for c in self.calls()[count:]))
 
     def test_corrupt_backup_does_not_drop_current_database(self):
         r = self.invoke("backup")

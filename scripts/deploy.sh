@@ -93,6 +93,10 @@ finish() {
     mkdir -p deployments
     mapfile -t IDS < <("${COMPOSE[@]}" ps -aq)
     python3 "$SNAPSHOT/deployment-state.py" manifest "deployments/$STAMP.json" "$TARGET" "$PREVIOUS" "$STATUS" "$BACKUP" "${IDS[@]}" || rc=1
+    if [[ $STATUS == success ]]; then
+        # Retention never changes the deploy status or exit code.
+        quiet python3 "$SNAPSHOT/deployment-state.py" prune-rollback 3 || echo 'Rollback tag retention failed (ignored).' >&2
+    fi
     echo "Deployment status: $STATUS; receipt: deployments/$STAMP.json; private log: $LOG"
     exit "$rc"
 }
