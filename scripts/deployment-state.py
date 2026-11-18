@@ -4,6 +4,10 @@
 With Docker's containerd image store, rebuilding a tag can make the previous
 image ID unresolvable: only a tag keeps an image alive. The snapshot therefore
 pins ``nidavellir-rollback/<service>:<stamp>`` tags, never raw image IDs.
+
+The snapshot pins exactly the image each container runs, or refuses. A service
+tag may name a different image from the running one, so it is used only when
+the operator opts in through ``NIDAVELLIR_ROLLBACK_ACCEPT_TAG``.
 """
 import datetime
 import json
@@ -16,7 +20,16 @@ import sys
 ROLLBACK_REPO = "nidavellir-rollback"
 STAMP = re.compile(r"\d{8}T\d{6}-\d+")
 SERVICE = re.compile(r"[a-z0-9][a-z0-9_.-]{0,62}")
+ROLLBACK_REF = re.compile(rf"{ROLLBACK_REPO}/({SERVICE.pattern}):({STAMP.pattern})")
 RUNNER_SERVICE = "poc-runner-image"
+RUNNER_ENV = "NIDAVELLIR_POC_RUNNER_IMAGE"
+RUNNER_DEFAULT = "nidavellir/poc-runner:py311"  # scenario-orchestrator config.py default
+ACCEPT_TAG = "NIDAVELLIR_ROLLBACK_ACCEPT_TAG"
+SERVICE_LABEL = "com.docker.compose.service"
+
+
+class Refused(Exception):
+    pass
 
 
 def docker(*args):
@@ -33,9 +46,112 @@ def resolve(reference):
         return None
 
 
-def service_name(container, fallback):
+def service_label(container):
     labels = (container.get("Config") or {}).get("Labels") or {}
-    return labels.get("com.docker.compose.service") or fallback
+    return labels.get(SERVICE_LABEL)
+
+
+def rollback_reference(reference):
+    """(service, stamp) for an exact nidavellir-rollback/<service>:<stamp> reference, else None."""
+    match = ROLLBACK_REF.fullmatch(reference.removeprefix("docker.io/"))
+    return match.groups() if match else None
+
+
+def list_rollback_tags():
+    listing = subprocess.check_output(
+        ["docker", "image", "ls", "--filter", f"reference={ROLLBACK_REPO}/*",
+         "--format", "{{.Repository}}:{{.Tag}}"], text=True, stderr=subprocess.DEVNULL)
+    return [line.strip() for line in listing.splitlines() if rollback_reference(line.strip())]
+
+
+def runner_reference(container):
+    for value in (container.get("Config") or {}).get("Env") or []:
+        if value.startswith(RUNNER_ENV + "="):
+            return value.split("=", 1)[1]
+    return RUNNER_DEFAULT
+
+
+def choose(name, container, accepted):
+    """Exact image of a running service, or the opted-in tag; never a silent fallback."""
+    image_id = container.get("Image")
+    if resolve(image_id):
+        return {"source": "image_id", "reference": image_id}
+    config_image = (container.get("Config") or {}).get("Image")
+    if name in accepted:
+        current = resolve(config_image)
+        if current is None:
+            raise Refused(f"service {name}: neither its image {image_id!r} nor its tag "
+                          f"{config_image!r} resolves")
+        return {"source": "accepted_tag", "reference": config_image,
+                "container_image": image_id, "resolved_image_id": current.get("Id")}
+    raise Refused(
+        f"service {name}: its running image {image_id!r} no longer resolves, and its tag "
+        f"{config_image!r} may name a different image. Either recreate {name} from its "
+        f"current tag before deploying, or set {ACCEPT_TAG}={name} to knowingly roll "
+        f"{name} back to the image {config_image!r} names now")
+
+
+def plan(ids, accepted):
+    """Resolve every reference before anything is tagged."""
+    chosen, runners, initializer = {}, set(), False
+    for cid in ids:
+        try:
+            c = docker("inspect", cid)[0]
+        except (subprocess.CalledProcessError, ValueError, IndexError, OSError):
+            raise Refused(f"cannot inspect container {cid}") from None
+        name = service_label(c)
+        if not name:
+            raise Refused(f"container {cid} has no {SERVICE_LABEL} label")
+        if not SERVICE.fullmatch(name):
+            raise Refused(f"invalid service name {name!r} (container {cid})")
+        if name == RUNNER_SERVICE:
+            initializer = True
+            continue  # one-shot initializer: its rollback image is the worker's runner
+        if name == "worker":
+            runners.add(runner_reference(c))
+        choice = choose(name, c, accepted)
+        previous = chosen.get(name)
+        if previous and previous["reference"] != choice["reference"]:
+            raise Refused(f"service {name} has containers on different images "
+                          f"({previous['reference']!r}, {choice['reference']!r})")
+        chosen[name] = choice
+    if len(runners) > 1:
+        raise Refused(f"worker containers use different {RUNNER_ENV} values: {sorted(runners)}")
+    if runners:
+        runner = runners.pop()
+        if not resolve(runner):
+            raise Refused(f"service {RUNNER_SERVICE}: the worker's runner {runner!r} does not resolve")
+        chosen[RUNNER_SERVICE] = {"source": "worker_runner", "reference": runner}
+    elif initializer:
+        raise Refused(f"service {RUNNER_SERVICE}: no worker container names the runner to keep")
+    return chosen
+
+
+def tag_atomically(chosen, stamp):
+    """Create every rollback tag of this stamp, or none of them."""
+    try:
+        existing = [t for t in list_rollback_tags() if rollback_reference(t)[1] == stamp]
+    except (subprocess.CalledProcessError, OSError):
+        raise Refused("cannot list existing rollback tags") from None
+    existing += [f"{ROLLBACK_REPO}/{name}:{stamp}" for name in chosen
+                 if resolve(f"{ROLLBACK_REPO}/{name}:{stamp}")]
+    if existing:
+        raise Refused(f"rollback tags for stamp {stamp} already exist: {sorted(set(existing))}")
+    created = []
+    for name, choice in chosen.items():
+        tag = f"{ROLLBACK_REPO}/{name}:{stamp}"
+        try:
+            subprocess.run(["docker", "tag", choice["reference"], tag], check=True,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except (subprocess.CalledProcessError, OSError):
+            leftover = [t for t in created if subprocess.run(
+                ["docker", "rmi", t], stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL).returncode]  # never -f
+            detail = f"; could not remove {leftover}" if leftover else ""
+            raise Refused(f"cannot tag {choice['reference']} as {tag} (service {name})"
+                          f"{detail}") from None
+        created.append(tag)
+        choice["tag"] = tag
 
 
 def snapshot(destination, ids):
@@ -44,58 +160,27 @@ def snapshot(destination, ids):
     )
     if not STAMP.fullmatch(stamp):
         sys.exit(f"Invalid rollback stamp: {stamp!r}")
-    # Resolve every reference before tagging anything: fail closed, touch nothing.
-    chosen = {}
-    worker_runner = "nidavellir/poc-runner:py311"
-    for cid in ids:
-        try:
-            c = docker("inspect", cid)[0]
-        except (subprocess.CalledProcessError, ValueError, IndexError, OSError):
-            sys.exit(f"Rollback snapshot refused: cannot inspect container {cid}")
-        name = service_name(c, cid)
-        if not SERVICE.fullmatch(name):
-            sys.exit(f"Rollback snapshot refused: invalid service name {name!r}")
-        config_image = (c.get("Config") or {}).get("Image")
-        if resolve(c.get("Image")):
-            chosen[name] = ("image_id", c["Image"])
-        elif resolve(config_image):
-            chosen[name] = ("config_image", config_image)
-        else:
-            sys.exit(f"Rollback snapshot refused: no resolvable image for service {name} "
-                     f"(image ID {c.get('Image')!r}, config image {config_image!r})")
-        if name == "worker":
-            for value in (c.get("Config") or {}).get("Env") or []:
-                if value.startswith("NIDAVELLIR_POC_RUNNER_IMAGE="):
-                    worker_runner = value.split("=", 1)[1]
-    if RUNNER_SERVICE not in chosen and "worker" in chosen:
-        # No initializer container: pin what the worker actually runs PoCs with.
-        if not resolve(worker_runner):
-            sys.exit("Rollback snapshot refused: no resolvable image for service "
-                     f"{RUNNER_SERVICE} (worker runner {worker_runner!r})")
-        chosen[RUNNER_SERVICE] = ("worker_runner", worker_runner)
-
-    services, record = {}, {}
-    for name, (source, reference) in chosen.items():
-        tag = f"{ROLLBACK_REPO}/{name}:{stamp}"
-        try:
-            subprocess.run(["docker", "tag", reference, tag], check=True,
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except (subprocess.CalledProcessError, OSError):
-            sys.exit(f"Rollback snapshot refused: cannot tag {reference} as {tag} (service {name})")
-        record[name] = {"source": source, "reference": reference, "tag": tag}
-        if source == "worker_runner":
-            continue  # not a running service; only pinned through the environment
-        services[name] = {"image": tag, "pull_policy": "never"}
-        if source != "image_id":
-            print(f"Rollback image for {name}: container image ID did not resolve; "
-                  f"tagged {source} {reference}", file=sys.stderr)
-    if RUNNER_SERVICE in record:
+    accepted = {s.strip() for s in os.environ.get(ACCEPT_TAG, "").split(",") if s.strip()}
+    try:
+        chosen = plan(ids, accepted)
+        tag_atomically(chosen, stamp)
+    except Refused as error:
+        sys.exit(f"Rollback snapshot refused: {error}")
+    for name in sorted(accepted - {n for n, c in chosen.items() if c["source"] == "accepted_tag"}):
+        print(f"Warning: {ACCEPT_TAG} names {name!r}, which needed no opt-in", file=sys.stderr)
+    services = {}
+    for name, choice in chosen.items():
+        services[name] = {"image": choice["tag"], "pull_policy": "never"}
+        if choice["source"] == "accepted_tag":
+            print(f"Warning: rollback for {name} accepts tag {choice['reference']} "
+                  f"({choice['resolved_image_id']}), not its running image "
+                  f"{choice['container_image']}", file=sys.stderr)
+    if RUNNER_SERVICE in chosen:
         for name in ("worker", "orchestrator"):
             if name in services:
-                services[name]["environment"] = {
-                    "NIDAVELLIR_POC_RUNNER_IMAGE": record[RUNNER_SERVICE]["tag"]}
+                services[name]["environment"] = {RUNNER_ENV: chosen[RUNNER_SERVICE]["tag"]}
     overlay = {"services": services,
-               "x-nidavellir-rollback": {"stamp": stamp, "services": record}}
+               "x-nidavellir-rollback": {"stamp": stamp, "services": chosen}}
     pathlib.Path(destination).write_text(json.dumps(overlay, indent=2) + "\n")
 
 
@@ -119,7 +204,7 @@ def manifest(destination, sha, previous, status, backup, ids):
                      "resolved_image_id": current.get("Id"),
                      "repo_digests": current.get("RepoDigests") or [],
                      "image_resolvable": False}
-        images[service_name(c, cid)] = entry
+        images[service_label(c) or cid] = entry
     record = {
         "schema": "nidavellir-deployment/v1",
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
