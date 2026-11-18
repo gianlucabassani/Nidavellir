@@ -509,8 +509,13 @@ class DeploymentToolingTests(unittest.TestCase):
         stamps = ["20261101T000000-9", "20261102T000000-1", "20261102T000000-10",
                   "20261103T000000-5", "20261104T000000-7"]
         rollback = [f"nidavellir-rollback/{svc}:{s}" for s in stamps for svc in ("worker", "webui")]
+        rollback += [f"docker.io/nidavellir-rollback/beat:{stamps[0]}"]  # optional prefix stripped
+        old = "20200101T000000-1"  # older than every kept stamp: only an exact match may go
         others = ["nidavellir/worker:latest", "postgres:16-alpine",
-                  "nidavellir-rollback-x/worker:20200101T000000-1", "nidavellir-rollback/worker:manual"]
+                  f"nidavellir-rollback-x/worker:{old}", "nidavellir-rollback/worker:manual",
+                  f"nidavellir-rollback:{old}", f"nidavellir-rollback/a/b:{old}",
+                  f"nidavellir-rollbackx/w:{old}", "nidavellir-rollback/w:latest",
+                  f"docker.io/library/nidavellir-rollback/w:{old}", f"nidavellir-rollback/W:{old}"]
         (self.root / "tags").write_text("".join(t + "\n" for t in rollback + others))
         self.state("prune-rollback", "3")
         kept = [t for t in rollback if t.rsplit(":", 1)[1] in stamps[2:]]
