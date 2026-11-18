@@ -134,6 +134,37 @@ def manifest(destination, sha, previous, status, backup, ids):
     temporary.replace(path)
 
 
+def stamp_key(stamp):
+    moment, pid = stamp.split("-")
+    return moment, int(pid)
+
+
+def prune_rollback(keep):
+    """Untag rollback references outside the newest ``keep`` deploy stamps."""
+    listing = subprocess.check_output(
+        ["docker", "image", "ls", "--filter", f"reference={ROLLBACK_REPO}/*",
+         "--format", "{{.Repository}}:{{.Tag}}"], text=True)
+    tags = {}
+    for line in listing.splitlines():
+        reference = line.strip()
+        repository, _, tag = reference.rpartition(":")
+        if repository.removeprefix("docker.io/").split("/")[0] != ROLLBACK_REPO:
+            continue  # never touch other repositories, whatever the filter returned
+        if STAMP.fullmatch(tag):
+            tags.setdefault(tag, set()).add(reference)
+    stale = sorted(tags, key=stamp_key, reverse=True)[keep:]
+    failed = False
+    for stamp in stale:
+        for reference in sorted(tags[stamp]):
+            # rmi of a repo:tag removes the tag and any image left unused; never -f or prune.
+            if subprocess.run(["docker", "rmi", reference], stdout=subprocess.DEVNULL).returncode:
+                print(f"Rollback retention: could not remove {reference}", file=sys.stderr)
+                failed = True
+            else:
+                print(f"Rollback retention: removed {reference}")
+    return 1 if failed else 0
+
+
 def main(argv):
     if not argv:
         sys.exit("Unknown deployment state operation")
@@ -142,6 +173,8 @@ def main(argv):
         snapshot(args[0], args[1:])
     elif mode == "manifest" and len(args) >= 5:
         manifest(args[0], *args[1:5], args[5:])
+    elif mode == "prune-rollback" and len(args) == 1 and args[0].isdigit() and int(args[0]) >= 1:
+        sys.exit(prune_rollback(int(args[0])))
     else:
         sys.exit("Unknown deployment state operation")
 
