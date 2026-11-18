@@ -45,9 +45,14 @@ if a[0]=="compose":
    sql=sys.stdin.read()
    if "SELECT 1;" not in sql: sys.exit(3)
 elif a[0]=="inspect":
+ if a[1] in os.environ.get("UNINSPECTABLE","").split(","): sys.exit(1)
  name=a[1].removeprefix("old-")
- print(json.dumps([{"Image":"sha256:old-"+name,"Config":{"Labels":{"com.docker.compose.service":name}}}]))
-elif a[:2]==["image","inspect"]: print(json.dumps([{"RepoDigests":[],"Id":"sha256:fallback-runner"}]))
+ print(json.dumps([{"Image":"sha256:old-"+name,"Config":{"Image":"nidavellir/"+name+":latest","Labels":{"com.docker.compose.service":name}}}]))
+elif a[:2]==["image","inspect"]:
+ # UNRESOLVABLE models the containerd store: a rebuilt tag orphans the old image ID.
+ if a[2] in os.environ.get("UNRESOLVABLE","").split(","): sys.exit(1)
+ ident=a[2] if a[2].startswith("sha256:") else "sha256:now-"+a[2].replace("/","-").replace(":","-")
+ print(json.dumps([{"RepoDigests":[],"Id":ident}]))
 else: sys.exit(2)
 '''
 
@@ -281,14 +286,41 @@ class DeploymentToolingTests(unittest.TestCase):
         self.assertEqual(len(list(base.rglob("complete"))), 14)
         self.assertTrue(incomplete.is_dir())
 
+    def state(self, *args, check=True, **variables):
+        return subprocess.run(["python3", "scripts/deployment-state.py", *args], cwd=self.repo,
+                              env=self.env | variables,
+                              text=True, capture_output=True, check=check, timeout=30)
+
     def test_rollback_pins_runtime_runner(self):
         output = self.root / "images.json"
-        subprocess.run(["python3", "scripts/deployment-state.py", "snapshot", str(output),
-                        "old-orchestrator", "old-worker", "old-poc-runner-image"],
-                       cwd=self.repo, env=self.env, check=True)
+        self.state("snapshot", str(output), "old-orchestrator", "old-worker", "old-poc-runner-image")
         services = json.loads(output.read_text())["services"]
         self.assertEqual(services["worker"]["environment"]["NIDAVELLIR_POC_RUNNER_IMAGE"],
                          "sha256:old-poc-runner-image")
+
+    def test_manifest_records_unresolvable_image_instead_of_raising(self):
+        output = self.root / "receipt.json"
+        self.state("manifest", str(output), "sha", "prev", "success", "", "old-orchestrator",
+                   "old-poc-runner-image", "old-webui", "gone",
+                   UNRESOLVABLE="sha256:old-poc-runner-image,sha256:old-webui,nidavellir/webui:latest",
+                   UNINSPECTABLE="gone")
+        receipt = json.loads(output.read_text())
+        images = receipt["images"]
+        self.assertEqual(images["orchestrator"], {"image_id": "sha256:old-orchestrator", "repo_digests": [],
+                                                  "image_resolvable": True})
+        self.assertEqual(images["poc-runner-image"], {
+            "image_id": "sha256:old-poc-runner-image", "config_image": "nidavellir/poc-runner-image:latest",
+            "resolved_image_id": "sha256:now-nidavellir-poc-runner-image-latest", "repo_digests": [],
+            "image_resolvable": False})
+        self.assertIsNone(images["webui"]["resolved_image_id"])
+        self.assertFalse(images["webui"]["image_resolvable"])
+        self.assertEqual(receipt["uninspectable_containers"], ["gone"])
+        # End to end: the 2026-11-18 deploy succeeded but wrote no receipt.
+        r = self.invoke("deploy", "v-test", UNRESOLVABLE="sha256:old-poc-runner-image")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        receipt = self.receipts()[0]
+        self.assertEqual(receipt["status"], "success")
+        self.assertFalse(receipt["images"]["poc-runner-image"]["image_resolvable"])
 
     def test_corrupt_backup_does_not_drop_current_database(self):
         r = self.invoke("backup")
@@ -302,8 +334,7 @@ class DeploymentToolingTests(unittest.TestCase):
 
     def test_runner_pin_without_initializer_container(self):
         output = self.root / "images.json"
-        subprocess.run(["python3", "scripts/deployment-state.py", "snapshot", str(output),
-                        "old-worker"], cwd=self.repo, env=self.env, check=True)
+        self.state("snapshot", str(output), "old-worker")
         services = json.loads(output.read_text())["services"]
         self.assertEqual(services["worker"]["environment"]["NIDAVELLIR_POC_RUNNER_IMAGE"],
-                         "sha256:fallback-runner")
+                         "sha256:now-nidavellir-poc-runner-py311")
