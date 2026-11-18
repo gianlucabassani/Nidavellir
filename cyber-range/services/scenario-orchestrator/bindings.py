@@ -49,15 +49,17 @@ CAP_OBSERVE = "observe"  # in-path traffic capture on a shared segment (mitm)
 CAP_LIFECYCLE = "lifecycle"  # status-independent teardown of a bound arena
 CAP_WORKSPACE = "workspace"  # bounded source status/diff for research evidence
 CAP_FORWARD = "forward"  # declared internal TCP service from an attacker foothold
+CAP_EXTEND = "extend"    # F1: move the arena time box forward (configurator only)
 
 # stance -> permitted capabilities. `None` (unrestricted) permits everything but
-# forwards; a stance-scoped binding permits only its stance's class. Reads
+# forwards and time-box extension (F1 grants that to `configurator` only); a
+# stance-scoped binding permits only its stance's class. Reads
 # (status/events) need a binding in any stance (FR-04) but no capability — D1 is
 # about *driving* an arena.
 _STANCE_CAPS: dict[str | None, set[str]] = {
     None: {CAP_EXEC, CAP_SETUP, CAP_OBSERVE, CAP_LIFECYCLE, CAP_WORKSPACE},
     "attacker": {CAP_EXEC, CAP_LIFECYCLE, CAP_WORKSPACE, CAP_FORWARD},
-    "configurator": {CAP_SETUP, CAP_LIFECYCLE, CAP_WORKSPACE},
+    "configurator": {CAP_SETUP, CAP_LIFECYCLE, CAP_WORKSPACE, CAP_EXTEND},
     "defender": {CAP_LIFECYCLE},
     "mitm": {CAP_OBSERVE, CAP_LIFECYCLE},
 }

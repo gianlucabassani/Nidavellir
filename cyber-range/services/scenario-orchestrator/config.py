@@ -302,6 +302,9 @@ POC_STALE_SECONDS = max(
 # destroys expired labs and reconciles labs stuck in a transient state (e.g. a
 # worker that died mid-deploy leaving a lab 'pending' forever).
 LAB_TTL_MINUTES = int(os.getenv("LAB_TTL_MINUTES", "180"))
+# F1: POST /arenas/{id}/extend moves the TTL by 300..86400 s per call; the total
+# lifetime from creation stays under this hard ceiling (default 7 days).
+ARENA_MAX_LIFETIME_SECONDS = int(os.getenv("ARENA_MAX_LIFETIME_SECONDS", str(7 * 86400)))
 REAPER_INTERVAL_SECONDS = int(os.getenv("REAPER_INTERVAL_SECONDS", "300"))
 # A lab in pending/deploying/destroying that hasn't been touched in this long is
 # considered orphaned (no live worker) and reconciled by the reaper.

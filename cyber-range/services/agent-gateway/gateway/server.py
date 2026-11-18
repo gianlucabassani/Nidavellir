@@ -376,7 +376,17 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
             window; returns a flow summary (src/dst/proto/ports). In-path capture."""
             return tools.observe_traffic(ctx(), arena_id=arena_id, seconds=seconds, max_packets=max_packets)
 
-    elif stance is Stance.configurator:
+    if stance in (Stance.configurator, Stance.operator):
+        @mcp.tool()
+        def extend_arena(arena_id: str, seconds: int,
+                         idempotency_key: str | None = None) -> dict:
+            """Move the arena's time box forward by `seconds` (300..86400) before
+            it expires, so research continues on the same arena. Pass an
+            idempotency_key to make a retry safe."""
+            return tools.extend_arena(ctx(), arena_id=arena_id, seconds=seconds,
+                                      idempotency_key=idempotency_key)
+
+    if stance is Stance.configurator:
         @mcp.tool()
         def workspace_status(arena_id: str) -> dict:
             """List writable SUT source workspaces available during setup."""

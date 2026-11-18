@@ -57,8 +57,8 @@ orchestrator re-checks the stance's capability on every call (defence in depth).
 | **attacker** | offensive testing from the foothold | `get_topology`, `list_targets`, `run_command`, `submit_poc`, `poc_status`, `poc_result`, `cancel_poc`, `browser_visit`, `http_request`, `list_http_transactions`, `get_http_transaction`, `replay_http_transaction`, `upload_file`, `download_file`, `workspace_status`, `workspace_diff`, `workspace_patch_artifact`, `report_finding` |
 | **defender** | detection over the event feed | `get_topology`, `query_events` |
 | **mitm** | in-path traffic observation | `get_topology`, `observe_traffic` |
-| **configurator** | bring a software-under-test up before the engagement | `get_setup_brief`, `workspace_status`, `workspace_diff`, `workspace_patch_artifact`, `propose_setup_step`, `await_setup_step`, `run_setup_step`, `upload_file`, `finish_setup` |
-| **operator** | author scenarios with a connected model; read stored source review sessions | `scaffold_scenario`, `import_scenario`, `source_review_read` (read-only: one session summary plus one page of sites; it cannot create a session or record a review) |
+| **configurator** | bring a software-under-test up before the engagement | `get_setup_brief`, `workspace_status`, `workspace_diff`, `workspace_patch_artifact`, `propose_setup_step`, `await_setup_step`, `run_setup_step`, `upload_file`, `finish_setup`, `extend_arena` |
+| **operator** | author scenarios with a connected model; read stored source review sessions | `scaffold_scenario`, `import_scenario`, `extend_arena`, `source_review_read` (read-only: one session summary plus one page of sites; it cannot create a session or record a review) |
 
 Every stance also has the lifecycle tools: `announce_agent`, `get_briefing`,
 `arena_status`, `session_preflight`, `list_scenarios`, `deploy_arena`,

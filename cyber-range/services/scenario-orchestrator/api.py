@@ -67,7 +67,7 @@ import validation_evidence
 import evidence_review
 import vulhub_import
 from auth import Principal, ensure_bootstrap_key, hash_api_key, require_principal
-from database import Database, StopDenied
+from database import Database, ExtendRefused, StopDenied
 from orchestrator import Orchestrator
 from providers import (
     available_providers,
@@ -3292,6 +3292,8 @@ class RuntimeCapabilities(BaseModel):
     arena_state: str
     principal_role: str
     binding_stance: str | None
+    # F1: the reaper's TTL; moves with POST /arenas/{id}/extend (None = no TTL).
+    expires_at: str | None = None
     budget: dict | None
     stop: dict
     footholds: list[str]
@@ -3384,6 +3386,10 @@ def runtime_capabilities(instance_id: str, principal: Principal = Depends(requir
         "poc": operation(bindings.CAP_EXEC, limits={"network": "selected_http_target"}),
         "files": operation(bindings.CAP_EXEC, limits={"foothold_only": True}),
         "setup": operation(bindings.CAP_SETUP),
+        "extend": operation(bindings.CAP_EXTEND, provider_required=False,
+                            limits={"seconds_min": 300, "seconds_max": 86400,
+                                    "lifetime_seconds_max":
+                                        config.ARENA_MAX_LIFETIME_SECONDS}),
         "observe": operation(bindings.CAP_OBSERVE),
         "forward": operation(bindings.CAP_FORWARD, declared=declared,
                              runtime_ready=forward_nodes_ready,
@@ -3401,6 +3407,7 @@ def runtime_capabilities(instance_id: str, principal: Principal = Depends(requir
         arena_id=instance_id, provider=provider, arena_state=arena["status"],
         principal_role=principal.role,
         binding_stance=binding.get("stance") if binding else None,
+        expires_at=arena.get("expires_at"),
         budget=policy, stop={"system": budget.get("system"), "arena": budget.get("arena")},
         footholds=footholds, targets=targets, operations=operations,
     )
@@ -3609,6 +3616,51 @@ class BudgetPolicyRequest(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
     token_cap: int | None = None
     cost_cap: float | None = None
+
+
+class ExtendRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    seconds: int = Field(ge=300, le=86400)
+    # Optional: a retry with the same key replays the first result instead of
+    # extending twice. Omitted, each call is a new extension.
+    idempotency_key: str | None = Field(default=None, min_length=8, max_length=128,
+                                        pattern=r"^[A-Za-z0-9._:-]+$")
+
+
+_EXTEND_REFUSAL_STATUS = {
+    "arena_not_found": 404,
+    "idempotency_key_reused": 409,
+    "arena_not_extendable": 409,
+    "legacy_budget_unavailable": 409,
+    "stop_active": 423,
+    "max_lifetime_exceeded": 422,
+}
+
+
+@app.post("/arenas/{instance_id}/extend")
+def extend_arena(instance_id: str, req: ExtendRequest,
+                 principal: Principal = Depends(require_principal)):
+    """F1: move the arena's time box (TTL + budget deadline) forward by
+    ``seconds`` from now, or from the current deadline while it is still in the
+    future. Operators, or an agent holding a ``configurator`` binding to this
+    arena. Refusals carry a stable ``code``."""
+    if db.get_deployment(instance_id) is None:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    binding = _require_binding(principal, instance_id, bindings.CAP_EXTEND)
+    try:
+        result = db.extend_arena(
+            instance_id, seconds=req.seconds, actor=principal.name,
+            key=req.idempotency_key,
+            max_lifetime_seconds=config.ARENA_MAX_LIFETIME_SECONDS,
+            require_open_gate=binding is not None,
+        )
+    except ExtendRefused as exc:
+        raise HTTPException(status_code=_EXTEND_REFUSAL_STATUS.get(exc.code, 409),
+                            detail={"code": exc.code, "message": str(exc)}) from exc
+    logger.info(f"Arena {instance_id} extended by {req.seconds}s by '{principal.name}'"
+                f"{' (replay)' if result['replayed'] else ''}")
+    return {"arena_id": instance_id, **result}
 
 
 @app.post("/arenas/{instance_id}/budget/policy")

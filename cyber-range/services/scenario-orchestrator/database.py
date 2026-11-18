@@ -65,6 +65,20 @@ class StopDenied(ValueError):
     """A system-wide stop rejected new infrastructure admission."""
 
 
+# F1: an arena time-box extension is an audited lifecycle event; only arenas that
+# still have (or are getting) infrastructure can be extended.
+ARENA_EXTENDED_EVENT = "arena_extended"
+EXTENDABLE_STATES = (LabStatus.PENDING, LabStatus.DEPLOYING, LabStatus.ACTIVE)
+
+
+class ExtendRefused(ValueError):
+    """A time-box extension was refused; ``code`` is a stable machine reason."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+
+
 def database_url() -> str:
     """Resolve the SQLAlchemy URL: DATABASE_URL > DATABASE_PATH > default."""
     url = os.getenv("DATABASE_URL")
@@ -730,6 +744,84 @@ class Database:
             replacement.epoch = source.epoch
             session.delete(session.get(BudgetAccount, replacement_id))
             session.commit()
+
+    def extend_arena(self, arena_id, *, seconds, actor, max_lifetime_seconds,
+                     key=None, require_open_gate=False):
+        """F1: move an arena's time box forward by ``seconds``.
+
+        The TTL (``deployments.expires_at``, the reaper's signal) and the durable
+        budget deadline move together, each from ``max(now, current)``, so a
+        tighter operator budget deadline keeps its offset and never exceeds the
+        TTL. One serialized step under the arena gate lock; an optional
+        ``key`` makes a retry replay the first result instead of extending
+        twice. ``require_open_gate`` (agent callers) refuses while a stop holds:
+        an agent never prolongs a stopped arena. Raises ``ExtendRefused``.
+        """
+        now = db_now()
+        with self._session() as session:
+            system = self._lock_gate(session, "system")
+            gate = self._lock_gate(session, arena_id)
+            dep = session.get(Deployment, arena_id)
+            if dep is None:
+                raise ExtendRefused("arena_not_found", "arena not found")
+            if key is not None:
+                row = session.get(BudgetControl, (arena_id, key))
+                if row is not None:
+                    if (row.command, row.actor, row.reason) != ("extend", actor, str(seconds)):
+                        raise ExtendRefused("idempotency_key_reused",
+                                            "extension key was reused with different input")
+                    prior = session.scalars(select(Event).where(
+                        Event.lab_id == arena_id, Event.type == ARENA_EXTENDED_EVENT,
+                    ).order_by(Event.id.desc())).all()
+                    for event in prior:
+                        payload = json.loads(event.payload or "{}")
+                        if payload.get("idempotency_key") == key:
+                            return {**payload, "replayed": True}
+                    raise ExtendRefused("idempotency_key_reused", "extension record missing")
+            if dep.status not in EXTENDABLE_STATES:
+                raise ExtendRefused("arena_not_extendable",
+                                    f"arena is {dep.status}; only live arenas can be extended")
+            if gate is None:
+                raise ExtendRefused("legacy_budget_unavailable",
+                                    "legacy arena has no durable budget policy")
+            if require_open_gate and (system.state != "open" or gate.state != "open"):
+                raise ExtendRefused("stop_active",
+                                    "a stop is active; an operator must resume first")
+            account = self._lock_account(session, gate.account_scope)
+            delta = timedelta(seconds=seconds)
+            previous_expires, previous_deadline = dep.expires_at, account.deadline
+            new_expires = None
+            if dep.expires_at is not None:
+                new_expires = max(now, dep.expires_at) + delta
+                born = dep.created_at or now
+                if new_expires - born > timedelta(seconds=max_lifetime_seconds):
+                    raise ExtendRefused(
+                        "max_lifetime_exceeded",
+                        f"extension would exceed the {max_lifetime_seconds}s arena lifetime cap")
+            new_deadline = max(now, account.deadline) + delta
+            if new_expires is not None:
+                new_deadline = min(new_deadline, new_expires)
+            dep.expires_at = new_expires
+            account.deadline = new_deadline
+            account.version += 1
+            result = {
+                "category": "lifecycle", "action": "extended",
+                "seconds": seconds,
+                "previous_expires_at": _stringify(previous_expires),
+                "expires_at": _stringify(new_expires),
+                "previous_deadline": _stringify(previous_deadline),
+                "deadline": _stringify(new_deadline),
+                "budget_version": account.version,
+                "idempotency_key": key,
+            }
+            self._append_event(session, arena_id, actor, ARENA_EXTENDED_EVENT, result)
+            if key is not None:
+                session.add(BudgetControl(scope=arena_id, idempotency_key=key,
+                                          command="extend", actor=actor,
+                                          reason=str(seconds), epoch=gate.epoch,
+                                          created_at=now))
+            session.commit()
+            return {**result, "replayed": False}
 
     def revise_budget_policy(self, arena_id, *, action_cap, deadline, actor, reason):
         if not reason or len(reason) > 500:
