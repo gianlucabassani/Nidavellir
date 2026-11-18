@@ -68,6 +68,13 @@ Every stance also has the lifecycle tools: `announce_agent`, `get_briefing`,
 (time and budget left, cycle count, hypothesis/finding counts and titles, last 3
 activity lines, up to 3 next steps) instead of re-reading the agent's own logs.
 
+Research-mode arenas (operator opt-in, see API.md "Research integrity layer"): the
+attacker registers a contract with `register_hypothesis(arena_id, contract)` before
+probing, passes its `hypothesis_id` to `run_command`, `http_request`,
+`replay_http_transaction`, `browser_visit` and `submit_poc` (each spends one unit of
+its `probe_budget`), reads them with `list_hypotheses`, and closes one with
+`mark_hypothesis_tested(arena_id, hypothesis_id, outcome)`.
+
 `session_preflight(arena_id)` should be called before research begins. It returns
 the immutable target identity, authorization basis, reset contract, readiness
 checks, and the next valid phase. Required checks fail closed in the orchestrator;

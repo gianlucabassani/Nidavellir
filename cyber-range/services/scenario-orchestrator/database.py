@@ -1754,6 +1754,43 @@ class Database:
             session.commit()
             return True
 
+    def guarded_append(self, lock_key, decide):
+        """Check-then-append audit events as one serialized step.
+
+        ``decide(read)`` receives ``read(lab_id=None, types=None, scenario=None)``
+        returning newest-first event dicts seen under the lock, and returns
+        ``(appends, result)`` where ``appends`` is a list of ``(lab_id, actor,
+        type, payload)``. An exception from ``decide`` appends nothing. Writers
+        sharing ``lock_key`` (PostgreSQL advisory lock) or any writer (SQLite
+        database lock) cannot interleave between the check and the append."""
+        with self._session() as session:
+            if self._engine.dialect.name == "postgresql":
+                session.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+                                {"key": f"guarded\x1f{lock_key}"})
+            else:
+                session.execute(update(BudgetGate).where(BudgetGate.scope == "system")
+                                .values(scope="system"))
+
+            def read(lab_id=None, types=None, scenario=None):
+                query = select(Event).order_by(Event.id.desc())
+                if lab_id is not None:
+                    query = query.where(Event.lab_id == lab_id)
+                if scenario is not None:
+                    query = query.where(Event.lab_id.in_(
+                        select(Deployment.id).where(Deployment.scenario == scenario)))
+                if types is not None:
+                    query = query.where(Event.type.in_(list(types)))
+                return [{"id": e.id, "lab_id": e.lab_id, "ts": _stringify(e.ts),
+                         "actor": e.actor, "type": e.type,
+                         "payload": json.loads(e.payload) if e.payload else None}
+                        for e in session.scalars(query)]
+
+            appends, result = decide(read)
+            for lab_id, actor, type_, payload in appends:
+                self._append_event(session, lab_id, actor, type_, payload)
+            session.commit()
+            return result
+
     def list_events(self, lab_id=None, limit=100, types=None, before_id=None):
         """Recent events (newest first), optionally for one lab and/or restricted
         to a set of event ``types``. The type filter lets the setup-phase derive

@@ -35,6 +35,50 @@ class GatewayContext:
     steps_used: int = 0
 
 
+def _hyp(hypothesis_id: str | None) -> dict:
+    """R1: forward a hypothesis citation only when given, so clients without
+    research mode see the unchanged call."""
+    return {"hypothesis_id": hypothesis_id} if hypothesis_id else {}
+
+
+def register_hypothesis(ctx: GatewayContext, arena_id: str, contract: dict) -> dict:
+    """R1: register a hypothesis contract (all fields required)."""
+    _guard(ctx, "register_hypothesis")
+    try:
+        result = ctx.client.register_hypothesis(ctx.session.api_key, arena_id, contract)
+    except Exception:
+        _trace(ctx, "register_hypothesis", {"id": (contract or {}).get("id")}, ok=False,
+               arena_id=arena_id)
+        raise
+    _trace(ctx, "register_hypothesis",
+           {"id": result.get("id"), "contract_digest": result.get("contract_digest")},
+           ok=True, arena_id=arena_id)
+    return result
+
+
+def list_hypotheses(ctx: GatewayContext, arena_id: str) -> dict:
+    _guard(ctx, "list_hypotheses")
+    result = ctx.client.list_hypotheses(ctx.session.api_key, arena_id)
+    _trace(ctx, "list_hypotheses", {}, ok=True, arena_id=arena_id)
+    return result
+
+
+def mark_hypothesis_tested(ctx: GatewayContext, arena_id: str, hypothesis_id: str,
+                           outcome: str, note: str | None = None,
+                           finding_ids: list[str] | None = None) -> dict:
+    _guard(ctx, "mark_hypothesis_tested")
+    args = {"hypothesis_id": hypothesis_id, "outcome": outcome}
+    try:
+        result = ctx.client.mark_hypothesis_tested(
+            ctx.session.api_key, arena_id, hypothesis_id, outcome, note=note,
+            finding_ids=finding_ids)
+    except Exception:
+        _trace(ctx, "mark_hypothesis_tested", args, ok=False, arena_id=arena_id)
+        raise
+    _trace(ctx, "mark_hypothesis_tested", args, ok=True, arena_id=arena_id)
+    return result
+
+
 def _guard(ctx: GatewayContext, tool: str) -> None:
     if not ctx.session.can_use(tool):
         stance = ctx.session.stance.value if ctx.session.stance else "unbound"
@@ -571,6 +615,7 @@ def run_command(
     command: str,
     node: str | None = None,
     timeout: int = 30,
+    hypothesis_id: str | None = None,
 ) -> dict:
     """Run a shell command from the arena's foothold node and return its
     output. Foothold-only (attacker scope), budget-charged, fully traced.
@@ -585,7 +630,8 @@ def run_command(
     # has been consumed.
     try:
         foothold = _resolve_foothold(ctx, arena_id, node)
-        res = ctx.client.exec_command(ctx.session.api_key, arena_id, foothold, command, timeout)
+        res = ctx.client.exec_command(ctx.session.api_key, arena_id, foothold, command, timeout,
+                                       **_hyp(hypothesis_id))
     except Exception:
         _trace(ctx, "run_command",
                {"node": node, "command": command[:512]}, ok=False, arena_id=arena_id)
@@ -606,6 +652,7 @@ def browser_visit(
     path: str = "/",
     params: dict[str, str] | None = None,
     wait_ms: int = 1500,
+    hypothesis_id: str | None = None,
 ) -> dict:
     """Render JavaScript on one in-scope arena target (never an arbitrary URL)."""
     _guard(ctx, "browser_visit")
@@ -616,7 +663,7 @@ def browser_visit(
     }
     try:
         result = ctx.client.browser_visit(
-            ctx.session.api_key, arena_id, node, path, params, wait_ms
+            ctx.session.api_key, arena_id, node, path, params, wait_ms, **_hyp(hypothesis_id)
         )
     except Exception:
         _trace(ctx, "browser_visit", args, ok=False, arena_id=arena_id)
@@ -639,6 +686,7 @@ def http_request(
     method: str = "GET",
     headers: dict[str, str] | None = None,
     body: str | None = None,
+    hypothesis_id: str | None = None,
 ) -> dict:
     """Perform ONE HTTP transaction against an arena target's web service
     (never an arbitrary URL). Scope checks are server-side; traces and the
@@ -654,7 +702,7 @@ def http_request(
     try:
         result = ctx.client.http_request(
             ctx.session.api_key, arena_id, node, path, params, method,
-            headers, body,
+            headers, body, **_hyp(hypothesis_id),
         )
     except Exception:
         _trace(ctx, "http_request", args, ok=False, arena_id=arena_id)
@@ -735,6 +783,7 @@ def replay_http_transaction(
     replace_params: bool = False,
     credential_source_digest: str | None = None,
     credential_header_names: list[str] | None = None,
+    hypothesis_id: str | None = None,
 ) -> dict:
     """Re-send a stored HTTP transaction with optional edits; the new record
     links to the original via `replay_of`. Same server-side scope checks as a
@@ -759,6 +808,7 @@ def replay_http_transaction(
         result = ctx.client.http_replay(
             ctx.session.api_key, arena_id, digest, node=node, path=path,
             params=params, headers=headers, method=method, body=body, **reuse,
+            **_hyp(hypothesis_id),
         )
     except Exception:
         _trace(ctx, "replay_http_transaction", args, ok=False, arena_id=arena_id)
@@ -823,7 +873,7 @@ def submit_poc(
     ctx: GatewayContext, arena_id: str, source: str, target_node: str | None = None,
     transfer_files: list[str] | None = None, timeout_seconds: int = 30,
     memory_mb: int = 128, cpu_millis: int = 500, pids: int = 32,
-    idempotency_key: str | None = None,
+    idempotency_key: str | None = None, hypothesis_id: str | None = None,
 ) -> dict:
     """Submit Python to the worker-owned networkless runner.
 
@@ -842,7 +892,7 @@ def submit_poc(
             ctx.session.api_key, arena_id, source, target_node=target_node,
             transfer_files=transfer_files, timeout_seconds=timeout_seconds,
             memory_mb=memory_mb, cpu_millis=cpu_millis, pids=pids,
-            idempotency_key=key,
+            idempotency_key=key, **_hyp(hypothesis_id),
         )
     except Exception:
         _trace(ctx, "submit_poc", meta, ok=False, arena_id=arena_id)

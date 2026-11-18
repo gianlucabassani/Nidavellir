@@ -1610,6 +1610,38 @@ Audit events `research_campaign`, `campaign_finding`, `campaign_disclosure` and
 written under `campaign:<campaign_id>` and withheld from agent keys on the event feeds.
 Reads are not audited.
 
+## Research integrity layer (opt-in per arena)
+
+Makes the record enforce the research method. Everything here is off until an
+operator switches it on for one arena; with it off, no existing endpoint changes.
+Refusals are typed: `{"detail": {"code", "message", ...}}`.
+
+| Endpoint | Who | Purpose |
+|---|---|---|
+| `POST /arenas/{id}/research-mode` `{"enabled", "reason"}` | operator | Turn the layer on/off for this arena (audited `research_mode` event; newest wins). |
+| `GET /research/hypothesis-schema` | any key | JSON schema `nidavellir.hypothesis.v1`. |
+| `POST /arenas/{id}/hypotheses` | operator, or agent with `exec` | Register a contract (201). |
+| `GET /arenas/{id}/hypotheses` | arena member | Every hypothesis with `status` (`open`/`tested`), `outcome`, `probe_budget`, `probes_used`, contract. |
+| `POST /arenas/{id}/hypotheses/{hid}/tested` `{"contract_id", "outcome", "note"?, "finding_ids"?}` | operator, or agent with `exec` | The only way to close a hypothesis. |
+
+**R1 — hypothesis contract.** Required fields (unknown fields are refused): `id`
+(unique per arena), `source` (`fix-diff|primitive|history|invariant|fuzz|paper`),
+`provenance`, `preconditions[]` (at least one; say `none` explicitly),
+`invariant`, `source_sink` `{source, sink}`, `expected_observable`,
+`negative_control`, `dedup_key`, `probe_budget` (1–500), `stop_condition`. A missing
+field is `422 invalid_hypothesis` with `missing: [field…]`; malformed ones are listed
+in `errors: [{field, message}]`. A reused id is `409 hypothesis_exists`. `tested`
+requires `contract_id` equal to `{hid}` (`422 contract_id_mismatch`), and a
+hypothesis closes once (`409 hypothesis_closed`).
+
+With research mode on, an **agent's** probe — `POST …/exec`, `…/http/request`,
+`…/http/transactions/{digest}/replay`, `…/browser/visit`, `…/poc-jobs` — must carry
+`hypothesis_id` of an open hypothesis (`422 hypothesis_required`, `404
+unknown_hypothesis`, `409 hypothesis_closed`). Each admitted probe appends a
+`hypothesis_probe` event before it runs; once `probe_budget` is spent the probe is
+`429 probe_budget_exhausted`. The check and the charge are one serialized step.
+Operators are not gated.
+
 ## Testing with mock mode
 
 When `MOCK_MODE=true`, deployments simulate infrastructure without real provisioning:
