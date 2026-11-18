@@ -241,17 +241,10 @@ def stamp_key(stamp):
 
 def prune_rollback(keep):
     """Untag rollback references outside the newest ``keep`` deploy stamps."""
-    listing = subprocess.check_output(
-        ["docker", "image", "ls", "--filter", f"reference={ROLLBACK_REPO}/*",
-         "--format", "{{.Repository}}:{{.Tag}}"], text=True)
     tags = {}
-    for line in listing.splitlines():
-        reference = line.strip()
-        repository, _, tag = reference.rpartition(":")
-        if repository.removeprefix("docker.io/").split("/")[0] != ROLLBACK_REPO:
-            continue  # never touch other repositories, whatever the filter returned
-        if STAMP.fullmatch(tag):
-            tags.setdefault(tag, set()).add(reference)
+    # Only exact nidavellir-rollback/<service>:<stamp> references, whatever the filter returned.
+    for reference in list_rollback_tags():
+        tags.setdefault(rollback_reference(reference)[1], set()).add(reference)
     stale = sorted(tags, key=stamp_key, reverse=True)[keep:]
     failed = False
     for stamp in stale:
