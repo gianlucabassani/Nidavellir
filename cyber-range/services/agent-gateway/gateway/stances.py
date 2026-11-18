@@ -57,7 +57,9 @@ STANCE_TOOLS: dict[Stance, frozenset[str]] = {
          # Research integrity (R1): hypothesis contracts.
          "register_hypothesis", "list_hypotheses", "mark_hypothesis_tested",
          # R2: root-cause fingerprint lookup before probing.
-         "dedup_lookup"}
+         "dedup_lookup",
+         # R4: saturation ledger.
+         "record_sweep", "research_ledger"}
     ),
     Stance.defender: frozenset({"get_topology", "query_events"}),
     Stance.mitm: frozenset({"get_topology", "observe_traffic"}),

@@ -328,6 +328,12 @@ class RestClient:
             body["causality"] = causality
         return self._request("POST", f"/arenas/{arena_id}/findings", api_key, json=body)
 
+    def record_sweep(self, api_key: str, arena_id: str, sweep: dict) -> dict:
+        return self._request("POST", f"/arenas/{arena_id}/sweeps", api_key, json=sweep)
+
+    def research_ledger(self, api_key: str, arena_id: str) -> dict:
+        return self._request("GET", f"/arenas/{arena_id}/research", api_key)
+
     def dedup_lookup(self, api_key: str, arena_id: str, root_cause: dict) -> dict:
         return self._request("POST", f"/arenas/{arena_id}/dedup/lookup", api_key,
                              json=root_cause)

@@ -3836,12 +3836,15 @@ def arena_digest(instance_id: str, principal: Principal = Depends(require_princi
     can_extend = (not agent) or bool(
         binding and not binding.get("paused")
         and bindings.stance_permits(stance, bindings.CAP_EXTEND))
+    research = _research_summary(instance_id, arena)
+    in_use = (research["research_mode"] or research["sweep_count"]
+              or research["hypotheses"]["open"] or research["hypotheses"]["tested"])
     doc = research_digest.build(
         arena=arena, budget=db.budget_status(instance_id),
         finding_events=findings, activity_events=activity,
         session_count=len(sessions), now=db_now(),
         verdicts=None if agent else _latest_finding_verdicts(instance_id),
-        can_extend=can_extend,
+        can_extend=can_extend, research=research if in_use else None,
     )
     return Response(content=research_digest.render(doc), media_type="application/json")
 
@@ -3897,6 +3900,8 @@ def _research_probe_gate(principal: Principal, instance_id: str,
                        "(POST /arenas/{id}/hypotheses)"})
 
     def decide(read):
+        research_integrity.require_not_shelved(
+            read(lab_id=instance_id, types=research_integrity.LEDGER_EVENT_TYPES))
         views = research_integrity.hypothesis_views(
             read(lab_id=instance_id, types=research_integrity.HYPOTHESIS_EVENT_TYPES))
         research_integrity.require_probe_allowed(views, hypothesis_id)
@@ -3951,6 +3956,8 @@ def register_hypothesis(instance_id: str, body: dict = Body(...),
     digest = research_integrity.contract_digest(contract)
 
     def decide(read):
+        research_integrity.require_not_shelved(
+            read(lab_id=instance_id, types=research_integrity.LEDGER_EVENT_TYPES))
         views = research_integrity.hypothesis_views(
             read(lab_id=instance_id, types=research_integrity.HYPOTHESIS_EVENT_TYPES))
         if contract["id"] in views:
@@ -4027,6 +4034,96 @@ def mark_hypothesis_tested(instance_id: str, hypothesis_id: str,
     view = _research_guarded(instance_id, decide)
     return {"arena_id": instance_id, "id": hypothesis_id, "status": "tested",
             "outcome": req.outcome, "probes_used": view["probes_used"]}
+
+
+def _research_summary(instance_id: str, record: dict) -> dict:
+    """R4: the arena's research state — mode, lineage, ledger and hypotheses."""
+    state = research_integrity.ledger(db.list_events(
+        instance_id, limit=None, types=research_integrity.LEDGER_EVENT_TYPES))
+    views = research_integrity.hypothesis_views(db.list_events(
+        instance_id, limit=None, types=research_integrity.HYPOTHESIS_EVENT_TYPES))
+    outcomes: dict[str, int] = {}
+    for view in views.values():
+        if view["outcome"]:
+            outcomes[view["outcome"]] = outcomes.get(view["outcome"], 0) + 1
+    return {"arena_id": instance_id, "research_mode": _research_mode(instance_id),
+            "lineage": _research_lineage(record), **state,
+            "hypotheses": {**research_integrity.hypothesis_counts(views),
+                           "outcomes": outcomes}}
+
+
+@app.get("/arenas/{instance_id}/research")
+def research_ledger(instance_id: str, principal: Principal = Depends(require_principal)):
+    """R4: the saturation ledger — research status (active/shelved, with reason
+    and reopen triggers), planned-vs-reviewed coverage, hypotheses by status and
+    the sweeps with their source and yield."""
+    record = db.get_deployment(instance_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    _require_arena_member(principal, instance_id)
+    return _research_summary(instance_id, record)
+
+
+@app.post("/arenas/{instance_id}/sweeps", status_code=201)
+def record_sweep(instance_id: str, req: research_integrity.Sweep,
+                 principal: Principal = Depends(require_principal)):
+    """R4: record one sweep's source and yield. Two consecutive zero-yield
+    sweeps with >= 80% of planned surfaces reviewed shelve the arena's research
+    in the same serialized step; a shelved arena takes no more sweeps."""
+    record = db.get_deployment(instance_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    _require_binding(principal, instance_id, bindings.CAP_EXEC)
+    sweep = req.model_dump(by_alias=True)
+
+    def decide(read):
+        events = read(lab_id=instance_id, types=research_integrity.LEDGER_EVENT_TYPES)
+        research_integrity.require_not_shelved(events)
+        appends = [(instance_id, principal.name, research_integrity.SWEEP_EVENT, sweep)]
+        after = research_integrity.ledger(
+            [{"type": research_integrity.SWEEP_EVENT, "payload": sweep,
+              "actor": principal.name, "ts": None}] + events)
+        if research_integrity.should_shelve(after):
+            appends.append((instance_id, "system", research_integrity.SHELVED_EVENT,
+                            research_integrity.shelve_payload(after)))
+        return appends, len(appends) == 2
+
+    shelved = _research_guarded(instance_id, decide)
+    if shelved:
+        logger.info(f"Arena {instance_id} research shelved as saturated")
+    return {"recorded": True, "shelved_by_this_sweep": shelved,
+            **_research_summary(instance_id, record)}
+
+
+class ReopenRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    trigger: Literal[research_integrity.REOPEN_TRIGGERS]  # type: ignore[valid-type]
+    detail: str = Field(min_length=1, max_length=500,
+                        description="what is new: commit, CVE id, primitive, config or model")
+
+
+@app.post("/arenas/{instance_id}/research/reopen")
+def reopen_research(instance_id: str, req: ReopenRequest,
+                    principal: Principal = Depends(require_principal)):
+    """R4: operator reopens a shelved arena, naming the new input that justifies
+    another pass. The zero-yield streak restarts; coverage is kept."""
+    _require_operator(principal)
+    record = db.get_deployment(instance_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Arena not found")
+
+    def decide(read):
+        state = research_integrity.ledger(
+            read(lab_id=instance_id, types=research_integrity.LEDGER_EVENT_TYPES))
+        if state["status"] != "shelved":
+            raise research_integrity.ResearchRefused("not_shelved",
+                                                     "the arena's research is not shelved")
+        return [(instance_id, principal.name, research_integrity.REOPENED_EVENT,
+                 {"trigger": req.trigger, "detail": req.detail})], None
+
+    _research_guarded(instance_id, decide)
+    return _research_summary(instance_id, record)
 
 
 @app.post("/arenas/{instance_id}/dedup/lookup")

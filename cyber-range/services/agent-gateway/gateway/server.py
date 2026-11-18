@@ -390,6 +390,25 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
             return tools.dedup_lookup(ctx(), arena_id=arena_id, root_cause=root_cause)
 
         @mcp.tool()
+        def record_sweep(arena_id: str, source: str, yield_count: int,
+                         surfaces_planned: list[str] | None = None,
+                         surfaces_reviewed: list[str] | None = None,
+                         note: str | None = None) -> dict:
+            """Close a research sweep: its idea `source` (e.g. fix-diff, fuzz),
+            `yield_count` of new non-duplicate findings, surfaces you planned and
+            reviewed. Two zero-yield sweeps at >= 80% planned coverage shelve the
+            arena; only an operator with a new input reopens it."""
+            return tools.record_sweep(
+                ctx(), arena_id=arena_id, source=source, yield_count=yield_count,
+                surfaces_planned=surfaces_planned, surfaces_reviewed=surfaces_reviewed,
+                note=note)
+
+        @mcp.tool()
+        def research_ledger(arena_id: str) -> dict:
+            """Saturation ledger: research status, coverage, hypotheses, sweeps."""
+            return tools.research_ledger(ctx(), arena_id=arena_id)
+
+        @mcp.tool()
         def register_hypothesis(arena_id: str, contract: dict) -> dict:
             """Register a falsifiable hypothesis before probing it. `contract`
             needs every field: id, source (fix-diff|primitive|history|invariant|

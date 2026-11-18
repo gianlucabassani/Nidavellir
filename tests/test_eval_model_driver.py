@@ -488,14 +488,19 @@ def test_single_trial_smoke_is_durable_and_unpaired(monkeypatch):
         "build_id": build["id"], "challenge_id": challenge["id"],
         "action_cap": 8, "deadline_seconds": 600})
     assert response.status_code == 202, response.text
-    assert response.json()["kind"] == "single_trial_smoke"
-    record = client.get("/evaluations/" + response.json()["id"]).json()
-    assert record["kind"] == "single_trial_smoke"
-    assert len(record["runs"]) == len(record["trials"]) == 1
-    assert record["comparison"]["matched_pairs"] == 0
-    assert queued == [record["id"]]
-    assert client.post("/evaluation-smokes", json={"build_id": build["id"],
-        "challenge_id": challenge["id"], "action_cap": 13}).status_code == 422
-    assert client.post("/evaluation-smokes", json={"build_id": build["id"],
-        "challenge_id": challenge["id"], "token_budget": 100}).status_code == 422
-    assert experiments.compare(record)["evidence_scope"] == "calibration_or_unknown"
+    try:
+        assert response.json()["kind"] == "single_trial_smoke"
+        record = client.get("/evaluations/" + response.json()["id"]).json()
+        assert record["kind"] == "single_trial_smoke"
+        assert len(record["runs"]) == len(record["trials"]) == 1
+        assert record["comparison"]["matched_pairs"] == 0
+        assert queued == [record["id"]]
+        assert client.post("/evaluation-smokes", json={"build_id": build["id"],
+            "challenge_id": challenge["id"], "action_cap": 13}).status_code == 422
+        assert client.post("/evaluation-smokes", json={"build_id": build["id"],
+            "challenge_id": challenge["id"], "token_budget": 100}).status_code == 422
+        assert experiments.compare(record)["evidence_scope"] == "calibration_or_unknown"
+    finally:
+        # Never left `queued`: the reaper requeues queued rows older than two
+        # minutes through Celery, which later reaper tests cannot reach.
+        db.set_evaluation_state(response.json()["id"], "complete")

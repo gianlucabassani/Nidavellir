@@ -16,6 +16,9 @@ R2 — root-cause fingerprint: a finding in research mode states its root cause;
 R3 — causality gate: in research mode a finding is confirmed only when its
      record cites a trace, a fixed-build (or guard) control and the single
      toggle, each backed by an immutable evidence digest.
+R4 — saturation ledger: coverage, hypotheses and sweeps per arena; two
+     consecutive zero-yield sweeps at >= 80% planned coverage shelve the arena's
+     research (not its infrastructure) until an operator names a reopen trigger.
 """
 from __future__ import annotations
 
@@ -337,3 +340,94 @@ def downgrade(validation: dict | None, reason_code: str, **extra) -> dict:
     """An automatic confirmation the integrity layer will not accept."""
     return {**(validation or {}), "confirmed": False, "verdict": "unverified",
             "reason_code": reason_code, **extra}
+
+
+# --- R4: saturation ledger ----------------------------------------------------------
+
+SWEEP_EVENT = "research_sweep"
+SHELVED_EVENT = "research_shelved"
+REOPENED_EVENT = "research_reopened"
+LEDGER_EVENT_TYPES = (SWEEP_EVENT, SHELVED_EVENT, REOPENED_EVENT)
+REOPEN_TRIGGERS = ("new_commit", "new_cve", "new_primitive", "new_configuration", "new_model")
+SHELVE_MIN_COVERAGE = 0.8
+SHELVE_ZERO_STREAK = 2
+MAX_LEDGER_SWEEPS = 20
+
+Surface = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=256)]
+
+
+class Sweep(BaseModel):
+    """One pass over the arena: where the ideas came from, how many new
+    (non-duplicate) findings it yielded, and which surfaces it planned/reviewed."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    source: str = Field(pattern=r"^[a-z0-9][a-z0-9._-]{0,31}$")
+    yield_: int = Field(alias="yield", ge=0, le=10000)
+    surfaces_planned: list[Surface] = Field(default_factory=list, max_length=200)
+    surfaces_reviewed: list[Surface] = Field(default_factory=list, max_length=200)
+    note: str | None = Field(default=None, max_length=1024)
+
+
+def _surface(name: str) -> str:
+    return " ".join(str(name).split()).casefold()
+
+
+def ledger(events: list[dict]) -> dict:
+    """The saturation ledger from newest-first ledger events. Coverage is
+    cumulative; the zero-yield streak restarts when the arena is reopened."""
+    planned: set[str] = set()
+    reviewed: set[str] = set()
+    sweeps: list[dict] = []
+    streak = 0
+    status, shelved, reopened = "active", None, None
+    for event in reversed(events):
+        payload = event.get("payload") or {}
+        kind = event.get("type")
+        if kind == SWEEP_EVENT:
+            planned.update(_surface(s) for s in payload.get("surfaces_planned") or [])
+            reviewed.update(_surface(s) for s in payload.get("surfaces_reviewed") or [])
+            sweeps.append({"source": payload.get("source"), "yield": payload.get("yield"),
+                           "actor": event.get("actor"), "ts": event.get("ts")})
+            streak = streak + 1 if payload.get("yield") == 0 else 0
+        elif kind == SHELVED_EVENT:
+            status, shelved = "shelved", {**payload, "ts": event.get("ts")}
+        elif kind == REOPENED_EVENT:
+            status, streak = "active", 0
+            reopened = {**payload, "actor": event.get("actor"), "ts": event.get("ts")}
+    covered = len(reviewed & planned)
+    return {
+        "status": status,
+        "coverage": {"planned": len(planned), "reviewed": covered,
+                     "ratio": round(covered / len(planned), 4) if planned else 0.0},
+        "sweep_count": len(sweeps),
+        "sweeps": sweeps[-MAX_LEDGER_SWEEPS:],
+        "zero_yield_streak": streak,
+        "shelved": shelved if status == "shelved" else None,
+        "last_reopened": reopened,
+        "reopen_on": list(REOPEN_TRIGGERS),
+    }
+
+
+def should_shelve(state: dict) -> bool:
+    return (state["status"] == "active"
+            and state["zero_yield_streak"] >= SHELVE_ZERO_STREAK
+            and state["coverage"]["ratio"] >= SHELVE_MIN_COVERAGE)
+
+
+def shelve_payload(state: dict) -> dict:
+    pct = int(state["coverage"]["ratio"] * 100)
+    return {"reason": f"{state['zero_yield_streak']} consecutive zero-yield sweeps at "
+                      f"{pct}% planned coverage",
+            "coverage": state["coverage"], "zero_yield_streak": state["zero_yield_streak"],
+            "reopen_on": list(REOPEN_TRIGGERS)}
+
+
+def require_not_shelved(events: list[dict]) -> None:
+    state = ledger(events)
+    if state["status"] == "shelved":
+        raise ResearchRefused(
+            "research_shelved",
+            "the arena is shelved as saturated (" + state["shelved"]["reason"] + "); an "
+            "operator reopens it on a new commit, CVE, primitive, configuration or model",
+            reopen_on=list(REOPEN_TRIGGERS))
