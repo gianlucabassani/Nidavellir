@@ -191,6 +191,41 @@ class DeploymentToolingTests(unittest.TestCase):
         self.assertTrue(any("dropdb" in c and "nidavellir" == c[-1] for c in calls))
         self.assertNotIn(SECRET, r.stdout + r.stderr)
 
+    def test_up_force_recreates_app_services_only(self):
+        """2026-11-18: webui kept running an image whose tag a rebuild had moved."""
+        app = ["webui", "agent-gateway", "beat", "worker", "orchestrator"]
+        services = ["postgres", "redis", "orchestrator", "worker", "beat", "webui", "agent-gateway",
+                    "poc-runner-image"]
+
+        def check(ups, overlay):
+            self.assertEqual(len(ups), 2, ups)
+            plain, forced = ups
+            self.assertNotIn("--force-recreate", plain)
+            self.assertEqual(plain[plain.index("--wait-timeout") + 2:], services)
+            self.assertEqual(forced[forced.index("--wait-timeout") + 2:], ["--force-recreate", "--no-deps", *app])
+            for call in ups:
+                self.assertIn("--wait", call)
+                self.assertEqual([x for x in call if x.endswith("images.json")], [overlay] if overlay else [])
+
+        r = self.invoke("deploy", "v-test")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        check([c for c in self.calls() if "up" in c], None)
+        # The rollback path ends the same way, on the overlay images.
+        count = len(self.calls())
+        r = self.invoke("deploy", "v-test", FAIL_API="1")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertEqual(sorted(x["status"] for x in self.receipts()), ["rolled_back", "success"])
+        restarts = [c for c in self.calls()[count:] if "up" in c and "--no-build" in c]
+        overlay = restarts[0][restarts[0].index("up") - 1]
+        self.assertTrue(overlay.endswith("images.json"))
+        check(restarts, overlay)
+        self.assertTrue(all(c[c.index("up") + 1:c.index("up") + 6] == ["-d", "--no-build", "--pull", "never", "--wait"]
+                            for c in restarts))
+        # Dry run shows both calls.
+        r = self.invoke("deploy", "--dry-run", "v-test")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.count("--force-recreate --no-deps webui agent-gateway beat worker orchestrator"), 2)
+
     def test_postgres_status_error_aborts_without_changing_stack(self):
         result = self.invoke("deploy", "v-test", FAIL_POSTGRES_PS="1", NO_OLD_IDS="1")
         self.assertNotEqual(result.returncode, 0)

@@ -11,6 +11,12 @@ for arg in "$@"; do
         *) [[ -z $REF ]] || exit 2; REF=$arg ;;
     esac
 done
+# APP containers are always recreated: each then runs exactly the image its tag names, and
+# no running image loses its last tag when a build moves it (containerd image store).
+up_stack() {  # $@: compose options and `up` arguments; infrastructure converges as before
+    quiet "${COMPOSE[@]}" "$@" --wait --wait-timeout 180 "${SERVICES[@]}" || return 1
+    quiet "${COMPOSE[@]}" "$@" --wait --wait-timeout 180 --force-recreate --no-deps "${APP[@]}"
+}
 [[ -n $REF ]] || { echo 'Usage: deploy.sh [--dry-run] <ref>' >&2; exit 2; }
 [[ -z $(git status --porcelain --untracked-files=all) ]] || { echo 'Dirty tree: abort (including dry-run)' >&2; exit 1; }
 PREVIOUS=$(git rev-parse HEAD)
@@ -41,13 +47,13 @@ if [[ $DRY_RUN == true ]]; then
     show git checkout --detach "$TARGET"
     show make release-check
     show "${COMPOSE[@]}" build
-    show "${COMPOSE[@]}" up -d --wait --wait-timeout 180 "${SERVICES[@]}"
+    up_stack up -d
     smoke
     echo '# On failure, recovery branch:'
     show "${COMPOSE[@]}" stop "${APP[@]}"
     show git checkout --detach "$PREVIOUS"
     show env NIDAVELLIR_DEPLOY_LOCKED=1 NIDAVELLIR_BACKUP_LEAVE_STOPPED=1 bash '<snapshot>/backup.sh' --restore '<completed-backup>'
-    show "${COMPOSE[@]}" -f '<saved-images.json>' up -d --no-build --pull never --wait --wait-timeout 180 "${SERVICES[@]}"
+    up_stack -f '<saved-images.json>' up -d --no-build --pull never
     smoke
     echo "+ write deployments/$STAMP.json (mode 600)"
     printf '{"schema":"nidavellir-deployment/v1","sha":"%s","previous_sha":"%s","timestamp":"<UTC>","status":"success|rolled_back|rollback_failed|failed","backup":"<path-or-null>","images":{"orchestrator":{"image_id":"sha256:<local-content-digest>","repo_digests":["<registry-digest-if-available>"]}}}\n' "$TARGET" "$PREVIOUS"
@@ -70,7 +76,7 @@ rollback() {
         quiet env NIDAVELLIR_DEPLOY_LOCKED=1 NIDAVELLIR_BACKUP_LEAVE_STOPPED=1 bash "$SNAPSHOT/backup.sh" --restore "$BACKUP" || return 1
     fi
     if ((${#OLD_IDS[@]})); then
-        quiet "${COMPOSE[@]}" -f "$SNAPSHOT/images.json" up -d --no-build --pull never --wait --wait-timeout 180 "${SERVICES[@]}" || return 1
+        up_stack -f "$SNAPSHOT/images.json" up -d --no-build --pull never || return 1
         smoke || return 1
     fi
 }
@@ -123,6 +129,6 @@ preflight
 quiet make release-check
 quiet "${COMPOSE[@]}" build
 TOUCHED=true
-quiet "${COMPOSE[@]}" up -d --wait --wait-timeout 180 "${SERVICES[@]}"
+up_stack up -d
 smoke
 STATUS=success
