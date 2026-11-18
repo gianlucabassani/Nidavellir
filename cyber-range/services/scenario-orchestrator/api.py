@@ -34,6 +34,7 @@ import bindings
 import build_planner
 import catalog
 import config
+import database
 import dockerfile_synth
 import evidence_artifact
 import event_visibility
@@ -68,7 +69,7 @@ import validation_evidence
 import evidence_review
 import vulhub_import
 from auth import Principal, ensure_bootstrap_key, hash_api_key, require_principal
-from database import Database, ExtendRefused, StopDenied
+from database import AgentDeployRefused, Database, ExtendRefused, StopDenied
 from orchestrator import Orchestrator
 from providers import (
     available_providers,
@@ -1827,8 +1828,13 @@ def deploy(
     principal: Principal = Depends(require_principal),
 ):
     """Queue deployment via Celery with Unique UUID. Operator-only (FR-04): an
-    agent is bound to arenas an operator created, it never deploys its own."""
-    _require_operator(principal)
+    agent is bound to arenas an operator created, it never deploys its own —
+    except F4: an agent whose current grant for this scenario is
+    `configurator` may deploy an allowlisted scenario, under quota, audited, and
+    while the runtime kill switch is clear (`_agent_deploy_gate`)."""
+    agent_deploy = principal.role not in OPERATOR_ROLES
+    if agent_deploy:
+        _agent_deploy_gate(principal, req.scenario)
 
     _check_provider_compatibility(req.scenario, req.provider)
     _assert_container_images_exist(req.scenario, req.provider)
@@ -1853,6 +1859,16 @@ def deploy(
     scenario_config = scenarios.load_scenario(req.scenario)
     if scenario_config is None:
         raise HTTPException(status_code=404, detail=f"unknown scenario '{req.scenario}'")
+    if agent_deploy:
+        try:
+            db.admit_agent_deploy(
+                system_id, agent_name=principal.name, scenario=req.scenario,
+                per_hour=config.AGENT_DEPLOY_MAX_PER_HOUR,
+                max_live=config.AGENT_DEPLOY_MAX_LIVE,
+            )
+        except AgentDeployRefused as exc:
+            raise HTTPException(status_code=429,
+                                detail={"code": exc.code, "message": str(exc)}) from exc
     db.create_deployment(
         system_id,
         friendly_name,
@@ -1868,6 +1884,15 @@ def deploy(
         requested_provider=req.provider, expires_at=expires_at,
     )
     carried = _carry_over_bindings(system_id, req.scenario)
+    if agent_deploy and principal.name not in {c["agent_name"] for c in carried}:
+        # The deploying configurator drives its own arena as configurator only
+        # (setup, lifecycle, workspace, extend) — never attacker capabilities.
+        db.record_event(
+            system_id, bindings.BINDING_GRANT,
+            {"agent_name": principal.name, "stance": "configurator", "auto": True,
+             "persistent": False, "granted_by": "agent_deploy"},
+            actor=principal.name,
+        )
 
     # 4. Dispatch Async Task using the UUID
     deploy_lab.delay(
@@ -3227,6 +3252,80 @@ def _arena_binding_events(instance_id: str) -> list[dict]:
     return db.list_events(
         instance_id, limit=bindings.BINDING_EVENT_WINDOW, types=bindings.BINDING_EVENT_TYPES
     )
+
+
+def _agent_deploy_refused(status: int, code: str, message: str):
+    return HTTPException(status_code=status, detail={"code": code, "message": message})
+
+
+def _agent_deploy_kill_switch() -> dict | None:
+    """The newest kill-switch event (lab ``system``), or None if never set."""
+    events = db.list_events("system", limit=1, types=(database.AGENT_DEPLOY_KILL_EVENT,))
+    return events[0] if events else None
+
+
+def _agent_deploy_gate(principal: Principal, scenario: str) -> None:
+    """F4 admission for an agent ``POST /deploy`` (quota is checked later, in
+    the same transaction as the audit record). Order: feature off → stance →
+    allowlist, so a disabled install answers without looking at grants."""
+    if principal.role != "agent":
+        raise HTTPException(status_code=403, detail="operator or admin role required")
+    if not config.AGENT_DEPLOY_SCENARIOS:
+        raise _agent_deploy_refused(403, "agent_deploy_disabled",
+                                    "agent deploy is disabled (empty AGENT_DEPLOY_SCENARIOS)")
+    switch = _agent_deploy_kill_switch()
+    if switch and (switch.get("payload") or {}).get("engaged"):
+        raise _agent_deploy_refused(403, "agent_deploy_disabled",
+                                    "agent deploy is disabled by the operator kill switch")
+    lineage = db.scenario_binding_events(scenario, bindings.BINDING_EVENT_TYPES)
+    current = bindings.binding_for(lineage, principal.name)
+    if current is None or current.get("stance") != "configurator":
+        stance = current.get("stance") if current else None
+        raise _agent_deploy_refused(
+            403, "stance_not_permitted",
+            f"only a configurator grant for scenario {scenario!r} may deploy it "
+            f"(current: {stance or 'none'})")
+    if current.get("paused"):
+        raise _agent_deploy_refused(423, "binding_paused",
+                                    "this agent's configurator binding is paused")
+    if scenario not in config.AGENT_DEPLOY_SCENARIOS:
+        raise _agent_deploy_refused(403, "scenario_not_allowlisted",
+                                    f"scenario {scenario!r} is not on the agent deploy allowlist")
+
+
+class AgentDeploySwitchRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    engaged: bool
+    reason: str = Field(min_length=1, max_length=500)
+
+
+@app.get("/system/agent-deploy")
+def agent_deploy_status(principal: Principal = Depends(require_principal)):
+    """F4 policy as configured plus the runtime kill switch. Operator-only."""
+    _require_operator(principal)
+    switch = _agent_deploy_kill_switch()
+    return {
+        "allowlist": list(config.AGENT_DEPLOY_SCENARIOS),
+        "max_per_hour": config.AGENT_DEPLOY_MAX_PER_HOUR,
+        "max_live": config.AGENT_DEPLOY_MAX_LIVE,
+        "kill_switch": (switch or {}).get("payload") or {"engaged": False},
+        "enabled": bool(config.AGENT_DEPLOY_SCENARIOS)
+                   and not ((switch or {}).get("payload") or {}).get("engaged"),
+    }
+
+
+@app.post("/system/agent-deploy/kill-switch")
+def set_agent_deploy_kill_switch(req: AgentDeploySwitchRequest,
+                                 principal: Principal = Depends(require_principal)):
+    """F4 runtime kill switch: `engaged: true` refuses every agent deploy at
+    once, without a restart; arenas already deployed are untouched. Audited."""
+    _require_operator(principal)
+    db.record_event("system", database.AGENT_DEPLOY_KILL_EVENT,
+                    {"engaged": req.engaged, "reason": req.reason, "by": principal.name},
+                    actor=principal.name)
+    logger.info(f"Agent deploy kill switch engaged={req.engaged} by '{principal.name}'")
+    return agent_deploy_status(principal)
 
 
 def _carry_over_bindings(instance_id: str, scenario: str) -> list[dict]:

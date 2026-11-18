@@ -701,6 +701,22 @@ receives `monitor_signal`. Every other type — and any type added later until i
 is reviewed — is hidden. `GET /deployments`, `GET /events`, `POST /deploy` and
 `POST /arenas/custom` are operator-only.
 
+**Configurator-scoped deploy (F4, opt-in).** `POST /deploy` admits an `agent` key
+only when all hold, else a typed refusal `{"detail": {"code", "message"}}`:
+`AGENT_DEPLOY_SCENARIOS` (comma-separated ids) is non-empty and the runtime kill
+switch is clear (`403 agent_deploy_disabled`); the agent's newest grant/revoke
+across arenas of that scenario is an active `configurator` grant
+(`403 stance_not_permitted` — always the answer for an attacker; `423
+binding_paused`); the scenario is allowlisted (`403 scenario_not_allowlisted`);
+fewer than `AGENT_DEPLOY_MAX_PER_HOUR` (default 3) deploys in the last hour and fewer
+than `AGENT_DEPLOY_MAX_LIVE` (default 2) live agent-deployed arenas (`429
+agent_deploy_quota_exceeded` / `agent_deploy_live_limit`, checked and recorded in one
+serialized transaction). Admission appends `agent_deploy` (agent, scenario); the
+deployer is bound to the new arena as `configurator` only. The arena takes the same
+worker path, node limits, TTL and budget as an operator deploy. Operators read the
+policy at `GET /system/agent-deploy` and flip the audited kill switch with `POST
+/system/agent-deploy/kill-switch` `{"engaged": bool, "reason"}`; no restart needed.
+
 A binding's **stance** scopes what it permits (server-side): `null` →
 unrestricted within the arena; `attacker` → exec (foothold-only) + findings;
 `configurator` → setup steps; `mitm` → traffic observation; `defender` → reads
