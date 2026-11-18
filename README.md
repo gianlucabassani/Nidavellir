@@ -75,8 +75,11 @@ For real Docker-local arenas, configuration and data handling see
 Before changing anything, `scripts/deploy.sh` tags each running service image as
 `nidavellir-rollback/<service>:<deploy stamp>`, and automatic rollback starts from those tags.
 It does not use raw image IDs: with Docker's containerd image store, rebuilding a tag makes the
-old image ID unresolvable, and only a tag keeps the image. If no image reference resolves, the
-deploy refuses to start. After a successful deploy, only the newest 3 stamps are kept
+old image ID unresolvable, and only a tag keeps the image. Each deploy force-recreates the app
+services so they always run the image their tag names. If a running image no longer resolves,
+the deploy refuses: recreate that service from its current tag first, or set
+`NIDAVELLIR_ROLLBACK_ACCEPT_TAG=<svc>[,<svc>…]` to knowingly roll it back to what its tag names
+now. After a successful deploy, only the newest 3 stamps are kept
 (`docker rmi <repo:tag>`, never `-f` or prune).
 
 ## Development
