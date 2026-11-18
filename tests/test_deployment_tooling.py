@@ -22,7 +22,7 @@ if a[0]=="compose":
  elif "ps" in a:
   if a[-1]=="postgres":
    if os.environ.get("FAIL_POSTGRES_PS")=="1": sys.exit(1)
-   print("old-postgres")
+   if os.environ.get("POSTGRES_STOPPED")!="1": print("old-postgres")
   elif os.environ.get("NO_OLD_IDS")!="1": print("old-orchestrator\nold-postgres\nold-poc-runner-image\nold-worker")
  elif "up" in a and os.environ.get("FAIL_UP")=="1" and "--no-build" not in a: sys.exit(1)
  elif "run" in a and "tar" in a:
@@ -226,14 +226,27 @@ class DeploymentToolingTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(r.stdout.count("--force-recreate --no-deps webui agent-gateway beat worker orchestrator"), 2)
 
-    def test_postgres_status_error_aborts_without_changing_stack(self):
-        result = self.invoke("deploy", "v-test", FAIL_POSTGRES_PS="1", NO_OLD_IDS="1")
+    def assert_postgres_refusal_changes_nothing(self, message, **variables):
+        """2026-11-19: these refusals came after the snapshot and left its rollback tags behind."""
+        unrelated = "nidavellir-rollback/worker:20261101T000000-1"
+        (self.root / "tags").write_text(unrelated + "\n")
+        result = self.invoke("deploy", "v-test", **variables)  # old IDs present
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Unable to determine PostgreSQL status", result.stderr)
+        self.assertIn(message, result.stderr)
         self.assertEqual(self.git("rev-parse", "HEAD").strip(), self.previous)
-        self.assertFalse(any(any(op in call for op in ("build", "run", "exec", "up", "stop"))
+        self.assertFalse(any(call[0] in ("tag", "rmi") or any(op in call for op in ("build", "run", "exec", "up", "stop"))
                              for call in self.calls()))
-        self.assertEqual(self.receipts()[0]["status"], "failed")
+        self.assertEqual(self.tags(), [unrelated])
+        self.assertFalse((self.repo / "deployments").exists())
+        self.assertFalse((self.root / "home").exists())  # no backup was taken either
+
+    def test_postgres_status_error_aborts_before_snapshot(self):
+        self.assert_postgres_refusal_changes_nothing("Unable to determine PostgreSQL status",
+                                                     FAIL_POSTGRES_PS="1")
+
+    def test_stack_without_running_postgres_aborts_before_snapshot(self):
+        self.assert_postgres_refusal_changes_nothing("Existing stack has no running PostgreSQL",
+                                                     POSTGRES_STOPPED="1")
 
     def test_deploy_does_not_require_ripgrep(self):
         ripgrep = self.root / "bin" / "rg"

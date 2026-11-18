@@ -65,6 +65,15 @@ cp "$HERE/backup.sh" "$HERE/deployment-common.sh" "$HERE/deployment-state.py" "$
 OLD_CONTAINERS=$("${COMPOSE[@]}" ps -aq)
 OLD_IDS=()
 if [[ -n $OLD_CONTAINERS ]]; then mapfile -t OLD_IDS <<< "$OLD_CONTAINERS"; fi
+# Both PostgreSQL refusals precede the snapshot: no rollback tag exists yet to leave behind.
+if ! RUNNING_POSTGRES=$("${COMPOSE[@]}" ps --status running -q postgres); then
+    echo 'Unable to determine PostgreSQL status; abort without changing it.' >&2
+    exit 1
+fi
+if [[ -z $RUNNING_POSTGRES ]] && ((${#OLD_IDS[@]})); then
+    echo 'Existing stack has no running PostgreSQL; abort without changing it.' >&2
+    exit 1
+fi
 # Fails closed before anything is touched (no trap yet): no rollback, no deploy.
 NIDAVELLIR_ROLLBACK_STAMP=$STAMP python3 "$SNAPSHOT/deployment-state.py" snapshot "$SNAPSHOT/images.json" "${OLD_IDS[@]}"
 echo "Rollback images: $SNAPSHOT/images.json" >>"$LOG"
@@ -109,19 +118,12 @@ finish() {
 trap finish EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-if ! RUNNING_POSTGRES=$("${COMPOSE[@]}" ps --status running -q postgres); then
-    echo 'Unable to determine PostgreSQL status; abort without changing it.' >&2
-    exit 1
-fi
 if [[ -n $RUNNING_POSTGRES ]]; then
     TOUCHED=true
     quiet env NIDAVELLIR_DEPLOY_LOCKED=1 NIDAVELLIR_BACKUP_LEAVE_STOPPED=1 bash "$SNAPSHOT/backup.sh"
     # backup output is private, but its non-secret path is needed for recovery.
     BACKUP=$(sed -n 's/^Backup directory: //p' "$LOG" | tail -1)
     [[ -n $BACKUP && -f $BACKUP/complete ]]
-elif ((${#OLD_IDS[@]})); then
-    echo 'Existing stack has no running PostgreSQL; abort without changing it.' >&2
-    exit 1
 fi
 quiet git checkout --detach "$TARGET"
 SWITCHED=true
