@@ -22,7 +22,7 @@ from timeutil import db_now
 from pathlib import Path
 from threading import Lock
 
-from sqlalchemy import create_engine, or_, select, text, update
+from sqlalchemy import create_engine, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
@@ -69,6 +69,20 @@ class StopDenied(ValueError):
 # still have (or are getting) infrastructure can be extended.
 ARENA_EXTENDED_EVENT = "arena_extended"
 EXTENDABLE_STATES = (LabStatus.PENDING, LabStatus.DEPLOYING, LabStatus.ACTIVE)
+
+
+# F4: audit trail of agent self-deploys (lab_id = the new arena) and the runtime
+# kill switch (lab_id = "system"; the newest event decides).
+AGENT_DEPLOY_EVENT = "agent_deploy"
+AGENT_DEPLOY_KILL_EVENT = "agent_deploy_kill_switch"
+
+
+class AgentDeployRefused(ValueError):
+    """An agent deploy was refused by quota; ``code`` is a stable reason."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
 
 
 class ExtendRefused(ValueError):
@@ -1772,6 +1786,34 @@ class Database:
                 }
                 for e in session.scalars(query)
             ]
+
+    def admit_agent_deploy(self, arena_id, *, agent_name, scenario, per_hour, max_live):
+        """F4: quota check and audit record in one serialized step.
+
+        The system gate row lock (PostgreSQL) / writer reservation (SQLite)
+        serializes concurrent admissions, so N parallel requests can never all
+        pass a quota of N-1. Counts this agent's ``agent_deploy`` events in the
+        last hour and its arenas that are still live."""
+        now = db_now()
+        with self._session() as session:
+            self._lock_gate(session, "system")
+            rows = session.execute(select(Event.lab_id, Event.ts).where(
+                Event.type == AGENT_DEPLOY_EVENT, Event.actor == agent_name)).all()
+            recent = sum(1 for _, ts in rows if ts is not None and ts > now - timedelta(hours=1))
+            if recent >= per_hour:
+                raise AgentDeployRefused(
+                    "agent_deploy_quota_exceeded",
+                    f"{recent} agent deploys in the last hour (limit {per_hour})")
+            labs = [lab for lab, _ in rows]
+            live = session.scalar(select(func.count()).select_from(Deployment).where(
+                Deployment.id.in_(labs), Deployment.status.in_(list(LIVE_STATES)))) if labs else 0
+            if live >= max_live:
+                raise AgentDeployRefused(
+                    "agent_deploy_live_limit",
+                    f"{live} live agent-deployed arenas (limit {max_live}); destroy one first")
+            self._append_event(session, arena_id, agent_name, AGENT_DEPLOY_EVENT,
+                               {"agent_name": agent_name, "scenario": scenario})
+            session.commit()
 
     def scenario_binding_events(self, scenario, types, exclude_lab_id=None):
         """F2: binding events of every arena of ``scenario`` (newest first by

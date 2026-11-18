@@ -78,9 +78,11 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
 
     @mcp.tool()
     def deploy_arena(scenario: str, provider: str | None = None) -> dict:
-        """Deploy a scenario as a new arena. Returns its arena_id. Operator keys
-        only: the orchestrator refuses agent keys (an operator binds an agent to
-        an arena it created)."""
+        """Deploy a scenario as a new arena. Returns its arena_id. Operator keys;
+        an agent key only when the operator has enabled agent deploy for that
+        scenario and this agent holds a configurator grant for it (otherwise a
+        typed refusal: agent_deploy_disabled, stance_not_permitted,
+        scenario_not_allowlisted, agent_deploy_quota_exceeded)."""
         return tools.deploy_arena(ctx(), scenario=scenario, provider=provider)
 
     @mcp.tool()
