@@ -37,6 +37,7 @@ import config
 import dockerfile_synth
 import evidence_artifact
 import event_visibility
+import research_digest
 import eval_export
 import eval_model_driver
 import generator
@@ -3696,6 +3697,38 @@ def extend_arena(instance_id: str, req: ExtendRequest,
     logger.info(f"Arena {instance_id} extended by {req.seconds}s by '{principal.name}'"
                 f"{' (replay)' if result['replayed'] else ''}")
     return {"arena_id": instance_id, **result}
+
+
+@app.get("/arenas/{instance_id}/digest")
+def arena_digest(instance_id: str, principal: Principal = Depends(require_principal)):
+    """F3: a bounded (≤ 2048 bytes) research digest — arena state, time and
+    budget left, cycle count, hypothesis and finding counts, the last few
+    activity lines and up to three next steps. Deterministic, built from the
+    audit stream; an agent sees only its FR-04-visible events and no verdicts."""
+    arena = db.get_deployment(instance_id)
+    if arena is None:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    binding = _require_arena_member(principal, instance_id)
+    agent = principal.role not in OPERATOR_ROLES
+    stance = binding.get("stance") if binding else None
+    findings = db.list_events(instance_id, limit=None, types=("finding",))
+    activity = db.list_events(instance_id, limit=50,
+                              types=research_digest.MEANINGFUL_TYPES)
+    sessions = db.list_events(instance_id, limit=None, types=("agent_session",))
+    if agent:
+        findings = event_visibility.redact_for_agent(findings, stance)
+        activity = event_visibility.redact_for_agent(activity, stance)
+    can_extend = (not agent) or bool(
+        binding and not binding.get("paused")
+        and bindings.stance_permits(stance, bindings.CAP_EXTEND))
+    doc = research_digest.build(
+        arena=arena, budget=db.budget_status(instance_id),
+        finding_events=findings, activity_events=activity,
+        session_count=len(sessions), now=db_now(),
+        verdicts=None if agent else _latest_finding_verdicts(instance_id),
+        can_extend=can_extend,
+    )
+    return Response(content=research_digest.render(doc), media_type="application/json")
 
 
 @app.post("/arenas/{instance_id}/budget/policy")

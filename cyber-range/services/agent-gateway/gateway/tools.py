@@ -68,6 +68,14 @@ def budget_status(ctx: GatewayContext, arena_id: str) -> dict:
     return result
 
 
+def digest(ctx: GatewayContext, arena_id: str) -> dict:
+    """F3: the bounded (≤ 2 KB) research digest; replaces re-reading run logs."""
+    _guard(ctx, "digest")
+    result = ctx.client.digest(ctx.session.api_key, arena_id)
+    _trace(ctx, "digest", {}, ok=True, arena_id=arena_id)
+    return result
+
+
 def runtime_capabilities(ctx: GatewayContext, arena_id: str) -> dict:
     _guard(ctx, "runtime_capabilities")
     result = ctx.client.runtime_capabilities(ctx.session.api_key, arena_id)

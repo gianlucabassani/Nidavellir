@@ -44,6 +44,16 @@ under `ARENA_MAX_LIFETIME_SECONDS` (default 7 days). Refusals return
 lifts a stop and is not charged an action. `GET /arenas/{id}/capabilities` reports
 the new `expires_at` and `budget.deadline`.
 
+**Research digest (F3).** `GET /arenas/{id}/digest` returns at most 2048 bytes of
+deterministic JSON (`nidavellir.research-digest.v1`): arena status and scenario,
+`seconds_left` on the TTL, budget remaining/cap/deadline and stop state, `cycles`
+(`agent_session` announcements), `hypotheses` (finding claims that cite a recorded
+transaction or artifact = `evidenced`, otherwise `asserted`; operators also get
+verdict counts), finding count with up to 10 newest titles, the last 3 activity
+lines and up to 3 `next_actions`. Built from the audit stream only — no model call.
+Any binding stance may read it (also while paused); an agent sees only FR-04-visible
+events. MCP: the `digest(arena_id)` lifecycle tool.
+
 Token and cost caps are unavailable for external BYO agents because the
 orchestrator cannot reserve trusted pre-execution model usage. Requests with
 `token_budget` or `cost_budget_usd` at engagement creation, token/cost headers
