@@ -699,6 +699,13 @@ lifecycle tool. Operators/admins are never bound and bypass every check.
 
 - `POST /arenas/{id}/bindings` `{ "agent_name": "redteam", "stance": "attacker" }`
   → `{ "bound": true, … }`. Operator-only. Re-granting updates the stance.
+  Optional `"persistent": true` (F2, default `false`): when the **same scenario**
+  is redeployed with `POST /deploy`, the grant is re-applied to the new arena
+  automatically (stance and pause state included) and a `binding_carried_over`
+  event records the previous instance id; the deploy response lists
+  `carried_over_bindings`. Per agent, the newest grant/revoke across all arenas of
+  that scenario decides, so a revoke — or a non-persistent re-grant — anywhere in
+  the lineage ends carry-over.
 - `GET /arenas/{id}/bindings` → `{ "bindings": [ … ] }` (active bindings; each
   carries a `paused` flag). Operator-only.
 - `DELETE /arenas/{id}/bindings/{agent_name}` → `{ "revoked": true|false }`.

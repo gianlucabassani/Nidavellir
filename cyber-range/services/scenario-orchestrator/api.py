@@ -1866,6 +1866,7 @@ def deploy(
         system_id, scenario_name=req.scenario, scenario_config=scenario_config,
         requested_provider=req.provider, expires_at=expires_at,
     )
+    carried = _carry_over_bindings(system_id, req.scenario)
 
     # 4. Dispatch Async Task using the UUID
     deploy_lab.delay(
@@ -1878,7 +1879,8 @@ def deploy(
         effective_provider=resolve_provider_name(req.provider),
     )
 
-    return {"status": "accepted", "instance_id": system_id}
+    return {"status": "accepted", "instance_id": system_id,
+            "carried_over_bindings": [c["agent_name"] for c in carried]}
 
 @app.delete("/destroy/{instance_id}")
 @limiter.limit(RATE_LIMIT_DESTROY)
@@ -3226,6 +3228,39 @@ def _arena_binding_events(instance_id: str) -> list[dict]:
     )
 
 
+def _carry_over_bindings(instance_id: str, scenario: str) -> list[dict]:
+    """F2: re-apply active persistent grants for ``scenario`` to a new arena.
+
+    Each carried grant is a normal ``agent_binding`` event (still persistent, so
+    the chain continues) plus a ``binding_carried_over`` audit event naming the
+    previous instance. A pause travels with the grant; a revoked binding never
+    carries (see ``bindings.carry_over_candidates``)."""
+    lineage = db.scenario_binding_events(scenario, bindings.BINDING_EVENT_TYPES,
+                                         exclude_lab_id=instance_id)
+    carried = bindings.carry_over_candidates(lineage)
+    for c in carried:
+        db.record_event(
+            instance_id, bindings.BINDING_GRANT,
+            {"agent_name": c["agent_name"], "stance": c["stance"], "auto": True,
+             "persistent": True, "granted_by": c["granted_by"],
+             "carried_over_from": c["previous_instance_id"]},
+            actor="system",
+        )
+        if c["paused"]:
+            db.record_event(instance_id, bindings.BINDING_PAUSE,
+                            {"agent_name": c["agent_name"], "granted_by": "carry_over"},
+                            actor="system")
+        db.record_event(
+            instance_id, bindings.BINDING_CARRIED_OVER,
+            {"agent_name": c["agent_name"], "stance": c["stance"], "scenario": scenario,
+             "previous_instance_id": c["previous_instance_id"], "paused": c["paused"]},
+            actor="system",
+        )
+        logger.info(f"Carried persistent binding '{c['agent_name']}' "
+                    f"(stance={c['stance']}) from {c['previous_instance_id']} to {instance_id}")
+    return carried
+
+
 def _require_binding(principal: Principal, instance_id: str, capability: str) -> dict | None:
     """Gate an agent-driven arena action. Operators/admins bypass (return None);
     an `agent` principal must hold an active binding to `instance_id` whose stance
@@ -3761,6 +3796,9 @@ class BindingRequest(BaseModel):
     agent_name: str = Field(min_length=1, max_length=128)
     # The stance the agent is allowed to take on this arena. None = unrestricted.
     stance: str | None = Field(default=None, max_length=32)
+    # F2 opt-in: re-apply this grant automatically when the same scenario is
+    # redeployed. Default False keeps the per-arena FR-04 behaviour.
+    persistent: bool = False
 
     @field_validator("stance")
     @classmethod
@@ -3787,14 +3825,15 @@ def grant_binding(
     db.record_event(
         instance_id, bindings.BINDING_GRANT,
         {"agent_name": req.agent_name, "stance": req.stance, "auto": False,
-         "granted_by": principal.name},
+         "granted_by": principal.name, "persistent": req.persistent},
         actor=principal.name,
     )
     logger.info(
-        f"Bound agent '{req.agent_name}' (stance={req.stance}) to arena "
-        f"{instance_id} by '{principal.name}'"
+        f"Bound agent '{req.agent_name}' (stance={req.stance}, "
+        f"persistent={req.persistent}) to arena {instance_id} by '{principal.name}'"
     )
-    return {"bound": True, "agent_name": req.agent_name, "stance": req.stance}
+    return {"bound": True, "agent_name": req.agent_name, "stance": req.stance,
+            "persistent": req.persistent}
 
 
 @app.get("/arenas/{instance_id}/bindings")
