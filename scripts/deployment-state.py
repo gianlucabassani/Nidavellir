@@ -1,10 +1,22 @@
 #!/usr/bin/env python3
-"""Private deployment receipts: immutable local image IDs and registry digests."""
+"""Private deployment receipts and durable rollback image references.
+
+With Docker's containerd image store, rebuilding a tag can make the previous
+image ID unresolvable: only a tag keeps an image alive. The snapshot therefore
+pins ``nidavellir-rollback/<service>:<stamp>`` tags, never raw image IDs.
+"""
 import datetime
 import json
+import os
 import pathlib
+import re
 import subprocess
 import sys
+
+ROLLBACK_REPO = "nidavellir-rollback"
+STAMP = re.compile(r"\d{8}T\d{6}-\d+")
+SERVICE = re.compile(r"[a-z0-9][a-z0-9_.-]{0,62}")
+RUNNER_SERVICE = "poc-runner-image"
 
 
 def docker(*args):
@@ -12,7 +24,7 @@ def docker(*args):
 
 
 def resolve(reference):
-    """Return the image a reference resolves to now, or None."""
+    """Return the image a reference resolves to now (inspect record), or None."""
     if not reference:
         return None
     try:
@@ -27,27 +39,64 @@ def service_name(container, fallback):
 
 
 def snapshot(destination, ids):
-    services = {}
-    runner = None
+    stamp = os.environ.get("NIDAVELLIR_ROLLBACK_STAMP") or (
+        datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S") + f"-{os.getpid()}"
+    )
+    if not STAMP.fullmatch(stamp):
+        sys.exit(f"Invalid rollback stamp: {stamp!r}")
+    # Resolve every reference before tagging anything: fail closed, touch nothing.
+    chosen = {}
     worker_runner = "nidavellir/poc-runner:py311"
     for cid in ids:
-        c = docker("inspect", cid)[0]
-        name = c["Config"]["Labels"]["com.docker.compose.service"]
-        image = c["Image"]
-        services[name] = {"image": image, "pull_policy": "never"}
+        try:
+            c = docker("inspect", cid)[0]
+        except (subprocess.CalledProcessError, ValueError, IndexError, OSError):
+            sys.exit(f"Rollback snapshot refused: cannot inspect container {cid}")
+        name = service_name(c, cid)
+        if not SERVICE.fullmatch(name):
+            sys.exit(f"Rollback snapshot refused: invalid service name {name!r}")
+        config_image = (c.get("Config") or {}).get("Image")
+        if resolve(c.get("Image")):
+            chosen[name] = ("image_id", c["Image"])
+        elif resolve(config_image):
+            chosen[name] = ("config_image", config_image)
+        else:
+            sys.exit(f"Rollback snapshot refused: no resolvable image for service {name} "
+                     f"(image ID {c.get('Image')!r}, config image {config_image!r})")
         if name == "worker":
-            for value in c["Config"].get("Env", []):
+            for value in (c.get("Config") or {}).get("Env") or []:
                 if value.startswith("NIDAVELLIR_POC_RUNNER_IMAGE="):
                     worker_runner = value.split("=", 1)[1]
-        if name == "poc-runner-image":
-            runner = image
-    if runner is None and "worker" in services:
-        runner = docker("image", "inspect", worker_runner)[0]["Id"]
-    if runner:
+    if RUNNER_SERVICE not in chosen and "worker" in chosen:
+        # No initializer container: pin what the worker actually runs PoCs with.
+        if not resolve(worker_runner):
+            sys.exit("Rollback snapshot refused: no resolvable image for service "
+                     f"{RUNNER_SERVICE} (worker runner {worker_runner!r})")
+        chosen[RUNNER_SERVICE] = ("worker_runner", worker_runner)
+
+    services, record = {}, {}
+    for name, (source, reference) in chosen.items():
+        tag = f"{ROLLBACK_REPO}/{name}:{stamp}"
+        try:
+            subprocess.run(["docker", "tag", reference, tag], check=True,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except (subprocess.CalledProcessError, OSError):
+            sys.exit(f"Rollback snapshot refused: cannot tag {reference} as {tag} (service {name})")
+        record[name] = {"source": source, "reference": reference, "tag": tag}
+        if source == "worker_runner":
+            continue  # not a running service; only pinned through the environment
+        services[name] = {"image": tag, "pull_policy": "never"}
+        if source != "image_id":
+            print(f"Rollback image for {name}: container image ID did not resolve; "
+                  f"tagged {source} {reference}", file=sys.stderr)
+    if RUNNER_SERVICE in record:
         for name in ("worker", "orchestrator"):
             if name in services:
-                services[name]["environment"] = {"NIDAVELLIR_POC_RUNNER_IMAGE": runner}
-    pathlib.Path(destination).write_text(json.dumps({"services": services}, indent=2) + "\n")
+                services[name]["environment"] = {
+                    "NIDAVELLIR_POC_RUNNER_IMAGE": record[RUNNER_SERVICE]["tag"]}
+    overlay = {"services": services,
+               "x-nidavellir-rollback": {"stamp": stamp, "services": record}}
+    pathlib.Path(destination).write_text(json.dumps(overlay, indent=2) + "\n")
 
 
 def manifest(destination, sha, previous, status, backup, ids):
