@@ -76,6 +76,9 @@ its `probe_budget`), reads them with `list_hypotheses`, and closes one with
 `mark_hypothesis_tested(arena_id, hypothesis_id, outcome)` Before probing a suspected bug it calls
 `dedup_lookup(arena_id, root_cause)`; `report_finding` then requires the same
 `root_cause` and records whether it duplicates or varies an earlier finding.
+At the end of a sweep it calls `record_sweep(arena_id, source, yield_count,
+surfaces_planned, surfaces_reviewed)`; `research_ledger(arena_id)` (and the `research`
+block of `digest`) show coverage and whether the arena is shelved as saturated.
 
 `session_preflight(arena_id)` should be called before research begins. It returns
 the immutable target identity, authorization basis, reset contract, readiness

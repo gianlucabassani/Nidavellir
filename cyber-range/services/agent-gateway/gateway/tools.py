@@ -56,6 +56,36 @@ def register_hypothesis(ctx: GatewayContext, arena_id: str, contract: dict) -> d
     return result
 
 
+def record_sweep(ctx: GatewayContext, arena_id: str, source: str, yield_count: int,
+                 surfaces_planned: list[str] | None = None,
+                 surfaces_reviewed: list[str] | None = None,
+                 note: str | None = None) -> dict:
+    """R4: record one sweep's source and yield in the saturation ledger."""
+    _guard(ctx, "record_sweep")
+    body = {"source": source, "yield": yield_count,
+            "surfaces_planned": surfaces_planned or [],
+            "surfaces_reviewed": surfaces_reviewed or []}
+    if note:
+        body["note"] = note
+    args = {"source": source, "yield": yield_count}
+    try:
+        result = ctx.client.record_sweep(ctx.session.api_key, arena_id, body)
+    except Exception:
+        _trace(ctx, "record_sweep", args, ok=False, arena_id=arena_id)
+        raise
+    _trace(ctx, "record_sweep", {**args, "shelved": result.get("shelved_by_this_sweep")}, ok=True,
+           arena_id=arena_id)
+    return result
+
+
+def research_ledger(ctx: GatewayContext, arena_id: str) -> dict:
+    _guard(ctx, "research_ledger")
+    result = ctx.client.research_ledger(ctx.session.api_key, arena_id)
+    _trace(ctx, "research_ledger", {"status": result.get("status")}, ok=True,
+           arena_id=arena_id)
+    return result
+
+
 def dedup_lookup(ctx: GatewayContext, arena_id: str, root_cause: dict) -> dict:
     """R2: earlier findings in this lineage with the same root-cause fingerprint."""
     _guard(ctx, "dedup_lookup")

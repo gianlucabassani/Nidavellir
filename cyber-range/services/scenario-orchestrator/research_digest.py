@@ -15,6 +15,10 @@ Vocabulary:
     ``announce_agent`` once at start).
   - *hypothesis*: a participant finding claim. ``evidenced`` claims cite a
     recorded HTTP transaction or evidence artifact; ``asserted`` ones cite none.
+  - *research* (R4, present only when the arena uses the research integrity
+    layer): mode, research status (active/shelved), planned coverage %,
+    registered hypotheses by status, sweep count and zero-yield streak. Fixed
+    size, so it never competes with the byte cap.
 """
 from __future__ import annotations
 
@@ -64,9 +68,27 @@ def _evidenced(payload: dict) -> bool:
     return bool(payload.get("transaction_digests") or payload.get("evidence_artifact_digests"))
 
 
+def _research_block(research: dict) -> dict:
+    block = {"mode": bool(research.get("research_mode")),
+             "status": research.get("status"),
+             "coverage_pct": int(((research.get("coverage") or {}).get("ratio") or 0) * 100),
+             "hypotheses": {k: (research.get("hypotheses") or {}).get(k, 0)
+                            for k in ("open", "tested")},
+             "sweeps": research.get("sweep_count", 0),
+             "zero_streak": research.get("zero_yield_streak", 0)}
+    if research.get("status") == "shelved":
+        block["reopen_on"] = list(research.get("reopen_on") or [])
+    return block
+
+
 def _next_actions(*, status, stopped, seconds_left, remaining, cap, asserted,
-                  findings, can_extend) -> list[str]:
+                  findings, can_extend, research=None) -> list[str]:
     actions = []
+    if research and research.get("status") == "shelved":
+        actions.append("research shelved as saturated: only a new commit, CVE, "
+                       "primitive, configuration or model reopens it")
+    elif research and research["mode"] and not research["hypotheses"]["open"]:
+        actions.append("research mode: register_hypothesis before probing")
     if status in ("pending", "deploying"):
         actions.append(f"arena is {status}: poll arena_status until active")
     elif status != "active":
@@ -88,7 +110,8 @@ def _next_actions(*, status, stopped, seconds_left, remaining, cap, asserted,
 
 def build(*, arena: dict, budget: dict, finding_events: list[dict],
           activity_events: list[dict], session_count: int, now: datetime,
-          verdicts: dict[str, str] | None = None, can_extend: bool = False) -> dict:
+          verdicts: dict[str, str] | None = None, can_extend: bool = False,
+          research: dict | None = None) -> dict:
     """Assemble the digest (unbounded); ``render`` enforces the byte cap.
 
     ``finding_events`` and ``activity_events`` are newest-first and already
@@ -108,7 +131,8 @@ def build(*, arena: dict, budget: dict, finding_events: list[dict],
             counts[verdict if verdict in counts else "unreviewed"] += 1
         hypotheses["verdicts"] = counts
     recent = [e for e in activity_events if e.get("type") in MEANINGFUL_TYPES][:MAX_RECENT]
-    return {
+    block = _research_block(research) if research is not None else None
+    doc = {
         "schema": SCHEMA,
         "arena": {"id": arena.get("id"), "status": arena.get("status"),
                   "scenario": arena.get("scenario")},
@@ -125,8 +149,11 @@ def build(*, arena: dict, budget: dict, finding_events: list[dict],
             status=arena.get("status"), stopped=stopped, seconds_left=seconds_left,
             remaining=policy.get("remaining"), cap=policy.get("action_cap"),
             asserted=hypotheses["asserted"], findings=len(findings),
-            can_extend=can_extend),
+            can_extend=can_extend, research=block),
     }
+    if block is not None:
+        doc["research"] = block
+    return doc
 
 
 def _encode(doc: dict) -> bytes:

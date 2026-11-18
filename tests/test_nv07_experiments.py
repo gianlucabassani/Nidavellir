@@ -48,19 +48,25 @@ def test_evaluation_records_and_atomic_trial_claim():
         action_cap=20, deadline_seconds=600)
     evaluation = db.create_evaluation(suite_id=suite["id"],
         baseline_id=baseline["id"], candidate_id=candidate["id"])
-    record = db.get_evaluation(evaluation["id"])
-    assert len(record["runs"]) == 2
-    assert len(record["trials"]) == 6
-    trial = record["trials"][0]
-    assert db.claim_eval_trial(trial["id"], "first")
-    assert not db.claim_eval_trial(trial["id"], "second")
-    assert db.assign_eval_trial_arena(trial["id"], "first", "arena-1")
-    assert not db.finish_eval_trial(trial["id"], "second", state="completed")
-    assert db.finish_eval_trial(trial["id"], "first", state="infrastructure_failure",
-                                error="readiness failed")
-    stored = next(item for item in db.get_evaluation(evaluation["id"])["trials"]
-                  if item["id"] == trial["id"])
-    assert stored["arena_id"] == "arena-1"
+    try:
+        record = db.get_evaluation(evaluation["id"])
+        assert len(record["runs"]) == 2
+        assert len(record["trials"]) == 6
+        trial = record["trials"][0]
+        assert db.claim_eval_trial(trial["id"], "first")
+        assert not db.claim_eval_trial(trial["id"], "second")
+        assert db.assign_eval_trial_arena(trial["id"], "first", "arena-1")
+        assert not db.finish_eval_trial(trial["id"], "second", state="completed")
+        assert db.finish_eval_trial(trial["id"], "first", state="infrastructure_failure",
+                                    error="readiness failed")
+        stored = next(item for item in db.get_evaluation(evaluation["id"])["trials"]
+                      if item["id"] == trial["id"])
+        assert stored["arena_id"] == "arena-1"
+    finally:
+        # Close it like the `evaluations` fixture does: a `queued` row left in the
+        # shared test database is requeued (via Celery/Redis) by any reaper test
+        # that runs more than two minutes later, so the leak depended on suite length.
+        db.set_evaluation_state(evaluation["id"], "complete")
 
 
 def test_comparison_excludes_infrastructure_and_unmatched_starts():

@@ -1679,6 +1679,25 @@ operator `verify` with `confirmed` is otherwise `422 causality_incomplete`
 `confirmed: false, verdict: unverified, reason_code: causality_incomplete,
 missing_causality: [...]`.
 
+**R4 — saturation ledger.** `POST /arenas/{id}/sweeps` (operator, or agent with `exec`;
+201) records `{source, yield, surfaces_planned[], surfaces_reviewed[], note?}`.
+`GET /arenas/{id}/research` (arena member) returns `research_mode`, `lineage`,
+`status` (`active`/`shelved`), `coverage {planned, reviewed, ratio}` (cumulative;
+only planned surfaces count as reviewed), `hypotheses {open, tested, outcomes}`,
+`sweeps` (last 20, each with source, yield, actor, ts), `sweep_count`,
+`zero_yield_streak`, `shelved {reason, coverage, zero_yield_streak, reopen_on}`,
+`last_reopened` and `reopen_on`. When a sweep makes the trailing zero-yield streak 2 with
+`ratio >= 0.8`, a `research_shelved` event is appended in the same serialized step
+(the sweep response has `shelved_by_this_sweep: true`). This is the arena's **research
+status**, not its lab state: the arena keeps running and is destroyed/reaped as usual.
+While shelved, sweeps, new hypotheses and research-mode probes are `409
+research_shelved` with `reopen_on`. `POST /arenas/{id}/research/reopen` (operator)
+`{"trigger": "new_commit|new_cve|new_primitive|new_configuration|new_model", "detail"}`
+reopens it (`409 not_shelved` otherwise); the streak restarts, coverage is kept.
+`GET /arenas/{id}/digest` gains a fixed-size `research` block (`mode`, `status`,
+`coverage_pct`, `hypotheses {open, tested}`, `sweeps`, `zero_streak`, plus `reopen_on`
+when shelved) only for arenas using the layer; the 2048-byte cap is unchanged.
+
 ## Testing with mock mode
 
 When `MOCK_MODE=true`, deployments simulate infrastructure without real provisioning:
