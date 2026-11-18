@@ -1664,6 +1664,21 @@ research mode, else `409 research_mode_off`) returns `fingerprint`, `oracle_dige
 `normalised`, the `relation`/`related_finding_id` a report would get now and
 `matches[{finding_id, arena_id, reported_at, relation}]` — ids only, no titles.
 
+**R3 — causality gate.** Findings (and operator `verify`) accept `causality`:
+`trace` (instrumented path proving source reaches sink), `fixed_build_control`
+(`kind: fixed_build|guard_toggle`, `build`: the fixed commit/version or the guard),
+`toggle` (`control`: the single control that removes the effect). Each part is
+`{summary, evidence_digest: "sha256:…", arena_id?}`; the digest must resolve in that
+arena's immutable stores (HTTP transaction, evidence artifact or validation
+observation; default the finding's arena). An agent may cite another arena only when
+bound to it — typically the fixed-build arena. Otherwise `422
+causality_evidence_unresolved` with the `part`. In research mode a finding is
+confirmed only when the report plus the verification together carry all three:
+operator `verify` with `confirmed` is otherwise `422 causality_incomplete`
+`{status: "unverified", missing: [...]}`, and an automatic confirmation is stored as
+`confirmed: false, verdict: unverified, reason_code: causality_incomplete,
+missing_causality: [...]`.
+
 ## Testing with mock mode
 
 When `MOCK_MODE=true`, deployments simulate infrastructure without real provisioning:

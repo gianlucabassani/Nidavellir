@@ -13,6 +13,9 @@ R2 — root-cause fingerprint: a finding in research mode states its root cause;
      the normalised fingerprint links it to earlier findings of the same
      lineage as ``duplicate``/``variant``/``independent``, and a duplicate can
      never be confirmed.
+R3 — causality gate: in research mode a finding is confirmed only when its
+     record cites a trace, a fixed-build (or guard) control and the single
+     toggle, each backed by an immutable evidence digest.
 """
 from __future__ import annotations
 
@@ -271,3 +274,66 @@ def match_view(match: dict, oracle_digest: str) -> dict:
     return {"finding_id": match["finding_id"], "arena_id": match["arena_id"],
             "reported_at": match["reported_at"],
             "relation": DUPLICATE if match["oracle_digest"] == oracle_digest else VARIANT}
+
+
+# --- R3: causality gate -----------------------------------------------------------
+
+CAUSALITY_PARTS = ("trace", "fixed_build_control", "toggle")
+
+Digest = Annotated[str, StringConstraints(pattern=r"^sha256:[0-9a-f]{64}$")]
+
+
+class EvidenceRef(BaseModel):
+    """A causality claim backed by an immutable record: an HTTP transaction,
+    evidence artifact or validation observation of ``arena_id`` (default: the
+    finding's own arena). A description without a resolvable digest is not
+    evidence."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    summary: Text
+    evidence_digest: Digest
+    arena_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9-]{1,64}$")
+
+
+class TraceClaim(EvidenceRef):
+    """Instrumented path proving the claimed source reaches the claimed sink."""
+
+
+class FixedBuildControl(EvidenceRef):
+    """The same trigger failing on the fixed build, or — where no fix exists —
+    a documented feature/guard toggle that removes the effect."""
+
+    kind: Literal["fixed_build", "guard_toggle"]
+    build: Part = Field(description="fixed commit/version, or the guard's name")
+
+
+class ToggleClaim(EvidenceRef):
+    """The single control that, when flipped, removes the effect."""
+
+    control: Part
+
+
+class Causality(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    trace: TraceClaim | None = None
+    fixed_build_control: FixedBuildControl | None = None
+    toggle: ToggleClaim | None = None
+
+
+def causality_refs(causality: dict | None) -> list[tuple[str, dict]]:
+    return [(name, (causality or {})[name]) for name in CAUSALITY_PARTS
+            if (causality or {}).get(name)]
+
+
+def causality_missing(*claims: dict | None) -> list[str]:
+    """Parts absent from every supplied claim set (finding + verification)."""
+    return [name for name in CAUSALITY_PARTS
+            if not any((claim or {}).get(name) for claim in claims)]
+
+
+def downgrade(validation: dict | None, reason_code: str, **extra) -> dict:
+    """An automatic confirmation the integrity layer will not accept."""
+    return {**(validation or {}), "confirmed": False, "verdict": "unverified",
+            "reason_code": reason_code, **extra}
