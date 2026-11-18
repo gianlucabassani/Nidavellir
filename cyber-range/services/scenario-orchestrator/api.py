@@ -6228,6 +6228,9 @@ class FindingRequest(BaseModel):
     # R2: the root cause, independent of title and build. Required in a
     # research-mode arena; fingerprinted whenever supplied.
     root_cause: research_integrity.RootCause | None = None
+    # R3: trace / fixed-build control / toggle, each citing an immutable digest.
+    # In a research-mode arena all three are needed before it can be confirmed.
+    causality: research_integrity.Causality | None = None
 
     @field_validator("variant_of")
     @classmethod
@@ -6252,6 +6255,7 @@ def report_finding(
     if not record:
         raise HTTPException(status_code=404, detail="Arena not found")
     _require_binding(principal, instance_id, bindings.CAP_EXEC)  # D1
+    _check_causality_refs(principal, instance_id, req.causality)
     finding_id = _record_finding(instance_id, record, req, actor=principal.name)
     return {"recorded": True, "finding_id": finding_id}
 
@@ -6369,6 +6373,13 @@ def _record_finding(instance_id, record, req: "FindingRequest", *, actor: str,
             "variant_of": req.variant_of,
             "research_key": research_key or finding_id,
     }
+    if req.causality is not None:
+        payload["causality"] = req.causality.model_dump(exclude_none=True)
+    if research:
+        missing = research_integrity.causality_missing(payload.get("causality"))
+        if missing and (validation or {}).get("confirmed") is True:
+            payload["validation"] = research_integrity.downgrade(
+                validation, "causality_incomplete", missing_causality=missing)
     if req.root_cause is None:
         db.record_event(instance_id, "finding", payload, actor=actor)
         return finding_id
@@ -6395,9 +6406,8 @@ def _record_finding(instance_id, record, req: "FindingRequest", *, actor: str,
             payload["research_key"] = related_payload.get("research_key") or related
         if dedup["relation"] == research_integrity.DUPLICATE and (
                 payload["validation"] or {}).get("confirmed") is True:
-            payload["validation"] = {
-                **payload["validation"], "confirmed": False, "verdict": "unverified",
-                "reason_code": "duplicate_finding", "duplicate_of": related}
+            payload["validation"] = research_integrity.downgrade(
+                payload["validation"], "duplicate_finding", duplicate_of=related)
         return [(instance_id, actor, "finding", payload)], None
 
     db.guarded_append(f"fingerprint\x1f{lineage}", decide)
@@ -6408,6 +6418,48 @@ class VerifyFindingRequest(BaseModel):
     verdict: str = Field(pattern="^(confirmed|refuted)$")
     note: str | None = Field(default=None, max_length=1024)
     evidence_digest: str | None = Field(default=None, max_length=71)
+    # R3: causality parts established after the report (e.g. a fixed-build run).
+    causality: research_integrity.Causality | None = None
+
+
+def _evidence_resolves(arena_id: str, digest: str) -> bool:
+    """True when ``digest`` names an immutable record in ``arena_id``'s stores."""
+    for fetch, error in (
+        (validation_evidence.get, validation_evidence.ValidationEvidenceError),
+        (http_transactions.get, http_transactions.HttpTransactionError),
+        (evidence_artifact.get, evidence_artifact.EvidenceArtifactError),
+    ):
+        try:
+            fetch(arena_id, digest)
+            return True
+        except error:
+            pass
+    return False
+
+
+def _check_causality_refs(principal: Principal, instance_id: str,
+                          causality: "research_integrity.Causality | None") -> None:
+    """R3: every causality part must cite a digest that resolves in an arena the
+    caller may read (its own by default; an agent needs a binding to any other,
+    e.g. the fixed-build arena). Claims about a container are not evidence."""
+    if causality is None:
+        return
+    for name, ref in research_integrity.causality_refs(causality.model_dump()):
+        arena_id = ref.get("arena_id") or instance_id
+        if arena_id != instance_id:
+            if db.get_deployment(arena_id) is None:
+                raise HTTPException(status_code=422, detail={
+                    "code": "causality_evidence_unresolved", "part": name,
+                    "message": f"{name}: arena {arena_id!r} not found"})
+            if principal.role not in OPERATOR_ROLES and bindings.binding_for(
+                    _arena_binding_events(arena_id), principal.name) is None:
+                raise HTTPException(status_code=422, detail={
+                    "code": "causality_evidence_unresolved", "part": name,
+                    "message": f"{name}: not bound to arena {arena_id!r}"})
+        if not _evidence_resolves(arena_id, ref["evidence_digest"]):
+            raise HTTPException(status_code=422, detail={
+                "code": "causality_evidence_unresolved", "part": name,
+                "message": f"{name}: evidence digest not found in arena {arena_id!r}"})
 
 
 @app.post("/arenas/{instance_id}/findings/manual")
@@ -6423,6 +6475,7 @@ def add_manual_finding(
     record = db.get_deployment(instance_id)
     if not record:
         raise HTTPException(status_code=404, detail="Arena not found")
+    _check_causality_refs(principal, instance_id, req.causality)
     finding_id = _record_finding(instance_id, record, req, actor=principal.name, manual=True)
     return {"recorded": True, "finding_id": finding_id, "manual": True}
 
@@ -6506,30 +6559,27 @@ def verify_finding(
         review = _review_finding(instance_id, finding_id)
         if review["validator_id"] in evidence_review.SUPPORTED and not review["can_refute"]:
             raise HTTPException(status_code=422, detail="Refutation requires resolved, passed prerequisite controls and linked evidence")
+    _check_causality_refs(principal, instance_id, req.causality)
+    supplied = req.causality.model_dump(exclude_none=True) if req.causality else None
+    if req.verdict == "confirmed" and _research_mode(instance_id):
+        missing = research_integrity.causality_missing(finding.get("causality"), supplied)
+        if missing:
+            raise HTTPException(status_code=422, detail={
+                "code": "causality_incomplete", "status": "unverified",
+                "missing": missing,
+                "message": "research mode: confirmation needs trace, fixed_build_control "
+                           "and toggle; missing " + ", ".join(missing)})
     if req.verdict == "confirmed":
         if not req.evidence_digest:
             raise HTTPException(status_code=422, detail="confirmation requires an immutable evidence digest")
-        available = False
-        for fetch, error in (
-            (validation_evidence.get, validation_evidence.ValidationEvidenceError),
-            (http_transactions.get, http_transactions.HttpTransactionError),
-            (evidence_artifact.get, evidence_artifact.EvidenceArtifactError),
-        ):
-            try:
-                fetch(instance_id, req.evidence_digest)
-                available = True
-                break
-            except error:
-                pass
-        if not available:
+        if not _evidence_resolves(instance_id, req.evidence_digest):
             raise HTTPException(status_code=422, detail="immutable evidence digest not found in this arena")
-    db.record_event(
-        instance_id, "finding_verification",
-        {"finding_id": finding_id, "verdict": req.verdict,
-         "note": (req.note or "")[:1024], "actor": principal.name,
-         "evidence_digest": req.evidence_digest},
-        actor=principal.name,
-    )
+    verification = {"finding_id": finding_id, "verdict": req.verdict,
+                    "note": (req.note or "")[:1024], "actor": principal.name,
+                    "evidence_digest": req.evidence_digest}
+    if supplied:
+        verification["causality"] = supplied
+    db.record_event(instance_id, "finding_verification", verification, actor=principal.name)
     return {"verified": True, "finding_id": finding_id, "verdict": req.verdict}
 
 

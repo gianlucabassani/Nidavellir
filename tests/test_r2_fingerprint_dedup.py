@@ -149,10 +149,14 @@ def test_duplicate_cannot_be_confirmed(operator, agent):
 def test_duplicate_auto_confirmation_is_downgraded(operator, agent, monkeypatch):
     monkeypatch.setattr(api, "_validate_finding",
                         lambda record, req, vuln: {"confirmed": True, "method": "test"})
+    from tests.test_r3_causality_gate import _causality
     arena = _research_arena(operator, agent)
-    first = _report(agent, arena).json()["finding_id"]
+    # Complete R3 causality, so only the duplicate rule can withhold confirmation.
+    complete = {"title": "t", "root_cause": BASE, "causality": _causality(arena)}
+    first = agent.post(f"/arenas/{arena}/findings", json=complete).json()["finding_id"]
     assert _finding(arena, first)["validation"]["confirmed"] is True
-    dup = _report(agent, arena).json()["finding_id"]
+    dup = agent.post(f"/arenas/{arena}/findings",
+                     json={**complete, "causality": _causality(arena)}).json()["finding_id"]
     validation = _finding(arena, dup)["validation"]
     assert validation["confirmed"] is False
     assert validation["verdict"] == "unverified"

@@ -854,6 +854,7 @@ def report_finding(
     transaction_digests: list[str] | None = None,
     variant_of: str | None = None,
     root_cause: dict | None = None,
+    causality: dict | None = None,
 ) -> dict:
     """Report a discovered vulnerability. The engagement goal is to DISCOVER the
     arena's known weaknesses; this records your finding for scoring. Pass the
@@ -877,6 +878,7 @@ def report_finding(
             evidence_artifact_digests=evidence_artifact_digests,
             transaction_digests=transaction_digests, variant_of=variant_of,
             **({"root_cause": root_cause} if root_cause else {}),
+            **({"causality": causality} if causality else {}),
         )
     except Exception:
         _trace(ctx, "report_finding", trace_args, ok=False, arena_id=arena_id)
