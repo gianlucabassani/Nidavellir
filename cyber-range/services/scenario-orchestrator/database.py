@@ -1773,6 +1773,24 @@ class Database:
                 for e in session.scalars(query)
             ]
 
+    def scenario_binding_events(self, scenario, types, exclude_lab_id=None):
+        """F2: binding events of every arena of ``scenario`` (newest first by
+        global id), so the newest grant/revoke for an agent across a redeploy
+        lineage can be found in one query."""
+        with self._session() as session:
+            labs = select(Deployment.id).where(Deployment.scenario == scenario)
+            if exclude_lab_id is not None:
+                labs = labs.where(Deployment.id != exclude_lab_id)
+            query = (select(Event).where(Event.lab_id.in_(labs),
+                                         Event.type.in_(list(types)))
+                     .order_by(Event.id.desc()))
+            return [
+                {"id": e.id, "lab_id": e.lab_id, "ts": _stringify(e.ts),
+                 "actor": e.actor, "type": e.type,
+                 "payload": json.loads(e.payload) if e.payload else None}
+                for e in session.scalars(query)
+            ]
+
     def has_http_capture(self, lab_id: str, actor: str, digest: str) -> bool:
         """An immutable body-free execution receipt proves deduplicated capture access.
 

@@ -92,9 +92,44 @@ def _binding_view(agent_name: str, payload: dict, ts, paused: bool = False) -> d
         "granted_by": payload.get("granted_by"),
         "session_id": payload.get("session_id"),
         "auto": bool(payload.get("auto")),
+        "persistent": bool(payload.get("persistent")),
+        "carried_over_from": payload.get("carried_over_from"),
         "paused": paused,
         "ts": ts,
     }
+
+
+# F2: a `persistent: true` grant survives destroy + redeploy of the same scenario.
+BINDING_CARRIED_OVER = "binding_carried_over"
+
+
+def carry_over_candidates(lineage_events: list[dict]) -> list[dict]:
+    """Persistent grants to re-apply on a new arena of the same scenario.
+
+    ``lineage_events`` are the binding events of every earlier arena of that
+    scenario, newest-first by global event id. Per agent, the newest grant or
+    revoke anywhere in the lineage decides, so a revoke (or a later
+    non-persistent re-grant) on any arena ends carry-over: revocation stays
+    authoritative. A pause is carried with the grant. Returns
+    ``[{"agent_name", "stance", "granted_by", "previous_instance_id", "paused"}]``.
+    """
+    decided: dict[str, dict | None] = {}
+    for e in lineage_events:  # newest-first
+        p = e.get("payload") or {}
+        name, t = p.get("agent_name"), e.get("type")
+        if not name or name in decided:
+            continue
+        if t == BINDING_REVOKE:
+            decided[name] = None
+        elif t == BINDING_GRANT:
+            decided[name] = None if not p.get("persistent") else {
+                "agent_name": name,
+                "stance": p.get("stance"),
+                "granted_by": p.get("granted_by"),
+                "previous_instance_id": e.get("lab_id"),
+                "paused": is_paused(lineage_events, name),
+            }
+    return [v for v in decided.values() if v is not None]
 
 
 def binding_for(events: list[dict], agent_name: str) -> dict | None:
