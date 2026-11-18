@@ -73,7 +73,9 @@ attacker registers a contract with `register_hypothesis(arena_id, contract)` bef
 probing, passes its `hypothesis_id` to `run_command`, `http_request`,
 `replay_http_transaction`, `browser_visit` and `submit_poc` (each spends one unit of
 its `probe_budget`), reads them with `list_hypotheses`, and closes one with
-`mark_hypothesis_tested(arena_id, hypothesis_id, outcome)`.
+`mark_hypothesis_tested(arena_id, hypothesis_id, outcome)` Before probing a suspected bug it calls
+`dedup_lookup(arena_id, root_cause)`; `report_finding` then requires the same
+`root_cause` and records whether it duplicates or varies an earlier finding.
 
 `session_preflight(arena_id)` should be called before research begins. It returns
 the immutable target identity, authorization basis, reset contract, readiness

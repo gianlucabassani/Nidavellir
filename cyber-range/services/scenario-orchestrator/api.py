@@ -3861,6 +3861,20 @@ def _research_mode(instance_id: str) -> bool:
     return bool(events and (events[0].get("payload") or {}).get("enabled") is True)
 
 
+def _research_lineage(record: dict) -> str:
+    """R2: the program lineage a finding is deduplicated within. An operator may
+    name one when enabling research mode (so builds of the same program share
+    it); otherwise a registered scenario id, else the arena alone."""
+    events = db.list_events(record["id"], limit=1, types=(research_integrity.MODE_EVENT,))
+    named = (events[0].get("payload") or {}).get("lineage") if events else None
+    if named:
+        return f"program:{named}"
+    scenario = record.get("scenario")
+    if scenario and scenario in scenarios.scenario_ids():
+        return f"scenario:{scenario}"
+    return f"arena:{record['id']}"
+
+
 def _research_guarded(instance_id: str, decide):
     try:
         return db.guarded_append(f"research\x1f{instance_id}", decide)
@@ -3897,6 +3911,9 @@ class ResearchModeRequest(BaseModel):
 
     enabled: bool
     reason: str = Field(min_length=1, max_length=500)
+    # R2: arenas naming the same lineage share one fingerprint store (e.g. the
+    # vulnerable and the backported build of one program).
+    lineage: str | None = Field(default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$")
 
 
 @app.post("/arenas/{instance_id}/research-mode")
@@ -3907,8 +3924,10 @@ def set_research_mode(instance_id: str, req: ResearchModeRequest,
     if db.get_deployment(instance_id) is None:
         raise HTTPException(status_code=404, detail="Arena not found")
     db.record_event(instance_id, research_integrity.MODE_EVENT,
-                    {"enabled": req.enabled, "reason": req.reason}, actor=principal.name)
-    return {"arena_id": instance_id, "research_mode": req.enabled}
+                    {"enabled": req.enabled, "reason": req.reason, "lineage": req.lineage},
+                    actor=principal.name)
+    return {"arena_id": instance_id, "research_mode": req.enabled,
+            "lineage": _research_lineage(db.get_deployment(instance_id))}
 
 
 @app.get("/research/hypothesis-schema")
@@ -4008,6 +4027,33 @@ def mark_hypothesis_tested(instance_id: str, hypothesis_id: str,
     view = _research_guarded(instance_id, decide)
     return {"arena_id": instance_id, "id": hypothesis_id, "status": "tested",
             "outcome": req.outcome, "probes_used": view["probes_used"]}
+
+
+@app.post("/arenas/{instance_id}/dedup/lookup")
+def dedup_lookup(instance_id: str, req: research_integrity.RootCause,
+                 principal: Principal = Depends(require_principal)):
+    """R2: check a root cause against this arena's lineage *before* probing.
+    Returns the fingerprint and every earlier finding sharing it, each with the
+    relation a new report would get. Read-only. Agents need a binding and an
+    arena in research mode; matches carry ids only, never titles or verdicts."""
+    record = db.get_deployment(instance_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    _require_arena_member(principal, instance_id)
+    if principal.role not in OPERATOR_ROLES and not _research_mode(instance_id):
+        raise HTTPException(status_code=409, detail={
+            "code": "research_mode_off",
+            "message": "dedup lookup is available to agents only in research mode"})
+    lineage = _research_lineage(record)
+    fp = research_integrity.fingerprint(req.model_dump())
+    matches = research_integrity.lineage_matches(
+        db.list_events(limit=None, types=("finding",)), lineage, fp["fingerprint"])
+    would_be = research_integrity.classify(matches, fp["oracle_digest"])
+    return {"lineage": lineage, "fingerprint": fp["fingerprint"],
+            "oracle_digest": fp["oracle_digest"], "normalised": fp["normalised"],
+            **would_be,
+            "matches": [research_integrity.match_view(m, fp["oracle_digest"])
+                        for m in matches]}
 
 
 @app.post("/arenas/{instance_id}/budget/policy")
@@ -6179,6 +6225,9 @@ class FindingRequest(BaseModel):
     # Affected-versus-fixed linkage: the finding id this report is a variant of.
     # The group read resolves the shared research key from the referenced event.
     variant_of: str | None = Field(default=None, max_length=32)
+    # R2: the root cause, independent of title and build. Required in a
+    # research-mode arena; fingerprinted whenever supplied.
+    root_cause: research_integrity.RootCause | None = None
 
     @field_validator("variant_of")
     @classmethod
@@ -6218,6 +6267,12 @@ def _record_finding(instance_id, record, req: "FindingRequest", *, actor: str,
     there is no manifest — those run in *discovery mode*: the finding is recorded
     and ack'd but never scored by CWE (crash-oracle + operator verification carry
     the evidence instead)."""
+    research = _research_mode(instance_id)
+    if research and req.root_cause is None:
+        raise HTTPException(status_code=422, detail={
+            "code": "root_cause_required",
+            "message": "research mode is on: a finding states its root_cause "
+                       "(invariant, owner_lifetime, source, sink, missing_check, oracle)"})
     manifest = _arena_manifest(record)
     verdicts = _latest_finding_verdicts(instance_id)
     claimed = {
@@ -6294,9 +6349,7 @@ def _record_finding(instance_id, record, req: "FindingRequest", *, actor: str,
         )
     else:
         validation = _validate_finding(record, req, matched_vuln)
-    db.record_event(
-        instance_id, "finding",
-        {
+    payload = {
             "finding_id": finding_id,
             "title": req.title[:256],
             "cwe": normalize_cwe(req.cwe),
@@ -6315,9 +6368,39 @@ def _record_finding(instance_id, record, req: "FindingRequest", *, actor: str,
             "actor": actor,
             "variant_of": req.variant_of,
             "research_key": research_key or finding_id,
-        },
-        actor=actor,
-    )
+    }
+    if req.root_cause is None:
+        db.record_event(instance_id, "finding", payload, actor=actor)
+        return finding_id
+    lineage = _research_lineage(record)
+    payload["root_cause"] = {**research_integrity.fingerprint(req.root_cause.model_dump()),
+                             "lineage": lineage}
+    if not research:
+        db.record_event(instance_id, "finding", payload, actor=actor)
+        return finding_id
+
+    def decide(read):
+        # Relation, linkage and the duplicate downgrade are decided under the
+        # lineage lock, so two racing reports of one bug cannot both be
+        # `independent`.
+        root = payload["root_cause"]
+        events = read(types=("finding",))
+        matches = research_integrity.lineage_matches(events, lineage, root["fingerprint"])
+        dedup = research_integrity.classify(matches, root["oracle_digest"])
+        payload["dedup"] = {**dedup, "lineage": lineage}
+        related = dedup["related_finding_id"]
+        if related and not req.variant_of:
+            related_payload = next((e.get("payload") or {} for e in events
+                                    if (e.get("payload") or {}).get("finding_id") == related), {})
+            payload["research_key"] = related_payload.get("research_key") or related
+        if dedup["relation"] == research_integrity.DUPLICATE and (
+                payload["validation"] or {}).get("confirmed") is True:
+            payload["validation"] = {
+                **payload["validation"], "confirmed": False, "verdict": "unverified",
+                "reason_code": "duplicate_finding", "duplicate_of": related}
+        return [(instance_id, actor, "finding", payload)], None
+
+    db.guarded_append(f"fingerprint\x1f{lineage}", decide)
     return finding_id
 
 
@@ -6409,9 +6492,16 @@ def verify_finding(
     record = db.get_deployment(instance_id)
     if not record:
         raise HTTPException(status_code=404, detail="Arena not found")
-    known = {(e.get("payload") or {}).get("finding_id") for e in _finding_events(instance_id)}
-    if finding_id not in known:
+    finding = next((e.get("payload") or {} for e in _finding_events(instance_id)
+                    if (e.get("payload") or {}).get("finding_id") == finding_id), None)
+    if finding is None:
         raise HTTPException(status_code=404, detail="Finding not found in this arena")
+    dedup = finding.get("dedup") or {}
+    if req.verdict == "confirmed" and dedup.get("relation") == research_integrity.DUPLICATE:
+        raise HTTPException(status_code=409, detail={
+            "code": "duplicate_finding",
+            "message": "a duplicate cannot be confirmed; confirm the related finding",
+            "related_finding_id": dedup.get("related_finding_id")})
     if req.verdict == "refuted":
         review = _review_finding(instance_id, finding_id)
         if review["validator_id"] in evidence_review.SUPPORTED and not review["can_refute"]:
