@@ -65,6 +65,22 @@ make down
 | Migrations/readiness | Alembic + service clients | `make smoke` |
 | Clean SQLite + PostgreSQL | Docker/Python 3.11.14 | `make release-check` |
 
+## Public-tree guard
+
+This repository is public. The **Guard** workflow fails a PR that adds a secret
+(gitleaks, every commit), an absolute local path such as `/home/<you>/...`, an
+`.env` file, a private key, operator notes or a binary over 1 MiB. Run the same
+checks before you commit:
+
+```bash
+pre-commit install                    # once; uses .pre-commit-config.yaml
+python3 scripts/check-public-tree.py  # ad hoc
+```
+
+A deliberate test fixture that trips gitleaks goes into `.gitleaks.toml` by exact
+value, never by path. Any real credential that reached a commit must be rotated:
+removing it from git does not make it secret again.
+
 ## Adding tests
 
 - Tests live in `tests/`. `conftest.py` already redirects all runtime state to a
