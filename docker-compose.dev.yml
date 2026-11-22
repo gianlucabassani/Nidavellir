@@ -51,6 +51,10 @@ services:
     volumes:
       # Image runs the app from /app/webui (see webui/Dockerfile)
       - ./cyber-range/webui:/app/webui
+      # The source mount above hides the console the image built, and a fresh clone
+      # has no local build (static/console/ is gitignored). This anonymous volume
+      # keeps the image's copy; `make dev` renews it so a rebuild is never stale.
+      - /app/webui/static/console
 
   # Opt-in profile; mock mode lets it use the dev key (FR-03 refuses it otherwise).
   agent-gateway:
