@@ -35,6 +35,14 @@ app.conf.update(
     result_serializer='json',
     task_track_started=True, # Allows tracking "started" state in addition to "pending/success"
     worker_concurrency=4,    # Number of concurrent worker threads (CPU)
+    # PF-01 U3: lifecycle tasks are acks_late, so Redis redelivers one that stays
+    # unacknowledged past the visibility timeout (default 1 h), even while it is
+    # still running. Set it above every bounded task's hard limit, and reserve only
+    # what a worker is running so queued tasks cannot age behind a long one.
+    broker_transport_options={"visibility_timeout": config.CELERY_VISIBILITY_TIMEOUT_SECONDS},
+    result_backend_transport_options={
+        "visibility_timeout": config.CELERY_VISIBILITY_TIMEOUT_SECONDS},
+    worker_prefetch_multiplier=1,
 )
 
 # Celery-beat schedule: the lifecycle reaper (audit #9). The `beat` service
