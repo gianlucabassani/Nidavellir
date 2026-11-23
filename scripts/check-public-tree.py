@@ -127,8 +127,8 @@ def main(argv: list[str]) -> int:
 
 def self_test() -> int:
     leaks = [
-        "/home/alice/Projects/x", "see /Users/bob/code", r"C:\Users\carol\repo",
-        r"C:\\Users\\dave\\repo",
+        "/home/alice/Projects/x", "see /Users/bob/code", r"C:\Users\carol\repo",  # public-tree: allow
+        r"C:\\Users\\dave\\repo",  # public-tree: allow
     ]
     clean = [
         "/home/ubuntu/.bashrc", "/home/kali/.bashrc", "/home/runner/work",
