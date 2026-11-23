@@ -7,6 +7,7 @@ for that scenario is ``configurator`` and its hourly / live quotas hold. Every
 admitted deploy is audited with the agent and scenario. An attacker is refused in
 every configuration; FR-04's operator-only default is unchanged.
 """
+import os
 import shutil
 import uuid
 from pathlib import Path
@@ -223,3 +224,29 @@ def test_operator_deploy_is_unaffected(env, monkeypatch):
     monkeypatch.setattr(config, "AGENT_DEPLOY_SCENARIOS", ())
     assert _deploy(operator, created).status_code == 200
     assert len(queued) == 1
+
+
+@pytest.mark.skipif(not os.getenv("DATABASE_URL", "").startswith("postgresql"),
+                    reason="PostgreSQL quota race")
+def test_racing_agent_deploys_never_exceed_the_hourly_quota(env, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    operator, queued, created = env
+    monkeypatch.setattr(config, "AGENT_DEPLOY_MAX_PER_HOUR", 2)
+    monkeypatch.setattr(config, "AGENT_DEPLOY_MAX_LIVE", 10)
+    agent = _client("agent")
+    _seed_arena(operator, created, OPENCMS, agent, "configurator")
+    workers = 8
+    barrier = Barrier(workers)
+
+    def deploy(_):
+        barrier.wait(5)
+        return _deploy(agent, created)
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        responses = list(pool.map(deploy, range(workers)))
+    accepted = [r for r in responses if r.status_code == 200]
+    assert len(accepted) == 2, [r.text for r in responses]
+    assert all(r.status_code == 429 for r in responses if r.status_code != 200)
+    assert len(queued) == 2
