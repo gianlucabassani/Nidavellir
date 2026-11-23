@@ -50,6 +50,12 @@ use an open-egress arena, bind host services to `127.0.0.1`, or drop arena-bridg
 traffic to host addresses in the host firewall (Docker's `DOCKER-USER` chain and the
 INPUT path). Locked arenas are not affected.
 
+Since PF-02 (#22), deploying an open-egress scenario takes an operator's explicit
+`acknowledge_open_egress: true`, which is recorded as an audited
+`open_egress_acknowledged` event. Agent keys can never deploy one, and the worker
+refuses an open-egress deploy without the event, whichever route queued it. Host
+firewall rules remain the operator's choice; the platform does not change them.
+
 ## Secrets handling (audit #14)
 
 Two layers protect lab and cloud secrets:
