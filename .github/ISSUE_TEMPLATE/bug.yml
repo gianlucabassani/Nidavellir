@@ -1,0 +1,36 @@
+name: Bug report
+description: Something does not work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do **not** report security vulnerabilities here; use the repository's
+        Security tab → "Report a vulnerability". Never paste secrets, `.env`
+        contents or absolute paths from your machine.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected, what you got, and any error output.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. git clone … && make dev
+        2. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Commit or version
+      description: Output of `git rev-parse --short HEAD`.
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: OS, Docker / Compose version, Python version, provider (mock, docker-local…).
