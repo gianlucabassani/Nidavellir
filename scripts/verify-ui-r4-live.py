@@ -565,7 +565,7 @@ def main():
         compose("down", "--volumes", "--remove-orphans")
         STACK_ENV["UI_R4_SECRETS_ENCRYPTION_KEY"] = ""
         compose("up", "-d", "--wait", "postgres", "redis")
-        maintenance("python", "-c", "from database import Database; Database()")
+        maintenance("python", "-m", "migrate")
         maintenance("python", "recovery.py", "restore", "/recovery/full.nvr", "--root", "/app")
         saved = maintenance("cat", "/app/keys/recovery.env").stdout.strip()
         assert saved.startswith("SECRETS_ENCRYPTION_KEY=")

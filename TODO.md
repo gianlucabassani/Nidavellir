@@ -184,8 +184,16 @@ as pending with the exact command.
   violation in a browser, sixth rapid failed login refused. *Throttle/header/cookie tests met 2026-11-16 (`tests/test_fr02_console_server.py`); gunicorn release smoke and the browser CSP check are pending the operator.*
 - [x] **FR-01 — Run migrations at deploy and stop masking drift (B10, U4).** **Accept:**
   0009 → deploy path → 0010 column present; a revision mismatch exits non-zero. *Met on SQLite 2026-11-16 (`tests/test_fr01_migrations.py`; U4 proven); PostgreSQL copy-of-production migration and the deploy are pending the operator.*
-- [ ] **FR-09 — Finish NV-14.** Independent review + closure report; live rerun is the
-  operator's. **Accept:** as `NV-14`. *2026-11-16: fix review done and accepted; live rerun (`scripts/verify-nv14-live.py`) and release gate pending.*
+- [x] **FR-09 — Finish NV-14 (#14).** Independent review + closure report. **Accept:** as `NV-14`.
+  *2026-11-16: fix review done and accepted.* **Closed 2026-11-23:** the live rerun
+  first exposed that every PostgreSQL acceptance stack (`compose/acceptance/nv02`–`nv06`)
+  had lacked the FR-01 `migrate` step since FR-01 landed, so the API refused to start.
+  The fresh-instance restore in the NV-10, NV-14 and UI-R4 verifiers had the same gap
+  (`Database()` instead of `python -m migrate`). Both are fixed. The rerun then passed
+  all eight checks on the Vaultwarden calibration pair, restore on a clean instance
+  included (evidence kept locally under `docs/verification/`). `make release-check`
+  passed: SQLite 1565, PostgreSQL 1577. The other live gates on the fixed stacks
+  (NV-02–NV-10, UI-R4) were not rerun here.
 
 - [ ] **PF-01 — Prove or refute the review's unverified claims (U1–U5).** U1 locked node
   reaches host services via the bridge gateway; U2 SSRF DNS rebinding window; U3 no
@@ -440,7 +448,7 @@ commit are stale; locate code by symbol.
   establish a live local hypervisor lifecycle before claiming provider support.
   **Depends:** proven Docker path and NV-10. **Accept:** reproduce and reset the selected
   non-source target; no source-diff approximation for binary evidence.
-- [ ] **NV-14 — Research campaigns and disclosure bundles.** Group local research sessions,
+- [x] **NV-14 — Research campaigns and disclosure bundles.** Group local research sessions,
   deduplicate findings by affected identity, track version/fix/disclosure state and generate
   sanitized reproducible output. **Depends:** NV-10–11.
   **Accept:** trace one finding across versions and produce a reviewable disclosure bundle;
@@ -452,8 +460,10 @@ commit are stale; locate code by symbol.
   **Not complete:** an independent review found two important defects — a downloaded
   bundle did not hash to its digest, and the evidence-support flag ignored whether a
   different version was run. Both are fixed with tests and the fixes were accepted on
-  review. **Next action:** rerun `scripts/verify-nv14-live.py` on the fixed code, then
-  flip this box.
+  review. **Closed 2026-11-23 (FR-09, #14):** `scripts/verify-nv14-live.py` passed on the
+  fixed code with all eight checks (agent key refused, browser, bundle, disclosure
+  state, no arena or budget change, one-byte tamper, one row for two arenas, restore
+  on a clean instance), and `make release-check` passed.
 - [ ] **NV-15 — Held-out proof and optional active episodes.** Build private challenges from
   confirmed research findings with truth withheld; repeated trials, leakage policy, build
   identity and uncertainty. Add staged releases or LLM-app targets when used by the agent
