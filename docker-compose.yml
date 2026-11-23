@@ -93,7 +93,7 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     command: uvicorn api:app --host 0.0.0.0 --port 8000
     environment:
       # The local stack provisions REAL container arenas by default: the
@@ -325,7 +325,7 @@ services:
     depends_on:
       - orchestrator
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
     environment:
       ORCHESTRATOR_URL: http://orchestrator:8000
       ORCHESTRATOR_API_KEY: ${NIDAVELLIR_API_KEY:-dev-insecure-key}
@@ -361,7 +361,7 @@ services:
     depends_on:
       - orchestrator
     ports:
-      - "${AGENT_GATEWAY_PORT:-9001}:9000"
+      - "127.0.0.1:${AGENT_GATEWAY_PORT:-9001}:9000"
     environment:
       NIDAVELLIR_API_URL: http://orchestrator:8000
       # FR-03: outside MOCK_MODE the gateway refuses an empty/admin-role key.
