@@ -352,6 +352,9 @@ REOPEN_TRIGGERS = ("new_commit", "new_cve", "new_primitive", "new_configuration"
 SHELVE_MIN_COVERAGE = 0.8
 SHELVE_ZERO_STREAK = 2
 MAX_LEDGER_SWEEPS = 20
+FINDING_EVENT = "finding"
+YIELD_EVENT_TYPES = LEDGER_EVENT_TYPES + (FINDING_EVENT,)
+MAX_COUNTED_FINDINGS = 1000
 
 Surface = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=256)]
 
@@ -363,10 +366,58 @@ class Sweep(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     source: str = Field(pattern=r"^[a-z0-9][a-z0-9._-]{0,31}$")
-    yield_: int = Field(alias="yield", ge=0, le=10000)
+    # Optional and advisory: the recorded yield is derived from the arena's
+    # findings (``derive_yield``); a reported value is kept as ``reported_yield``.
+    yield_: int | None = Field(default=None, alias="yield", ge=0, le=10000)
     surfaces_planned: list[Surface] = Field(default_factory=list, max_length=200)
     surfaces_reviewed: list[Surface] = Field(default_factory=list, max_length=200)
     note: str | None = Field(default=None, max_length=1024)
+
+
+def derive_yield(events: list[dict]) -> list[str]:
+    """Finding ids this sweep yields, oldest first, from the arena's newest-first
+    sweep and finding events: every finding no earlier sweep counted, except R2
+    duplicates. Findings without a dedup relation (no root cause, research mode
+    off) count, so a sweep that found something can never shelve the arena.
+
+    Earlier sweeps carry the ids they counted, so a finding whose event id was
+    allocated before a sweep but committed after it is counted by the next sweep
+    instead of falling between windows. A sweep recorded before yields were
+    derived has no ids; findings older than it are treated as counted."""
+    counted: set[str] = set()
+    legacy_floor = 0
+    for event in events:
+        if event.get("type") != SWEEP_EVENT:
+            continue
+        payload = event.get("payload") or {}
+        if "counted_findings" in payload:
+            counted.update(payload["counted_findings"] or [])
+        else:
+            legacy_floor = max(legacy_floor, event.get("id") or 0)
+    found: list[str] = []
+    for event in reversed(events):
+        payload = event.get("payload") or {}
+        finding_id = payload.get("finding_id")
+        if (event.get("type") != FINDING_EVENT or not finding_id or finding_id in counted
+                or (event.get("id") or 0) < legacy_floor
+                or (payload.get("dedup") or {}).get("relation") == DUPLICATE):
+            continue
+        found.append(finding_id)
+    return found
+
+
+def sweep_payload(sweep: dict, events: list[dict]) -> dict:
+    """The recorded sweep: ``yield`` derived from findings, the sweeper's own
+    count kept as ``reported_yield`` with ``yield_disagrees`` when it differs."""
+    found = derive_yield(events)
+    reported = sweep.get("yield")
+    payload = {key: value for key, value in sweep.items() if key != "yield"}
+    payload.update({"yield": len(found), "yield_source": "derived",
+                    "counted_findings": found[:MAX_COUNTED_FINDINGS]})
+    if reported is not None:
+        payload["reported_yield"] = reported
+        payload["yield_disagrees"] = reported != len(found)
+    return payload
 
 
 def _surface(name: str) -> str:
@@ -387,8 +438,11 @@ def ledger(events: list[dict]) -> dict:
         if kind == SWEEP_EVENT:
             planned.update(_surface(s) for s in payload.get("surfaces_planned") or [])
             reviewed.update(_surface(s) for s in payload.get("surfaces_reviewed") or [])
-            sweeps.append({"source": payload.get("source"), "yield": payload.get("yield"),
-                           "actor": event.get("actor"), "ts": event.get("ts")})
+            entry = {"source": payload.get("source"), "yield": payload.get("yield"),
+                     "actor": event.get("actor"), "ts": event.get("ts")}
+            if payload.get("yield_disagrees"):
+                entry["reported_yield"] = payload.get("reported_yield")
+            sweeps.append(entry)
             streak = streak + 1 if payload.get("yield") == 0 else 0
         elif kind == SHELVED_EVENT:
             status, shelved = "shelved", {**payload, "ts": event.get("ts")}
