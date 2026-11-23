@@ -1,0 +1,26 @@
+# RC-03 acceptance overlay: research core (F1–F4, R1–R4) on a live docker-local arena.
+# Use only as:
+#   docker compose -p nidavellir-rc --project-directory . -f compose/acceptance/nv06.yml -f compose/acceptance/rc.yml ...
+# scripts/verify-research-core-live.py drives it. Ports are loopback only.
+name: nidavellir-rc
+
+services:
+  orchestrator:
+    environment:
+      AGENT_DEPLOY_SCENARIOS: rc-fixture
+      # nv06 sets 0 for its own reaper checks; here arenas must survive deployment.
+      LAB_STUCK_MINUTES: "30"
+      AGENT_DEPLOY_MAX_PER_HOUR: "3"
+      AGENT_DEPLOY_MAX_LIVE: "2"
+    ports: !override ["127.0.0.1:18017:8000"]
+
+  worker:
+    environment:
+      AGENT_DEPLOY_SCENARIOS: rc-fixture
+      LAB_STUCK_MINUTES: "30"
+
+  webui:
+    ports: !override ["127.0.0.1:15017:5000"]
+
+  agent-gateway:
+    ports: !override ["127.0.0.1:19017:9000"]

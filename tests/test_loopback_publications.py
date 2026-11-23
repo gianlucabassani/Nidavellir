@@ -33,6 +33,7 @@ STACKS = {
        for p in sorted((ROOT / "compose" / "acceptance").glob("nv0[2-6].yml"))},
     "acceptance-nv14": ["compose/acceptance/nv06.yml", "compose/acceptance/nv14.yml"],
     "acceptance-ui-r4": ["compose/acceptance/nv06.yml", "compose/acceptance/ui-r4.yml"],
+    "acceptance-rc": ["compose/acceptance/nv06.yml", "compose/acceptance/rc.yml"],
 }
 
 

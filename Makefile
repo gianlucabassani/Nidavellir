@@ -19,7 +19,7 @@ PYTHON := $(if $(wildcard $(VENV_BIN)/python),$(VENV_BIN)/python,python3)
 
 .PHONY: help venv install-dev check-python test test-unit test-integration \
 	cov lint fmt security smoke check verify-sqlite verify-postgres release-check \
-	verify-nv02-live verify-nv03-live verify-nv04-live verify-nv05-live verify-nv06-live verify-nv07-live verify-nv07-recovery-live verify-nv08-live verify-nv09-live verify-nv10-live verify-vaultwarden-live build-poc-runner up down dev dev-smoke dev-down dev-logs logs clean
+	verify-nv02-live verify-nv03-live verify-nv04-live verify-nv05-live verify-nv06-live verify-nv07-live verify-nv07-recovery-live verify-nv08-live verify-nv09-live verify-nv10-live verify-vaultwarden-live verify-research-core-live build-poc-runner up down dev dev-smoke dev-down dev-logs logs clean
 
 
 help: ## Show this help
@@ -117,6 +117,9 @@ verify-nv10-live: ## Clean-install encrypted backup and restore acceptance
 
 verify-vaultwarden-live: ## Non-synthetic CVE-2026-26012 calibration acceptance
 	python3 scripts/verify-vaultwarden-live.py
+
+verify-research-core-live: ## Live F1–F4 and R1–R4 on an isolated docker-local stack (RC-03)
+	$(PYTHON) scripts/verify-research-core-live.py
 
 up: ## Start the base stack via docker-compose (requires configured non-mock credentials)
 	$(COMPOSE) up -d --build

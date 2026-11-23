@@ -260,9 +260,23 @@ Each commit message records its verification; contracts are in `docs/API.md` and
 - [x] **RC-02 — PostgreSQL concurrency gate for `guarded_append` (#13).**
   `tests/test_guarded_append_postgres.py`: with the advisory lock replaced by a no-op,
   the race tests fail.
-- [ ] **RC-03 — Live use of F1–F4 and R1–R4 in a real campaign.** None of them has run
-  against a live docker-local arena. **Accept:** the next research campaign uses extend,
-  carry-over, the digest and research mode. Any defect it exposes becomes an issue.
+- [x] **RC-03 — Live use of F1–F4 and R1–R4 (#29).** None of them had run against a live
+  docker-local arena. **Accept:** live use of extend, carry-over, the digest and research
+  mode; any defect it exposes becomes an issue. **Closed 2026-11-23:**
+  `make verify-research-core-live` (isolated `nidavellir-rc` stack, real arena containers)
+  passed:
+  - F1 extended the time box by 15 min.
+  - R1 refused an uncited probe (`hypothesis_required`), ran a real `exec` on the foothold,
+    and stopped at the probe budget.
+  - R2 refused to confirm the duplicate.
+  - R3 confirmed a finding backed by three real recorded HTTP transactions, refused a
+    fabricated digest and refused incomplete causality.
+  - R4 yielded 2 findings, then shelved after two zero-yield sweeps at 100 % coverage; the
+    operator reopened it.
+  - F3's digest was 774 B, under the 2048 B cap.
+  - F2 carried both persistent grants to the redeploy.
+  - F4 let the configurator deploy and refused the attacker.
+  - No product defect was found, and no arena containers were left over.
 - [x] **RC-04 — Index scenario/lineage scans (#27).** F2's binding lineage and R2's
   relation/lookup read every event of a scenario or every finding. **Accept:** query cost
   is measured at 10× today's events; an index is added if p95 exceeds the 150 ms
