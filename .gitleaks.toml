@@ -1,0 +1,31 @@
+# gitleaks configuration for the public tree (CI `guard` workflow and pre-commit).
+# The default ruleset applies; the allowlist below names each known, deliberately
+# public value exactly. Do not allowlist whole paths (e.g. tests/): a real secret
+# pasted into a test must still fail. Add a value here only when it is a fixture,
+# a placeholder or a key that guards nothing outside a throwaway local stack.
+
+title = "Nidavellir"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known public fixtures and placeholders"
+regexTarget = "secret"
+regexes = [
+  # Fixed Fernet key of the isolated, throwaway acceptance stacks (compose/acceptance/).
+  '''^7Qv0B9F_WjC1jL45o7oYw9xgA-rn7s4Usi0p-DuStxk=$''',
+  # Fernet key written to a temporary .env by tests/test_deployment_tooling.py.
+  '''^1Lyp1COmA9ijy52VmSMGEO25u6INm-Slggk0cgcCP4o=$''',
+  # Placeholders shown to operators in the console (`NIDAVELLIR_AGENT_KEY=<agent-key>
+  # NIDAVELLIR_STANCE=attacker ...`); the generic rule reads the next token as the key.
+  '''^<agent-key>$''',
+  '''^NIDAVELLIR_STANCE=attacker$''',
+  # Fixed test and acceptance fixtures.
+  '''^0123456789abcdef0123456789abcdef$''',
+  '''^0123456789ab$''',
+  '''^abcdef123456$''',
+  '''^tok-live-4f9a1c7e22$''',
+  '''^nv14-operator-key$''',
+  '''^nv03-mcp-(live|cancel)-job$''',
+]

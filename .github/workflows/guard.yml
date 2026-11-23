@@ -1,0 +1,46 @@
+# Public-tree guard: this repository is public, so every PR and every push to main
+# is checked for secrets (gitleaks, full history) and for local or private material
+# (absolute home paths, .env files, keys, operator notes, oversized binaries).
+# The same checks run locally through .pre-commit-config.yaml.
+name: Guard
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # scan every commit, not only the tip
+
+      - name: gitleaks
+        # Pinned by digest. The CLI is used directly: gitleaks-action needs a license
+        # key for organisation accounts and adds nothing here.
+        run: |
+          docker run --rm -v "$PWD:/repo:ro" \
+            zricethezav/gitleaks:v8.24.3@sha256:e1b35e12a8c6fa8901f060459cfb6b2fc4c484d3afbe3b029733a3bbfab07055 \
+            git /repo --config /repo/.gitleaks.toml --redact --no-banner --log-opts="--all"
+
+  public-tree:
+    name: Local paths and private files
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.14"
+
+      - name: Self-test the rules
+        run: python scripts/check-public-tree.py --self-test
+
+      - name: Check the tracked tree
+        run: python scripts/check-public-tree.py

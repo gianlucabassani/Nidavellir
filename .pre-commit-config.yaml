@@ -1,0 +1,22 @@
+# Local mirror of the CI `guard` workflow, so a leak is stopped before it is committed.
+#   pip install pre-commit   (or: uv tool install pre-commit)
+#   pre-commit install
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.3
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: public-tree
+        name: public tree (local paths, private files, large binaries)
+        entry: python3 scripts/check-public-tree.py
+        language: system
+        pass_filenames: true
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--config, ruff.toml]
