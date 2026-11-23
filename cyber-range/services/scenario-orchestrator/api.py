@@ -2157,10 +2157,28 @@ def purge_deployment_records(
     return {"status": "purged", "deleted": deleted}
 
 
+# PF-01 U5: the provider outputs an agent may read from /status. Deny by default:
+# providers also write operator material (Terraform's `soc_credentials`, setup
+# instructions, `docker exec` setup shells into the victim), and any key not listed
+# here is withheld from agent keys. Operators and admins see every output.
+_AGENT_OUTPUT_KEY = re.compile(
+    r"^(?:node_[A-Za-z0-9_.-]+_(?:name|private_ip|floating_ip|url|ports|state|limits"
+    r"|whitebox|whitebox_source|ssh_command)"
+    r"|(?:attack_vm|victim_vm|log_vm)_(?:name|private_ip|floating_ip|ssh_command)"
+    r"|provider|lab_network|lab_networks|egress|package_mirror|victim_web_url"
+    r"|unhealthy_nodes|arena_vpc_id|private_network_cidr|private_network_name"
+    r"|soc_dashboard_url)$")
+
+
+def _agent_visible_outputs(outputs: dict) -> dict:
+    return {key: value for key, value in outputs.items() if _AGENT_OUTPUT_KEY.match(key)}
+
+
 @app.get("/status/{instance_id}")
 def get_status(instance_id: str, principal: Principal = Depends(require_principal)):
     """One arena's record with its decrypted outputs. An agent key must be bound
-    to this arena (FR-04); the outputs are its topology, not anyone else's."""
+    to this arena (FR-04) and sees only the topology outputs it needs (PF-01 U5);
+    operators see every output."""
     data = db.get_deployment(instance_id)
     if not data:
         raise HTTPException(status_code=404, detail="Instance not found")
@@ -2169,11 +2187,16 @@ def get_status(instance_id: str, principal: Principal = Depends(require_principa
     outputs = data.get("outputs", {})
     if isinstance(outputs, str):
         try:
-            data["outputs"] = json.loads(outputs)
+            outputs = json.loads(outputs)
         except json.JSONDecodeError:
             logger.warning(f"Corrupt outputs JSON for deployment {instance_id}")
-            data["outputs"] = {}
-
+            outputs = {}
+    outputs = outputs if isinstance(outputs, dict) else {}
+    if principal.role not in OPERATOR_ROLES:
+        visible = _agent_visible_outputs(outputs)
+        withheld = len(outputs) - len(visible)
+        outputs = {**visible, **({"withheld_outputs": withheld} if withheld else {})}
+    data["outputs"] = outputs
     return data
 
 
