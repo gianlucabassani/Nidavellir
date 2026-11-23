@@ -29,6 +29,27 @@ the most security-sensitive part of the system.
 | 7 | **Med**  | No rate limiting; a single client can exhaust the worker pool / cloud quota. | `api.py` | **Fixed** — slowapi per-client limits on `/deploy` (10/min) and `/destroy` (30/min), tunable via `RATE_LIMIT_*` env; per-operator quotas follow in Phase 5 |
 | 8 | **Low**  | No network isolation guarantees between concurrent arenas are documented/enforced. | `infra/terraform/network.tf` | Phase 1–2 (topology segments + per-stance egress lockdown) |
 
+## Review claims U1–U5 (PF-01, 2026-11-23)
+
+The 2026-11-16 review raised five claims that nobody had verified. Each now has a test
+or a recorded run.
+
+| Claim | Result | Evidence and fix |
+|---|---|---|
+| U1 — a locked node reaches host services through its bridge gateway | **Refuted** for locked arenas (Docker 29.9.2). **Confirmed variant** for `requires.egress: open` arenas | `scripts/verify-pf01-live.py` recreates docker-local's `internal` segment and no-masquerade ingress bridge. Locked nodes reached none of the host's listeners; a normal-bridge control reached them. Open-egress arenas sit on a normal bridge and can reach every host service bound to a non-loopback address (LAN, VPN or overlay, other Docker bridge gateways). See below. |
+| U2 — SSRF DNS-rebinding window | **Confirmed**, plus a redirect bypass. **Fixed** | Fetchers resolved the host again after `netguard` checked it, and git and the Docker daemon followed redirects. git is now pinned to the checked addresses (`http.curloptResolve`), with redirects off and HTTP(S) only. Daemon source builds use a pinned local clone, and registry HTTP checks each socket's real peer before sending. `tests/test_pf01_ssrf_rebinding.py`. |
+| U3 — no Celery `visibility_timeout` | **Confirmed. Fixed** | `acks_late` tasks fell back to Redis's 1-hour default, below the 3660 s evaluation fallback limit. `CELERY_VISIBILITY_TIMEOUT_SECONDS` (default 7200) now exceeds every bounded task, and `worker_prefetch_multiplier=1`. Longer evaluations are guarded by their `queued → running` claim. `tests/test_pf01_celery_redelivery.py`. |
+| U4 — column migrations fail on an old schema | **Refuted** with FR-01 in place | FR-01 proved and fixed it on SQLite. On PostgreSQL every historical revision, and an unversioned `create_all` database, reaches head with rows intact: `tests/test_pf01_migrations_postgres.py`. |
+| U5 — decrypted outputs reach an agent key | **Confirmed. Fixed** | `/status` returned all decrypted outputs to a bound agent, including Terraform's `soc_credentials` and `docker exec` setup shells. Agents now get a deny-by-default allowlist of topology keys; operators see everything. `tests/test_pf01_agent_outputs.py`. |
+
+**Open-egress arenas and host services.** An arena opts out of containment with
+`requires.egress: open`. Its nodes then sit on a normal Docker bridge, and they reach
+anything the host reaches, **including services on the host itself bound to a
+non-loopback address**. The provider cannot restrict this per destination. Before you
+use an open-egress arena, bind host services to `127.0.0.1`, or drop arena-bridge
+traffic to host addresses in the host firewall (Docker's `DOCKER-USER` chain and the
+INPUT path). Locked arenas are not affected.
+
 ## Secrets handling (audit #14)
 
 Two layers protect lab and cloud secrets:

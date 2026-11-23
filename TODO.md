@@ -195,12 +195,24 @@ as pending with the exact command.
   passed: SQLite 1565, PostgreSQL 1577. The other live gates on the fixed stacks
   (NV-02–NV-10, UI-R4) were not rerun here.
 
-- [ ] **PF-01 — Prove or refute the review's unverified claims (U1–U5).** U1 locked node
+- [x] **PF-01 — Prove or refute the review's unverified claims (U1–U5) (#15).** U1 locked node
   reaches host services via the bridge gateway; U2 SSRF DNS rebinding window; U3 no
-  Celery `visibility_timeout` (none found in code 2026-11-17); U4 column migrations on an
-  old schema; U5 decrypted outputs to an agent key. Add to the NV-03 containment gate a
-  check that arena ports bind `127.0.0.1` only (fixed 2026-11-17 in docker-local).
-  **Accept:** one test or recorded run per claim; each confirmed claim gets a fix package.
+  Celery `visibility_timeout`; U4 column migrations on an old schema; U5 decrypted outputs
+  to an agent key. Add to the NV-03 containment gate a check that arena ports bind
+  `127.0.0.1` only. **Accept:** one test or recorded run per claim; each confirmed claim
+  gets a fix package. **Closed 2026-11-23** (detail in `docs/SECURITY.md`):
+  - U1 **refuted** for locked arenas: `scripts/verify-pf01-live.py`, with a positive control.
+    The confirmed variant, that open-egress arenas reach host services, is the operator
+    decision **#22**.
+  - U2 **confirmed and fixed**: git is pinned to the checked addresses with redirects off,
+    daemon builds use a local clone, and registry HTTP checks each peer.
+  - U3 **confirmed and fixed**: `CELERY_VISIBILITY_TIMEOUT_SECONDS` and prefetch 1.
+  - U4 **refuted** with FR-01 in place: PostgreSQL upgrades from every revision with rows
+    intact.
+  - U5 **confirmed and fixed**: agents get an allowlist of topology outputs.
+  - The loopback-only publication check is in `scripts/verify-nv03-live.py` and passed in
+    live runs. The full NV-03 gate did not complete on the loaded host because of timing
+    windows that predate this work (**#23**).
 
 ## Research core — from the OpenCMS campaign (work orders 2026-11-18)
 
