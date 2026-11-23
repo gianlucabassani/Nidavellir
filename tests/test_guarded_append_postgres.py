@@ -130,9 +130,9 @@ def test_racing_reports_of_one_root_cause_yield_one_independent_finding(monkeypa
     from tests.research_support import bind, client, research_mode
     from tests.test_r2_fingerprint_dedup import BASE
 
-    # Outcome-level: same-arena finding reports are also serialised earlier in
-    # the finding path, so this test holds even without the advisory lock. The
-    # lock itself is isolated by the claim, waiter and sweep tests in this file.
+    # Outcome-level: the finding path does more work before the guarded step, so
+    # without the advisory lock this race is lost on most runs but not every run.
+    # The claim and waiter tests isolate the lock deterministically.
     monkeypatch.setattr(research_integrity, "classify", _slow(research_integrity.classify))
 
     operator, agent = client("operator"), client("agent")
@@ -185,3 +185,32 @@ def test_racing_zero_yield_sweeps_shelve_exactly_once(monkeypatch):
     assert all(r.json()["detail"]["code"] == "research_shelved" for r in refused)
     shelved = _db().list_events(arena, limit=None, types=("research_shelved",))
     assert len(shelved) == 1
+
+
+def test_racing_probes_never_overspend_a_hypothesis_budget(monkeypatch):
+    import research_integrity
+    from tests.research_support import bind, client, contract, research_mode
+
+    operator, agent = client("operator"), client("agent")
+    arena = _arena()
+    bind(operator, arena, agent)
+    research_mode(operator, arena)
+    hid = agent.post(f"/arenas/{arena}/hypotheses", json=contract(probe_budget=2)).json()["id"]
+    monkeypatch.setattr(research_integrity, "require_probe_allowed",
+                        _slow(research_integrity.require_probe_allowed))
+    barrier = Barrier(WORKERS)
+
+    def probe(_):
+        barrier.wait(5)
+        return agent.post(f"/arenas/{arena}/exec",
+                          json={"node": "victim", "command": "id", "hypothesis_id": hid})
+
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        responses = list(pool.map(probe, range(WORKERS)))
+    allowed = [r for r in responses if r.status_code == 200]
+    refused = [r for r in responses if r.status_code == 429]
+    assert len(allowed) == 2, [r.text for r in responses]
+    assert len(refused) == WORKERS - 2
+    assert {r.json()["detail"]["code"] for r in refused} == {"probe_budget_exhausted"}
+    (view,) = agent.get(f"/arenas/{arena}/hypotheses").json()["hypotheses"]
+    assert view["id"] == hid and view["probes_used"] == 2
