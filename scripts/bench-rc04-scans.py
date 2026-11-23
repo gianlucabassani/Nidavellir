@@ -40,7 +40,8 @@ BUDGET_MS = 150.0
 def _seed(engine, scale: int) -> dict:
     from sqlalchemy import text
 
-    rng = random.Random(scale)  # nosec B311 - synthetic benchmark data, not security
+    # Synthetic benchmark data; this generator is never used for anything secret.
+    rng = random.Random(scale)  # nosec B311
     scenarios = [f"bench-scenario-{i}" for i in range(BASE["scenarios"])]
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     deployments = []
