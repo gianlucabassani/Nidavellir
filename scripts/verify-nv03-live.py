@@ -405,6 +405,11 @@ print(json.dumps(proof, sort_keys=True))
     result = useful["result"]
     if "stdout" not in result:
         raise RuntimeError(f"useful PoC did not execute: {useful}")
+    if useful["state"] != "succeeded" or not result["stdout"].strip():
+        raise RuntimeError(
+            f"useful PoC ended {useful['state']!r} without a proof; "
+            f"stderr tail: {str(result.get('stderr', ''))[-1500:]!r}; result keys: "
+            f"{sorted(result)}; job: { {k: useful.get(k) for k in ('state', 'cleanup_state', 'deadline', 'limits')} }")
     proof = json.loads(result["stdout"])
     assert useful["state"] == "succeeded" and all(proof["denied"].values())
     assert proof["status"] == 200 and proof["file"] == transfer.decode()
