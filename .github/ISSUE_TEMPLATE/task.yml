@@ -1,0 +1,24 @@
+name: Feature or task
+description: A change to make: a feature, fix, refactor, docs or CI task.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is missing or wrong, and why it matters.
+    validations:
+      required: true
+  - type: textarea
+    id: change
+    attributes:
+      label: Proposed change
+      description: Scope of the change. Reference the TODO.md NV ID, ROADMAP item or ADR when one applies.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance
+      description: How we will know it is done; what must be verified.
+    validations:
+      required: true
