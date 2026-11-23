@@ -56,15 +56,20 @@ def register_hypothesis(ctx: GatewayContext, arena_id: str, contract: dict) -> d
     return result
 
 
-def record_sweep(ctx: GatewayContext, arena_id: str, source: str, yield_count: int,
+def record_sweep(ctx: GatewayContext, arena_id: str, source: str,
+                 yield_count: int | None = None,
                  surfaces_planned: list[str] | None = None,
                  surfaces_reviewed: list[str] | None = None,
                  note: str | None = None) -> dict:
-    """R4: record one sweep's source and yield in the saturation ledger."""
+    """R4: record one sweep in the saturation ledger. The platform derives the
+    yield from the arena's findings; ``yield_count`` is the agent's own count,
+    kept as ``reported_yield`` and flagged when it disagrees."""
     _guard(ctx, "record_sweep")
-    body = {"source": source, "yield": yield_count,
+    body = {"source": source,
             "surfaces_planned": surfaces_planned or [],
             "surfaces_reviewed": surfaces_reviewed or []}
+    if yield_count is not None:
+        body["yield"] = yield_count
     if note:
         body["note"] = note
     args = {"source": source, "yield": yield_count}
@@ -73,7 +78,8 @@ def record_sweep(ctx: GatewayContext, arena_id: str, source: str, yield_count: i
     except Exception:
         _trace(ctx, "record_sweep", args, ok=False, arena_id=arena_id)
         raise
-    _trace(ctx, "record_sweep", {**args, "shelved": result.get("shelved_by_this_sweep")}, ok=True,
+    _trace(ctx, "record_sweep", {**args, "derived_yield": (result.get("sweep") or {}).get("yield"),
+                                 "shelved": result.get("shelved_by_this_sweep")}, ok=True,
            arena_id=arena_id)
     return result
 

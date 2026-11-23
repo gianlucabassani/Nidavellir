@@ -4067,7 +4067,9 @@ def research_ledger(instance_id: str, principal: Principal = Depends(require_pri
 @app.post("/arenas/{instance_id}/sweeps", status_code=201)
 def record_sweep(instance_id: str, req: research_integrity.Sweep,
                  principal: Principal = Depends(require_principal)):
-    """R4: record one sweep's source and yield. Two consecutive zero-yield
+    """R4: record one sweep's source and coverage. Its yield is derived from the
+    arena's findings no earlier sweep counted (R2 duplicates excluded); a yield
+    the sweeper reports is kept as ``reported_yield``. Two consecutive zero-yield
     sweeps with >= 80% of planned surfaces reviewed shelve the arena's research
     in the same serialized step; a shelved arena takes no more sweeps."""
     record = db.get_deployment(instance_id)
@@ -4077,21 +4079,29 @@ def record_sweep(instance_id: str, req: research_integrity.Sweep,
     sweep = req.model_dump(by_alias=True)
 
     def decide(read):
-        events = read(lab_id=instance_id, types=research_integrity.LEDGER_EVENT_TYPES)
-        research_integrity.require_not_shelved(events)
-        appends = [(instance_id, principal.name, research_integrity.SWEEP_EVENT, sweep)]
+        events = read(lab_id=instance_id, types=research_integrity.YIELD_EVENT_TYPES)
+        ledger_events = [e for e in events if e["type"] != research_integrity.FINDING_EVENT]
+        research_integrity.require_not_shelved(ledger_events)
+        payload = research_integrity.sweep_payload(sweep, events)
+        appends = [(instance_id, principal.name, research_integrity.SWEEP_EVENT, payload)]
         after = research_integrity.ledger(
-            [{"type": research_integrity.SWEEP_EVENT, "payload": sweep,
-              "actor": principal.name, "ts": None}] + events)
+            [{"type": research_integrity.SWEEP_EVENT, "payload": payload,
+              "actor": principal.name, "ts": None}] + ledger_events)
         if research_integrity.should_shelve(after):
             appends.append((instance_id, "system", research_integrity.SHELVED_EVENT,
                             research_integrity.shelve_payload(after)))
-        return appends, len(appends) == 2
+        return appends, (payload, len(appends) == 2)
 
-    shelved = _research_guarded(instance_id, decide)
+    payload, shelved = _research_guarded(instance_id, decide)
+    if payload.get("yield_disagrees"):
+        logger.info(f"Arena {instance_id} sweep reported yield {payload['reported_yield']} "
+                    f"but its findings derive {payload['yield']}")
     if shelved:
         logger.info(f"Arena {instance_id} research shelved as saturated")
     return {"recorded": True, "shelved_by_this_sweep": shelved,
+            "sweep": {key: payload[key] for key in
+                      ("yield", "yield_source", "reported_yield", "yield_disagrees")
+                      if key in payload},
             **_research_summary(instance_id, record)}
 
 

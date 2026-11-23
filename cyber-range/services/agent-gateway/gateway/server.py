@@ -390,13 +390,14 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
             return tools.dedup_lookup(ctx(), arena_id=arena_id, root_cause=root_cause)
 
         @mcp.tool()
-        def record_sweep(arena_id: str, source: str, yield_count: int,
+        def record_sweep(arena_id: str, source: str, yield_count: int | None = None,
                          surfaces_planned: list[str] | None = None,
                          surfaces_reviewed: list[str] | None = None,
                          note: str | None = None) -> dict:
-            """Close a research sweep: its idea `source` (e.g. fix-diff, fuzz),
-            `yield_count` of new non-duplicate findings, surfaces you planned and
-            reviewed. Two zero-yield sweeps at >= 80% planned coverage shelve the
+            """Close a research sweep: its idea `source` (e.g. fix-diff, fuzz) and the
+            surfaces you planned and reviewed. The platform derives the yield from the
+            arena's new non-duplicate findings; an optional `yield_count` is kept as your
+            reported count and flagged if it disagrees. Two zero-yield sweeps at >= 80% planned coverage shelve the
             arena; only an operator with a new input reopens it."""
             return tools.record_sweep(
                 ctx(), arena_id=arena_id, source=source, yield_count=yield_count,

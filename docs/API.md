@@ -1680,11 +1680,19 @@ operator `verify` with `confirmed` is otherwise `422 causality_incomplete`
 missing_causality: [...]`.
 
 **R4 — saturation ledger.** `POST /arenas/{id}/sweeps` (operator, or agent with `exec`;
-201) records `{source, yield, surfaces_planned[], surfaces_reviewed[], note?}`.
+201) records `{source, surfaces_planned[], surfaces_reviewed[], note?, yield?}`. The
+recorded `yield` is **derived**, not reported: it counts the arena's findings that no
+earlier sweep counted, excluding R2 `duplicate`s (findings without a dedup relation
+count). Each sweep stores the finding ids it counted, so a finding committed after a
+concurrent sweep is counted by the next one. An optional reported `yield` is kept as
+`reported_yield` with `yield_disagrees`, and the response's `sweep` block shows
+`{yield, yield_source: "derived", reported_yield?, yield_disagrees?}`. Sweeps recorded
+before derivation keep their reported yield; findings older than them count as counted.
 `GET /arenas/{id}/research` (arena member) returns `research_mode`, `lineage`,
 `status` (`active`/`shelved`), `coverage {planned, reviewed, ratio}` (cumulative;
 only planned surfaces count as reviewed), `hypotheses {open, tested, outcomes}`,
-`sweeps` (last 20, each with source, yield, actor, ts), `sweep_count`,
+`sweeps` (last 20, each with source, yield, actor, ts, and `reported_yield` when it
+disagreed), `sweep_count`,
 `zero_yield_streak`, `shelved {reason, coverage, zero_yield_streak, reopen_on}`,
 `last_reopened` and `reopen_on`. When a sweep makes the trailing zero-yield streak 2 with
 `ratio >= 0.8`, a `research_shelved` event is appended in the same serialized step
