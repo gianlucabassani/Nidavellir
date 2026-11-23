@@ -59,7 +59,7 @@ def main():
         # The second PostgreSQL service and all persistent volumes are fresh.
         os.environ["NV07_SECRETS_ENCRYPTION_KEY"] = ""
         fixture.run(*fixture.COMPOSE, "up", "-d", "--wait", "postgres", "redis")
-        _maintenance("python", "-c", "from database import Database; Database()", workspace=workspace)
+        _maintenance("python", "-m", "migrate", workspace=workspace)
         _maintenance("python", "recovery.py", "restore", "/recovery/full.nvr",
                      "--root", "/app", workspace=workspace)
         saved = _maintenance("cat", "/app/keys/recovery.env", workspace=workspace).stdout.strip()

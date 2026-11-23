@@ -47,6 +47,7 @@ services:
       PYTHONPATH: /app
     depends_on:
       postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
       redis: {condition: service_healthy}
     ports: ["18000:8000"]
     volumes:
@@ -60,6 +61,19 @@ services:
       timeout: 3s
       retries: 30
 
+  # FR-01: one-shot migration to the Alembic head. On PostgreSQL the API, worker
+  # and beat refuse an unversioned or drifted schema, as in docker-compose.yml.
+  migrate:
+    build:
+      context: ./cyber-range/services/scenario-orchestrator
+    command: ["python", "-m", "migrate"]
+    restart: "no"
+    environment: *orchestrator-env
+    depends_on:
+      postgres: {condition: service_healthy}
+    volumes:
+      - nv02-data:/app/data
+
   worker:
     build:
       context: ./cyber-range/services/scenario-orchestrator
@@ -67,6 +81,7 @@ services:
     environment: *orchestrator-env
     depends_on:
       postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
       redis: {condition: service_healthy}
       orchestrator: {condition: service_healthy}
     volumes:
@@ -83,6 +98,7 @@ services:
     depends_on:
       redis: {condition: service_healthy}
       postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
 
   webui:
     build:
