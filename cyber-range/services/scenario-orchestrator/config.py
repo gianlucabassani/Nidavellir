@@ -224,6 +224,11 @@ SOC_FLAVOR = os.getenv("SOC_FLAVOR", "m1.medium")
 # CELERY & REDIS
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
+# PF-01 U3: Redis redelivers an unacknowledged (acks_late) task after this many
+# seconds. It must exceed every bounded task's hard time limit, or a task still
+# running is handed to a second worker. Evaluations longer than this are guarded
+# by their own queued->running claim instead.
+CELERY_VISIBILITY_TIMEOUT_SECONDS = int(os.getenv("CELERY_VISIBILITY_TIMEOUT_SECONDS", "7200"))
 
 # DATABASE
 DATABASE_PATH = os.getenv("DATABASE_PATH", str(DATA_DIR / "deployments.db"))
