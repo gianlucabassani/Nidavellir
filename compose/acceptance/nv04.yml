@@ -58,7 +58,7 @@ services:
       postgres: {condition: service_healthy}
       migrate: {condition: service_completed_successfully}
       redis: {condition: service_healthy}
-    ports: ["18004:8000"]
+    ports: ["127.0.0.1:18004:8000"]
     volumes:
       - nv04-data:/app/data
       # Startup validation requires the template directory, as in docker-compose.yml.
@@ -126,7 +126,7 @@ services:
       MOCK_MODE: "false"
     depends_on:
       orchestrator: {condition: service_healthy}
-    ports: ["15004:5000"]
+    ports: ["127.0.0.1:15004:5000"]
 
   agent-gateway:
     build:
@@ -141,7 +141,7 @@ services:
       NIDAVELLIR_TRACE_DIR: /app/traces
     depends_on:
       orchestrator: {condition: service_healthy}
-    ports: ["19004:9000"]
+    ports: ["127.0.0.1:19004:9000"]
     volumes:
       - nv04-traces:/app/traces
 
