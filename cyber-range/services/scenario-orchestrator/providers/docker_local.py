@@ -526,7 +526,7 @@ class DockerLocalProvider(RangeProvider):
             # Chrome retries a refused proxy for long enough to consume the
             # entire synchronous API budget, so establish readiness from inside
             # the trusted proxy container before launching the untrusted page.
-            proxy_ready_deadline = time.monotonic() + 8
+            proxy_ready_deadline = time.monotonic() + config.BROWSER_PROXY_READY_SECONDS
             while time.monotonic() < proxy_ready_deadline:
                 probe = proxy.exec_run([
                     "python3", "-E", "-c",
