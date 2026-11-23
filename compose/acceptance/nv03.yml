@@ -5,7 +5,7 @@ services:
   poc-runner-image:
     build:
       context: ./cyber-range/services/scenario-orchestrator/infra/poc-runner
-    image: nidavellir/poc-runner:py311
+    image: nidavellir/poc-runner:acceptance
     entrypoint: ["/bin/true"]
     restart: "no"
 
@@ -50,7 +50,7 @@ services:
       LAB_STUCK_MINUTES: "30"
       NIDAVELLIR_POC_STALE_SECONDS: "12"
       NIDAVELLIR_POC_MAX_TIMEOUT_SECONDS: "10"
-      NIDAVELLIR_POC_RUNNER_IMAGE: nidavellir/poc-runner:py311
+      NIDAVELLIR_POC_RUNNER_IMAGE: nidavellir/poc-runner:acceptance
       SECRETS_ENCRYPTION_KEY: 7Qv0B9F_WjC1jL45o7oYw9xgA-rn7s4Usi0p-DuStxk=
       HTTP_TIMEOUT_SECONDS: "5"
       PYTHONPATH: /app
@@ -61,6 +61,8 @@ services:
     ports: ["18003:8000"]
     volumes:
       - nv03-data:/app/data
+      # Startup validation requires the template directory, as in docker-compose.yml.
+      - ./cyber-range/infra/terraform:/app/terraform:ro
       - nv03-runs:/app/runs
       - nv03-keys:/app/keys
       - /var/run/docker.sock:/var/run/docker.sock
@@ -96,6 +98,8 @@ services:
       orchestrator: {condition: service_healthy}
     volumes:
       - nv03-data:/app/data
+      # Startup validation requires the template directory, as in docker-compose.yml.
+      - ./cyber-range/infra/terraform:/app/terraform:ro
       - nv03-runs:/app/runs
       - nv03-keys:/app/keys
       - /var/run/docker.sock:/var/run/docker.sock
