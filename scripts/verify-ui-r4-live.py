@@ -55,7 +55,7 @@ PINNED_REF = "v3.3.0"
 EXPECTED = {"bare-auth-view": 8, "bulk-permission": 5, "field-validation": 320,
             "half-composed-check": 17, "mutation-order": 693, "privilege-flags": 139,
             "template-context": 315, "unguarded-verb": 25, "unscoped-queryset": 2846}
-# The two capture scopes of the 2026-10-12 inventory (scripts/verify-research-inventory.py).
+# The two capture scopes of the 2026-10-12 research inventory.
 SESSIONS = (
     ("two-directory scope", ["src/documents/", "src/paperless_mail/"],
      ["unscoped-queryset", "bare-auth-view", "bulk-permission", "half-composed-check",

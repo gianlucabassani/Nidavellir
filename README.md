@@ -141,7 +141,7 @@ The delivery order is in [TODO.md](TODO.md) and product scope in
 - [Security](docs/SECURITY.md) — trust boundaries and containment
 - [Architecture decisions](docs/adr/README.md)
 
-Documentation site: <https://gianlucabassani.github.io/Nidavellir>.
+Documentation site: <https://gianlucabassani.com/Nidavellir/>.
 
 ## Responsible use
 

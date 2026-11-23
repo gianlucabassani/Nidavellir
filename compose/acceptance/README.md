@@ -1,7 +1,7 @@
 # Acceptance stacks
 
 Isolated, disposable Compose projects used by the live acceptance gates
-(`make verify-nvXX-live`, `scripts/verify-*-live.py`, `scripts/ui-r1-*-check.cjs`).
+(`make verify-nvXX-live`, `scripts/verify-*-live.py`).
 Each file pins its own project name, loopback-only ports and throwaway
 PostgreSQL/Redis, so a gate never touches a running main stack.
 
@@ -31,7 +31,6 @@ Paths inside these files are relative to the repository root, so always pass
 | nv07.yml  | paired evaluations                     | nv06            |
 | nv10.yml  | encrypted record recovery              | nv06 + nv07     |
 | nv14.yml  | NV-14 acceptance                       | nv06            |
-| ui-r1.yml | operator console (needs --env-file)    | —               |
 | ui-r4.yml | research checkout mount                | nv06            |
 
 Records of past runs (kept locally, not published) cite the
