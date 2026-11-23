@@ -169,6 +169,10 @@ HEADLESS_BROWSER_MAX_OUTPUT_BYTES = int(
     os.getenv("HEADLESS_BROWSER_MAX_OUTPUT_BYTES", str(64 * 1024))
 )
 HEADLESS_BROWSER_MEMORY = os.getenv("HEADLESS_BROWSER_MEMORY", "512m")
+# How long the browser's egress proxy may take to accept connections. Readiness
+# is probed with `docker exec`, which slows sharply on a loaded host; a refused
+# visit is reported as "browser proxy did not become ready" (#23).
+BROWSER_PROXY_READY_SECONDS = int(os.getenv("NIDAVELLIR_BROWSER_PROXY_READY_SECONDS", "20"))
 
 # Arena-bound HTTP research primitive (ROADMAP R1). Like the headless browser,
 # the runner is a disposable, capability-dropped container attached only to the

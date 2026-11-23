@@ -210,9 +210,10 @@ as pending with the exact command.
   - U4 **refuted** with FR-01 in place: PostgreSQL upgrades from every revision with rows
     intact.
   - U5 **confirmed and fixed**: agents get an allowlist of topology outputs.
-  - The loopback-only publication check is in `scripts/verify-nv03-live.py` and passed in
-    live runs. The full NV-03 gate did not complete on the loaded host because of timing
-    windows that predate this work (**#23**).
+  - The loopback-only publication check is in `scripts/verify-nv03-live.py`. After the gate
+    timing fix (**#23**), the full NV-03 gate passed on 2026-11-23: 6 publications, all on
+    loopback; every direct, cross-arena, host, control-plane, metadata and IPv6 path and
+    every relay bypass denied; all positive controls reachable.
 
 ## Research core — from the OpenCMS campaign (work orders 2026-11-18)
 

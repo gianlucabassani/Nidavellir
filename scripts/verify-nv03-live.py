@@ -92,7 +92,13 @@ def wait_helper(job_id, timeout=8):
     raise RuntimeError(f"no live helper appeared for {job_id}")
 
 
-def submit(arena_id, source, *, target="selected", timeout=6, key=None):
+# Jobs that must succeed get the stack's whole PoC budget (10 s in nv03.yml). The
+# deadline is absolute from submission, so queue latency and container start on a
+# busy host spend it before the PoC runs (#23). Loop jobs keep short timeouts.
+SUCCESS_TIMEOUT = 10
+
+
+def submit(arena_id, source, *, target="selected", timeout=SUCCESS_TIMEOUT, key=None):
     response = api("POST", f"/arenas/{arena_id}/poc-jobs", {
         "source": source, "target_node": target, "timeout_seconds": timeout,
         "memory_mb": 64, "cpu_millis": 250, "pids": 16,
@@ -179,7 +185,7 @@ def console_submit(arena_id):
     token = re.search(r'name="csrf_token"[^>]+value="([^"]+)"', page)
     payload = json.dumps({
         "source": "print('console-poc-ok')\n", "target_node": None,
-        "timeout_seconds": 3, "memory_mb": 64, "pids": 16,
+        "timeout_seconds": SUCCESS_TIMEOUT, "memory_mb": 64, "pids": 16,
         "idempotency_key": f"console-{uuid.uuid4().hex}",
     }).encode()
     request = urllib.request.Request(
@@ -247,7 +253,7 @@ async def main():
             assert required <= names, (required, names)
             submitted = await session.call_tool("submit_poc", arguments={
                 "arena_id": arena, "source": "print('mcp-poc-ok')\n",
-                "target_node": None, "timeout_seconds": 3,
+                "target_node": None, "timeout_seconds": 10,  # SUCCESS_TIMEOUT: this program runs in the gateway
                 "idempotency_key": "nv03-mcp-live-job",
             })
             assert not submitted.isError, submitted
@@ -420,7 +426,7 @@ print(json.dumps(proof, sort_keys=True))
 '''
     useful = api("POST", f"/arenas/{main_id}/poc-jobs", {
         "source": source, "target_node": "selected", "transfer_files": ["proof.txt"],
-        "timeout_seconds": 6, "memory_mb": 64, "cpu_millis": 250, "pids": 16,
+        "timeout_seconds": SUCCESS_TIMEOUT, "memory_mb": 64, "cpu_millis": 250, "pids": 16,
         "idempotency_key": "nv03-useful-job",
     }, expected=(202,))["job"]
     useful = wait_job(main_id, useful["id"])
