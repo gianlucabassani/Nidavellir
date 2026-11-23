@@ -1548,47 +1548,70 @@ class DockerLocalProvider(RangeProvider):
         repo = source.get("repo")
         if not repo:
             raise ValueError(f"node {node['name']!r}: service.source needs a `repo`")
-        netguard.assert_public_host(repo)  # SSRF guard before the daemon fetches it
         ref = source.get("ref")
         subdir = source.get("context")
         dockerfile = source.get("dockerfile") or "Dockerfile"
-
-        # Daemon-side remote git context: "<repo.git>#<ref>:<subdir>". The daemon
-        # only treats an https remote as a GIT repo when the path ends in `.git`
-        # (else it fetches the URL as a tarball context — a plain GitHub URL then
-        # returns the repo's HTML page and the build fails). Normalize to the
-        # `.git` form so any https git URL builds. The repo is operator-authored
-        # (authoring the scenario is the approval); pin `ref` for reproducibility.
-        git_repo = _as_git_remote(repo)
-        if ref and subdir:
-            remote = f"{git_repo}#{ref}:{subdir}"
-        elif ref:
-            remote = f"{git_repo}#{ref}"
-        elif subdir:
-            remote = f"{git_repo}#:{subdir}"
-        else:
-            remote = git_repo
+        if not ref:
             logger.warning(
                 f"[{instance_id}] node {node['name']!r} builds from {repo} with "
                 "no pinned source.ref — not reproducible (pin a commit/tag)"
             )
-
         tag = f"{_SUT_IMAGE_PREFIX}:{self._short(instance_id)}-{node['name']}"
-        logger.info(
-            f"[{instance_id}] Building SUT image {tag} for node {node['name']!r} "
-            f"from {remote} (dockerfile={dockerfile}); build-time egress is OPEN"
-        )
-        image_obj, _logs = self.client.images.build(
-            path=remote,
-            dockerfile=dockerfile,
-            tag=tag,
-            rm=True,
-            forcerm=True,
-            pull=True,
-            labels=dict(labels),
-            timeout=config.SOURCE_BUILD_TIMEOUT,
-        )
+        # PF-01 U2: the daemon would resolve and fetch a remote git context itself,
+        # following redirects, after our check. Clone locally instead, pinned to the
+        # addresses checked here, and hand the daemon a local context.
+        checkout = tempfile.mkdtemp(prefix="nv-srcbuild-")
+        try:
+            context = self._pinned_checkout(repo, ref, subdir, checkout)
+            logger.info(
+                f"[{instance_id}] Building SUT image {tag} for node {node['name']!r} "
+                f"from {repo}{('@' + ref) if ref else ''} (context={subdir or '.'}, "
+                f"dockerfile={dockerfile}); build-time egress is OPEN"
+            )
+            image_obj, _logs = self.client.images.build(
+                path=context,
+                dockerfile=dockerfile,
+                tag=tag,
+                rm=True,
+                forcerm=True,
+                pull=True,
+                labels=dict(labels),
+                timeout=config.SOURCE_BUILD_TIMEOUT,
+            )
+        finally:
+            shutil.rmtree(checkout, ignore_errors=True)
         return image_obj.tags[0] if getattr(image_obj, "tags", None) else tag
+
+    @staticmethod
+    def _pinned_checkout(repo: str, ref: str | None, subdir: str | None, dest: str) -> str:
+        """Clone ``repo`` into ``dest`` with git pinned to the addresses netguard
+        checked (no redirects, HTTP(S) only), check out ``ref`` strictly, and
+        return the build context path. ``subdir`` must stay inside the checkout."""
+        pinned = netguard.git_network_args(repo)
+        env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_NOSYSTEM": "1",
+               "GIT_CONFIG_GLOBAL": "/dev/null"}
+        timeout = min(config.SOURCE_BUILD_TIMEOUT, 300)
+
+        def git(*argv, network=False):
+            result = subprocess.run(  # nosec B603 — fixed argv, no shell, pinned host
+                ["git", *(pinned if network else []), *argv],
+                capture_output=True, timeout=timeout, env=env, text=True, check=False)
+            if result.returncode != 0:
+                raise RuntimeError(f"git {argv[0] if argv[0] != '-C' else argv[2]} failed: "
+                                   f"{(result.stderr or '').strip()[-500:]}")
+            return result
+
+        git("clone", "--quiet", "--no-tags", "--", repo, dest, network=True)
+        if ref:
+            git("-C", dest, "fetch", "--quiet", "origin", ref, network=True)
+            git("-C", dest, "checkout", "--quiet", "--detach", "FETCH_HEAD")
+        root = os.path.realpath(dest)
+        context = os.path.realpath(os.path.join(root, subdir or "."))
+        if context != root and not context.startswith(root + os.sep):
+            raise ValueError(f"service.source.context {subdir!r} escapes the repository")
+        if not os.path.isdir(context):
+            raise ValueError(f"service.source.context {subdir!r} is not a directory")
+        return context
 
     def _build_package_image(self, instance_id, node, package, labels):
         """Install `service.package` on a base image (SUT arenas, P1-6 / M1-4).
@@ -1648,14 +1671,14 @@ class DockerLocalProvider(RangeProvider):
             return False, ("source builds are disabled — set NIDAVELLIR_ALLOW_SOURCE_"
                            "BUILD=true to synthesize + verify a Dockerfile")
         try:
-            netguard.assert_public_host(repo)
+            pinned = netguard.git_network_args(repo)
         except netguard.UnsafeHostError as e:
             return False, f"unsafe repo host: {e}"
         tmp = tempfile.mkdtemp(prefix="nv-synthbuild-")
         env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
         clone_timeout = min(timeout or config.SOURCE_BUILD_TIMEOUT, 300)
         try:
-            argv = ["git", "clone", "--quiet", "--depth", "1", "--no-tags"]
+            argv = ["git", *pinned, "clone", "--quiet", "--depth", "1", "--no-tags"]
             if ref:
                 argv += ["--branch", ref]
             argv += ["--", _as_git_remote(repo), tmp]
@@ -1876,9 +1899,10 @@ class DockerLocalProvider(RangeProvider):
         quoted, so an odd value cannot inject into the helper shell."""
         repo = source["repo"]
         ref = source.get("ref") or ""
-        # SSRF guard (authoritative, resolves the host): the repo is user-supplied
-        # and the clone helper has egress — reject internal/metadata/loopback hosts.
-        netguard.assert_public_host(repo)
+        # SSRF guard: the repo is user-supplied and the clone helper has egress.
+        # Resolve once, reject internal addresses, and pin the helper's git to the
+        # checked ones through GIT_CONFIG_* env (no redirects, HTTP(S) only).
+        pinned_env = netguard.git_network_env(repo)
         logger.info(
             f"[{instance_id}] Cloning white-box source {repo}"
             f"{('@' + ref) if ref else ''} into volume {vol_name}"
@@ -1895,7 +1919,7 @@ class DockerLocalProvider(RangeProvider):
                 image=_GIT_HELPER_IMAGE,
                 entrypoint="/bin/sh",
                 command=["-c", script],
-                environment={"REPO": repo, "REF": ref},
+                environment={"REPO": repo, "REF": ref, **pinned_env},
                 volumes={vol_name: {"bind": "/src", "mode": "rw"}},
                 labels=dict(labels),
                 detach=False,

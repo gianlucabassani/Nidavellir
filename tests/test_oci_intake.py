@@ -1,4 +1,5 @@
 """Strict OCI reference parsing and anonymous registry digest resolution."""
+from types import SimpleNamespace
 import json
 
 import pytest
@@ -82,8 +83,7 @@ def test_resolve_public_bearer_registry_to_digest(monkeypatch):
         calls.append(("get", url, kwargs))
         return _Response(200, body={"token": "anonymous-pull-token"})
 
-    monkeypatch.setattr(oci_intake.requests, "head", fake_head)
-    monkeypatch.setattr(oci_intake.requests, "get", fake_get)
+    monkeypatch.setattr(oci_intake, "_http", lambda: SimpleNamespace(head=fake_head, get=fake_get))
 
     result = oci_intake.resolve_image("ubuntu:22.04")
 
@@ -100,13 +100,10 @@ def test_resolve_rejects_registry_digest_mismatch(monkeypatch):
     monkeypatch.setattr(
         oci_intake.netguard, "assert_public_host", lambda *args, **kwargs: None
     )
-    monkeypatch.setattr(
-        oci_intake.requests,
-        "head",
-        lambda *args, **kwargs: _Response(
+    monkeypatch.setattr(oci_intake, "_http", lambda: SimpleNamespace(
+        head=lambda *args, **kwargs: _Response(
             200, headers={"Docker-Content-Digest": returned}
-        ),
-    )
+        )))
 
     with pytest.raises(oci_intake.OciIntakeError, match="does not match"):
         oci_intake.resolve_image(f"ghcr.io/acme/widget@{requested}")

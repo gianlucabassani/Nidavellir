@@ -1436,6 +1436,7 @@ def test_sut_source_build_runs_built_image_when_enabled(monkeypatch):
     # With the gate enabled, a `source` service is built via the daemon from a
     # pinned remote git context and the node runs the freshly built image.
     monkeypatch.setattr(config, "ALLOW_SOURCE_BUILD", True)
+    checkouts = _stub_pinned_checkout(monkeypatch)
     client = _FakeClient()
     provider = DockerLocalProvider(client=client)
     scenario = {
@@ -1451,12 +1452,13 @@ def test_sut_source_build_runs_built_image_when_enabled(monkeypatch):
     result = provider.deploy(scenario, "sutbuild1-rest-of-uuid")
     assert result["success"] is True, result.get("error")
 
-    # The daemon was asked to build from a pinned, sub-dir'd remote git context,
-    # tagged + arena-labeled, pulling fresh bases. The repo is normalized to the
-    # `.git` form so the daemon treats it as a git context, not a tarball URL (M1-2).
+    # PF-01 U2: the source is cloned locally with git pinned to the checked
+    # addresses, and the daemon builds that local, sub-dir'd context (it never
+    # fetches the remote itself), tagged + arena-labeled, pulling fresh bases.
+    assert checkouts == [("https://github.com/o/p", "v1", "web")]
     build = next(b for b in client.images.built
                  if str(b.get("tag", "")).startswith("nidavellir/sut:"))
-    assert build["path"] == "https://github.com/o/p.git#v1:web"
+    assert build["path"].endswith("/web") and not build["path"].startswith("https://")
     assert build["dockerfile"] == "Dockerfile"
     assert build["pull"] is True
     assert build["labels"][LABEL_LAB_ID] == "sutbuild1-rest-of-uuid"
@@ -1471,6 +1473,7 @@ def test_sut_source_build_image_is_reclaimed_on_destroy(monkeypatch):
     # A from-source build would leak one image per arena; destroy() reclaims the
     # arena-labeled built image.
     monkeypatch.setattr(config, "ALLOW_SOURCE_BUILD", True)
+    _stub_pinned_checkout(monkeypatch)
     client = _FakeClient()
     provider = DockerLocalProvider(client=client)
     scenario = {
@@ -1547,7 +1550,8 @@ def test_service_package_gated_off_by_default():
 
 # --- white-box source access (arena-scoped writable research copy) ------------
 
-def test_whitebox_source_cloned_as_writable_research_copy_on_foothold():
+def test_whitebox_source_cloned_as_writable_research_copy_on_foothold(monkeypatch):
+    _stub_resolution(monkeypatch)
     client = _FakeClient()
     provider = DockerLocalProvider(client=client)
     scenario = {
@@ -1568,11 +1572,17 @@ def test_whitebox_source_cloned_as_writable_research_copy_on_foothold():
     assert vol.name == "nv-wbx12345-src-app"
     assert vol.labels[LABEL_LAB_ID] == "wbx12345-rest-of-uuid"
 
-    # The git-clone helper ran with repo/ref via env (no shell-injection surface).
+    # The git-clone helper ran with repo/ref via env (no shell-injection surface),
+    # and its git is pinned to the checked address with redirects off (PF-01 U2).
     helper = next(kw for kw in client.containers.run_kwargs
                   if kw.get("image") == "alpine/git:latest")
-    assert helper["environment"] == {
-        "REPO": "https://github.com/juice-shop/juice-shop", "REF": "v15.0.0"}
+    env = helper["environment"]
+    assert env["REPO"] == "https://github.com/juice-shop/juice-shop" and env["REF"] == "v15.0.0"
+    config_pairs = {env[f"GIT_CONFIG_KEY_{i}"]: env[f"GIT_CONFIG_VALUE_{i}"]
+                    for i in range(int(env["GIT_CONFIG_COUNT"]))}
+    assert config_pairs["http.followRedirects"] == "false"
+    assert config_pairs["http.curloptResolve"] == "github.com:443:140.82.121.4"
+    assert config_pairs["protocol.allow"] == "never"
     assert helper["volumes"][vol.name]["bind"] == "/src"
     assert helper["remove"] is True
 
@@ -1629,3 +1639,28 @@ def test_whitebox_source_volume_reclaimed_on_destroy():
 
     assert provider.destroy("wbxgc-uuid")["success"] is True
     assert vol.removed is True
+
+
+def _stub_resolution(monkeypatch, addresses=("140.82.121.4",)):
+    """Hermetic DNS for netguard: a public answer without touching the network."""
+    import netguard
+
+    def resolve(url):
+        from urllib.parse import urlsplit
+        parts = urlsplit(url)
+        return parts.hostname, parts.port or 443, list(addresses)
+    monkeypatch.setattr(netguard, "resolve_public", resolve)
+
+
+def _stub_pinned_checkout(monkeypatch):
+    """Record pinned checkouts and fake the cloned tree instead of running git."""
+    import os
+    calls = []
+
+    def checkout(repo, ref, subdir, dest):
+        calls.append((repo, ref, subdir))
+        context = os.path.join(dest, subdir or "")
+        os.makedirs(context, exist_ok=True)
+        return os.path.realpath(context)
+    monkeypatch.setattr(DockerLocalProvider, "_pinned_checkout", staticmethod(checkout))
+    return calls

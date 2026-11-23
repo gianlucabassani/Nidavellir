@@ -117,6 +117,13 @@ def parse_reference(value: str) -> OciReference:
     )
 
 
+def _http():
+    """Registry HTTP through netguard's peer-checked session: every connection's
+    real address is checked before the request, closing the DNS-rebinding window
+    between the host check and the fetch (PF-01 U2). Redirects stay refused below."""
+    return netguard.public_session()
+
+
 def _bearer_challenge(header: str) -> dict[str, str]:
     scheme, separator, parameters = (header or "").partition(" ")
     if not separator or scheme.lower() != "bearer":
@@ -136,7 +143,7 @@ def _public_bearer_token(challenge: dict[str, str], reference: OciReference) -> 
     params = {"scope": f"repository:{reference.repository}:pull"}
     if challenge.get("service"):
         params["service"] = challenge["service"]
-    response = requests.get(
+    response = _http().get(
         challenge["realm"],
         params=params,
         timeout=_TIMEOUT,
@@ -178,13 +185,13 @@ def resolve_image(value: str) -> dict:
         f"{reference.repository}/manifests/{reference.selector}"
     )
     headers = {"Accept": _ACCEPT}
-    response = requests.head(
+    response = _http().head(
         url, headers=headers, timeout=_TIMEOUT, allow_redirects=False
     )
     if response.status_code == 401:
         challenge = _bearer_challenge(response.headers.get("WWW-Authenticate", ""))
         headers["Authorization"] = f"Bearer {_public_bearer_token(challenge, reference)}"
-        response = requests.head(
+        response = _http().head(
             url, headers=headers, timeout=_TIMEOUT, allow_redirects=False
         )
     if response.status_code == 404:
