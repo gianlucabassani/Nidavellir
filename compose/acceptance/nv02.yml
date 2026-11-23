@@ -52,6 +52,8 @@ services:
     ports: ["18000:8000"]
     volumes:
       - nv02-data:/app/data
+      # Startup validation requires the template directory, as in docker-compose.yml.
+      - ./cyber-range/infra/terraform:/app/terraform:ro
       - nv02-runs:/app/runs
       - nv02-keys:/app/keys
       - /var/run/docker.sock:/var/run/docker.sock
@@ -86,6 +88,8 @@ services:
       orchestrator: {condition: service_healthy}
     volumes:
       - nv02-data:/app/data
+      # Startup validation requires the template directory, as in docker-compose.yml.
+      - ./cyber-range/infra/terraform:/app/terraform:ro
       - nv02-runs:/app/runs
       - nv02-keys:/app/keys
       - /var/run/docker.sock:/var/run/docker.sock

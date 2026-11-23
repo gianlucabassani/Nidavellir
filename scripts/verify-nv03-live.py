@@ -548,7 +548,7 @@ finally:
         raise RuntimeError(f"owned resources remain: {inventory}")
 
     runner_id = run(
-        "docker", "image", "inspect", "nidavellir/poc-runner:py311",
+        "docker", "image", "inspect", "nidavellir/poc-runner:acceptance",
         "--format", "{{.Id}}",
     ).stdout.strip()
     evidence = {
