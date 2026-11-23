@@ -1,5 +1,5 @@
 name: Feature or task
-description: A change to make: a feature, fix, refactor, docs or CI task.
+description: "A change to make: a feature, fix, refactor, docs or CI task."
 body:
   - type: textarea
     id: problem
