@@ -263,10 +263,14 @@ Each commit message records its verification; contracts are in `docs/API.md` and
 - [ ] **RC-03 — Live use of F1–F4 and R1–R4 in a real campaign.** None of them has run
   against a live docker-local arena. **Accept:** the next research campaign uses extend,
   carry-over, the digest and research mode. Any defect it exposes becomes an issue.
-- [ ] **RC-04 — Index scenario/lineage scans.** F2's binding lineage and R2's
-  relation/lookup read every event of a scenario or every finding; this is fine at today's
-  volume. **Accept:** query cost is measured at 10× today's events; an index is added if
-  p95 exceeds the 150 ms interactive budget (see TB-04).
+- [x] **RC-04 — Index scenario/lineage scans (#27).** F2's binding lineage and R2's
+  relation/lookup read every event of a scenario or every finding. **Accept:** query cost
+  is measured at 10× today's events; an index is added if p95 exceeds the 150 ms
+  interactive budget (see TB-04). **Measured 2026-11-23** with `scripts/bench-rc04-scans.py`
+  on PostgreSQL 16, on the loaded production host, using the production event mix (7,784
+  events, 56 findings). At 1×: F2 p95 7 ms, R2 p95 7 ms. At 10×: F2 p95 22 ms, R2 p95
+  54 ms. Both are under budget, so no index is added. Rerun the benchmark when event
+  volume grows past 10×.
 
 ## Repository and delivery (2026-11-23)
 
