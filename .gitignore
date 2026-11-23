@@ -1,81 +1,71 @@
-# --- TERRAFORM ---
+# --- Secrets and local configuration (never commit) ---
+.env
+.env.*
+.env*
+!.env.example
+*.pem
+*.pub
+id_rsa
+ssh_keys/
+nidavellir_ssh_key*
+
+# --- Terraform / OpenTofu ---
 .terraform/
+.terraform.lock.hcl
 *.tfstate
 *.tfstate.*
-crash.log
 *.tfvars
-.terraform.lock.hcl
+crash.log
 override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
 
-# --- OPENSTACK KEYS ---
-*.pem
-*.pub
-ssh_keys/
-id_rsa
-nidavellir_ssh_key*
-
-# --- PYTHON ---
+# --- Python ---
 __pycache__/
 *.py[cod]
 *$py.class
 venv/
 .venv/
-.env
-.env.*
-!.env.example
+*.egg-info/
 
-# --- DEV / TEST ARTIFACTS ---
+# --- Dev / test artifacts ---
 .pytest_cache/
 .ruff_cache/
 .coverage
 coverage.xml
 htmlcov/
-*.egg-info/
 
-# --- RUNTIME STATE (generated, never commit) ---
+# --- Runtime state (generated) ---
 /runs/
 /data/
 /cache/
 /keys/
-
+/deployments/
+cyber-range/data/
 # MCP gateway JSONL traces (compose mounts ./traces on gateway runs)
 /traces/
 
-# --- AI AGENT WORKSPACE (local working notes, never commit) ---
+# Built operator console (reproduced from cyber-range/webui/frontend/package-lock.json)
+/cyber-range/webui/static/console/
+
+# --- Local agent workspace ---
 /AGENT.md
 /.agent/
 /.lab.yaml
 
-# Built operator console assets (reproduced from frontend/package-lock.json)
-/cyber-range/webui/static/console/
-
-# Local deployment receipts (must not dirty the release checkout)
-/deployments/
-
-# Internal material: kept local, never published (public repos)
-docs/operator-notes/
-docs/reviews/
-
-# --- OSS publication guard: never re-track operator/internal material ---
+# --- Operator and internal material: kept local, never published ---
+# The Guard workflow (scripts/check-public-tree.py) enforces the same list in CI.
 /dev/
-.env*
-!.env.example
-/data/
-/keys/
+/ISSUES.md
 /CODEX-BRIEF.md
 /REVIEW_*.md
 /FABLE_*.md
 /OSS_CLEANUP_RESULT.md
-*.operator.md
-/docs/verification/
-/docs/research/
-/traces/*.jsonl
-
-# --- UN-VERSIONED (public tree) ---
-/ISSUES.md
-docs/JOURNAL.md
-cyber-range/data/
 /OSS_FIX_RESULT.md
+*.operator.md
+docs/JOURNAL.md
+docs/operator-notes/
+docs/reviews/
+docs/research/
+docs/verification/
