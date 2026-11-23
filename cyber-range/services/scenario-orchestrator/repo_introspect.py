@@ -412,13 +412,15 @@ def fetch_repo_files(repo: str, ref: str | None = None) -> tuple[dict[str, str],
     indicator files + path list, and clean up. SSRF-guarded (authoritative resolve)
     and time-boxed. Raises on failure — callers use ``introspect`` for best-effort.
     """
-    netguard.assert_public_host(repo)  # resolves the host — reject internal/metadata
+    # Resolve once, reject internal addresses, and pin git to the checked ones
+    # (no redirects, HTTP(S) only), so a rebinding DNS answer cannot reach inside.
+    pinned = netguard.git_network_args(repo)
     tmp = tempfile.mkdtemp(prefix="nv-introspect-")
     # GIT_TERMINAL_PROMPT=0: never block on a credential prompt for a private repo.
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
     try:
         subprocess.run(  # nosec B603 — fixed argv, no shell, timeout, guarded host
-            ["git", "clone", "--quiet", "--depth", "1", "--no-tags", "--", repo, tmp],
+            ["git", *pinned, "clone", "--quiet", "--depth", "1", "--no-tags", "--", repo, tmp],
             check=True, capture_output=True, timeout=CLONE_TIMEOUT_SECONDS, env=env,
         )
         if ref:
@@ -426,7 +428,7 @@ def fetch_repo_files(repo: str, ref: str | None = None) -> tuple[dict[str, str],
             # A branch/tag/SHA all work via FETCH_HEAD; failure leaves the default
             # branch checked out (introspection is best-effort, not a build).
             fetch = subprocess.run(  # nosec B603
-                ["git", "-C", tmp, "fetch", "--quiet", "--depth", "1", "origin", ref],
+                ["git", *pinned, "-C", tmp, "fetch", "--quiet", "--depth", "1", "origin", ref],
                 capture_output=True, timeout=CLONE_TIMEOUT_SECONDS, env=env,
                 check=False,
             )
@@ -449,7 +451,7 @@ def inspect_target(repo: str, ref: str | None = None) -> dict:
     that the deployment compiler receives instead of a mutable branch/tag.
     Repository files are still read through the same bounded analysis path.
     """
-    netguard.assert_public_host(repo)
+    pinned = netguard.git_network_args(repo)  # resolve once, pin, no redirects
     tmp = tempfile.mkdtemp(prefix="nv-intake-")
     env = {
         **os.environ,
@@ -459,7 +461,7 @@ def inspect_target(repo: str, ref: str | None = None) -> dict:
     }
     try:
         clone = subprocess.run(  # nosec B603 — fixed argv, no shell, guarded host
-            ["git", "clone", "--quiet", "--depth", "1", "--no-tags", "--", repo, tmp],
+            ["git", *pinned, "clone", "--quiet", "--depth", "1", "--no-tags", "--", repo, tmp],
             capture_output=True, timeout=CLONE_TIMEOUT_SECONDS, env=env, text=True,
             check=False,
         )
@@ -469,7 +471,7 @@ def inspect_target(repo: str, ref: str | None = None) -> dict:
             )
         if ref:
             fetch = subprocess.run(  # nosec B603 — ref is an argv element
-                ["git", "-C", tmp, "fetch", "--quiet", "--depth", "1", "origin", ref],
+                ["git", *pinned, "-C", tmp, "fetch", "--quiet", "--depth", "1", "origin", ref],
                 capture_output=True, timeout=CLONE_TIMEOUT_SECONDS, env=env, text=True,
                 check=False,
             )
