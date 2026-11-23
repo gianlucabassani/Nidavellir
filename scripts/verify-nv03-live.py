@@ -140,6 +140,22 @@ def cleanup_arena_resources(arena_id):
             run("docker", removal, "rm", *resources, check=False)
 
 
+def arena_publications(arena_ids):
+    """PF-01: every host port an arena container publishes, with its bind address.
+    Arena nodes must publish on 127.0.0.1 only; a deliberately vulnerable target on
+    0.0.0.0 would be reachable from the host's LAN and VPN interfaces."""
+    bindings = []
+    for arena_id in arena_ids:
+        ids = run("docker", "ps", "-q", "--filter",
+                  f"label=nidavellir.lab_id={arena_id}").stdout.split()
+        for info in (json.loads(run("docker", "inspect", *ids).stdout) if ids else []):
+            for port, hosts in (info["NetworkSettings"].get("Ports") or {}).items():
+                for host in hosts or []:
+                    bindings.append({"arena": arena_id, "container": info["Name"].lstrip("/"),
+                                     "port": port, "host_ip": host["HostIp"]})
+    return bindings
+
+
 def login_console():
     jar = http.cookiejar.CookieJar()
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
@@ -309,6 +325,12 @@ def main():
             raise RuntimeError(f"unexpected provider: {state}")
 
     main_id, other_id = ids["nv03-main"], ids["nv03-other"]
+    publications = arena_publications(ARENAS)
+    if not publications:
+        raise RuntimeError("expected published arena ports to inspect")
+    exposed = [p for p in publications if p["host_ip"] != "127.0.0.1"]
+    if exposed:
+        raise RuntimeError(f"arena ports published beyond loopback: {exposed}")
     main_state = api("GET", f"/status/{main_id}")
     other_state = api("GET", f"/status/{other_id}")
     outputs = main_state["outputs"]
@@ -573,6 +595,7 @@ finally:
                               "external_canary": True, "control_plane": True},
         "network_errors": proof["errors"], "runner_interfaces": proof["interfaces"],
         "relay_denied": proof["relay_denied"],
+        "loopback_only_publications": len(publications),
         "interrupted_job": {"id": interrupted["id"], "state": interrupted["state"],
                             "cleanup": interrupted["cleanup_state"]},
         "reset_operation": reset["operation_id"], "mcp": mcp_result,
