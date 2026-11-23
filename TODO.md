@@ -1,6 +1,8 @@
 # Nidavellir — ordered delivery checklist
 
-Updated 2026-11-17: UX/observability review and Fable review (FR-10–40) registered.
+Updated 2026-11-23: research-core work (F1–F4, R1–R4) registered with its follow-ups;
+repository workflow set up. Every item is worked as one GitHub issue → one branch → one
+PR that closes it (`CONTRIBUTING.md`); issue numbers are noted on each item.
 Priority order: FR-09 → PF-01 → UX-0 → OBS → UX-1 → trust boundary → structure → proof.
 P2 research items (NV-12/13/15) stay target-driven and can interleave.
 This is the canonical work queue. [ROADMAP.md](ROADMAP.md) retains product scope,
@@ -192,6 +194,65 @@ as pending with the exact command.
   check that arena ports bind `127.0.0.1` only (fixed 2026-11-17 in docker-local).
   **Accept:** one test or recorded run per claim; each confirmed claim gets a fix package.
 
+## Research core — from the OpenCMS campaign (work orders 2026-11-18)
+
+The 2026-11-18 OpenCMS research campaign showed where the loop wasted time and where its
+record could not be trusted. In one day it produced six findings. One cited a destroyed
+container, one was never reproduced without a hand-granted control, and one bug was
+re-found under three titles. Two work orders followed: research-core (F1–F4) and the
+research integrity layer (R1–R4). Every R item is opt-in per arena through
+`research_mode`. They landed on `main` on 2026-11-23 (PR #10, issue #9) and are deployed.
+Each commit message records its verification; contracts are in `docs/API.md` and
+`docs/MCP.md`.
+
+- [x] **F1 — Arena time-box extension.** `POST /arenas/{id}/extend` moves the reaper TTL and
+  the budget deadline together, capped by `ARENA_MAX_LIFETIME_SECONDS`. **Verified:**
+  `tests/test_f1_arena_extend.py`.
+- [x] **F2 — Binding carry-over across redeploy.** Persistent grants follow a scenario to
+  its next arena, by operator opt-in. **Verified:** `tests/test_f2_binding_carry_over.py`.
+- [x] **F3 — Bounded research digest.** `GET /arenas/{id}/digest` and the MCP tool, with a
+  2048-byte cap. **Verified:** `tests/test_f3_research_digest.py`. Not measured against
+  live campaign records.
+- [x] **F4 — Configurator-scoped agent deploy.** Allowlisted scenarios, hourly and live
+  quotas, a kill switch, and audit. **Verified:** `tests/test_f4_configurator_deploy.py`,
+  plus a PostgreSQL quota race (#13).
+- [x] **R1 — Hypothesis contract, registry and probe gate.** **Verified:**
+  `tests/test_r1_hypothesis_contract.py`, plus a PostgreSQL probe-budget race (#13).
+- [x] **R2 — Root-cause fingerprint store and pre-probe dedup.** **Verified:**
+  `tests/test_r2_fingerprint_dedup.py`, plus a PostgreSQL duplicate-report race (#13).
+- [x] **R3 — Causality gate on confirmation.** **Verified:** `tests/test_r3_causality_gate.py`.
+  The gate proves that a stored record exists, not what the record shows; that judgment
+  stays with the operator.
+- [x] **R4 — Saturation ledger, shelving and reopen triggers.** **Verified:**
+  `tests/test_r4_saturation_ledger.py`.
+- [x] **RC-01 — Derive sweep yield from findings (#13).** The recorded `yield` counts the
+  arena's findings that no earlier sweep counted, excluding R2 duplicates. A reported
+  value is kept as `reported_yield` and flagged on disagreement.
+- [x] **RC-02 — PostgreSQL concurrency gate for `guarded_append` (#13).**
+  `tests/test_guarded_append_postgres.py`: with the advisory lock replaced by a no-op,
+  the race tests fail.
+- [ ] **RC-03 — Live use of F1–F4 and R1–R4 in a real campaign.** None of them has run
+  against a live docker-local arena. **Accept:** the next research campaign uses extend,
+  carry-over, the digest and research mode. Any defect it exposes becomes an issue.
+- [ ] **RC-04 — Index scenario/lineage scans.** F2's binding lineage and R2's
+  relation/lookup read every event of a scenario or every finding; this is fine at today's
+  volume. **Accept:** query cost is measured at 10× today's events; an index is added if
+  p95 exceeds the 150 ms interactive budget (see TB-04).
+
+## Repository and delivery (2026-11-23)
+
+- [x] **Public repository set-up (issues #1–#4, PRs #5–#8).** A fresh clone's `make dev`
+  works and is guarded by the CI *Fresh-clone quickstart* job. `make venv` provisions the
+  pinned Python with uv. The *Guard* workflow runs gitleaks over the full history and
+  rejects local paths and private files. About 200 unused files were removed. Issue
+  forms, a PR template and `.github/SECURITY.md` were added. `main` is protected:
+  PR-only, admins included, six required checks, linear history. Secret scanning, push
+  protection and private vulnerability reporting are on.
+- [x] **Durable rollback images (#11, PR #16).** `deploy.sh` pins
+  `nidavellir-rollback/<svc>:<stamp>` tags of the exact running image, or refuses. The
+  manifest never aborts, and app services are force-recreated. Verified with the fake-daemon
+  tooling tests; the first real deploy on this tooling is recorded in its receipt.
+
 ## UX-0 — unblock human workflows (registered 2026-11-17, do next, parallel-safe)
 
 From a code-level UX review of the React console (no live session was driven). Today the
@@ -299,8 +360,10 @@ Order: data model first, then views.
 ## Structure, distribution and proof (Fable Phases 4–5)
 
 - [ ] **ST-01 — FR-34 hygiene, before any push.** Done 2026-11-17: LICENSE, tracked runtime
-  files and internal docs removed. Remaining: root `SECURITY.md`, `CHANGELOG.md`, secret
-  scan, private addresses in docs, repo name.
+  files and internal docs removed. Done 2026-11-23 (#2, #4): full-history secret scan in
+  CI (gitleaks), a local-path and private-file guard, and a security policy
+  (`.github/SECURITY.md`, private vulnerability reporting). Remaining: `CHANGELOG.md`,
+  private addresses in docs, repo name.
 - [ ] **ST-02 — Split `api.py` (FR-26)** → **ST-03 registries (FR-27)** → **ST-04 package
   and `nv` CLI (FR-28)** → **ST-05 scenario packs (FR-29)**. Split each into slices.
 - [ ] **ST-06 — Console structure (FR-30) and thin BFF / retire legacy console (FR-31).**
