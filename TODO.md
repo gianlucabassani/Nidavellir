@@ -215,6 +215,14 @@ as pending with the exact command.
     loopback; every direct, cross-arena, host, control-plane, metadata and IPv6 path and
     every relay bypass denied; all positive controls reachable.
 
+- [x] **PF-02 — Open-egress arenas reach host services (#22).** PF-01's U1 run showed that
+  `requires.egress: open` arenas reach the host's own non-loopback addresses. The platform
+  does not change the host firewall, so deploying one now requires an operator's audited
+  `acknowledge_open_egress`. Agents are refused, and the worker refuses any
+  unacknowledged open-egress deploy, whichever route queued it.
+  `tests/test_pf02_open_egress_ack.py`. Host firewall rules (`DOCKER-USER`) remain
+  documented as an operator option in `docs/SECURITY.md`.
+
 ## Research core — from the OpenCMS campaign (work orders 2026-11-18)
 
 The 2026-11-18 OpenCMS research campaign showed where the loop wasted time and where its

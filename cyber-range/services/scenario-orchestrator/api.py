@@ -81,8 +81,9 @@ from providers import (
 )
 from scenario_spec import ScenarioSpec, normalize_cwe, normalized_nodes, topology_view
 from states import IllegalTransition, LabStatus
-from tasks import (capture_source_review, deploy_lab, destroy_lab, enqueue_evaluation,
-                   reset_arena, run_forward_stream, run_poc_job)
+from tasks import (OPEN_EGRESS_ACK_EVENT, capture_source_review, deploy_lab, destroy_lab,
+                   enqueue_evaluation, is_open_egress, reset_arena, run_forward_stream,
+                   run_poc_job)
 from config import validate_config
 from migrate import SchemaDriftError
 
@@ -265,6 +266,11 @@ class EngagementIntentRequest(BaseModel):
     records it as immutable audit context; it does not override scenario or
     provider policy.
     """
+    # PF-02 (#22): a scenario with `requires.egress: open` reaches host services on
+    # non-loopback addresses (docs/SECURITY.md); only an operator can deploy one,
+    # and only by acknowledging that here. The acknowledgement is audited.
+    acknowledge_open_egress: bool = False
+
 
     engagement_purpose: str | None = Field(default=None, max_length=32)
     participant_mode: str | None = Field(default=None, max_length=16)
@@ -911,6 +917,7 @@ def deploy_custom_arena(
     system_id = str(uuid.uuid4())
     label = f"custom:{'+'.join(req.attackers)}+{'+'.join(req.victims)}"[:64]
     expires_at = _engagement_expires_at(req)
+    open_egress_ack = _open_egress_gate(principal, spec, req)
     db.create_deployment(
         system_id, req.instance_id, label,
         provider=req.provider, actor=principal.name, expires_at=expires_at,
@@ -925,6 +932,8 @@ def deploy_custom_arena(
         f"Queuing custom arena '{req.instance_id}' ({system_id}): "
         f"{label} provider={req.provider} by '{principal.name}'"
     )
+    if open_egress_ack:
+        _record_open_egress_ack(system_id, principal, label)
     deploy_lab.delay(
         instance_id=system_id,
         scenario_name=label,
@@ -1140,6 +1149,7 @@ def deploy_sut_arena(
     system_id = str(uuid.uuid4())
     label = f"sut:{req.repo}"[:64]
     expires_at = _engagement_expires_at(req)
+    open_egress_ack = _open_egress_gate(principal, spec, req)
     db.create_deployment(
         system_id, req.instance_id, label,
         provider=req.provider, actor=principal.name, expires_at=expires_at,
@@ -1187,6 +1197,8 @@ def deploy_sut_arena(
         f"ref={target['resolved_commit']} mode={req.setup_mode} build={plan.strategy}"
         f"{' (auto)' if auto_build else ''} by '{principal.name}'"
     )
+    if open_egress_ack:
+        _record_open_egress_ack(system_id, principal, label)
     deploy_lab.delay(
         instance_id=system_id, scenario_name=label, user_id=req.instance_id,
         variables={}, provider=req.provider, scenario_config=spec,
@@ -1361,6 +1373,7 @@ def deploy_oci_arena(
     system_id = str(uuid.uuid4())
     label = f"oci:{req.image}"[:64]
     expires_at = _engagement_expires_at(req)
+    open_egress_ack = _open_egress_gate(principal, spec, req)
     db.create_deployment(
         system_id,
         req.instance_id,
@@ -1407,6 +1420,8 @@ def deploy_oci_arena(
         target["resolved_digest"],
         principal.name,
     )
+    if open_egress_ack:
+        _record_open_egress_ack(system_id, principal, label)
     deploy_lab.delay(
         instance_id=system_id,
         scenario_name=label,
@@ -1622,6 +1637,7 @@ def deploy_source_bundle_arena(
     system_id = str(uuid.uuid4())
     label = f"bundle:{artifact['filename']}"[:64]
     expires_at = _engagement_expires_at(req)
+    open_egress_ack = _open_egress_gate(principal, spec, req)
     db.create_deployment(
         system_id,
         req.instance_id,
@@ -1668,6 +1684,8 @@ def deploy_source_bundle_arena(
         artifact["digest"],
         principal.name,
     )
+    if open_egress_ack:
+        _record_open_egress_ack(system_id, principal, label)
     deploy_lab.delay(
         instance_id=system_id,
         scenario_name=label,
@@ -1821,6 +1839,35 @@ def list_deployments(principal: Principal = Depends(require_principal)):
         results[d['id']] = d
     return results
 
+OPEN_EGRESS_EXPOSURE = (
+    "nodes of an open-egress arena sit on a normal Docker bridge and reach the internet "
+    "and services on the host's own non-loopback addresses (LAN, VPN, other bridges); "
+    "see docs/SECURITY.md")
+
+
+def _open_egress_gate(principal: Principal, scenario_config: dict, req) -> bool:
+    """PF-02 (#22): refuse an open-egress deploy unless an operator acknowledges the
+    host exposure in the request. Returns True when the acknowledgement must be
+    recorded for the new arena."""
+    if not is_open_egress(scenario_config):
+        return False
+    if principal.role not in OPERATOR_ROLES:
+        raise HTTPException(status_code=403, detail={
+            "code": "open_egress_requires_operator",
+            "message": "only an operator can deploy an open-egress scenario"})
+    if not getattr(req, "acknowledge_open_egress", False):
+        raise HTTPException(status_code=409, detail={
+            "code": "open_egress_unacknowledged",
+            "message": "set acknowledge_open_egress: true to deploy it: " + OPEN_EGRESS_EXPOSURE})
+    return True
+
+
+def _record_open_egress_ack(system_id: str, principal: Principal, scenario: str) -> None:
+    db.record_event(system_id, OPEN_EGRESS_ACK_EVENT,
+                    {"scenario": scenario, "acknowledged_by": principal.name,
+                     "exposure": OPEN_EGRESS_EXPOSURE}, actor=principal.name)
+
+
 @app.post("/deploy")
 @limiter.limit(RATE_LIMIT_DEPLOY)
 def deploy(
@@ -1870,6 +1917,7 @@ def deploy(
         except AgentDeployRefused as exc:
             raise HTTPException(status_code=429,
                                 detail={"code": exc.code, "message": str(exc)}) from exc
+    open_egress_ack = _open_egress_gate(principal, scenario_config, req)
     db.create_deployment(
         system_id,
         friendly_name,
@@ -1896,6 +1944,8 @@ def deploy(
         )
 
     # 4. Dispatch Async Task using the UUID
+    if open_egress_ack:
+        _record_open_egress_ack(system_id, principal, req.scenario)
     deploy_lab.delay(
         instance_id=system_id,
         scenario_name=req.scenario,

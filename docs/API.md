@@ -1117,6 +1117,7 @@ Content-Type: application/json
 | `scenario` | string | Yes | Scenario name (e.g., `basic_pentest`, `random_vulnhub`) |
 | `instance_id` | string | Yes | Unique identifier for this lab (alphanumeric + hyphens) |
 | `provider` | string | No | Deployment backend (see `GET /providers`). Omitted → the install default (worker's `RANGE_PROVIDER` / `MOCK_MODE`). The chosen provider is recorded with the deployment, and destroy always runs on the provider the lab was deployed with. |
+| `acknowledge_open_egress` | bool | No | Required (`true`) to deploy a scenario with `requires.egress: open`, whose nodes reach the internet and the host's own non-loopback addresses. Without it the response is `409 open_egress_unacknowledged`; an `agent` key is always `403 open_egress_requires_operator`. The acknowledgement is recorded as an `open_egress_acknowledged` event, and the worker refuses an open-egress deploy that has none. Accepted by every deploy route (`/deploy`, `/arenas/custom`, `/arenas/sut`, `/arenas/oci`, `/arenas/source-bundle`). |
 
 **Response:** `202 Accepted`
 ```json

@@ -89,6 +89,29 @@ def run_evaluation(evaluation_id):
     return experiments.execute(evaluation_id, uuid.uuid4().hex)
 
 
+OPEN_EGRESS_ACK_EVENT = "open_egress_acknowledged"
+
+
+def is_open_egress(scenario_config) -> bool:
+    return str(((scenario_config or {}).get("requires") or {}).get("egress", "none")
+               ).lower() == "open"
+
+
+def open_egress_unacknowledged(db, instance_id, scenario_name, scenario_config) -> bool:
+    """True when the arena's scenario opts out of egress containment and no
+    operator acknowledgement event exists for it (PF-02, #22)."""
+    config = scenario_config
+    if config is None:
+        try:
+            import scenarios  # noqa: PLC0415
+            config = scenarios.load_scenario(scenario_name)
+        except Exception:  # noqa: BLE001 - an unloadable scenario fails in deploy itself
+            return False
+    if not is_open_egress(config):
+        return False
+    return not db.list_events(instance_id, limit=1, types=(OPEN_EGRESS_ACK_EVENT,))
+
+
 def enqueue_evaluation(evaluation_id, db=None):
     import experiments  # noqa: PLC0415
 
@@ -382,9 +405,15 @@ def deploy_lab(self, instance_id, scenario_name, user_id, variables=None, provid
     # stuck in 'deploying' with no audit trail — turn it into an observable failure
     # exactly like a returned {success: False}.
     try:
-        result = orch.deploy(
-            scenario_name, instance_id, variables, scenario_config=scenario_config
-        )
+        if open_egress_unacknowledged(db, instance_id, scenario_name, scenario_config):
+            # PF-02 (#22): never provision an open-egress arena without the
+            # operator's recorded acknowledgement, whichever route queued it.
+            result = {"success": False, "phase": "policy",
+                      "error": "open egress was not acknowledged by an operator"}
+        else:
+            result = orch.deploy(
+                scenario_name, instance_id, variables, scenario_config=scenario_config
+            )
     except Exception as e:  # noqa: BLE001 - a crash becomes a recorded failure
         logger.exception(f"[{instance_id}] deploy task crashed")
         result = {"success": False, "error": f"deploy crashed: {e}",
