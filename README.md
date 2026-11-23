@@ -63,7 +63,8 @@ make dev            # docker-compose.yml + docker-compose.dev.yml, live reload
 - Console: <http://localhost:5000> — login `admin` / `nidavellir`
 - API: <http://localhost:8000>
 
-`make dev-logs` tails the stack, `make dev-down` stops it. The dev stack runs in
+`make dev-smoke` checks the running stack end to end, `make dev-logs` tails it,
+`make dev-down` stops it. The dev stack runs in
 `MOCK_MODE`: the full flow works without creating real target infrastructure.
 The demo credentials are for a machine you control — never expose this stack.
 
@@ -74,8 +75,8 @@ For real Docker-local arenas, configuration and data handling see
 ## Development
 
 ```bash
-python3.11 -m venv .venv && source .venv/bin/activate
-make install-dev    # pinned runtime + dev dependencies
+make venv           # .venv with the pinned Python 3.11 (via uv, or python3.11) + deps
+source .venv/bin/activate
 make check          # ruff + bandit + pytest (Python 3.11)
 make release-check  # authoritative gate: clean Python 3.11, SQLite + PostgreSQL, in Docker
 ```

@@ -15,25 +15,37 @@ PIP    := $(if $(wildcard $(VENV_BIN)/pip),$(VENV_BIN)/pip,pip)
 PYTEST := $(if $(wildcard $(VENV_BIN)/pytest),$(VENV_BIN)/pytest,pytest)
 RUFF   := $(if $(wildcard $(VENV_BIN)/ruff),$(VENV_BIN)/ruff,ruff)
 BANDIT := $(if $(wildcard $(VENV_BIN)/bandit),$(VENV_BIN)/bandit,bandit)
+PYTHON := $(if $(wildcard $(VENV_BIN)/python),$(VENV_BIN)/python,python3)
 
 .PHONY: help venv install-dev check-python test test-unit test-integration \
 	cov lint fmt security smoke check verify-sqlite verify-postgres release-check \
-	verify-nv02-live verify-nv03-live verify-nv04-live verify-nv05-live verify-nv06-live verify-nv07-live verify-nv07-recovery-live verify-nv08-live verify-nv09-live verify-nv10-live verify-vaultwarden-live build-poc-runner up down dev dev-down dev-logs logs clean
+	verify-nv02-live verify-nv03-live verify-nv04-live verify-nv05-live verify-nv06-live verify-nv07-live verify-nv07-recovery-live verify-nv08-live verify-nv09-live verify-nv10-live verify-vaultwarden-live build-poc-runner up down dev dev-smoke dev-down dev-logs logs clean
 
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
-venv: ## Create .venv/ and install all dev dependencies into it
-	python3 -m venv .venv
-	$(VENV_BIN)/pip install -r requirements-lock.txt
+PYTHON_VERSION := $(shell cat .python-version)
+
+venv: ## Create .venv/ with the pinned Python (uv if available) and install dev deps
+	@if command -v uv >/dev/null 2>&1; then \
+		uv venv --python $(PYTHON_VERSION) .venv && \
+		uv pip install --python $(VENV_BIN)/python -r requirements-lock.txt; \
+	elif command -v python3.11 >/dev/null 2>&1; then \
+		python3.11 -m venv .venv && $(VENV_BIN)/pip install -r requirements-lock.txt; \
+	else \
+		echo "Python 3.11 not found. Install uv (https://docs.astral.sh/uv/) and rerun 'make venv';"; \
+		echo "uv downloads Python $(PYTHON_VERSION) itself. Or install python3.11 and python3.11-venv."; \
+		exit 1; \
+	fi
+	@echo "Ready: source .venv/bin/activate && make check"
 
 install-dev: ## Install runtime + dev/test dependencies
 	$(PIP) install -r requirements-lock.txt
 
 check-python: ## Refuse unsupported Python versions (the release line is 3.11)
-	@python -c 'import platform, sys; print("Python " + platform.python_version()); assert sys.version_info[:2] == (3, 11), "Nidavellir verification requires Python 3.11"'
+	@$(PYTHON) -c 'import platform, sys; print("Python " + platform.python_version()); assert sys.version_info[:2] == (3, 11), "Nidavellir verification requires Python 3.11"'
 
 test: ## Run the test suite (mock mode, no external services)
 	MOCK_MODE=true $(PYTEST)
@@ -57,14 +69,14 @@ security: ## Static security scan with bandit
 	$(BANDIT) -r $(ORCH) $(GATEWAY) $(HARNESS) $(SCRIPTS) cyber-range/services/vulnhub-importer cyber-range/webui -x '*/.venv/*,*/venv/*' -ll
 
 smoke: ## Verify migrations plus API, UI and MCP gateway readiness
-	python scripts/release-smoke.py
+	$(PYTHON) scripts/release-smoke.py
 
 check: check-python lint security test-unit smoke ## Run the supported host gate (requires Python 3.11)
 
 verify-sqlite: check-python lint security test-unit smoke ## Full SQLite release gate inside the pinned environment
 
 verify-postgres: check-python ## Full PostgreSQL test gate (requires DATABASE_URL)
-	@python -c 'import os; assert os.environ.get("DATABASE_URL", "").startswith("postgresql"), "verify-postgres requires a PostgreSQL DATABASE_URL"'
+	@$(PYTHON) -c 'import os; assert os.environ.get("DATABASE_URL", "").startswith("postgresql"), "verify-postgres requires a PostgreSQL DATABASE_URL"'
 	$(MAKE) test-unit
 
 release-check: ## Clean Python 3.11 SQLite + PostgreSQL release gate in Docker
@@ -115,8 +127,11 @@ down: ## Stop and remove containers
 DEV_COMPOSE := $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
 
 dev: ## Start the dev stack: mock mode pinned, live code reload, no .env needed
-	$(DEV_COMPOSE) up -d --build
+	$(DEV_COMPOSE) up -d --build --renew-anon-volumes
 	@echo "WebUI: http://localhost:5000 (admin/nidavellir) — API: http://localhost:8000 (X-API-Key: dev-insecure-key)"
+
+dev-smoke: ## Check a running dev stack: API ready, login, console and its assets
+	./scripts/dev-smoke.sh
 
 dev-down: ## Stop the dev stack
 	$(DEV_COMPOSE) down

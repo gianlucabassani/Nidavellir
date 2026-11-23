@@ -9,13 +9,11 @@ Thanks for helping build Nidavellir. This guide gets you from clone to green tes
 git clone https://github.com/gianlucabassani/Nidavellir.git
 cd Nidavellir
 
-# 2. Create a virtualenv with the supported interpreter (.python-version)
-python3.11 -m venv .venv && source .venv/bin/activate
+# 2. Create .venv with the pinned interpreter (.python-version) and the dependency lock.
+#    Uses uv when installed (it downloads Python 3.11 itself), else python3.11.
+make venv && source .venv/bin/activate
 
-# 3. Install the verified runtime + dev dependency lock
-make install-dev      # == pip install -r requirements-lock.txt
-
-# 4. Run the clean release gate (recommended before claiming a task complete)
+# 3. Run the clean release gate (recommended before claiming a task complete)
 make release-check    # pinned Python 3.11, SQLite + PostgreSQL, smoke checks
 ```
 

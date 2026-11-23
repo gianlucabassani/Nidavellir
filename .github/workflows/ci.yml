@@ -75,3 +75,25 @@ jobs:
 
       - name: Validate docker-compose config
         run: docker compose config -q
+
+  quickstart:
+    # The documented first run (README, docs site): a clean checkout, no .env,
+    # `make dev`, then log in and load the console. Guards issue #1.
+    name: Fresh-clone quickstart
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: make dev
+        run: make dev
+
+      - name: Smoke the quickstart
+        run: make dev-smoke
+
+      - name: Stack logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml logs --no-color --tail=200
+
+      - name: Stop the stack
+        if: always()
+        run: make dev-down
