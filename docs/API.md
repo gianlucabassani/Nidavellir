@@ -774,6 +774,16 @@ the same endpoint. An agent key must be bound and receives only its stance's
 allowlisted event kinds and agent-visible spans. The console BFF proxies this stream at
 `/api/arenas/{id}/stream` instead of polling.
 
+**Agents board (OBS-06).** `GET /board` (operator-only) → `{ observed_at, idle_minutes,
+arenas: [...], inbox: [...] }`. Each live arena carries its bound agents (stance, paused),
+last action (name, actor, status, time), error rate over its latest 50 agent/tool/model
+spans, budget (remaining, cap, stopped) and its evaluation trial if any. The inbox lists
+failed arenas, validator and operator verdicts, budget exhaustion (one per arena), stops
+and finished trials, newest first. `GET /board/stream` pushes a `board` frame after each
+burst of platform activity (Redis channel `nv:all`), not on a timer. Idle detection is
+done by the client from `last_action.at` and `idle_minutes`
+(`NIDAVELLIR_BOARD_IDLE_MINUTES`, default 10).
+
 **Console agent keys (UX-07).** An operator connects an agent without a shell:
 - `POST /arenas/{id}/agent-keys` `{ "name", "stance" }` → `201 { "agent_name",
   "stance", "role": "agent", "api_key" }`. Operator-only; active arenas only

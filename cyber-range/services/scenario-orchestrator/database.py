@@ -1853,6 +1853,39 @@ class Database:
                      "payload": json.loads(e.payload) if e.payload else None}
                     for e in session.scalars(query)]
 
+    def recent_spans(self, arena_id, limit=50):
+        """The arena's newest spans, newest first (OBS-06 board)."""
+        with self._session() as session:
+            query = (select(Span).where(Span.arena_id == arena_id)
+                     .order_by(Span.id.desc()).limit(limit))
+            return [self._span_dict(row) for row in session.scalars(query)]
+
+    def recent_events_of(self, types, limit=200):
+        """Newest events of the given types across all arenas (OBS-06 inbox)."""
+        with self._session() as session:
+            query = (select(Event).where(Event.type.in_(list(types)))
+                     .order_by(Event.id.desc()).limit(limit))
+            return [{"id": e.id, "lab_id": e.lab_id, "ts": _stringify(e.ts),
+                     "actor": e.actor, "type": e.type,
+                     "payload": json.loads(e.payload) if e.payload else None}
+                    for e in session.scalars(query)]
+
+    def recent_refusals(self, limit=50):
+        """Newest budget-refused spans across arenas (OBS-06 inbox)."""
+        with self._session() as session:
+            query = (select(Span).where(Span.status == "budget_refused")
+                     .order_by(Span.id.desc()).limit(limit))
+            return [self._span_dict(row) for row in session.scalars(query)]
+
+    def eval_trials_for_board(self, limit=100):
+        """Running trials and the most recently finished ones (OBS-06)."""
+        with self._session() as session:
+            query = select(EvalTrial).order_by(EvalTrial.updated_at.desc()).limit(limit)
+            return [{"id": t.id, "evaluation_id": t.evaluation_id, "run_id": t.run_id,
+                     "seed": t.seed, "state": t.state, "arena_id": t.arena_id,
+                     "error": t.error, "updated_at": _stringify(t.updated_at)}
+                    for t in session.scalars(query)]
+
     def latest_ids(self, lab_id):
         """(newest event id, newest span id) for one lab, 0 when none."""
         with self._session() as session:

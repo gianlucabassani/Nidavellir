@@ -26,6 +26,8 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 CHANNEL = "nv:arena:{}"
+# Every message is also sent here for cross-arena views (OBS-06 board).
+GLOBAL_CHANNEL = "nv:all"
 KEEPALIVE_SECONDS = float(os.getenv("NIDAVELLIR_STREAM_KEEPALIVE_SECONDS", "15"))
 MAX_SECONDS = float(os.getenv("NIDAVELLIR_STREAM_MAX_SECONDS", "1800"))
 FALLBACK_POLL_SECONDS = float(os.getenv("NIDAVELLIR_STREAM_FALLBACK_POLL_SECONDS", "2"))
@@ -65,8 +67,10 @@ def publish(messages: list[tuple[str, str, int]]) -> None:
         return
     try:
         for arena_id, kind, row_id in messages:
-            client.publish(CHANNEL.format(arena_id),
-                           json.dumps({"kind": kind, "id": row_id}))
+            message = json.dumps({"kind": kind, "id": row_id})
+            client.publish(CHANNEL.format(arena_id), message)
+            client.publish(GLOBAL_CHANNEL, json.dumps(
+                {"kind": kind, "id": row_id, "arena_id": arena_id}))
     except Exception:  # noqa: BLE001
         logger.warning("stream publish failed", exc_info=True)
 
@@ -207,3 +211,42 @@ def redis_subscribe(arena_id: str):
         return pubsub
     except Exception:  # noqa: BLE001
         return None
+
+
+def redis_subscribe_global():
+    client = _redis()
+    if client is None:
+        return None
+    try:
+        pubsub = client.pubsub()
+        pubsub.subscribe(GLOBAL_CHANNEL)
+        return pubsub
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def board_frames(build: Callable[[], dict], *, subscribe=None,
+                 max_seconds: float | None = None, min_interval: float = 1.0) -> Iterator[str]:
+    """``board`` frames: one now, then one after each burst of platform activity
+    (at most one per ``min_interval``). Idle time is computed by the client from
+    each arena's last action, so no frame is needed just because time passed."""
+    deadline = time.monotonic() + (MAX_SECONDS if max_seconds is None else max_seconds)
+    pubsub = subscribe() if subscribe else None
+    try:
+        yield "retry: 3000\n\n"
+        yield sse("board", build())
+        while time.monotonic() < deadline:
+            if _wait(pubsub, deadline):
+                time.sleep(min(min_interval, max(0.0, deadline - time.monotonic())))
+                if pubsub is not None:  # fold the burst into one rebuild
+                    while pubsub.get_message(ignore_subscribe_messages=True, timeout=0):
+                        pass
+                yield sse("board", build())
+            elif time.monotonic() < deadline:
+                yield ": keepalive\n\n"
+    finally:
+        if pubsub is not None:
+            try:
+                pubsub.close()
+            except Exception:  # noqa: BLE001 - a dead connection needs no closing
+                logger.debug("pubsub close failed", exc_info=True)

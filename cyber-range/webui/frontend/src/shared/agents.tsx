@@ -1,3 +1,4 @@
+import { BoardSummary } from "./board";
 import type { AgentsData } from "../types";
 import {
   Empty,
@@ -6,7 +7,6 @@ import {
   Loading,
   PageHead,
   Panel,
-  Status,
   useWorkspaceData,
 } from "../ui";
 
@@ -69,54 +69,7 @@ export function AgentsLibrary() {
             />
           )}
         </Panel>
-        <Panel
-          eyebrow="02 / RUNTIME"
-          title="Recent connections"
-          aside={
-            <span className="tiny-tag">{value.connections.length} SEEN</span>
-          }
-        >
-          {value.connections.length ? (
-            <div className="shared-record-list">
-              {value.connections.map((item, index) => (
-                <article
-                  key={`${item.arena_id}-${item.stance}-${index}`}
-                  className="shared-record"
-                >
-                  <div>
-                    <strong>
-                      {item.model || item.actor || "Agent connection"}
-                    </strong>
-                    <Status value={item.active ? "active" : "inactive"} />
-                  </div>
-                  <small>
-                    {item.arena_name} · {item.stance} ·{" "}
-                    {item.provider || "provider unknown"}
-                  </small>
-                  <small>
-                    {item.commands} commands · {item.findings} findings ·{" "}
-                    {item.last_seen
-                      ? formatObserved(item.last_seen)
-                      : "No recent action"}
-                  </small>
-                  {item.arena_id && (
-                    <a
-                      className="inline-action"
-                      href={`/console/arena/${encodeURIComponent(item.arena_id)}`}
-                    >
-                      Open arena ↗
-                    </a>
-                  )}
-                </article>
-              ))}
-            </div>
-          ) : (
-            <Empty
-              title="No agent connections"
-              detail="Gateway sessions will appear when an agent connects to an arena."
-            />
-          )}
-        </Panel>
+        <BoardSummary eyebrow="02 / RUNTIME" />
         <Panel
           eyebrow="03 / TRACE"
           title="Agent activity"

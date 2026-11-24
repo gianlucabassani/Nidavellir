@@ -24,6 +24,7 @@ import { Profile } from "./shared/profile";
 import { Settings } from "./shared/settings";
 import { ResearchAssistant } from "./shared/assistant";
 import { AllArenas, AllEvaluations } from "./shared/lists";
+import { AgentsBoard } from "./shared/board";
 import { installRouter, navigate as routeTo } from "./router";
 
 installRouter();
@@ -71,6 +72,7 @@ function App() {
   const benchmarkRegistry =
     window.location.pathname === "/console/benchmark/registry";
   const activity = window.location.pathname === "/console/activity";
+  const boardPage = window.location.pathname === "/console/board";
   const agentsLibrary = window.location.pathname === "/console/library/agents";
   const targetsLibrary =
     window.location.pathname === "/console/library/targets";
@@ -112,6 +114,7 @@ function App() {
       : evaluationId || newComparison || benchmarkRegistry || allEvaluations
         ? "benchmark"
         : newResearch ||
+            boardPage ||
             allArenas ||
             sourceReviews ||
             sourceReviewId ||
@@ -127,6 +130,7 @@ function App() {
     activity &&
     new URLSearchParams(window.location.search).get("section") === "evidence";
   const sharedTools = [
+    { label: "Agents board", href: "/console/board", active: boardPage },
     { label: "All arenas", href: "/console/arenas", active: allArenas },
     {
       label: "All evaluations",
@@ -317,6 +321,8 @@ function App() {
         >
           {arenaId ? (
             <ArenaWorkspace key={arenaId} id={arenaId} />
+          ) : boardPage ? (
+            <AgentsBoard />
           ) : allArenas ? (
             <AllArenas />
           ) : allEvaluations ? (

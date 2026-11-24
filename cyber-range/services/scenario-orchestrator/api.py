@@ -69,6 +69,7 @@ import validators
 import validation_evidence
 import evidence_review
 import actions
+import board
 import spans
 import streams
 from actions import action
@@ -3288,6 +3289,32 @@ def list_arena_spans(
     rows = db.list_spans(arena_id=instance_id, after_id=after_id, limit=limit,
                          visibility=spans.visible_to(principal.role))
     return {"spans": rows, "next_after_id": rows[-1]["id"] if rows else after_id}
+
+
+def _board_snapshot() -> dict:
+    return board.build(db, _arena_binding_events, _stringify_now())
+
+
+def _stringify_now() -> str:
+    return db_now().isoformat(sep=" ")
+
+
+@app.get("/board")
+def get_board(principal: Principal = Depends(require_principal)):
+    """OBS-06: every live arena, its agents, last action, error rate, budget and
+    trial, plus the attention inbox. Operator-only."""
+    _require_operator(principal)
+    return _board_snapshot()
+
+
+@app.get("/board/stream")
+def board_stream(principal: Principal = Depends(require_principal)):
+    """OBS-06: ``board`` frames pushed after platform activity. Operator-only."""
+    _require_operator(principal)
+    frames = streams.board_frames(_board_snapshot,
+                                  subscribe=streams.redis_subscribe_global)
+    return StreamingResponse(frames, media_type="text/event-stream", headers={
+        "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.get("/arenas/{instance_id}/stream")
