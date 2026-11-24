@@ -1,6 +1,9 @@
+import logging
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+
+_log = logging.getLogger("config")
 
 # Load environment variables
 load_dotenv()
@@ -409,22 +412,18 @@ def validate_config():
         SOURCE_BUNDLES_DIR,
     ]:
         dir_path.mkdir(parents=True, exist_ok=True)
-        print(f"✅ Directory ready: {dir_path}")
+        _log.debug("directory ready: %s", dir_path)
     
     # Ensure plugin cache subdir exists
     Path(TF_PLUGIN_CACHE_DIR).mkdir(parents=True, exist_ok=True)
     
     # Print warnings
     for warning in warnings:
-        print(f"⚠️  WARNING: {warning}")
-    
-    print("✅ Configuration validated successfully")
-    print(f"   BASE_DIR: {BASE_DIR}")
-    print(f"   CYBER_RANGE_DIR: {CYBER_RANGE_DIR}")
-    print(f"   TEMPLATES_DIR: {TEMPLATES_DIR}")
-    print(f"   TERRAFORM_TEMPLATE: {BASE_TERRAFORM_TEMPLATE}")
-    print(f"   RUNS_DIR: {RUNS_DIR}")
-    print(f"   DATA_DIR: {DATA_DIR}")
+        _log.warning("configuration: %s", warning)
+
+    # OBS-07: one structured line instead of decorated prints.
+    _log.info("configuration validated (base=%s, templates=%s, terraform=%s, runs=%s, data=%s)",
+              BASE_DIR, TEMPLATES_DIR, BASE_TERRAFORM_TEMPLATE, RUNS_DIR, DATA_DIR)
 
 # Deprecated alias for compatibility
 TF_DIR = BASE_TERRAFORM_TEMPLATE

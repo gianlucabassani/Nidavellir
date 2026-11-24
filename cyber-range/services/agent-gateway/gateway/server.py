@@ -27,6 +27,37 @@ from gateway.tools import GatewayContext
 logger = logging.getLogger(__name__)
 
 
+class _JsonFormatter(logging.Formatter):
+    """OBS-07: JSON log lines with the current tool call's request ID."""
+
+    def format(self, record):
+        import json  # noqa: PLC0415
+        import time  # noqa: PLC0415
+
+        from gateway.spans import CURRENT  # noqa: PLC0415
+
+        entry = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(record.created))
+                 + f".{int(record.msecs):03d}Z", "level": record.levelname,
+                 "logger": record.name, "msg": record.getMessage(), "service": "gateway"}
+        current = CURRENT.get()
+        if current:
+            entry["request_id"] = f"gw-{current[1]}"
+        if record.exc_info:
+            entry["exc"] = self.formatException(record.exc_info)
+        return json.dumps(entry, default=str)
+
+
+def _configure_logging():
+    handler = logging.StreamHandler()
+    if os.getenv("NIDAVELLIR_LOG_FORMAT", "json").lower() == "text":
+        handler.setFormatter(logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s"))
+    else:
+        handler.setFormatter(_JsonFormatter())
+    root = logging.getLogger()
+    root.handlers = [handler]
+    root.setLevel(logging.INFO)
+
+
 def build_context(cfg: GatewayConfig | None = None) -> GatewayContext:
     cfg = cfg or GatewayConfig()
     return GatewayContext(
@@ -675,7 +706,7 @@ def _probe_operator_read(cfg) -> int | None:
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+    _configure_logging()
     cfg = GatewayConfig()
     errors = insecure_gateway_config_errors(cfg)
     if errors:

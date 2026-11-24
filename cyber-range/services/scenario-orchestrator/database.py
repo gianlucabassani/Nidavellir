@@ -28,6 +28,7 @@ from sqlalchemy.orm import sessionmaker
 
 from crypto import decrypt_secret, encrypt_secret
 import setup_phase
+import otlp
 import streams
 from model_headers import extra_headers_digest, normalize_extra_headers
 from models import (
@@ -1732,6 +1733,7 @@ class Database:
             span = Span(**row)
             session.add(span)
             session.commit()
+            otlp.export(row)  # OBS-07: optional, off unless configured
             return span.id
 
     def list_spans(self, *, arena_id=None, trace_id=None, trial_id=None,
@@ -1885,6 +1887,28 @@ class Database:
                      "seed": t.seed, "state": t.state, "arena_id": t.arena_id,
                      "error": t.error, "updated_at": _stringify(t.updated_at)}
                     for t in session.scalars(query)]
+
+    def telemetry_counts(self) -> dict:
+        """Database-derived metric families (OBS-07)."""
+        with self._session() as session:
+            states = dict(session.execute(
+                select(Deployment.status, func.count()).group_by(Deployment.status)).all())
+            refusals = session.scalar(select(func.count()).select_from(Span)
+                                      .where(Span.status == "budget_refused")) or 0
+            reaper = dict(session.execute(
+                select(Event.type, func.count()).where(Event.actor == "reaper")
+                .group_by(Event.type)).all())
+            verdicts: dict[str, int] = {}
+            for (payload,) in session.execute(select(Event.payload).where(Event.type == "finding")):
+                try:
+                    verdict = ((json.loads(payload) or {}).get("validation") or {}).get("verdict")
+                except (TypeError, ValueError):
+                    verdict = None
+                if verdict:
+                    verdicts[verdict] = verdicts.get(verdict, 0) + 1
+        return {"arena_states": {str(k): int(v) for k, v in states.items()},
+                "budget_refusals": int(refusals), "verdicts": verdicts,
+                "reaper_actions": {str(k): int(v) for k, v in reaper.items()}}
 
     def latest_ids(self, lab_id):
         """(newest event id, newest span id) for one lab, 0 when none."""

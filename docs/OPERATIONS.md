@@ -126,6 +126,24 @@ Key environment variables (see [`.env.example`](../.env.example)):
 | `NIDAVELLIR_ALLOW_SOURCE_BUILD` | Opt-in to building SUT workloads from source (off by default). |
 | `WEBUI_USERNAME` / `WEBUI_PASSWORD` | Console login. |
 
+## Telemetry (OBS-07)
+
+- **Logs.** The API, worker and gateway write one JSON object per line
+  (`NIDAVELLIR_LOG_FORMAT=text` for plain lines) with `request_id`, and `arena_id`,
+  `actor` or `route` when known. The API accepts a well-formed `X-Request-ID` or
+  mints one, returns it on every response, and Celery tasks log the ID of the
+  request that enqueued them. Each gateway tool call sends its own
+  `X-Request-ID: gw-<span id>`.
+- **Metrics.** `GET /metrics` on the orchestrator, in Prometheus text format, for an
+  operator/admin key or `Authorization: Bearer $NIDAVELLIR_METRICS_TOKEN`:
+  request latency by route template (`nidavellir_http_request_duration_seconds`),
+  Celery queue depth, task duration by task, deploy/destroy duration, arenas by
+  state, budget refusals, validator verdicts and reaper actions.
+- **Traces.** Spans are always stored in the database (`GET /arenas/{id}/spans`).
+  Set `OTEL_EXPORTER_OTLP_ENDPOINT` (for example `http://otel-collector:4318`) to also
+  send them, batched, to `<endpoint>/v1/traces` as OTLP/HTTP JSON; previews are
+  already redacted. Leave it empty to keep export off.
+
 ## The console
 
 - **Home** — live engagements, findings awaiting a verdict, failed runs and

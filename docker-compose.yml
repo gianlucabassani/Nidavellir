@@ -103,6 +103,10 @@ services:
       # docker-local below (no need to unset it). For cloud backends leave
       # MOCK_MODE unset and set RANGE_PROVIDER=openstack/aws + creds.
       MOCK_MODE: ${MOCK_MODE:-false}
+      # OBS-07: JSON logs by default; /metrics bearer token; optional OTLP export.
+      NIDAVELLIR_LOG_FORMAT: ${NIDAVELLIR_LOG_FORMAT:-json}
+      NIDAVELLIR_METRICS_TOKEN: ${NIDAVELLIR_METRICS_TOKEN:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       RANGE_PROVIDER: ${RANGE_PROVIDER:-docker-local}
 
       # API authentication (ADR-0002). The default is a well-known dev key for
@@ -224,6 +228,8 @@ services:
       # Same environment as orchestrator — real container arenas by default;
       # MOCK_MODE=true overrides RANGE_PROVIDER and forces the mock provider.
       MOCK_MODE: ${MOCK_MODE:-false}
+      NIDAVELLIR_LOG_FORMAT: ${NIDAVELLIR_LOG_FORMAT:-json}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       RANGE_PROVIDER: ${RANGE_PROVIDER:-docker-local}
       NIDAVELLIR_POC_RUNNER_IMAGE: ${NIDAVELLIR_POC_RUNNER_IMAGE:-nidavellir/poc-runner:py311}
       OS_AUTH_URL: ${OS_AUTH_URL:-}
