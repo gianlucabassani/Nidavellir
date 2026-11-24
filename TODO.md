@@ -316,7 +316,7 @@ each, each with a browser check.
   `location.assign`; back/forward restore tab and scroll; breadcrumbs reflect the real
   origin (arena opened from Range must not say "← Research").
   **Accept:** browser check: no full reload across a launch → arena → evidence → back flow.
-- [ ] **UX-03 — Tools are visible, not behind hover.** Replace the arena flyout rail with a
+- [x] **UX-03 — Tools are visible, not behind hover.** Replace the arena flyout rail with a
   persistent tab/side list (Prepare · Investigate · Record), keyboard reachable; live trace
   and monitor signals are open by default, not in collapsed `<details>`.
   **Accept:** every arena tool reachable in one click and by keyboard; screen-reader check.

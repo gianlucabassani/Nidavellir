@@ -393,7 +393,7 @@ export function ForgeOverview({
           {archived && <span>Retained record</span>}
         </div>
       </div>
-      <details className="forge-trace forge-monitor">
+      <details className="forge-trace forge-monitor" open>
         <summary>
           <span>
             Monitor signals{" "}
@@ -441,7 +441,7 @@ export function ForgeOverview({
           )}
         </div>
       </details>
-      <details className="forge-trace">
+      <details className="forge-trace" open>
         <summary>
           <span>
             Event trace <small>{arena.events.length} observed events</small>
