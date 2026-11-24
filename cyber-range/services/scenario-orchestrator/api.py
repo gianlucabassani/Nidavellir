@@ -70,6 +70,7 @@ import validation_evidence
 import evidence_review
 import actions
 import spans
+import streams
 from actions import action
 import vulhub_import
 from auth import (
@@ -3287,6 +3288,54 @@ def list_arena_spans(
     rows = db.list_spans(arena_id=instance_id, after_id=after_id, limit=limit,
                          visibility=spans.visible_to(principal.role))
     return {"spans": rows, "next_after_id": rows[-1]["id"] if rows else after_id}
+
+
+@app.get("/arenas/{instance_id}/stream")
+def arena_stream(
+    instance_id: str,
+    request: Request,
+    principal: Principal = Depends(require_principal),
+):
+    """Server-sent arena updates (OBS-04): ``state``, ``activity`` (audit events)
+    and ``spans``, pushed on insert. Resume with ``Last-Event-ID`` (the ``id`` of
+    the last frame, ``<event id>.<span id>``). An agent key must be bound and
+    receives only allowlisted event kinds and agent-visible spans."""
+    if not db.get_deployment(instance_id):
+        raise HTTPException(status_code=404, detail="Instance not found")
+    binding = _require_arena_member(principal, instance_id)
+    operator = principal.role in OPERATOR_ROLES
+    stance = (binding or {}).get("stance")
+    allowed = None if operator else sorted(event_visibility.visible_event_types(stance))
+
+    def read_events(after, limit):
+        rows = db.events_after(instance_id, after, types=allowed, limit=limit)
+        return rows if operator else event_visibility.redact_for_agent(rows, stance)
+
+    def read_spans(after, limit):
+        return db.list_spans(arena_id=instance_id, after_id=after, limit=limit,
+                             visibility=spans.visible_to(principal.role))
+
+    def read_state():
+        record = db.get_deployment(instance_id)
+        if not record:
+            return None
+        outputs = record.get("outputs") or {}
+        if isinstance(outputs, str):
+            try:
+                outputs = json.loads(outputs)
+            except json.JSONDecodeError:
+                outputs = {}
+        outputs = outputs if isinstance(outputs, dict) else {}
+        return {"status": record.get("status"),
+                "outputs": outputs if operator else _agent_visible_outputs(outputs)}
+
+    frames = streams.arena_frames(
+        arena_id=instance_id,
+        cursor=streams.parse_cursor(request.headers.get("Last-Event-ID")),
+        read_events=read_events, read_spans=read_spans, read_state=read_state,
+        latest=lambda: db.latest_ids(instance_id), subscribe=streams.redis_subscribe)
+    return StreamingResponse(frames, media_type="text/event-stream", headers={
+        "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.get("/deployments/{instance_id}/events")

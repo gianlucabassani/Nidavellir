@@ -763,6 +763,17 @@ so the action span nests under the caller's span while the trace ID stays the
 server-derived one. The gateway reports each tool call this way, and the evaluation
 worker records one `model` span per provider call with `gen_ai.usage.*` tokens.
 
+**Push stream (OBS-04).** `GET /arenas/{id}/stream` (server-sent events): `state`
+(`{status, outputs}`, re-sent after a status change), `activity` (`{events: [...]}`, audit
+events oldest first) and `spans` (`{spans: [...]}`). Each data frame has
+`id: <event id>.<span id>`; reconnect with `Last-Event-ID` to resume without gaps or
+repeats. A first connection backfills the last 40 events and 200 spans. Event and span
+inserts publish to Redis after commit, and the stream reads the database only when a
+message arrives (keepalive comments every 15 s); without Redis it polls every 2 s behind
+the same endpoint. An agent key must be bound and receives only its stance's
+allowlisted event kinds and agent-visible spans. The console BFF proxies this stream at
+`/api/arenas/{id}/stream` instead of polling.
+
 **Console agent keys (UX-07).** An operator connects an agent without a shell:
 - `POST /arenas/{id}/agent-keys` `{ "name", "stance" }` → `201 { "agent_name",
   "stance", "role": "agent", "api_key" }`. Operator-only; active arenas only

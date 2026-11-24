@@ -1,4 +1,3 @@
-import { useEffect, useRef } from "react";
 import type { ArenaData, DeployPhase } from "../types";
 
 // UX-05: launch progress from the worker's deploy_phase events. The page never
@@ -15,20 +14,6 @@ const LAUNCHING = ["pending", "deploying"];
 
 export function isLaunching(state: string) {
   return LAUNCHING.includes(state.toLowerCase());
-}
-
-/** Refresh the arena while it is launching (the live stream starts once active). */
-export function useLaunchPolling(
-  state: string | undefined,
-  refresh: () => void,
-) {
-  const refreshRef = useRef(refresh);
-  refreshRef.current = refresh;
-  useEffect(() => {
-    if (!state || !isLaunching(state)) return;
-    const timer = window.setInterval(() => refreshRef.current(), 2000);
-    return () => window.clearInterval(timer);
-  }, [state]);
 }
 
 function phaseState(

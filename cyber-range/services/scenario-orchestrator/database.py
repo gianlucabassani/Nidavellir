@@ -28,6 +28,7 @@ from sqlalchemy.orm import sessionmaker
 
 from crypto import decrypt_secret, encrypt_secret
 import setup_phase
+import streams
 from model_headers import extra_headers_digest, normalize_extra_headers
 from models import (
     AgentBuild, ApiKey, Base, BudgetAccount, BudgetAction, BudgetControl, BudgetGate, Deployment,
@@ -149,6 +150,7 @@ class Database:
             connect_args["check_same_thread"] = False
         self._engine = create_engine(url, connect_args=connect_args)
         self._session = sessionmaker(bind=self._engine, expire_on_commit=False)
+        streams.install()  # OBS-04: publish event/span inserts after commit
         # FR-01 (B10, U4): `create_all` only creates missing tables, never missing
         # columns, so on a deployed database it masked schema drift. On PostgreSQL
         # outside mock mode the schema is owned by the `migrate` step and a
@@ -1838,6 +1840,25 @@ class Database:
                 self._append_event(session, lab_id, actor, type_, payload)
             session.commit()
             return result
+
+    def events_after(self, lab_id, after_id=0, types=None, limit=500):
+        """Events of one lab after ``after_id``, oldest first (OBS-04 stream)."""
+        with self._session() as session:
+            query = select(Event).where(Event.lab_id == lab_id, Event.id > (after_id or 0))
+            if types is not None:
+                query = query.where(Event.type.in_(list(types)))
+            query = query.order_by(Event.id).limit(limit)
+            return [{"id": e.id, "lab_id": e.lab_id, "ts": _stringify(e.ts),
+                     "actor": e.actor, "type": e.type,
+                     "payload": json.loads(e.payload) if e.payload else None}
+                    for e in session.scalars(query)]
+
+    def latest_ids(self, lab_id):
+        """(newest event id, newest span id) for one lab, 0 when none."""
+        with self._session() as session:
+            event = session.scalar(select(func.max(Event.id)).where(Event.lab_id == lab_id))
+            span = session.scalar(select(func.max(Span.id)).where(Span.arena_id == lab_id))
+            return event or 0, span or 0
 
     def list_events(self, lab_id=None, limit=100, types=None, before_id=None):
         """Recent events (newest first), optionally for one lab and/or restricted
