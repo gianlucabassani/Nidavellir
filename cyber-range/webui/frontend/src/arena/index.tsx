@@ -8,6 +8,7 @@ import {
   PageHead,
   Loading,
   ErrorState,
+  ErrorBoundary,
 } from "../ui";
 import { PocWorkbench } from "./poc";
 import { FindingsWorkbench } from "./findings";
@@ -105,7 +106,7 @@ export function ArenaWorkspace({ id }: { id: string }) {
     }
   }
   if (loading && !value) return <Loading />;
-  if (error) return <ErrorState message={error} refresh={refresh} />;
+  if (error && !value) return <ErrorState message={error} refresh={refresh} />;
   if (!value) return null;
   const legacy = `/arena/${encodeURIComponent(id)}`;
   const readOnly = value.state === "destroyed";
@@ -178,37 +179,39 @@ export function ArenaWorkspace({ id }: { id: string }) {
       <div className="arena-layout forge-layout">
         <ArenaNavigation id={id} tab={activeTab} />
         <div className="arena-workspace-body">
-          {activeTab === "browser" ? (
-            <BrowserWorkbench arena={value} />
-          ) : activeTab === "transfer" ? (
-            <TransferWorkbench arena={value} />
-          ) : activeTab === "infrastructure" ? (
-            <Infrastructure arena={value} />
-          ) : activeTab === "access" ? (
-            <AgentAccess arena={value} />
-          ) : activeTab === "setup" ? (
-            <SetupWorkbench arena={value} compactFlow />
-          ) : activeTab === "http" ? (
-            <HttpWorkbench arena={value} />
-          ) : activeTab === "poc" ? (
-            <PocWorkbench arena={value} />
-          ) : activeTab === "findings" ? (
-            <FindingsWorkbench arena={value} />
-          ) : activeTab === "evidence" ? (
-            <EvidenceWorkbench arena={value} />
-          ) : activeTab === "score" ? (
-            <ScoreWorkbench arena={value} />
-          ) : activeTab === "forwards" ? (
-            <ForwardsWorkbench arena={value} />
-          ) : (
-            <ForgeOverview
-              arena={value}
-              onAction={(action) => {
-                setGateError("");
-                setConfirmAction(action);
-              }}
-            />
-          )}
+          <ErrorBoundary key={activeTab} label="This tool">
+            {activeTab === "browser" ? (
+              <BrowserWorkbench arena={value} />
+            ) : activeTab === "transfer" ? (
+              <TransferWorkbench arena={value} />
+            ) : activeTab === "infrastructure" ? (
+              <Infrastructure arena={value} />
+            ) : activeTab === "access" ? (
+              <AgentAccess arena={value} />
+            ) : activeTab === "setup" ? (
+              <SetupWorkbench arena={value} compactFlow />
+            ) : activeTab === "http" ? (
+              <HttpWorkbench arena={value} />
+            ) : activeTab === "poc" ? (
+              <PocWorkbench arena={value} />
+            ) : activeTab === "findings" ? (
+              <FindingsWorkbench arena={value} />
+            ) : activeTab === "evidence" ? (
+              <EvidenceWorkbench arena={value} />
+            ) : activeTab === "score" ? (
+              <ScoreWorkbench arena={value} />
+            ) : activeTab === "forwards" ? (
+              <ForwardsWorkbench arena={value} />
+            ) : (
+              <ForgeOverview
+                arena={value}
+                onAction={(action) => {
+                  setGateError("");
+                  setConfirmAction(action);
+                }}
+              />
+            )}
+          </ErrorBoundary>
         </div>
       </div>
       <dialog

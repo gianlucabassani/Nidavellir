@@ -56,7 +56,7 @@ export function EvaluationDetail({ id }: { id: string }) {
     };
   }, [value?.state]);
   if (loading && !value) return <Loading />;
-  if (error) return <ErrorState message={error} refresh={refresh} />;
+  if (error && !value) return <ErrorState message={error} refresh={refresh} />;
   if (!value) return null;
   const metrics = Object.entries(value.differences);
   return (

@@ -89,7 +89,7 @@ export function SetupWorkbench({
     }
   }
   if (loading && !value) return <Loading />;
-  if (error) return <ErrorState message={error} refresh={refresh} />;
+  if (error && !value) return <ErrorState message={error} refresh={refresh} />;
   if (!value) return null;
   const canEdit = active && value.open && !value.expired;
   const showSteps = !compactFlow || (active && value.open && !value.finished);

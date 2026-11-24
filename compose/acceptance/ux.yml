@@ -1,0 +1,42 @@
+# UX-0 browser-check overlay on the mock-mode dev stack. Use only as:
+#   docker compose -p nidavellir-ux --project-directory . -f docker-compose.yml \
+#     -f docker-compose.dev.yml -f compose/acceptance/ux.yml up -d --build
+# The console is served from the host build (`npm run build` in
+# cyber-range/webui/frontend), so a rebuild shows without restarting the stack.
+# Ports are loopback only and differ from the default stack. Container names and
+# the PoC runner tag are reset so nothing here can touch a production container
+# or retag production's runner image.
+name: nidavellir-ux
+
+services:
+  poc-runner-image:
+    image: nidavellir/poc-runner:ux
+
+  postgres:
+    container_name: !reset null
+
+  redis:
+    container_name: !reset null
+
+  migrate:
+    container_name: !reset null
+
+  worker:
+    container_name: !reset null
+
+  beat:
+    container_name: !reset null
+
+  orchestrator:
+    container_name: !reset null
+    ports: !override ["127.0.0.1:18020:8000"]
+
+  webui:
+    container_name: !reset null
+    ports: !override ["127.0.0.1:15020:5000"]
+    volumes: !override
+      - ./cyber-range/webui:/app/webui
+
+  agent-gateway:
+    container_name: !reset null
+    ports: !override ["127.0.0.1:19020:9000"]

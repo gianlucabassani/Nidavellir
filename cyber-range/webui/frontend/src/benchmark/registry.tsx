@@ -99,7 +99,7 @@ export function BenchmarkRegistry() {
   }
 
   if (loading && !value) return <Loading />;
-  if (error) return <ErrorState message={error} refresh={refresh} />;
+  if (error && !value) return <ErrorState message={error} refresh={refresh} />;
   if (!value) return null;
   const records =
     kind === "builds"

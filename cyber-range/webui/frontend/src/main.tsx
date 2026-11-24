@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 import type { Workspace, Theme } from "./types";
-import { Rune } from "./ui";
+import { ErrorBoundary, Rune, StaleBanner } from "./ui";
 import { Research } from "./research";
 import { NewResearch } from "./research/new";
 import { Campaign, Campaigns } from "./research/campaigns";
@@ -302,51 +302,57 @@ function App() {
           window.dispatchEvent(new PopStateEvent("popstate"));
         }}
       >
-        {arenaId ? (
-          <ArenaWorkspace key={arenaId} id={arenaId} />
-        ) : allArenas ? (
-          <AllArenas />
-        ) : allEvaluations ? (
-          <AllEvaluations />
-        ) : newResearch ? (
-          <NewResearch />
-        ) : sourceReviews ? (
-          <SourceReviewSessions />
-        ) : sourceReviewId ? (
-          <SourceReviewSession key={sourceReviewId} id={sourceReviewId} />
-        ) : campaigns ? (
-          <Campaigns />
-        ) : campaignId ? (
-          <Campaign key={campaignId} id={campaignId} />
-        ) : newArena ? (
-          <NewArena />
-        ) : scenarioLibrary ? (
-          <ScenarioLibrary />
-        ) : scenarioImport ? (
-          <ScenarioImport />
-        ) : newComparison ? (
-          <NewComparison />
-        ) : benchmarkRegistry ? (
-          <BenchmarkRegistry />
-        ) : activity ? (
-          <Activity />
-        ) : agentsLibrary ? (
-          <AgentsLibrary />
-        ) : targetsLibrary ? (
-          <TargetsLibrary />
-        ) : settingsPage ? (
-          <Settings />
-        ) : profilePage ? (
-          <Profile username={username} theme={theme} setTheme={setTheme} />
-        ) : evaluationId ? (
-          <EvaluationDetail id={evaluationId} />
-        ) : workspace === "research" ? (
-          <Research />
-        ) : workspace === "benchmark" ? (
-          <Benchmark />
-        ) : (
-          <Range />
-        )}
+        <StaleBanner />
+        <ErrorBoundary
+          key={window.location.pathname + window.location.search}
+          label="This view"
+        >
+          {arenaId ? (
+            <ArenaWorkspace key={arenaId} id={arenaId} />
+          ) : allArenas ? (
+            <AllArenas />
+          ) : allEvaluations ? (
+            <AllEvaluations />
+          ) : newResearch ? (
+            <NewResearch />
+          ) : sourceReviews ? (
+            <SourceReviewSessions />
+          ) : sourceReviewId ? (
+            <SourceReviewSession key={sourceReviewId} id={sourceReviewId} />
+          ) : campaigns ? (
+            <Campaigns />
+          ) : campaignId ? (
+            <Campaign key={campaignId} id={campaignId} />
+          ) : newArena ? (
+            <NewArena />
+          ) : scenarioLibrary ? (
+            <ScenarioLibrary />
+          ) : scenarioImport ? (
+            <ScenarioImport />
+          ) : newComparison ? (
+            <NewComparison />
+          ) : benchmarkRegistry ? (
+            <BenchmarkRegistry />
+          ) : activity ? (
+            <Activity />
+          ) : agentsLibrary ? (
+            <AgentsLibrary />
+          ) : targetsLibrary ? (
+            <TargetsLibrary />
+          ) : settingsPage ? (
+            <Settings />
+          ) : profilePage ? (
+            <Profile username={username} theme={theme} setTheme={setTheme} />
+          ) : evaluationId ? (
+            <EvaluationDetail id={evaluationId} />
+          ) : workspace === "research" ? (
+            <Research />
+          ) : workspace === "benchmark" ? (
+            <Benchmark />
+          ) : (
+            <Range />
+          )}
+        </ErrorBoundary>
       </main>
       <ResearchAssistant arenaId={arenaId} />
       <footer className="site-footer">

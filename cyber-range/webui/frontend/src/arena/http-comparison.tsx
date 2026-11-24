@@ -11,7 +11,7 @@ function ComparedResponses({ arenaId, pair }: { arenaId: string; pair: Pair }) {
   const { value, error, loading, refresh } = useWorkspaceData<HttpComparison>(
     `/api/console/arenas/${id}/http/comparison?${new URLSearchParams(pair)}`,
   );
-  if (error) return <ErrorState message={error} refresh={refresh} />;
+  if (error && !value) return <ErrorState message={error} refresh={refresh} />;
   if (loading || !value) return <Loading />;
   return (
     <div className="http-compared-responses">
@@ -248,7 +248,7 @@ export function HttpComparisonWorkbench({
       )}
       {message && <p role="status">{message}</p>}
       <h3>Saved request groups</h3>
-      {error ? (
+      {error && !value ? (
         <ErrorState message={error} refresh={refresh} />
       ) : loading ? (
         <Loading />

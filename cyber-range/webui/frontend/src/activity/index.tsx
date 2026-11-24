@@ -34,7 +34,7 @@ export function Activity() {
     window.history.replaceState(null, "", url);
   }
   if (loading && !value) return <Loading />;
-  if (error) return <ErrorState message={error} refresh={refresh} />;
+  if (error && !value) return <ErrorState message={error} refresh={refresh} />;
   if (!value) return null;
   const filter = (text: string) =>
     text.toLowerCase().includes(query.trim().toLowerCase());
