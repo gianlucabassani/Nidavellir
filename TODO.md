@@ -327,7 +327,7 @@ each, each with a browser check.
   evaluation start return immediately and show per-phase progress (pull, network, nodes,
   readiness) from events; the operator can navigate away and come back.
   **Accept:** launching a slow target shows phases; leaving and returning keeps progress.
-- [ ] **UX-06 — Evidence by picking, not by pasting digests.** Finding forms and "Confirm
+- [x] **UX-06 — Evidence by picking, not by pasting digests.** Finding forms and "Confirm
   with evidence" offer a searchable picker of the arena's transactions/artifacts (digest
   paste stays as fallback); findings refresh with the live stream.
   **Accept:** confirm a finding with evidence without copying a digest.

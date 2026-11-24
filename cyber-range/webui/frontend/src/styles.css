@@ -5238,3 +5238,56 @@ body {
 .launch-phase-waiting {
   opacity: 0.7;
 }
+
+/* UX-06: evidence picker. */
+.evidence-picker {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+}
+.evidence-picker ul {
+  max-height: 220px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+  border: 1px solid var(--line-soft);
+}
+.evidence-picker li > label {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+.evidence-picker li > label:hover {
+  background: var(--surface-soft);
+}
+.evidence-picker li span {
+  display: grid;
+  min-width: 0;
+}
+.evidence-picker li strong,
+.evidence-picker li small {
+  overflow-wrap: anywhere;
+}
+.evidence-picker-empty {
+  padding: 8px;
+  opacity: 0.8;
+}
+.evidence-picker-paste {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+}
+.evidence-picker-paste input {
+  flex: 1 1 240px;
+}
+.evidence-picker-extra code {
+  overflow-wrap: anywhere;
+}
