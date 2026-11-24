@@ -10,6 +10,7 @@ import {
   PageHead,
   Panel,
   useWorkspaceData,
+  BackLink,
 } from "../ui";
 
 type Kind = "builds" | "challenges" | "suites";
@@ -110,7 +111,7 @@ export function BenchmarkRegistry() {
   return (
     <>
       <div className="arena-return">
-        <a href="/console?workspace=benchmark">← Benchmark</a>
+        <BackLink href="/console?workspace=benchmark" label="Benchmark" />
         <span>/</span>
         <span>Registry</span>
       </div>

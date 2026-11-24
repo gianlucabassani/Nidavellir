@@ -8,6 +8,7 @@ import {
   PageHead,
   Panel,
   useWorkspaceData,
+  BackLink,
 } from "../ui";
 import { ScenarioTopology } from "./index";
 
@@ -97,7 +98,7 @@ export function ScenarioLibrary() {
   return (
     <>
       <div className="arena-return">
-        <a href="/console?workspace=range">← Cyber Range</a>
+        <BackLink href="/console?workspace=range" label="Cyber Range" />
         <span>/</span>
         <span>Scenarios</span>
       </div>

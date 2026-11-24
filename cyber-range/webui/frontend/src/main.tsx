@@ -24,6 +24,9 @@ import { Profile } from "./shared/profile";
 import { Settings } from "./shared/settings";
 import { ResearchAssistant } from "./shared/assistant";
 import { AllArenas, AllEvaluations } from "./shared/lists";
+import { installRouter, navigate as routeTo } from "./router";
+
+installRouter();
 
 function workspaceFromUrl(): Workspace {
   const value = new URLSearchParams(window.location.search).get("workspace");
@@ -146,21 +149,25 @@ function App() {
     }
   }, [theme]);
   useEffect(() => {
+    let lastPath = window.location.pathname;
     const onPop = () => {
       setWorkspace(workspaceFromUrl());
       setRouteVersion((value) => value + 1);
+      if (window.location.pathname !== lastPath)
+        window.setTimeout(
+          () =>
+            heading.current
+              ?.querySelector("h1")
+              ?.focus({ preventScroll: true }),
+          0,
+        );
+      lastPath = window.location.pathname;
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
   function navigate(next: Workspace) {
-    const url = new URL(window.location.href);
-    url.pathname = "/console";
-    url.searchParams.set("workspace", next);
-    window.history.pushState(null, "", url);
-    setWorkspace(next);
-    setRouteVersion((value) => value + 1);
-    window.setTimeout(() => heading.current?.querySelector("h1")?.focus(), 0);
+    routeTo(`/console?workspace=${next}`);
   }
   return (
     <>
@@ -272,39 +279,15 @@ function App() {
           </div>
         </div>
       </header>
-      <main
-        className="workspace-main"
-        id="main"
-        ref={heading}
-        onClick={(event) => {
-          if (
-            !arenaId ||
-            event.button !== 0 ||
-            event.metaKey ||
-            event.ctrlKey ||
-            event.shiftKey ||
-            event.altKey
-          )
-            return;
-          const anchor = (
-            event.target as HTMLElement
-          ).closest<HTMLAnchorElement>("a[href]");
-          if (!anchor || anchor.target || anchor.hasAttribute("download"))
-            return;
-          const next = new URL(anchor.href);
-          if (
-            next.origin !== window.location.origin ||
-            next.pathname !== window.location.pathname
-          )
-            return;
-          event.preventDefault();
-          window.history.pushState(null, "", next);
-          window.dispatchEvent(new PopStateEvent("popstate"));
-        }}
-      >
+      <main className="workspace-main" id="main" ref={heading}>
         <StaleBanner />
         <ErrorBoundary
-          key={window.location.pathname + window.location.search}
+          key={
+            // Arena tabs live in ?tab= and keep the workspace mounted.
+            arenaId
+              ? window.location.pathname
+              : window.location.pathname + window.location.search
+          }
           label="This view"
         >
           {arenaId ? (

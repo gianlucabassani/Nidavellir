@@ -1,8 +1,16 @@
+import { navigate } from "../router";
 import { useState } from "react";
 import type React from "react";
 import type { BenchmarkData } from "../types";
 import { paths } from "../types";
-import { useWorkspaceData, Panel, PageHead, Loading, ErrorState } from "../ui";
+import {
+  useWorkspaceData,
+  Panel,
+  PageHead,
+  Loading,
+  ErrorState,
+  BackLink,
+} from "../ui";
 
 export function NewComparison() {
   const { value, error, loading, refresh } = useWorkspaceData<BenchmarkData>(
@@ -55,9 +63,9 @@ export function NewComparison() {
         throw new Error(
           payload.error || `Evaluation could not start (${response.status})`,
         );
-      window.location.assign(
-        `/console/evaluations/${encodeURIComponent(payload.id)}`,
-      );
+      navigate(`/console/evaluations/${encodeURIComponent(payload.id)}`, {
+        replace: true,
+      });
     } catch (reason) {
       setSubmitError(
         reason instanceof Error ? reason.message : "Evaluation could not start",
@@ -68,7 +76,7 @@ export function NewComparison() {
   return (
     <>
       <div className="arena-return">
-        <a href="/console?workspace=benchmark">← Benchmark</a>
+        <BackLink href="/console?workspace=benchmark" label="Benchmark" />
         <span>/</span>
         <span>New comparison</span>
       </div>

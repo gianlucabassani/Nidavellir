@@ -1,3 +1,4 @@
+import { navigate } from "../router";
 import { useState } from "react";
 import type React from "react";
 import type { RangeData } from "../types";
@@ -9,6 +10,7 @@ import {
   PageHead,
   Loading,
   ErrorState,
+  BackLink,
 } from "../ui";
 import { ScenarioTopology } from "./index";
 import { TopologyPreview } from "./topology";
@@ -146,9 +148,9 @@ export function NewArena() {
         throw new Error(
           payload.error || `Arena could not launch (${response.status})`,
         );
-      window.location.assign(
-        `/console/arena/${encodeURIComponent(payload.instance_id)}`,
-      );
+      navigate(`/console/arena/${encodeURIComponent(payload.instance_id)}`, {
+        replace: true,
+      });
     } catch (reason) {
       setSubmitError(
         reason instanceof Error ? reason.message : "Arena could not launch",
@@ -159,7 +161,7 @@ export function NewArena() {
   return (
     <>
       <div className="arena-return">
-        <a href="/console?workspace=range">← Cyber Range</a>
+        <BackLink href="/console?workspace=range" label="Cyber Range" />
         <span>/</span>
         <span>New arena</span>
       </div>

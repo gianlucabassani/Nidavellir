@@ -1,3 +1,4 @@
+import { navigate } from "../router";
 import { useEffect, useId, useRef, useState } from "react";
 import type React from "react";
 import { postJson } from "../api";
@@ -127,8 +128,9 @@ function NewCampaign() {
         product: product.trim(),
         ...(note.trim() ? { note: note.trim() } : {}),
       });
-      window.location.assign(
+      navigate(
         `/console/research/campaigns/${encodeURIComponent(created.campaign_id)}`,
+        { replace: true },
       );
     } catch (reason) {
       setMessage(
