@@ -23,6 +23,8 @@ services:
 
   worker:
     container_name: !reset null
+    environment:
+      NIDAVELLIR_POC_RUNNER_IMAGE: nidavellir/poc-runner:ux
 
   beat:
     container_name: !reset null
