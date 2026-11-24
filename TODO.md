@@ -355,7 +355,7 @@ Order: data model first, then views.
   evaluation/trial links, actor kind, tool, timings, status incl. denied/budget_refused,
   input/output digests, redacted previews, attrs incl. tokens/cost); operator-visibility
   for validator/truth spans. ADR required. **Accept:** as FR-10 in the review.
-- [ ] **OBS-02 — Single action boundary (FR-11).** `actions.run` = policy → stop gate →
+- [x] **OBS-02 — Single action boundary (FR-11).** `actions.run` = policy → stop gate →
   budget → span → execute → reconcile → audit; replaces `_budgeted_path`. **Accept:**
   derived budgeted-route set equals today's; NV-04 race tests unchanged; one span per call.
 - [ ] **OBS-03 — Gateway and model calls in the same trace (FR-12).** Trace context from
