@@ -43,7 +43,7 @@ export function ArenaNavigation({
   tab: string | null;
 }) {
   const href = (item: string) =>
-    `/console/arena/${encodeURIComponent(id)}${item === "forge" ? "" : `?tab=${item}`}`;
+    `/console/arena/${encodeURIComponent(id)}?tab=${item}`;
   return (
     <nav className="arena-tool-list" aria-label="Arena tools">
       <a
@@ -52,6 +52,13 @@ export function ArenaNavigation({
         aria-current={tab === "forge" ? "page" : undefined}
       >
         <span aria-hidden="true">⬡</span> Arena overview
+      </a>
+      <a
+        className="arena-tool-overview"
+        href={href("live")}
+        aria-current={tab === "live" ? "page" : undefined}
+      >
+        <span aria-hidden="true">◉</span> Agent live view
       </a>
       {categories.map((category) => (
         <section

@@ -611,3 +611,27 @@ export type DeployPhase = {
   reason?: string;
   status?: string;
 };
+
+export type Span = {
+  id: number;
+  span_id: string;
+  trace_id: string;
+  parent_span_id: string | null;
+  actor: string;
+  actor_kind: string;
+  stance: string | null;
+  kind: string;
+  name: string;
+  started_at: string;
+  ended_at: string | null;
+  duration_ms: number | null;
+  status: "ok" | "error" | "denied" | "budget_refused";
+  error_class: string | null;
+  input_digest: string | null;
+  output_digest: string | null;
+  input_preview: string | null;
+  output_preview: string | null;
+  attrs: Record<string, unknown>;
+  visibility: "agent" | "operator";
+  trial_id?: string | null;
+};

@@ -365,7 +365,7 @@ Order: data model first, then views.
   orchestrator SSE with `Last-Event-ID` replay; BFF proxies, no polling; clients apply the
   payload instead of refetching the whole projection. **Accept:** zero periodic polls with
   two viewers; no event lost on reconnect; agent keys see allowlisted kinds only.
-- [ ] **OBS-05 — Agent live view (FR-15, the main screen of an active arena).** Header:
+- [x] **OBS-05 — Agent live view (FR-15, the main screen of an active arena).** Header:
   who is connected, stance, current step, elapsed, budget remaining (gauges), Stop/Pause
   always visible. Body: live virtualized span timeline (tool, status, duration, actor) with
   follow-live, filters, keyboard; inspector with request/response, linked transaction,

@@ -167,6 +167,16 @@ async def run(request: Request, call_next: Callable[[Request], Awaitable[Respons
         response = await call_next(request)
 
     response, output = await _buffer(response)
+    parsed = _json_or_text(output)
+    links = {}
+    if isinstance(parsed, dict):
+        for key in ("transaction_digest", "finding_id", "job_id", "forward_id"):
+            if isinstance(parsed.get(key), str):
+                links[f"nv.{key}"] = parsed[key]
+    budget_outcome = None
+    if action_id is not None:
+        code = response.status_code
+        budget_outcome = "spent" if code < 400 else "released" if code < 500 else "unknown"
     if action_id is not None:
         response.headers["X-Action-ID"] = action_id
     spans.record(
@@ -176,10 +186,11 @@ async def run(request: Request, call_next: Callable[[Request], Awaitable[Respons
         arena_id=arena_id, started_at=started, ended_at=datetime.now(timezone.utc),
         status=_span_status(response.status_code, refused),
         error_class=None if response.status_code < 400 else f"http_{response.status_code}",
-        input=_json_or_text(body), output=_json_or_text(output),
+        input=_json_or_text(body), output=parsed,
         attrs={"http.method": request.method, "http.route": kind,
                "http.status_code": response.status_code,
                "nv.budget_action_id": action_id, "nv.budgeted": action_id is not None,
+               "nv.budget_outcome": budget_outcome, **links,
                "openinference.span.kind": "TOOL", "gen_ai.operation.name": "execute_tool",
                "tool.name": spec.name},
     )

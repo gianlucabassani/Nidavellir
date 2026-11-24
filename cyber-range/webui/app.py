@@ -1272,6 +1272,21 @@ def console_arena_findings(instance_id):
 
 # UX-06: what an operator can attach as evidence, so forms offer a picker
 # instead of a pasted digest. Built from the arena's own audit events.
+# OBS-05: the arena's span timeline for the live view (operator console only).
+@app.route("/api/console/arenas/<instance_id>/spans")
+def console_arena_spans(instance_id):
+    try:
+        after = max(0, int(request.args.get("after_id", "0")))
+        limit = max(1, min(int(request.args.get("limit", "5000")), 5000))
+    except ValueError:
+        return jsonify({"error": "invalid paging"}), 400
+    data, ok = _api_get(f"/arenas/{quote(instance_id, safe='')}/spans"
+                        f"?after_id={after}&limit={limit}", timeout=15)
+    if not ok or not isinstance(data, dict):
+        return jsonify({"error": "Span timeline unavailable"}), 503
+    return jsonify(data)
+
+
 @app.route("/api/console/arenas/<instance_id>/evidence-candidates")
 def console_arena_evidence_candidates(instance_id):
     requests_, ok_requests = _api_get(
