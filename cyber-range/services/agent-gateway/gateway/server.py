@@ -16,6 +16,7 @@ import os
 
 from mcp.server.fastmcp import FastMCP
 
+from gateway import spans as gateway_spans
 from gateway import tools
 from gateway.config import GatewayConfig
 from gateway.rest_client import RestClient
@@ -70,6 +71,15 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
         if holder["ctx"] is None:
             holder["ctx"] = build_context(cfg)
         return holder["ctx"]
+
+    # OBS-03: every tool that names an arena becomes a span in its trace.
+    register = mcp.tool
+
+    def traced_tool(*args, **kwargs):
+        decorate = register(*args, **kwargs)
+        return lambda fn: decorate(gateway_spans.traced(fn, ctx))
+
+    mcp.tool = traced_tool
 
     @mcp.tool()
     def list_scenarios() -> dict:

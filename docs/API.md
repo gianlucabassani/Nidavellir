@@ -751,6 +751,18 @@ full input and output, previews of at most 2 KiB redacted at write time, and `at
 Operators read all spans; an agent key must be bound to the arena and reads only
 `agent`-visibility spans (validation spans are always operator-only).
 
+**Reported spans and trace context (OBS-03).** `POST /arenas/{id}/spans`
+`{ span_id?, parent_span_id?, name, kind: agent|model, started_at, ended_at, status: ok|error,
+error_class?, input?, output?, attrs? }` → `201 { id, span_id, trace_id }`. For the gateway and
+BYO agents: the caller must be an operator or bound to the arena; the span always lands
+in the arena's trace with agent visibility and `attrs["nv.self_reported"] = true`, and
+scoring never reads spans. Bounded (16 KiB input/output, 4 KiB attrs, at most one hour
+long, within the last day), rate-limited like exec, never budgeted; a repeated `span_id`
+is `409`. Any action call may send W3C `traceparent`; only its parent span ID is used,
+so the action span nests under the caller's span while the trace ID stays the
+server-derived one. The gateway reports each tool call this way, and the evaluation
+worker records one `model` span per provider call with `gen_ai.usage.*` tokens.
+
 **Console agent keys (UX-07).** An operator connects an agent without a shell:
 - `POST /arenas/{id}/agent-keys` `{ "name", "stance" }` → `201 { "agent_name",
   "stance", "role": "agent", "api_key" }`. Operator-only; active arenas only

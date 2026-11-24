@@ -3197,6 +3197,78 @@ def list_events(limit: int = 100, type: str | None = None,
     return {"events": db.list_events(limit=limit, types=types)}
 
 
+_SPAN_JSON_LIMIT = 16384
+_SPAN_ATTRS_LIMIT = 4096
+
+
+class ReportedSpan(BaseModel):
+    """A span reported by a gateway or BYO agent (OBS-03). Self-reported."""
+    model_config = ConfigDict(extra="forbid")
+    span_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{16}$")
+    parent_span_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{16}$")
+    name: str = Field(min_length=1, max_length=128)
+    kind: str = Field(pattern=r"^(agent|model)$")
+    started_at: datetime
+    ended_at: datetime
+    status: str = Field(default="ok", pattern=r"^(ok|error)$")
+    error_class: str | None = Field(default=None, max_length=128)
+    input: dict | list | str | None = None
+    output: dict | list | str | None = None
+    attrs: dict = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _bounded(self):
+        for field in ("input", "output"):
+            value = getattr(self, field)
+            if value is not None and len(json.dumps(value, default=str)) > _SPAN_JSON_LIMIT:
+                raise ValueError(f"{field} exceeds {_SPAN_JSON_LIMIT} bytes")
+        if len(json.dumps(self.attrs, default=str)) > _SPAN_ATTRS_LIMIT:
+            raise ValueError(f"attrs exceed {_SPAN_ATTRS_LIMIT} bytes")
+        start, end = (self.started_at.astimezone(timezone.utc) if self.started_at.tzinfo
+                      else self.started_at.replace(tzinfo=timezone.utc),
+                      self.ended_at.astimezone(timezone.utc) if self.ended_at.tzinfo
+                      else self.ended_at.replace(tzinfo=timezone.utc))
+        now = datetime.now(timezone.utc)
+        if end < start or end - start > timedelta(hours=1):
+            raise ValueError("a span must end after it starts and last at most one hour")
+        if start < now - timedelta(days=1) or end > now + timedelta(minutes=5):
+            raise ValueError("span times must be within the last day")
+        self.started_at, self.ended_at = start, end
+        return self
+
+
+@app.post("/arenas/{instance_id}/spans", status_code=201)
+@limiter.limit(RATE_LIMIT_EXEC)
+def report_arena_span(
+    request: Request,
+    instance_id: str,
+    req: ReportedSpan,
+    principal: Principal = Depends(require_principal),
+):
+    """Record a span reported by the gateway or a BYO agent (OBS-03).
+
+    The caller must be an operator or an agent bound to the arena (FR-04). The
+    span always lands in the arena's own trace, with agent visibility and
+    ``nv.self_reported`` set; scoring never reads spans. Not a budgeted action."""
+    if not db.get_deployment(instance_id):
+        raise HTTPException(status_code=404, detail="Arena not found")
+    binding = _require_arena_member(principal, instance_id)
+    row = spans.build(
+        name=req.name, kind=req.kind, actor=principal.name,
+        actor_kind="agent" if principal.role == "agent" else "human",
+        stance=(binding or {}).get("stance"), arena_id=instance_id,
+        span_id=req.span_id, parent_span_id=req.parent_span_id,
+        started_at=req.started_at, ended_at=req.ended_at, status=req.status,
+        error_class=req.error_class, input=req.input, output=req.output,
+        attrs={**req.attrs, "nv.self_reported": True}, visibility="agent",
+    )
+    try:
+        span_id = db.insert_span(row)
+    except IntegrityError as exc:
+        raise HTTPException(status_code=409, detail="span_id already recorded") from exc
+    return {"id": span_id, "span_id": row["span_id"], "trace_id": row["trace_id"]}
+
+
 @app.get("/arenas/{instance_id}/spans")
 def list_arena_spans(
     instance_id: str,

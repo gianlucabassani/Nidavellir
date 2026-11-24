@@ -64,7 +64,9 @@ def _scrub(value, depth=0):
     if depth > 8:
         return "…"
     if isinstance(value, dict):
-        return {str(k): (MASK if _SENSITIVE_KEY.search(str(k)) else _scrub(v, depth + 1))
+        # Secrets are text; counts such as ``gen_ai.usage.input_tokens`` stay.
+        return {str(k): (MASK if _SENSITIVE_KEY.search(str(k)) and not isinstance(
+                    v, (int, float, bool, type(None))) else _scrub(v, depth + 1))
                 for k, v in value.items()}
     if isinstance(value, (list, tuple)):
         return [_scrub(v, depth + 1) for v in value]
@@ -143,3 +145,19 @@ def record(db, **fields) -> int | None:
 def visible_to(role: str) -> tuple[str, ...]:
     """Visibility values a principal role may read (agents: agent spans only)."""
     return VISIBILITIES if role != "agent" else ("agent",)
+
+
+_TRACEPARENT = re.compile(r"^[0-9a-f]{2}-([0-9a-f]{32})-([0-9a-f]{16})-[0-9a-f]{2}$")
+
+
+def parent_from_traceparent(header: str | None) -> str | None:
+    """The parent span ID of a W3C ``traceparent`` (OBS-03).
+
+    Only the parent is taken: the trace ID is always derived server-side from the
+    arena or trial, so a caller cannot place spans into another run's trace."""
+    if not header:
+        return None
+    m = _TRACEPARENT.match(header.strip().lower())
+    if not m or set(m.group(2)) == {"0"}:
+        return None
+    return m.group(2)

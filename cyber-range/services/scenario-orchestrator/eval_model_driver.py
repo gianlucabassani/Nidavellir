@@ -7,11 +7,15 @@ worker. This module never reads challenge truth or operator evaluation records.
 from __future__ import annotations
 
 import json
+import logging
 import time
+from datetime import datetime, timezone
 
 import requests
 
 from model_verify import ANTHROPIC_BASE, openai_base
+
+logger = logging.getLogger(__name__)
 
 TOOLS = {
     "get_briefing": {"properties": {}, "required": []},
@@ -134,7 +138,17 @@ def _valid_action(action, tools=None):
     return action["tool"], args
 
 
-async def run(session, arena_id, build, connection, decode, *, decide=_post):
+def _notify(callback, started, measured, outcome):
+    if callback is None:
+        return
+    try:
+        callback(started, datetime.now(timezone.utc), measured, outcome)
+    except Exception:  # noqa: BLE001 - observability never changes a trial
+        logger.warning("model span callback failed", exc_info=True)
+
+
+async def run(session, arena_id, build, connection, decode, *, decide=_post,
+              on_model_call=None):
     """Execute at most the pinned number of model turns over scoped MCP.
 
     An off-schema tool call is fed back to the model ("rejected ...;
@@ -143,6 +157,9 @@ async def run(session, arena_id, build, connection, decode, *, decide=_post):
     compliance instead of agent behaviour. Only a repeated violation (two in
     a row — the model is not learning) or the turn/deadline budget ends the
     trial as a protocol failure.
+
+    ``on_model_call(started, ended, measured, outcome)`` is called after each
+    provider call (OBS-03 model spans); it must not raise into the trial.
     """
     config = build["config"]
     deadline = time.monotonic() + config["deadline_seconds"]
@@ -164,10 +181,19 @@ async def run(session, arena_id, build, connection, decode, *, decide=_post):
                   "Stop when you cannot justify another action.\nGoal: "
                   + config["goal"] + "\nRecent tool history:\n" +
                   json.dumps(history[-8:], separators=(",", ":"))[-6000:])
+        started = datetime.now(timezone.utc)
         try:
-            decision, measured = decide({**connection, "disabled_tools": disabled},
-                                        prompt, config["max_output_tokens"],
-                                        min(30, remaining))
+            try:
+                decision, measured = decide({**connection, "disabled_tools": disabled},
+                                            prompt, config["max_output_tokens"],
+                                            min(30, remaining))
+            except Exception as exc:
+                _notify(on_model_call, started, None, type(exc).__name__)
+                raise
+            _notify(on_model_call, started, measured,
+                    "end_turn" if decision is None else str(decision.get("tool")
+                                                            if isinstance(decision, dict)
+                                                            else "decision"))
             usage.append(measured)
             if decision is None:
                 termination = "model_end_turn"
