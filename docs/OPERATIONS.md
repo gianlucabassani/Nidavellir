@@ -143,6 +143,11 @@ Key environment variables (see [`.env.example`](../.env.example)):
   Set `OTEL_EXPORTER_OTLP_ENDPOINT` (for example `http://otel-collector:4318`) to also
   send them, batched, to `<endpoint>/v1/traces` as OTLP/HTTP JSON; previews are
   already redacted. Leave it empty to keep export off.
+- **Replay and export.** A finished arena keeps its timeline: open **Agent live view**
+  to step through it (play, pause, step, speed) with findings and verdicts marked on
+  the spans that produced them. **Export trace**, or
+  `scripts/nv-trace-export.py <arena_id> -o trace.otlp.json`, writes the run as one
+  OTLP trace for Jaeger, Tempo or Phoenix.
 
 ## The console
 

@@ -70,6 +70,7 @@ import validators
 import validation_evidence
 import evidence_review
 import actions
+import otlp
 import board
 import spans
 import streams
@@ -3369,6 +3370,62 @@ def board_stream(principal: Principal = Depends(require_principal)):
                                   subscribe=streams.redis_subscribe_global)
     return StreamingResponse(frames, media_type="text/event-stream", headers={
         "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.get("/arenas/{instance_id}/trace")
+def export_arena_trace(instance_id: str, principal: Principal = Depends(require_principal)):
+    """OBS-08: the whole run as one OTLP/JSON trace, after teardown too.
+
+    Operator-only: it includes operator-visibility spans. Spans that produced a
+    finding carry its title and current verdict (``nv.finding.*``)."""
+    _require_operator(principal)
+    record = db.get_deployment(instance_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    rows, after = [], None
+    while True:
+        page = db.list_spans(arena_id=instance_id, after_id=after, limit=5000)
+        rows.extend(page)
+        if len(page) < 5000:
+            break
+        after = page[-1]["id"]
+    verdicts = {}
+    for finding in _findings_with_verdicts(instance_id):
+        verdicts[finding["id"]] = finding
+    for row in rows:
+        linked = verdicts.get((row.get("attrs") or {}).get("nv.finding_id"))
+        if linked:
+            row["attrs"] = {**row["attrs"], "nv.finding.title": linked["title"],
+                            "nv.finding.verdict": linked["verdict"]}
+    body = otlp.payload(rows)
+    resource = body["resourceSpans"][0]["resource"]["attributes"]
+    resource += [otlp._attr("nv.arena_id", instance_id),
+                 otlp._attr("nv.scenario", record.get("scenario") or ""),
+                 otlp._attr("nv.trace_id", spans.trace_id_for(arena_id=instance_id))]
+    return Response(content=json.dumps(body), media_type="application/json", headers={
+        "Content-Disposition": f'attachment; filename="trace-{instance_id}.otlp.json"'})
+
+
+def _findings_with_verdicts(instance_id: str) -> list[dict]:
+    """Findings of an arena with their current verdict: an operator decision
+    wins over the validator's (the same rule the console shows)."""
+    events = db.list_events(instance_id, limit=None,
+                            types=("finding", "finding_verification"))
+    manual = {}
+    for event in events:  # newest first: keep the latest operator decision
+        payload = event.get("payload") or {}
+        if event["type"] == "finding_verification" and payload.get("finding_id") not in manual:
+            manual[payload.get("finding_id")] = payload.get("verdict")
+    out = []
+    for event in events:
+        payload = event.get("payload") or {}
+        if event["type"] != "finding" or not payload.get("finding_id"):
+            continue
+        fid = payload["finding_id"]
+        out.append({"id": fid, "title": payload.get("title") or "",
+                    "verdict": manual.get(fid) or (payload.get("validation") or {}).get("verdict")
+                    or "unverified"})
+    return out
 
 
 @app.get("/arenas/{instance_id}/stream")

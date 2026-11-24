@@ -293,3 +293,42 @@ span.live-status-budget_refused {
     display: none;
   }
 }
+/* OBS-08: replay. */
+.live-replay {
+  display: grid;
+  gap: 6px;
+  padding: 10px 14px;
+  border: 1px solid var(--accent);
+  border-left-width: 4px;
+  background: var(--accent-soft);
+}
+.live-replay > span {
+  font-size: 13px;
+}
+.live-replay-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.live-replay-controls > button:not(.button) {
+  min-width: 36px;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+.live-replay-controls label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+}
+.live-tag-finding {
+  border-color: var(--success);
+  color: var(--success);
+}
+.live-export {
+  justify-self: end;
+  font-size: 12px;
+}

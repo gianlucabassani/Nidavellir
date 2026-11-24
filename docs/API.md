@@ -784,6 +784,13 @@ burst of platform activity (Redis channel `nv:all`), not on a timer. Idle detect
 done by the client from `last_action.at` and `idle_minutes`
 (`NIDAVELLIR_BOARD_IDLE_MINUTES`, default 10).
 
+**Trace export (OBS-08).** `GET /arenas/{id}/trace` (operator-only) → the whole run as
+one OTLP/HTTP JSON trace (`resourceSpans`), including after teardown. Resource attributes
+name the arena and scenario; spans that produced a finding carry `nv.finding.title` and
+`nv.finding.verdict` (an operator decision wins over the validator's). The CLI
+`scripts/nv-trace-export.py <arena_id> [-o file]` (`NIDAVELLIR_API_URL`,
+`NIDAVELLIR_API_KEY`) wraps it, and the console's live view offers **Export trace**.
+
 **Console agent keys (UX-07).** An operator connects an agent without a shell:
 - `POST /arenas/{id}/agent-keys` `{ "name", "stance" }` → `201 { "agent_name",
   "stance", "role": "agent", "api_key" }`. Operator-only; active arenas only
