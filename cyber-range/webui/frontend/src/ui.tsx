@@ -1,38 +1,125 @@
-import type React from "react";
-import { useEffect, useId, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { getJson } from "./api";
 import type { Workspace } from "./types";
+
+// UX-01: a failed background refresh keeps the last data. Each hook that holds
+// data but failed to refresh registers here; one banner reports them all.
+type StaleSource = { message: string; retry: () => void };
+const staleSources = new Map<string, StaleSource>();
+const staleListeners = new Set<() => void>();
+let staleSnapshot: StaleSource[] = [];
+function publishStale() {
+  staleSnapshot = [...staleSources.values()];
+  staleListeners.forEach((listener) => listener());
+}
+function setStale(key: string, source: StaleSource | null) {
+  if (source) staleSources.set(key, source);
+  else if (!staleSources.delete(key)) return;
+  publishStale();
+}
 
 export function useWorkspaceData<T>(path: string) {
   const [value, setValue] = useState<T | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  const key = useId();
+  const hasValue = useRef(false);
+  const refresh = () => setRefreshKey((current) => current + 1);
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
-    setError("");
     getJson<T>(path, controller.signal)
-      .then((payload) => setValue(payload))
+      .then((payload) => {
+        hasValue.current = true;
+        setValue(payload);
+        setError("");
+        setStale(key, null);
+      })
       .catch((reason: unknown) => {
-        if (!controller.signal.aborted)
-          setError(
-            reason instanceof Error
-              ? reason.message
-              : "Unable to load workspace",
-          );
+        if (controller.signal.aborted) return;
+        const message =
+          reason instanceof Error ? reason.message : "Unable to load workspace";
+        setError(message);
+        if (hasValue.current)
+          setStale(key, {
+            message,
+            retry: () => setRefreshKey((current) => current + 1),
+          });
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [path, refreshKey]);
-  return {
-    value,
-    error,
-    loading,
-    refresh: () => setRefreshKey((key) => key + 1),
-  };
+  }, [path, refreshKey, key]);
+  useEffect(() => {
+    hasValue.current = false;
+    setValue(null);
+    setError("");
+  }, [path]);
+  useEffect(() => () => setStale(key, null), [key]);
+  return { value, error, loading, refresh };
+}
+
+export function StaleBanner() {
+  const sources = useSyncExternalStore(
+    (listener) => {
+      staleListeners.add(listener);
+      return () => staleListeners.delete(listener);
+    },
+    () => staleSnapshot,
+  );
+  if (!sources.length) return null;
+  return (
+    <div className="stale-banner" role="alert">
+      <div>
+        <strong>Showing the last data received.</strong>{" "}
+        <span>Refreshing failed: {sources[0].message}</span>
+      </div>
+      <button
+        className="button button-outline"
+        type="button"
+        onClick={() => sources.forEach((source) => source.retry())}
+      >
+        Retry
+      </button>
+    </div>
+  );
+}
+
+// UX-01: a render failure in one view never blanks the console.
+export class ErrorBoundary extends React.Component<
+  { children: React.ReactNode; label: string },
+  { failure: string }
+> {
+  state = { failure: "" };
+  static getDerivedStateFromError(error: unknown) {
+    return {
+      failure: error instanceof Error ? error.message : "Unexpected error",
+    };
+  }
+  render() {
+    if (!this.state.failure) return this.props.children;
+    return (
+      <div className="message-panel error" role="alert">
+        <strong>{this.props.label} failed to render</strong>
+        <p>{this.state.failure}</p>
+        <button
+          className="button button-outline"
+          type="button"
+          onClick={() => this.setState({ failure: "" })}
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
 }
 
 export function Rune({ kind }: { kind: Workspace }) {

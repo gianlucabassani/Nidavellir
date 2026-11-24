@@ -329,7 +329,7 @@ export function SourceReviewSessions() {
           </button>
         }
       >
-        {error ? (
+        {error && !value ? (
           <ErrorState message={error} refresh={refresh} />
         ) : loading && !value ? (
           <Loading />

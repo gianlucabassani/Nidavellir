@@ -307,7 +307,7 @@ console traps the operator: one failed refetch blanks a page, every link reloads
 tools hide in hover flyouts, agent connection happens in a shell. Small fixes, one commit
 each, each with a browser check.
 
-- [ ] **UX-01 — Errors never blank a page.** `ErrorBoundary` per workspace/tab; a failed
+- [x] **UX-01 — Errors never blank a page.** `ErrorBoundary` per workspace/tab; a failed
   background refresh keeps the last data and shows a stale banner with retry, instead of
   `if (error) return <ErrorState/>` (`arena/index.tsx`, `benchmark/detail.tsx`, `ui.tsx`).
   **Accept:** kill the BFF mid-session; the arena stays readable and recovers on retry.

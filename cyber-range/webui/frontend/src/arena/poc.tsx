@@ -274,7 +274,7 @@ export function PocWorkbench({ arena }: { arena: ArenaData }) {
         )}
         {loading && !value ? (
           <Loading />
-        ) : error ? (
+        ) : error && !value ? (
           <ErrorState message={error} refresh={refresh} />
         ) : jobs.length ? (
           <div className="poc-jobs">

@@ -31,7 +31,7 @@ export function AllArenas() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   if (loading && !value) return <Loading />;
-  if (error) return <ErrorState message={error} refresh={refresh} />;
+  if (error && !value) return <ErrorState message={error} refresh={refresh} />;
   if (!value) return null;
   const archived = value.sessions.filter((item) =>
     TERMINAL.includes(item.status),
@@ -273,7 +273,7 @@ export function AllEvaluations() {
   );
   const [state, setState] = useState("all");
   if (loading && !value) return <Loading />;
-  if (error) return <ErrorState message={error} refresh={refresh} />;
+  if (error && !value) return <ErrorState message={error} refresh={refresh} />;
   if (!value) return null;
   const build = (id: string) => {
     const item = value.builds.find((entry) => entry.id === id);

@@ -496,7 +496,7 @@ function SiteTable({
         </label>
         <button className="button button-outline">Apply path</button>
       </form>
-      {error ? (
+      {error && !value ? (
         <ErrorState message={error} refresh={refresh} />
       ) : loading && !value ? (
         <Loading />
@@ -679,7 +679,7 @@ function FixLinkDetail({
     useWorkspaceData<SourceReviewFixLink>(
       `${REVIEW_API}/${sessionId}/fix-links/${encodeURIComponent(linkId)}`,
     );
-  if (error) return <ErrorState message={error} refresh={refresh} />;
+  if (error && !value) return <ErrorState message={error} refresh={refresh} />;
   if (loading || !value) return <Loading />;
   const patch = value.fix_lookup.data as {
     subject?: string;
@@ -960,7 +960,7 @@ export function SourceReviewSession({ id }: { id: string }) {
         0,
       );
   }
-  if (error) return <ErrorState message={error} refresh={refresh} />;
+  if (error && !value) return <ErrorState message={error} refresh={refresh} />;
   if (loading && !value) return <Loading />;
   if (!value) return null;
   return (

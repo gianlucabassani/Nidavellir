@@ -72,7 +72,7 @@ export function ScoreWorkbench({ arena }: { arena: ArenaData }) {
     `/api/console/arenas/${id}/trace`,
   );
   if (loading && !value) return <Loading />;
-  if (error) return <ErrorState message={error} refresh={refresh} />;
+  if (error && !value) return <ErrorState message={error} refresh={refresh} />;
   const score = value?.score;
   const found = score?.found.length ?? 0;
   const total = score?.total_vulnerabilities ?? 0;
@@ -277,7 +277,7 @@ export function ForwardsWorkbench({ arena }: { arena: ArenaData }) {
     null,
   );
   if (loading && !value) return <Loading />;
-  if (error) return <ErrorState message={error} refresh={refresh} />;
+  if (error && !value) return <ErrorState message={error} refresh={refresh} />;
   if (!value) return null;
   const ready = value.state === "ready" && arena.state === "active";
   const chosenFoothold = foothold || value.footholds[0] || "";

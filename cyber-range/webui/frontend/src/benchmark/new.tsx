@@ -14,7 +14,7 @@ export function NewComparison() {
   const [pending, setPending] = useState(false);
   const [submitError, setSubmitError] = useState("");
   if (loading && !value) return <Loading />;
-  if (error) return <ErrorState message={error} refresh={refresh} />;
+  if (error && !value) return <ErrorState message={error} refresh={refresh} />;
   if (!value) return null;
   const selectedSuite = value.suites.find((suite) => suite.id === suiteId);
   const ready = value.suites.length > 0 && value.builds.length > 1;

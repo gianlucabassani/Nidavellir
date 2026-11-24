@@ -15,7 +15,7 @@ export function Benchmark() {
     paths.benchmark,
   );
   if (loading && !value) return <Loading />;
-  if (error) return <ErrorState message={error} refresh={refresh} />;
+  if (error && !value) return <ErrorState message={error} refresh={refresh} />;
   if (!value) return null;
   const latest = value.evaluations[0];
   const lookup = (id: string) => value.builds.find((build) => build.id === id);

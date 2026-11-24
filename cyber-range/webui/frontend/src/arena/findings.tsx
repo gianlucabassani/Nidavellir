@@ -235,7 +235,7 @@ export function FindingsWorkbench({ arena }: { arena: ArenaData }) {
           )}
           {loading && !value ? (
             <Loading />
-          ) : error ? (
+          ) : error && !value ? (
             <ErrorState message={error} refresh={refresh} />
           ) : value?.findings.length ? (
             <div className="finding-list">

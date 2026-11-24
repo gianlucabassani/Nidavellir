@@ -20,7 +20,7 @@ function ReviewContents({ arenaId, findingId, onReview }: ReviewProps) {
   useEffect(() => {
     if (value) onReview(findingId, value);
   }, [value, findingId, onReview]);
-  if (error) return <ErrorState message={error} refresh={refresh} />;
+  if (error && !value) return <ErrorState message={error} refresh={refresh} />;
   if (loading || !value) return <Loading />;
   const evidenceLink = (digest: string, type = "validation-evidence") =>
     `/api/arenas/${arena}/${type}/${encodeURIComponent(digest)}`;

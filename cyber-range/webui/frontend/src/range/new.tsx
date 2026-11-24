@@ -69,9 +69,9 @@ export function NewArena() {
   const [pending, setPending] = useState(false);
   const [submitError, setSubmitError] = useState("");
   if (loading && !value) return <Loading />;
-  if (error) return <ErrorState message={error} refresh={refresh} />;
+  if (error && !value) return <ErrorState message={error} refresh={refresh} />;
   if (launch.loading && !launch.value) return <Loading />;
-  if (launch.error)
+  if (launch.error && !launch.value)
     return <ErrorState message={launch.error} refresh={launch.refresh} />;
   if (!value || !launch.value) return null;
   const providers = launch.value.providers.filter(

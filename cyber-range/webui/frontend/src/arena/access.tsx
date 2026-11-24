@@ -54,7 +54,7 @@ export function AgentAccess({ arena }: { arena: ArenaData }) {
     }
   }
   if (loading && !value) return <Loading />;
-  if (error) return <ErrorState message={error} refresh={refresh} />;
+  if (error && !value) return <ErrorState message={error} refresh={refresh} />;
   if (!value) return null;
   return (
     <div className="access-grid">
