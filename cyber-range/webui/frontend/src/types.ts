@@ -162,6 +162,7 @@ export type ArenaData = {
     unsegmented: string[];
   } | null;
   events: { type: string; ts: string; actor: string }[];
+  deploy_phases?: DeployPhase[];
   findings: { id: string; title: string; verdict: string }[];
   poc_jobs: { id: string; status: string }[];
 };
@@ -597,4 +598,16 @@ export type CampaignListItem = {
   created_at: string;
   actor: string;
   finding_groups: number;
+};
+
+export type DeployPhase = {
+  phase: "network" | "pull" | "nodes" | "readiness";
+  state: "started" | "done" | "skipped" | "failed";
+  ts: string;
+  started_at: string | null;
+  image?: string;
+  total?: number;
+  error?: string;
+  reason?: string;
+  status?: string;
 };

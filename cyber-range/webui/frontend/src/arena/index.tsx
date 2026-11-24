@@ -23,6 +23,7 @@ import { BrowserWorkbench } from "./browser";
 import { TransferWorkbench } from "./transfer";
 import { ForgeOverview } from "./forge";
 import { ArenaNavigation } from "./navigation";
+import { LaunchProgress, useLaunchPolling } from "./progress";
 
 export function ArenaWorkspace({ id }: { id: string }) {
   const [activeTab, setActiveTab] = useState(
@@ -40,6 +41,7 @@ export function ArenaWorkspace({ id }: { id: string }) {
     `/api/console/arenas/${encodeURIComponent(id)}`,
   );
   const liveState = useArenaLive(id, value?.state === "active", refresh);
+  useLaunchPolling(value?.state, refresh);
   const [confirmAction, setConfirmAction] = useState<
     "stop" | "resume" | "reset" | "destroy" | null
   >(null);
@@ -177,6 +179,7 @@ export function ArenaWorkspace({ id }: { id: string }) {
           )}
         </p>
       )}
+      <LaunchProgress arena={value} />
       <div className="arena-layout forge-layout">
         <ArenaNavigation id={id} tab={activeTab} />
         <div className="arena-workspace-body">

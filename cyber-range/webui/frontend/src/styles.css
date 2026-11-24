@@ -5192,3 +5192,49 @@ body {
   color: var(--warning);
   font-size: 0.85rem;
 }
+
+/* UX-05: launch phases. */
+.launch-progress {
+  margin: 12px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line, #c9c2b2);
+  background: var(--surface, transparent);
+}
+.launch-progress h2 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+.launch-progress p {
+  margin: 0 0 10px;
+}
+.launch-progress ol {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.launch-phase {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border-left: 4px solid var(--line, #c9c2b2);
+}
+.launch-phase span {
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.launch-phase-running {
+  border-left-color: var(--warning);
+}
+.launch-phase-done {
+  border-left-color: var(--success, #2f7a4f);
+}
+.launch-phase-failed {
+  border-left-color: var(--danger);
+}
+.launch-phase-skipped,
+.launch-phase-waiting {
+  opacity: 0.7;
+}

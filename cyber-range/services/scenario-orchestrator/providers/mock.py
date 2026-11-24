@@ -7,7 +7,10 @@ tests and CI working with zero cloud cost. Output keys deliberately match
 """
 import hashlib
 import logging
+import os
 import time
+
+import deploy_progress
 
 from providers.base import RangeProvider
 from scenario_spec import normalized_nodes
@@ -15,7 +18,8 @@ from scenario_spec import normalized_nodes
 logger = logging.getLogger(__name__)
 
 # Seconds of fake provisioning delay (visible status progression in the UI).
-MOCK_DEPLOY_DELAY = 2
+# NIDAVELLIR_MOCK_DEPLOY_SECONDS simulates a slow target (UX-05 browser checks).
+MOCK_DEPLOY_DELAY = float(os.environ.get("NIDAVELLIR_MOCK_DEPLOY_SECONDS", "2"))
 _TRANSFER_FILES: dict[tuple[str, str, str], bytes] = {}
 
 
@@ -25,7 +29,16 @@ class MockProvider(RangeProvider):
 
     def deploy(self, scenario_config, instance_id, user_vars=None):
         logger.info(f"[{instance_id}] 🎭 SIMULATING DEPLOY...")
-        time.sleep(MOCK_DEPLOY_DELAY)
+        # Simulated phases, same events as a real provider (UX-05).
+        nodes = normalized_nodes(scenario_config)
+        deploy_progress.phase("network")
+        time.sleep(MOCK_DEPLOY_DELAY * 0.2)
+        deploy_progress.phase("nodes", total=len(nodes))
+        deploy_progress.mark("pull", "started", image="simulated")
+        time.sleep(MOCK_DEPLOY_DELAY * 0.5)
+        deploy_progress.mark("pull", "done", image="simulated")
+        time.sleep(MOCK_DEPLOY_DELAY * 0.3)
+        deploy_progress.done("nodes")
 
         fake_outputs = {
             "soc_dashboard_url": "https://192.168.1.50:443",

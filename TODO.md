@@ -323,7 +323,7 @@ each, each with a browser check.
 - [x] **UX-04 — Every disabled control says why.** Launch, Refute, Grant and tool buttons
   show the reason inline (not tooltip-only) with the action that unblocks it.
   **Accept:** test enumerates disabled controls; each has visible reason text.
-- [ ] **UX-05 — Long actions show progress and do not lock the page.** Launch and
+- [x] **UX-05 — Long actions show progress and do not lock the page.** Launch and
   evaluation start return immediately and show per-phase progress (pull, network, nodes,
   readiness) from events; the operator can navigate away and come back.
   **Accept:** launching a slow target shows phases; leaving and returning keeps progress.
