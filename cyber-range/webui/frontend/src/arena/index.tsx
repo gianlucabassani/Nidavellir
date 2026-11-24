@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ForwardsWorkbench, ScoreWorkbench } from "./record";
 import type { ArenaData } from "../types";
 import {
@@ -24,16 +24,16 @@ import { TransferWorkbench } from "./transfer";
 import { ForgeOverview } from "./forge";
 import { ArenaNavigation } from "./navigation";
 import { LaunchProgress } from "./progress";
+import { AgentLiveView, type SpanFeed } from "./live-view";
+import type { Span } from "../types";
 
 export function ArenaWorkspace({ id }: { id: string }) {
   const [activeTab, setActiveTab] = useState(
-    new URLSearchParams(window.location.search).get("tab") || "forge",
+    new URLSearchParams(window.location.search).get("tab"),
   );
   useEffect(() => {
     const sync = () =>
-      setActiveTab(
-        new URLSearchParams(window.location.search).get("tab") || "forge",
-      );
+      setActiveTab(new URLSearchParams(window.location.search).get("tab"));
     window.addEventListener("popstate", sync);
     return () => window.removeEventListener("popstate", sync);
   }, []);
@@ -41,9 +41,24 @@ export function ArenaWorkspace({ id }: { id: string }) {
     useWorkspaceData<ArenaData>(
       `/api/console/arenas/${encodeURIComponent(id)}`,
     );
+  // OBS-05: span frames from the stream fan out to the live view.
+  const spanListeners = useRef(new Set<(spans: Span[]) => void>());
+  const spanFeed = useMemo<SpanFeed>(
+    () => ({
+      subscribe: (listener) => {
+        spanListeners.current.add(listener);
+        return () => spanListeners.current.delete(listener);
+      },
+    }),
+    [],
+  );
   // OBS-04: one push stream for every non-archived arena, launching included.
   const liveState = useArenaLive(id, !!value && value.state !== "destroyed", {
     refresh,
+    onSpans: (spans) =>
+      spanListeners.current.forEach((listener) =>
+        listener(spans as unknown as Span[]),
+      ),
     onState: (next) =>
       mutate((current) =>
         current ? { ...current, state: next.status } : current,
@@ -145,6 +160,8 @@ export function ArenaWorkspace({ id }: { id: string }) {
   if (!value) return null;
   const legacy = `/arena/${encodeURIComponent(id)}`;
   const readOnly = value.state === "destroyed";
+  // OBS-05: an active arena opens on the agent live view.
+  const tab = activeTab || (value.state === "active" ? "live" : "forge");
   return (
     <>
       <div className="arena-return">
@@ -213,30 +230,39 @@ export function ArenaWorkspace({ id }: { id: string }) {
       )}
       <LaunchProgress arena={value} />
       <div className="arena-layout forge-layout">
-        <ArenaNavigation id={id} tab={activeTab} />
+        <ArenaNavigation id={id} tab={tab} />
         <div className="arena-workspace-body">
-          <ErrorBoundary key={activeTab} label="This tool">
-            {activeTab === "browser" ? (
+          <ErrorBoundary key={tab} label="This tool">
+            {tab === "live" ? (
+              <AgentLiveView
+                arena={value}
+                feed={spanFeed}
+                onStop={() => {
+                  setGateError("");
+                  setConfirmAction("stop");
+                }}
+              />
+            ) : tab === "browser" ? (
               <BrowserWorkbench arena={value} />
-            ) : activeTab === "transfer" ? (
+            ) : tab === "transfer" ? (
               <TransferWorkbench arena={value} />
-            ) : activeTab === "infrastructure" ? (
+            ) : tab === "infrastructure" ? (
               <Infrastructure arena={value} />
-            ) : activeTab === "access" ? (
+            ) : tab === "access" ? (
               <AgentAccess arena={value} />
-            ) : activeTab === "setup" ? (
+            ) : tab === "setup" ? (
               <SetupWorkbench arena={value} compactFlow />
-            ) : activeTab === "http" ? (
+            ) : tab === "http" ? (
               <HttpWorkbench arena={value} />
-            ) : activeTab === "poc" ? (
+            ) : tab === "poc" ? (
               <PocWorkbench arena={value} />
-            ) : activeTab === "findings" ? (
+            ) : tab === "findings" ? (
               <FindingsWorkbench arena={value} />
-            ) : activeTab === "evidence" ? (
+            ) : tab === "evidence" ? (
               <EvidenceWorkbench arena={value} />
-            ) : activeTab === "score" ? (
+            ) : tab === "score" ? (
               <ScoreWorkbench arena={value} />
-            ) : activeTab === "forwards" ? (
+            ) : tab === "forwards" ? (
               <ForwardsWorkbench arena={value} />
             ) : (
               <ForgeOverview

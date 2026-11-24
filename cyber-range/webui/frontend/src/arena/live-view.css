@@ -1,0 +1,295 @@
+/* OBS-05: agent live view. */
+.live-view {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.live-header {
+  position: sticky;
+  top: 96px;
+  z-index: 3;
+  display: grid;
+  grid-template-columns:
+    minmax(220px, 1.4fr) minmax(200px, 1.2fr) repeat(2, minmax(140px, 0.8fr))
+    auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.live-header small {
+  display: block;
+  color: var(--subtle);
+  font: 600 10px monospace;
+  letter-spacing: 0.08em;
+}
+.live-agent {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+  margin-top: 4px;
+}
+.live-agent .button {
+  padding: 4px 10px;
+}
+.live-now strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.live-now span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.live-gauge-bar {
+  height: 8px;
+  margin: 5px 0 3px;
+  background: var(--line-soft);
+}
+.live-gauge-bar span {
+  display: block;
+  height: 100%;
+  background: var(--success);
+}
+.live-gauge-bar.low span {
+  background: var(--danger);
+}
+.live-gauge strong {
+  font-size: 12px;
+}
+.live-waterfall {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.live-waterfall svg {
+  display: block;
+  width: 100%;
+  height: 58px;
+}
+.live-waterfall figcaption {
+  color: var(--subtle);
+  font-size: 11px;
+}
+.live-bar {
+  cursor: pointer;
+  fill: var(--success);
+}
+.live-bar.live-status-error {
+  fill: var(--danger);
+}
+.live-bar.live-status-denied,
+.live-bar.live-status-budget_refused {
+  fill: var(--warning);
+}
+.live-bar.selected {
+  stroke: var(--ink);
+  stroke-width: 1;
+}
+.live-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: end;
+}
+.live-filters label {
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
+}
+.live-filters .live-search {
+  flex: 1 1 220px;
+}
+.live-filters .live-check {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding-bottom: 8px;
+}
+.live-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+.live-list-frame {
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.live-list {
+  position: relative;
+  height: 520px;
+  overflow: auto;
+  contain: strict;
+}
+.live-list:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: -3px;
+}
+.live-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1.6fr) 104px 72px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  height: 34px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.live-row > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.live-row-head {
+  position: static;
+  color: var(--subtle);
+  font: 600 10px monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: default;
+}
+.live-row:hover {
+  background: var(--surface-soft);
+}
+.live-row.selected {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.live-status {
+  font-weight: 700;
+}
+.live-status-ok .live-status,
+span.live-status-ok {
+  color: var(--success);
+}
+.live-row.live-status-error {
+  background: var(--danger-soft);
+}
+.live-status-error .live-status,
+span.live-status-error {
+  color: var(--danger);
+}
+.live-row.live-status-denied,
+.live-row.live-status-budget_refused {
+  background: var(--warning-soft);
+}
+.live-status-denied .live-status,
+.live-status-budget_refused .live-status,
+span.live-status-denied,
+span.live-status-budget_refused {
+  color: var(--warning);
+}
+.live-kind {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 2px;
+  background: var(--subtle);
+}
+.live-kind-model {
+  background: var(--gold);
+}
+.live-kind-agent {
+  background: var(--accent);
+}
+.live-kind-validation {
+  background: var(--danger);
+}
+.live-tag {
+  margin-left: 6px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  font-size: 10px;
+  font-style: normal;
+}
+.live-empty {
+  padding: 16px;
+  color: var(--muted);
+}
+.live-inspector {
+  position: sticky;
+  top: 210px;
+  max-height: calc(100dvh - 230px);
+  overflow: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.live-inspector h3 {
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+.live-inspector h4 {
+  margin: 12px 0 4px;
+  font-size: 12px;
+}
+.live-inspector dl {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 4px 8px;
+  margin: 0;
+  font-size: 12px;
+}
+.live-inspector dt {
+  color: var(--subtle);
+}
+.live-inspector dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.live-inspector pre {
+  max-height: 220px;
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  background: var(--surface-soft);
+  font-size: 11px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.live-signals {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+}
+.live-digests {
+  color: var(--subtle);
+  font: 11px monospace;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1100px) {
+  .live-header {
+    position: static;
+    grid-template-columns: 1fr 1fr;
+  }
+  .live-body {
+    grid-template-columns: 1fr;
+  }
+  .live-inspector {
+    position: static;
+    max-height: none;
+  }
+}
+@media (max-width: 600px) {
+  .live-header {
+    grid-template-columns: 1fr;
+  }
+  .live-row {
+    grid-template-columns: 70px minmax(0, 1fr) 80px;
+  }
+  .live-row > span:nth-child(4),
+  .live-row > span:nth-child(5) {
+    display: none;
+  }
+}
