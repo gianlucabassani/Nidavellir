@@ -223,13 +223,16 @@ teardown only reclaims live infrastructure.
 
 ## Connect your agent & review the engagement
 
-Open an active engagement, go to the **Agent** tab, and use the **Agent positioning** card to authorize a
-bring-your-own agent (attacker / MITM / defender) — enter your **agent key's name**
-(from `auth.py create-key <name> agent`), pick a stance, and Authorize. The card's
-recipe gives a one-line `claude mcp add --transport http nidavellir-arena <gateway>`
-and a downloadable `.mcp.json` — no hand-written config. Then tell your agent to work
-the arena (pass the `arena_id`); every tool call streams into the **Live** tab,
-where you can Pause or Revoke.
+Open an active arena and go to **Agent access**. Under **Connect your agent app**,
+name the agent, pick a stance and choose **Create agent key**: the console mints a
+`role=agent` key bound only to this arena in that stance and shows it once. Copy the
+configuration for your client (Claude Code `.mcp.json`, Claude Desktop / Cursor /
+Windsurf, opencode or Codex) and start the client; it launches its own gateway with
+Docker over stdio. The indicator turns from *Waiting for agent* to *Connected* when
+the agent announces its session. Tell it to work the arena (pass the `arena_id`);
+every tool call appears in the event trace, and **Live bindings** can Pause or Revoke
+it. Keys made with `auth.py create-key <name> agent` can still be authorized by name
+under **Position an agent**, and a shared HTTP gateway is described under *Advanced*.
 
 The **Findings** tab lists what the agent submitted plus any operator-entered
 findings. For each, **confirm** or **refute** it — an operator *confirmed* is
