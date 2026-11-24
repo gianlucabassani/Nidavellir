@@ -1,10 +1,10 @@
+import { BoardSummary } from "../shared/board";
 import { useState } from "react";
-import type { ActivityData, ArenaData, ResearchData } from "../types";
+import type { ArenaData, ResearchData } from "../types";
 import { SegmentMap } from "../topology/SegmentMap";
 import { stationDetail } from "../arena/forge";
 import { paths } from "../types";
 import {
-  formatObserved,
   useWorkspaceData,
   Status,
   Panel,
@@ -127,7 +127,7 @@ export function Research() {
               />
             )}
           </Panel>
-          <LiveActivity />
+          <BoardSummary eyebrow="05 / AGENTS" />
         </div>
         <div className="research-col research-col-side">
           <Panel
@@ -211,89 +211,6 @@ export function Research() {
         </div>
       </div>
     </>
-  );
-}
-
-type Source = "all" | "agent" | "human" | "system";
-const SOURCES: Source[] = ["all", "agent", "human", "system"];
-
-// Latest attributed events across arenas, filterable by who acted.
-function LiveActivity() {
-  const [source, setSource] = useState<Source>("all");
-  const { value, error } = useWorkspaceData<ActivityData>(
-    "/api/console/activity",
-  );
-  const events = [...(value?.audit || [])]
-    .filter((item) => source === "all" || item.source === source)
-    .sort((first, second) => (second.ts || "").localeCompare(first.ts || ""))
-    .slice(0, 6);
-  return (
-    <Panel
-      eyebrow="05 / ACTIVITY"
-      title="Live activity"
-      className="research-activity"
-      aside={
-        <nav className="registry-tabs" aria-label="Filter activity by source">
-          {SOURCES.map((item) => (
-            <button
-              key={item}
-              type="button"
-              aria-pressed={source === item}
-              onClick={() => setSource(item)}
-            >
-              {item === "all"
-                ? "All"
-                : item === "agent"
-                  ? "Agents"
-                  : item[0].toUpperCase() + item.slice(1)}
-            </button>
-          ))}
-        </nav>
-      }
-    >
-      {error ? (
-        <Empty title="Activity unavailable" detail={error} />
-      ) : !value ? (
-        <Empty title="Loading activity" detail="Fetching recent events." />
-      ) : events.length ? (
-        <div className="activity-list">
-          {events.map((item, index) => (
-            <article
-              className="activity-row activity-audit-row"
-              key={`${item.ts}-${index}`}
-            >
-              <span className="activity-source">{item.source}</span>
-              <strong>{item.type.replaceAll("_", " ")}</strong>
-              <small>
-                {item.actor} · {item.arena_name || "platform"} ·{" "}
-                {item.ts ? formatObserved(item.ts) : "Time unknown"}
-              </small>
-              {item.arena_known && item.arena_id && (
-                <a
-                  className="inline-action"
-                  href={`/console/arena/${encodeURIComponent(item.arena_id)}`}
-                >
-                  Arena ↗
-                </a>
-              )}
-            </article>
-          ))}
-        </div>
-      ) : (
-        <Empty
-          title={
-            source === "all" ? "No recorded activity" : `No ${source} events`
-          }
-          detail="Attributed events from arenas and the platform appear here."
-        />
-      )}
-      <div className="panel-foot">
-        <span>Events come from the append-only audit trail.</span>
-        <a className="inline-action" href="/console/activity?section=audit">
-          Full audit trail ↗
-        </a>
-      </div>
-    </Panel>
   );
 }
 

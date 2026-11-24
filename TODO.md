@@ -372,7 +372,7 @@ Order: data model first, then views.
   target-side effect (exec output, file changes, monitor signals) and budget delta.
   Waterfall strip for time/concurrency. **Accept:** spans appear within 2 s without
   refresh; failures distinct; 5,000 spans scroll smoothly; operator-only spans hidden.
-- [ ] **OBS-06 — Cross-arena "what are my agents doing" board.** Replace one-shot Research
+- [x] **OBS-06 — Cross-arena "what are my agents doing" board.** Replace one-shot Research
   "Live activity" and Agents pages with a live board: every active arena/trial, its agent,
   last action, error rate, budget, stuck/idle detection (no action for N minutes) and
   attention inbox (trial finished, arena failed, verdict, budget exhausted, stop engaged).

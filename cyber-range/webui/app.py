@@ -755,6 +755,7 @@ def overview():
 @app.route("/console/research/campaigns/<campaign_id>")
 @app.route("/console/benchmark/registry")
 @app.route("/console/activity")
+@app.route("/console/board")
 @app.route("/console/library/targets")
 @app.route("/console/library/agents")
 @app.route("/console/settings")
@@ -3147,22 +3148,20 @@ def arena_events_proxy(instance_id):
 _STREAM_READ_TIMEOUT_SECONDS = float(os.getenv("WEBUI_STREAM_READ_TIMEOUT_SECONDS", "60"))
 
 
-@app.route("/api/arenas/<instance_id>/stream")
-def arena_stream(instance_id):
-    """Server-sent workspace updates: `state`, `activity` (audit events) and `spans`."""
+def _relay_stream(path, last_event_id=None):
+    """Proxy one orchestrator SSE stream (OBS-04/06): one upstream request, frames
+    passed through unchanged; the browser's EventSource handles reconnects."""
     headers = dict(API_HEADERS)
-    last = request.headers.get("Last-Event-ID", "")
-    if re.fullmatch(r"\d{1,18}(?:\.\d{1,18})?", last):
-        headers["Last-Event-ID"] = last
+    if last_event_id and re.fullmatch(r"\d{1,18}(?:\.\d{1,18})?", last_event_id):
+        headers["Last-Event-ID"] = last_event_id
     try:
-        upstream = requests.get(
-            f"{API_URL}/arenas/{quote(instance_id, safe='')}/stream", headers=headers,
-            stream=True, timeout=(5, _STREAM_READ_TIMEOUT_SECONDS))
+        upstream = requests.get(f"{API_URL}{path}", headers=headers, stream=True,
+                                timeout=(5, _STREAM_READ_TIMEOUT_SECONDS))
     except requests.RequestException:
         return jsonify({"error": "orchestrator unreachable"}), 502
     if upstream.status_code != 200:
         upstream.close()
-        return jsonify({"error": "Arena stream unavailable"}), (
+        return jsonify({"error": "Stream unavailable"}), (
             upstream.status_code if upstream.status_code in (403, 404) else 502)
 
     def relay():
@@ -3184,6 +3183,28 @@ def arena_stream(instance_id):
             "X-Accel-Buffering": "no",  # never buffer a stream behind a reverse proxy
         },
     )
+
+
+@app.route("/api/arenas/<instance_id>/stream")
+def arena_stream(instance_id):
+    """Server-sent workspace updates: `state`, `activity` (audit events) and `spans`."""
+    return _relay_stream(f"/arenas/{quote(instance_id, safe='')}/stream",
+                         request.headers.get("Last-Event-ID", ""))
+
+
+@app.route("/api/console/board")
+def console_board():
+    """OBS-06: the cross-arena agents board snapshot."""
+    data, ok = _api_get("/board", timeout=15)
+    if not ok or not isinstance(data, dict):
+        return jsonify({"error": "Agents board unavailable"}), 503
+    return jsonify(data)
+
+
+@app.route("/api/console/board/stream")
+def console_board_stream():
+    """OBS-06: `board` frames pushed after platform activity."""
+    return _relay_stream("/board/stream")
 
 
 @app.route("/api/arenas/<instance_id>/eval-export", methods=["GET"])

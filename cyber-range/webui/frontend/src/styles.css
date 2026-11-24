@@ -5423,3 +5423,139 @@ body {
 .page-head .eyebrow {
   overflow-wrap: anywhere;
 }
+
+/* OBS-06: agents board. */
+.board-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.board-table {
+  display: grid;
+  margin: 0 22px 18px;
+}
+.board-row {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.4fr) minmax(0, 1.2fr) minmax(0, 1.4fr)
+    80px 130px;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+.board-row > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.board-row small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.board-head {
+  color: var(--subtle);
+  font: 600 10px monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.board-row a {
+  color: var(--accent);
+  font-weight: 700;
+}
+.board-trial {
+  font-size: 11px;
+}
+.board-agent em,
+.board-flag {
+  justify-self: start;
+  padding: 0 6px;
+  border: 1px solid var(--warning);
+  color: var(--warning);
+  font-size: 11px;
+  font-style: normal;
+}
+.board-idle {
+  background: var(--warning-soft);
+}
+.board-last.board-error,
+.board-last.board-denied,
+.board-last.board-budget_refused {
+  color: var(--danger);
+}
+.board-meter {
+  display: block;
+  height: 7px;
+  background: var(--line-soft);
+}
+.board-meter > span {
+  display: block;
+  height: 100%;
+  background: var(--success);
+}
+.board-meter > span.low {
+  background: var(--danger);
+}
+.board-inbox ul {
+  margin: 0 22px 18px;
+  padding: 0;
+  list-style: none;
+}
+.board-inbox li {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: start;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+.board-inbox li > span:nth-child(2) {
+  display: grid;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+.board-inbox small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.board-kind {
+  padding: 1px 6px;
+  border-left: 3px solid var(--subtle);
+  font: 600 10px monospace;
+  text-transform: uppercase;
+}
+.board-inbox-arena_failed .board-kind,
+.board-inbox-budget_exhausted .board-kind {
+  border-color: var(--danger);
+}
+.board-inbox-stop .board-kind {
+  border-color: var(--warning);
+}
+.board-inbox-verdict .board-kind,
+.board-inbox-trial_finished .board-kind {
+  border-color: var(--success);
+}
+.board-dismiss {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+}
+@media (max-width: 1100px) {
+  .board-layout {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 700px) {
+  .board-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .board-head {
+    display: none;
+  }
+}
