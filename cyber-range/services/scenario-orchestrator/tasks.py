@@ -66,6 +66,57 @@ app.conf.beat_schedule = {
 MONITOR_EVENT = "monitor_signal"
 
 
+# OBS-07 (FR-13): structured logs, the enqueuing request's ID in every task log
+# line, and task durations recorded for the API's /metrics.
+import telemetry  # noqa: E402
+from celery.signals import (  # noqa: E402
+    before_task_publish, setup_logging, task_postrun, task_prerun,
+)
+
+_task_started: dict[str, tuple[float, list]] = {}
+
+
+@setup_logging.connect
+def _configure_worker_logging(**_kwargs):
+    telemetry.configure_logging("worker")
+
+
+@before_task_publish.connect
+def _carry_request_id(headers=None, **_kwargs):
+    rid = telemetry.REQUEST_ID.get()
+    if headers is not None and rid:
+        headers["nv_request_id"] = rid
+
+
+@task_prerun.connect
+def _enter_task_context(task_id=None, task=None, args=None, **_kwargs):
+    rid = telemetry.accept_request_id(getattr(task.request, "nv_request_id", None)
+                                      if task is not None else None)
+    tokens = [telemetry.REQUEST_ID.set(rid), telemetry.ROUTE.set(f"task:{task.name}")]
+    if args and isinstance(args[0], str):
+        tokens.append(telemetry.ARENA_ID.set(args[0]))
+    _task_started[task_id] = (time.perf_counter(), tokens)
+
+
+@task_postrun.connect
+def _leave_task_context(task_id=None, task=None, state=None, **_kwargs):
+    started, tokens = _task_started.pop(task_id, (None, []))
+    if started is not None and task is not None:
+        try:
+            import readiness  # noqa: PLC0415
+
+            client = readiness.redis_client(REDIS_URL)
+        except Exception:  # noqa: BLE001
+            client = None
+        telemetry.record_task(client, task.name, time.perf_counter() - started,
+                              str(state or "unknown"))
+    for token in reversed(tokens):
+        try:
+            token.var.reset(token)
+        except ValueError:  # reset from another context: leave it
+            pass
+
+
 # FR-07 (B12): the worker's main process heart-beats into Redis so `/ready` can
 # tell a live worker from none. Started once per worker, never in API/beat.
 from celery.signals import worker_ready  # noqa: E402

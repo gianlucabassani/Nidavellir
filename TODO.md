@@ -376,7 +376,7 @@ Order: data model first, then views.
   "Live activity" and Agents pages with a live board: every active arena/trial, its agent,
   last action, error rate, budget, stuck/idle detection (no action for N minutes) and
   attention inbox (trial finished, arena failed, verdict, budget exhausted, stop engaged).
-- [ ] **OBS-07 — Platform telemetry (FR-13).** JSON logs with request ID across API,
+- [x] **OBS-07 — Platform telemetry (FR-13).** JSON logs with request ID across API,
   worker, gateway; `/metrics`; optional OTLP export (documented, FR-37).
 - [ ] **OBS-08 — Post-run replay.** A finished run's timeline is replayable step by step
   after teardown, with findings and verdicts linked to the spans that produced them;

@@ -12,6 +12,7 @@ import base64
 import asyncio
 import difflib
 import hashlib
+import time
 import json
 import os
 import re
@@ -72,6 +73,7 @@ import actions
 import board
 import spans
 import streams
+import telemetry
 from actions import action
 import vulhub_import
 from auth import (
@@ -100,7 +102,7 @@ from migrate import SchemaDriftError
 
 
 
-logging.basicConfig(level=logging.INFO)
+telemetry.configure_logging("api")  # OBS-07: structured logs with request IDs
 logger = logging.getLogger("API")
 
 try:
@@ -156,6 +158,28 @@ async def durable_budget_boundary(request: Request, call_next):
             Principal(name, "agent"), arena, capability),
     )
 
+@app.middleware("http")
+async def request_context(request: Request, call_next):
+    """OBS-07: request ID (accepted or minted, returned), log context, latency."""
+    rid = telemetry.accept_request_id(request.headers.get("X-Request-ID"))
+    tokens = [telemetry.REQUEST_ID.set(rid)]
+    arena = request.url.path.split("/")[2] if request.url.path.startswith("/arenas/") else None
+    if arena:
+        tokens.append(telemetry.ARENA_ID.set(arena))
+    started = time.perf_counter()
+    status = 500
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        response.headers["X-Request-ID"] = rid
+        return response
+    finally:
+        route = getattr(request.scope.get("route"), "path", None) or "unmatched"
+        telemetry.observe_http(route, request.method, status, time.perf_counter() - started)
+        for token in reversed(tokens):
+            token.var.reset(token)
+
+
 RATE_LIMIT_DEPLOY = os.getenv("RATE_LIMIT_DEPLOY", "10/minute")
 RATE_LIMIT_DESTROY = os.getenv("RATE_LIMIT_DESTROY", "30/minute")
 # Exec runs in an agent loop → more frequent than deploy/destroy.
@@ -165,6 +189,36 @@ EXEC_OUTPUT_CAP = 16384
 # Setup-step output persisted in the `setup_step` event (the configurator console).
 # Smaller than EXEC — these accumulate one per step across a setup session.
 SETUP_OUTPUT_CAP = 4000
+
+
+@app.get("/metrics")
+def metrics(request: Request):
+    """OBS-07: Prometheus text exposition. Operator/admin key, or the bearer
+    token in ``NIDAVELLIR_METRICS_TOKEN`` for a scraper on the internal network."""
+    import hmac  # noqa: PLC0415
+
+    token = os.getenv("NIDAVELLIR_METRICS_TOKEN", "")
+    bearer = request.headers.get("Authorization", "")
+    allowed = bool(token) and hmac.compare_digest(bearer, f"Bearer {token}")
+    if not allowed:
+        from auth import hash_api_key  # noqa: PLC0415
+
+        key = request.headers.get("X-API-Key")
+        record = db.get_api_key(hash_api_key(key)) if key else None
+        if record is None:
+            raise HTTPException(status_code=401, detail="authentication required")
+        if record["role"] not in OPERATOR_ROLES:
+            raise HTTPException(status_code=403, detail="operator or admin role required")
+    import readiness  # noqa: PLC0415
+
+    try:
+        client = readiness.redis_client()
+        depths = {"celery": int(client.llen("celery"))}
+    except Exception:  # noqa: BLE001 - metrics degrade, never fail
+        client, depths = None, {}
+    counts = db.telemetry_counts()
+    body = telemetry.render(redis_client=client, queue_depths=depths, **counts)
+    return Response(content=body, media_type="text/plain; version=0.0.4")
 
 
 @app.get("/health")

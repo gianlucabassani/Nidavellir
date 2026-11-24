@@ -49,6 +49,8 @@ class RestClient:
         parent = traceparent()
         if parent:
             headers["traceparent"] = parent
+            # OBS-07: orchestrator logs for this tool call share one request ID.
+            headers["X-Request-ID"] = f"gw-{parent.split('-')[2]}"
         return headers
 
     def report_span(self, api_key: str, arena_id: str, span: dict) -> dict:
