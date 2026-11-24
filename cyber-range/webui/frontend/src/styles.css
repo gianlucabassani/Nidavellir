@@ -5185,3 +5185,10 @@ body {
   border-radius: 6px;
   background: color-mix(in srgb, var(--warning, #b7791f) 10%, transparent);
 }
+
+/* UX-04: why a control is disabled, always visible next to it. */
+.disabled-reason {
+  margin: 0.25rem 0;
+  color: var(--warning);
+  font-size: 0.85rem;
+}

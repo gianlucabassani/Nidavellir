@@ -2,7 +2,7 @@ import { navigate } from "../router";
 import { useState } from "react";
 import { ApiError, postJson } from "../api";
 import type { TopologyData } from "../types";
-import { Empty, PageHead, Panel, BackLink } from "../ui";
+import { Empty, PageHead, Panel, BackLink, DisabledReason } from "../ui";
 import { TopologyPreview } from "./topology";
 
 type Mode = "spec" | "vulhub" | "generate";
@@ -308,7 +308,16 @@ export function ScenarioImport() {
                     onChange={(event) => setVulhubRef(event.target.value)}
                     maxLength={120}
                     disabled={vulhubSource === "compose"}
+                    aria-describedby={
+                      vulhubSource === "compose" ? "vulhub-ref-why" : undefined
+                    }
                   />
+                  {vulhubSource === "compose" && (
+                    <DisabledReason id="vulhub-ref-why">
+                      Pasted Compose has no Git ref; choose a Vulhub path to set
+                      one.
+                    </DisabledReason>
+                  )}
                 </label>
                 <label className="scenario-author-check">
                   <input
@@ -406,10 +415,17 @@ export function ScenarioImport() {
               >
                 {pending ? "Checking…" : "Validate & preview"}
               </button>
+              {!reviewed && (
+                <DisabledReason id="import-why">
+                  Import needs a valid review of the current pack: run Validate
+                  &amp; preview after your last change.
+                </DisabledReason>
+              )}
               <button
                 type="button"
                 className="button button-gold"
                 disabled={!reviewed || pending}
+                aria-describedby={!reviewed ? "import-why" : undefined}
                 onClick={() => void importPack()}
               >
                 {pending ? "Saving…" : "Import reviewed pack ↗"}

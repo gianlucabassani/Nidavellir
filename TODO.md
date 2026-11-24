@@ -320,7 +320,7 @@ each, each with a browser check.
   persistent tab/side list (Prepare · Investigate · Record), keyboard reachable; live trace
   and monitor signals are open by default, not in collapsed `<details>`.
   **Accept:** every arena tool reachable in one click and by keyboard; screen-reader check.
-- [ ] **UX-04 — Every disabled control says why.** Launch, Refute, Grant and tool buttons
+- [x] **UX-04 — Every disabled control says why.** Launch, Refute, Grant and tool buttons
   show the reason inline (not tooltip-only) with the action that unblocks it.
   **Accept:** test enumerates disabled controls; each has visible reason text.
 - [ ] **UX-05 — Long actions show progress and do not lock the page.** Launch and

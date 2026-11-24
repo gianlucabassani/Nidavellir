@@ -2,7 +2,7 @@ import { navigate } from "../router";
 import { useRef, useState } from "react";
 import { postForm, postJson } from "../api";
 import type { ResearchPreview } from "../types";
-import { Panel, Empty, PageHead, BackLink } from "../ui";
+import { Panel, Empty, PageHead, BackLink, DisabledReason } from "../ui";
 import { SegmentMap } from "../topology/SegmentMap";
 
 type Step = 1 | 2 | 3;
@@ -271,6 +271,9 @@ export function NewResearch() {
                   type="button"
                   aria-current={number === step ? "step" : undefined}
                   disabled={number > step || pending}
+                  aria-describedby={
+                    number > step ? "intake-step-why" : undefined
+                  }
                   onClick={() => goTo(number)}
                 >
                   <span className="intake-step-number">
@@ -577,10 +580,18 @@ export function NewResearch() {
                 type="button"
                 className="button button-outline"
                 disabled={step === 1 || pending}
+                aria-describedby={step === 1 ? "intake-step-why" : undefined}
                 onClick={() => goTo((step - 1) as Step)}
               >
                 ← Back
               </button>
+              <DisabledReason id="intake-step-why">
+                Step {step} of 3. Later steps open once this one is complete
+                {step === 3 && !pinned
+                  ? "; launch opens once the target review pins it"
+                  : ""}
+                .
+              </DisabledReason>
               {step < 3 ? (
                 <button
                   type="submit"
@@ -594,6 +605,7 @@ export function NewResearch() {
                   type="submit"
                   className="button button-gold"
                   disabled={!pinned || pending}
+                  aria-describedby={!pinned ? "intake-step-why" : undefined}
                 >
                   {pending ? "Working…" : "Launch research ↗"}
                 </button>
@@ -684,13 +696,22 @@ export function NewResearch() {
                   </ul>
                 )}
                 <div className="comparison-form-foot">
-                  <span>
-                    Launch will create a new arena and start its time box.
-                  </span>
+                  {pinned ? (
+                    <span>
+                      Launch will create a new arena and start its time box.
+                    </span>
+                  ) : (
+                    <DisabledReason id="research-launch-why">
+                      Launch needs a pinned target: run Review target above.
+                    </DisabledReason>
+                  )}
                   <button
                     type="button"
                     className="button button-gold"
                     disabled={!pinned || pending}
+                    aria-describedby={
+                      !pinned ? "research-launch-why" : undefined
+                    }
                     onClick={launch}
                   >
                     {pending ? "Working…" : "Launch research ↗"}

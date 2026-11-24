@@ -10,6 +10,7 @@ import {
   Loading,
   ErrorState,
   BackLink,
+  DisabledReason,
 } from "../ui";
 
 export function NewComparison() {
@@ -164,15 +165,22 @@ export function NewComparison() {
             </div>
           )}
           <div className="comparison-form-foot">
-            <span>
-              {ready
-                ? "The orchestrator validates identities, reset eligibility and limits before scheduling."
-                : "Register at least two builds and one suite first."}
-            </span>
+            {ready ? (
+              <span>
+                The orchestrator validates identities, reset eligibility and
+                limits before scheduling.
+              </span>
+            ) : (
+              <DisabledReason id="evaluation-why">
+                Register at least two builds and one suite first in the{" "}
+                <a href="/console/benchmark/registry">registry</a>.
+              </DisabledReason>
+            )}
             <button
               className="button button-gold"
               type="submit"
               disabled={!ready || pending}
+              aria-describedby={!ready ? "evaluation-why" : undefined}
             >
               {pending ? "Starting…" : "Launch evaluation ↗"}
             </button>

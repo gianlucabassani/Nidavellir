@@ -10,6 +10,7 @@ import {
   Status,
   useWorkspaceData,
   formatObserved,
+  DisabledReason,
 } from "../ui";
 
 type SetupProposal = {
@@ -92,6 +93,11 @@ export function SetupWorkbench({
   if (error && !value) return <ErrorState message={error} refresh={refresh} />;
   if (!value) return null;
   const canEdit = active && value.open && !value.expired;
+  const setupClosedReason = !active
+    ? "Setup runs only on an active arena; this one is not active."
+    : value.expired
+      ? "This arena's time box expired. Reset it from the arena overview to continue."
+      : "Research is stopped. Resume it from the arena overview to run setup.";
   const showSteps = !compactFlow || (active && value.open && !value.finished);
   const planned = value.planned;
   const nodes = value.nodes || [];
@@ -311,18 +317,34 @@ export function SetupWorkbench({
                   placeholder="Command inside the setup node"
                 />
               </label>
+              {(!canEdit || nodes.length === 0) && (
+                <DisabledReason id="setup-run-why">
+                  {!canEdit
+                    ? setupClosedReason
+                    : "This arena declares no setup node to run a step in."}
+                </DisabledReason>
+              )}
               <button
                 className="button button-gold"
                 disabled={!canEdit || pending || nodes.length === 0}
+                aria-describedby={
+                  !canEdit || nodes.length === 0 ? "setup-run-why" : undefined
+                }
               >
                 Run step ↗
               </button>
             </form>
           ) : value.mode === "hitl" ? (
             <>
+              {!canEdit && (
+                <DisabledReason id="setup-hitl-why">
+                  {setupClosedReason}
+                </DisabledReason>
+              )}
               <button
                 className="button button-outline"
                 disabled={!canEdit || pending}
+                aria-describedby={!canEdit ? "setup-hitl-why" : undefined}
                 onClick={() => void run(`${endpoint}/generate-proposals`, {})}
               >
                 Generate proposals ↗
@@ -338,6 +360,9 @@ export function SetupWorkbench({
                         <button
                           className="button button-gold"
                           disabled={!canEdit || pending}
+                          aria-describedby={
+                            !canEdit ? "setup-hitl-why" : undefined
+                          }
                           onClick={() =>
                             void run(
                               `${endpoint}/proposals/${encodeURIComponent(proposal.step_id)}/approve`,
@@ -350,6 +375,9 @@ export function SetupWorkbench({
                         <button
                           className="button button-outline"
                           disabled={!canEdit || pending}
+                          aria-describedby={
+                            !canEdit ? "setup-hitl-why" : undefined
+                          }
                           onClick={() =>
                             void run(
                               `${endpoint}/proposals/${encodeURIComponent(proposal.step_id)}/reject`,

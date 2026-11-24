@@ -1,5 +1,5 @@
 import { navigate } from "../router";
-import { useState } from "react";
+import { useState, useId } from "react";
 import type React from "react";
 import type { RangeData } from "../types";
 import { paths } from "../types";
@@ -11,6 +11,7 @@ import {
   Loading,
   ErrorState,
   BackLink,
+  DisabledReason,
 } from "../ui";
 import { ScenarioTopology } from "./index";
 import { TopologyPreview } from "./topology";
@@ -70,6 +71,7 @@ export function NewArena() {
   const [timeBox, setTimeBox] = useState(3600);
   const [pending, setPending] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const launchWhy = useId();
   if (loading && !value) return <Loading />;
   if (error && !value) return <ErrorState message={error} refresh={refresh} />;
   if (launch.loading && !launch.value) return <Loading />;
@@ -251,6 +253,7 @@ export function NewArena() {
                             (!group.selected.includes(item.id) &&
                               group.selected.length >= 8)
                           }
+                          aria-describedby={`catalog-why-${item.id}`}
                           checked={group.selected.includes(item.id)}
                           onChange={(event) =>
                             group.set(
@@ -262,10 +265,13 @@ export function NewArena() {
                         />
                         <span>
                           <strong>{item.name}</strong>
-                          <small>
-                            {item.available
-                              ? item.description
-                              : item.note || "Unavailable on this provider"}
+                          <small id={`catalog-why-${item.id}`}>
+                            {!item.available
+                              ? item.note || "Unavailable on this provider"
+                              : !group.selected.includes(item.id) &&
+                                  group.selected.length >= 8
+                                ? "Limit of 8 reached: clear another pick to add this one."
+                                : item.description}
                           </small>
                         </span>
                       </label>
@@ -351,10 +357,24 @@ export function NewArena() {
               Launch creates an isolated arena and starts its TTL. The service
               remains authoritative for access and containment.
             </span>
+            {!canLaunch && (
+              <DisabledReason id={launchWhy}>
+                {custom ? (
+                  "Launch needs at least one attacker and one victim: pick them above."
+                ) : (
+                  <>
+                    No registered scenario fits this provider. Choose another
+                    provider above or{" "}
+                    <a href="/console/scenarios/import">import a scenario</a>.
+                  </>
+                )}
+              </DisabledReason>
+            )}
             <button
               className="button button-gold"
               type="submit"
               disabled={!canLaunch || pending}
+              aria-describedby={!canLaunch ? launchWhy : undefined}
             >
               {pending ? "Launching…" : "Launch arena ↗"}
             </button>

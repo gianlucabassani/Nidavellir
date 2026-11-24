@@ -9,6 +9,7 @@ import {
   Empty,
   Loading,
   ErrorState,
+  DisabledReason,
 } from "../ui";
 
 export function FindingsWorkbench({ arena }: { arena: ArenaData }) {
@@ -322,10 +323,21 @@ export function FindingsWorkbench({ arena }: { arena: ArenaData }) {
                           setDigest("");
                         }}
                         disabled={!reviews[finding.id]?.refutation_allowed}
-                        title="Open control and evidence review before recording a refutation"
+                        aria-describedby={
+                          reviews[finding.id]?.refutation_allowed
+                            ? undefined
+                            : `refute-why-${finding.id}`
+                        }
                       >
                         Refute
                       </button>
+                      {!reviews[finding.id]?.refutation_allowed && (
+                        <DisabledReason id={`refute-why-${finding.id}`}>
+                          Refuting needs the control and evidence review below
+                          to allow it: open the review and run its control
+                          first.
+                        </DisabledReason>
+                      )}
                     </div>
                   )}
                 </article>

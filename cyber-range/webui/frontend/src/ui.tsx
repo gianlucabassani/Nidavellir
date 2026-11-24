@@ -429,3 +429,19 @@ export function BackLink({ href, label }: { href: string; label: string }) {
     </a>
   );
 }
+
+// UX-04: a disabled control always says why, inline, with what unblocks it.
+// The control points at this text with aria-describedby.
+export function DisabledReason({
+  id,
+  children,
+}: {
+  id: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <p className="disabled-reason" id={id}>
+      {children}
+    </p>
+  );
+}

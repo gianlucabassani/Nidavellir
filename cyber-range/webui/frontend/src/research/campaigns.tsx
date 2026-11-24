@@ -17,6 +17,7 @@ import {
   Panel,
   formatObserved,
   useWorkspaceData,
+  DisabledReason,
 } from "../ui";
 import "./source-review.css";
 import "./campaigns.css";
@@ -594,10 +595,21 @@ function FindingDrawer({
           type="button"
           className="button button-outline"
           disabled={pending || !finding.available}
+          aria-describedby={
+            !finding.available
+              ? `bundle-why-${finding.research_key}`
+              : undefined
+          }
           onClick={bundle}
         >
           {pending ? "Working…" : "Generate bundle"}
         </button>
+        {!finding.available && (
+          <DisabledReason id={`bundle-why-${finding.research_key}`}>
+            The finding records are unavailable, so there is nothing to bundle.
+            Reopen the source arena to restore them.
+          </DisabledReason>
+        )}
       </div>
       {finding.bundles.length ? (
         <ul className="source-review-history campaign-bundles">
