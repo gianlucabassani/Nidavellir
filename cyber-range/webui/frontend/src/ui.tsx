@@ -65,7 +65,7 @@ export function useWorkspaceData<T>(path: string) {
     setError("");
   }, [path]);
   useEffect(() => () => setStale(key, null), [key]);
-  return { value, error, loading, refresh };
+  return { value, error, loading, refresh, mutate: setValue };
 }
 
 export function StaleBanner() {

@@ -23,7 +23,7 @@ import { BrowserWorkbench } from "./browser";
 import { TransferWorkbench } from "./transfer";
 import { ForgeOverview } from "./forge";
 import { ArenaNavigation } from "./navigation";
-import { LaunchProgress, useLaunchPolling } from "./progress";
+import { LaunchProgress } from "./progress";
 
 export function ArenaWorkspace({ id }: { id: string }) {
   const [activeTab, setActiveTab] = useState(
@@ -37,11 +37,43 @@ export function ArenaWorkspace({ id }: { id: string }) {
     window.addEventListener("popstate", sync);
     return () => window.removeEventListener("popstate", sync);
   }, []);
-  const { value, error, loading, refresh } = useWorkspaceData<ArenaData>(
-    `/api/console/arenas/${encodeURIComponent(id)}`,
-  );
-  const liveState = useArenaLive(id, value?.state === "active", refresh);
-  useLaunchPolling(value?.state, refresh);
+  const { value, error, loading, refresh, mutate } =
+    useWorkspaceData<ArenaData>(
+      `/api/console/arenas/${encodeURIComponent(id)}`,
+    );
+  // OBS-04: one push stream for every non-archived arena, launching included.
+  const liveState = useArenaLive(id, !!value && value.state !== "destroyed", {
+    refresh,
+    onState: (next) =>
+      mutate((current) =>
+        current ? { ...current, state: next.status } : current,
+      ),
+    onEvents: (events) =>
+      mutate((current) => {
+        if (!current) return current;
+        // Merge by id, newest first: backfill may be older than the projection.
+        const merged = new Map(
+          current.events.map((event) => [
+            event.id ?? `${event.ts}:${event.type}`,
+            event,
+          ]),
+        );
+        for (const event of events)
+          merged.set(event.id, {
+            id: event.id,
+            type: event.type,
+            ts: event.ts,
+            actor: event.actor || "system",
+          });
+        const next = [...merged.values()]
+          .sort((a, b) => (b.id ?? 0) - (a.id ?? 0))
+          .slice(0, 12);
+        return next.length === current.events.length &&
+          next.every((event, i) => event.id === current.events[i].id)
+          ? current
+          : { ...current, events: next };
+      }),
+  });
   const [confirmAction, setConfirmAction] = useState<
     "stop" | "resume" | "reset" | "destroy" | null
   >(null);

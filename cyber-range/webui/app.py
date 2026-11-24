@@ -1167,7 +1167,7 @@ def console_arena(instance_id):
                   for node in visible_nodes],
         "capabilities": _console_capabilities(capabilities),
         "topology": topology,
-        "events": [{"type": event.get("type"), "ts": event.get("ts"),
+        "events": [{"id": event.get("id"), "type": event.get("type"), "ts": event.get("ts"),
                     "actor": event.get("actor") or "system"} for event in events],
         "deploy_phases": _console_deploy_phases(phase_events),
         "findings": [{"id": finding.get("finding_id"), "title": finding.get("title"),
@@ -3125,64 +3125,43 @@ def arena_events_proxy(instance_id):
     return jsonify({"events": _events(instance_id, limit=limit)}), 200
 
 
-# Workspace live stream (ROADMAP C3). The browser holds one connection instead of
-# three timers; the console still only presents — it derives frames from orchestrator
-# reads. When the orchestrator grows its own change feed, this generator can consume
-# it without changing the contract the workspace already speaks.
-_STREAM_INTERVAL_SECONDS = float(os.getenv("WEBUI_STREAM_INTERVAL_SECONDS", "2"))
-_STREAM_MAX_SECONDS = float(os.getenv("WEBUI_STREAM_MAX_SECONDS", "1800"))
-_STREAM_BACKFILL = 40
-
-
-def _sse(name, payload, event_id=None):
-    head = f"id: {event_id}\n" if event_id is not None else ""
-    return f"{head}event: {name}\ndata: {json.dumps(payload)}\n\n"
+# Workspace live stream (ROADMAP C3, OBS-04). The browser holds one connection;
+# the BFF proxies the orchestrator's push stream (events and spans published on
+# insert) instead of polling it. Frames and `Last-Event-ID` pass through
+# unchanged, so a reconnecting browser resumes exactly where it stopped.
+_STREAM_READ_TIMEOUT_SECONDS = float(os.getenv("WEBUI_STREAM_READ_TIMEOUT_SECONDS", "60"))
 
 
 @app.route("/api/arenas/<instance_id>/stream")
 def arena_stream(instance_id):
-    """Server-sent workspace updates: arena state, outputs, and new audit events.
-
-    Audit events carry a monotonic id, so a reconnecting browser resumes exactly
-    where it stopped via the standard `Last-Event-ID` header — no duplicates, no gap.
-    """
+    """Server-sent workspace updates: `state`, `activity` (audit events) and `spans`."""
+    headers = dict(API_HEADERS)
+    last = request.headers.get("Last-Event-ID", "")
+    if re.fullmatch(r"\d{1,18}(?:\.\d{1,18})?", last):
+        headers["Last-Event-ID"] = last
     try:
-        cursor = int(request.headers.get("Last-Event-ID", ""))
-    except ValueError:
-        cursor = None
+        upstream = requests.get(
+            f"{API_URL}/arenas/{quote(instance_id, safe='')}/stream", headers=headers,
+            stream=True, timeout=(5, _STREAM_READ_TIMEOUT_SECONDS))
+    except requests.RequestException:
+        return jsonify({"error": "orchestrator unreachable"}), 502
+    if upstream.status_code != 200:
+        upstream.close()
+        return jsonify({"error": "Arena stream unavailable"}), (
+            upstream.status_code if upstream.status_code in (403, 404) else 502)
 
-    def generate(cursor):
-        deadline = time.monotonic() + _STREAM_MAX_SECONDS
-        previous = None
-        while time.monotonic() < deadline:
-            status, ok = _api_get(f"/status/{instance_id}")
-            if not ok or not isinstance(status, dict) or not status:
-                # Close instead of advertising healthy heartbeats for stale state.
-                # Native EventSource retry keeps its cursor and reconciles on open.
-                return
-            if ok and status:
-                state = {
-                    "status": status.get("status", "unknown"),
-                    "outputs": status.get("outputs") or {},
-                }
-                if state != previous:
-                    previous = state
-                    yield _sse("state", state)
-
-            events = list(reversed(_events(instance_id, limit=_STREAM_BACKFILL)))
-            if cursor is None:
-                fresh = events                       # first connection: recent context
-            else:
-                fresh = [e for e in events if (e.get("id") or 0) > cursor]
-            if fresh:
-                cursor = max((e.get("id") or 0) for e in fresh)
-                yield _sse("activity", {"events": fresh}, event_id=cursor)
-            else:
-                yield ": keepalive\n\n"            # keeps proxies from idling us out
-            time.sleep(_STREAM_INTERVAL_SECONDS)
+    def relay():
+        try:
+            for chunk in upstream.iter_content(chunk_size=None):
+                if chunk:
+                    yield chunk
+        except requests.RequestException:
+            return  # EventSource reconnects with its cursor
+        finally:
+            upstream.close()
 
     return Response(
-        stream_with_context(generate(cursor)),
+        stream_with_context(relay()),
         mimetype="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

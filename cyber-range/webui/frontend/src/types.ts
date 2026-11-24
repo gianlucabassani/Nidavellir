@@ -161,7 +161,7 @@ export type ArenaData = {
     segments: { name: string; nodes: string[] }[];
     unsegmented: string[];
   } | null;
-  events: { type: string; ts: string; actor: string }[];
+  events: { id?: number; type: string; ts: string; actor: string }[];
   deploy_phases?: DeployPhase[];
   findings: { id: string; title: string; verdict: string }[];
   poc_jobs: { id: string; status: string }[];

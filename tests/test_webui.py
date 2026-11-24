@@ -1802,57 +1802,65 @@ def test_destroyed_engagement_is_a_read_only_record(client, monkeypatch):
     assert 'badge--ok">running' not in html        # never claim a destroyed node is up
 
 
-def _stream_frames(client, monkeypatch, events, headers=None):
-    """Read one pass of the workspace stream without waiting on its idle sleep."""
+class _UpstreamStream:
+    def __init__(self, status=200, chunks=()):
+        self.status_code = status
+        self._chunks = list(chunks)
+        self.closed = False
+
+    def iter_content(self, chunk_size=None):
+        yield from self._chunks
+
+    def close(self):
+        self.closed = True
+
+
+def test_workspace_stream_proxies_the_orchestrator_push_stream(client, monkeypatch):
+    """OBS-04: one upstream request, frames passed through, no polling."""
     import app as webui_module
 
-    class _FakeResp:
-        status_code = 200
-
-        def __init__(self, payload):
-            self._payload = payload
-
-        def json(self):
-            return self._payload
+    calls = []
+    frames = [b"retry: 3000\n\n", b'event: state\ndata: {"status": "active"}\n\n',
+              b'id: 7.3\nevent: activity\ndata: {"events": [{"id": 7, "title": "XSS"}]}\n\n']
+    upstream = _UpstreamStream(chunks=frames)
 
     def fake_get(url, **kwargs):
-        if "/status/" in url:
-            return _FakeResp({"status": "active", "outputs": {"node_victim_name": "v"}})
-        return _FakeResp({"events": events})
+        calls.append((url, kwargs.get("headers", {}), kwargs.get("stream")))
+        return upstream
 
     monkeypatch.setattr(webui_module.requests, "get", fake_get)
-    # One iteration is enough: the loop exits as soon as its deadline passes.
-    monkeypatch.setattr(webui_module, "_STREAM_MAX_SECONDS", 0.001)
-    monkeypatch.setattr(webui_module.time, "sleep", lambda _s: None)
     _login(client)
-    resp = client.get("/api/arenas/a1/stream", headers=headers or {})
-    assert resp.status_code == 200
-    assert resp.mimetype == "text/event-stream"
-    return resp.get_data(as_text=True)
+    resp = client.get("/api/arenas/a1/stream", headers={"Last-Event-ID": "7.3"})
+    assert resp.status_code == 200 and resp.mimetype == "text/event-stream"
+    body = resp.get_data(as_text=True)
+    assert "event: state" in body and "id: 7.3" in body and "XSS" in body
+    assert len(calls) == 1
+    url, headers, stream = calls[0]
+    assert url.endswith("/arenas/a1/stream") and stream is True
+    assert headers["Last-Event-ID"] == "7.3"
+    assert upstream.closed
 
 
-def test_workspace_stream_pushes_state_and_activity(client, monkeypatch):
-    body = _stream_frames(client, monkeypatch, [
-        {"id": 7, "type": "finding", "ts": "t", "payload": {"title": "XSS"}},
-        {"id": 6, "type": "status", "ts": "t", "payload": {"to": "active"}},
-    ])
-    assert "event: state" in body
-    assert '"status": "active"' in body
-    assert "event: activity" in body
-    assert "id: 7" in body            # cursor is the newest event id
-    assert "XSS" in body
+def test_workspace_stream_drops_a_malformed_cursor_and_maps_errors(client, monkeypatch):
+    import app as webui_module
 
+    seen = {}
 
-def test_workspace_stream_resumes_from_last_event_id(client, monkeypatch):
-    """A reconnecting browser must not replay what it already rendered."""
-    body = _stream_frames(
-        client, monkeypatch,
-        [{"id": 7, "type": "finding", "ts": "t", "payload": {"title": "XSS"}},
-         {"id": 6, "type": "status", "ts": "t", "payload": {"to": "active"}}],
-        headers={"Last-Event-ID": "7"},
-    )
-    assert "event: activity" not in body   # nothing newer than the cursor
-    assert "keepalive" in body
+    def fake_get(url, **kwargs):
+        seen.update(kwargs.get("headers", {}))
+        return _UpstreamStream(status=403)
+
+    monkeypatch.setattr(webui_module.requests, "get", fake_get)
+    _login(client)
+    assert client.get("/api/arenas/a1/stream",
+                      headers={"Last-Event-ID": "7; DROP"}).status_code == 403
+    assert "Last-Event-ID" not in seen
+
+    def unreachable(url, **kwargs):
+        raise webui_module.requests.ConnectionError("down")
+
+    monkeypatch.setattr(webui_module.requests, "get", unreachable)
+    assert client.get("/api/arenas/a1/stream").status_code == 502
 
 
 def test_eval_export_proxy_downloads_the_run_row(client, monkeypatch):
@@ -2671,18 +2679,6 @@ def test_console_arena_explicit_mock_is_labelled_simulation(client, monkeypatch)
     monkeypatch.setattr(webui_module, "_findings", lambda *args: [])
     _login(client)
     assert client.get("/api/console/arenas/mock-arena").get_json()["simulation_mode"] is True
-
-
-def test_workspace_stream_closes_when_authoritative_state_is_unavailable(client, monkeypatch):
-    import app as webui_module
-
-    _login(client)
-    monkeypatch.setattr(webui_module, "_api_get", lambda *args, **kwargs: (None, False))
-    monkeypatch.setattr(webui_module, "_events", lambda *args, **kwargs: [])
-    monkeypatch.setattr(webui_module, "_STREAM_MAX_SECONDS", 0.001)
-    monkeypatch.setattr(webui_module.time, "sleep", lambda seconds: None)
-    response = client.get("/api/arenas/a1/stream")
-    assert response.get_data() == b""
 
 
 def test_console_control_review_requires_login_and_reports_unavailable(client, monkeypatch):

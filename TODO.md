@@ -361,7 +361,7 @@ Order: data model first, then views.
 - [x] **OBS-03 — Gateway and model calls in the same trace (FR-12).** Trace context from
   gateway; model spans with token usage; bounded self-reported agent spans (reasoning,
   plan), labelled and never scored. REST agents traced too.
-- [ ] **OBS-04 — Real push stream (FR-14).** Redis pub/sub on event/span insert;
+- [x] **OBS-04 — Real push stream (FR-14).** Redis pub/sub on event/span insert;
   orchestrator SSE with `Last-Event-ID` replay; BFF proxies, no polling; clients apply the
   payload instead of refetching the whole projection. **Accept:** zero periodic polls with
   two viewers; no event lost on reconnect; agent keys see allowlisted kinds only.
