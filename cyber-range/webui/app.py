@@ -1288,6 +1288,23 @@ def console_arena_spans(instance_id):
     return jsonify(data)
 
 
+# OBS-08: download the run as one OTLP/JSON trace (works after teardown).
+@app.route("/api/console/arenas/<instance_id>/trace/export")
+def console_arena_trace_export(instance_id):
+    try:
+        resp = requests.get(f"{API_URL}/arenas/{quote(instance_id, safe='')}/trace",
+                            headers=API_HEADERS, timeout=60)
+    except requests.RequestException:
+        return jsonify({"error": "orchestrator unreachable"}), 502
+    if resp.status_code != 200:
+        return jsonify({"error": "Trace export unavailable"}), (
+            resp.status_code if resp.status_code in (403, 404) else 502)
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", instance_id)[:80]
+    return Response(resp.content, mimetype="application/json", headers={
+        "Content-Disposition": f'attachment; filename="trace-{safe}.otlp.json"',
+        "Cache-Control": "no-store"})
+
+
 @app.route("/api/console/arenas/<instance_id>/evidence-candidates")
 def console_arena_evidence_candidates(instance_id):
     requests_, ok_requests = _api_get(

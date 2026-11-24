@@ -95,6 +95,9 @@ export function AgentLiveView({
   const [now, setNow] = useState(Date.now());
   const [signals, setSignals] = useState<EvidenceData["signals"]>([]);
   const [pending, setPending] = useState("");
+  // OBS-08: a finished run replays step by step.
+  const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState(600);
   const list = useRef<HTMLDivElement>(null);
 
   const merge = useCallback((incoming: Span[]) => {
@@ -216,6 +219,17 @@ export function AgentLiveView({
         element.scrollTop = top + ROW - element.clientHeight;
     }
   }
+  useEffect(() => {
+    if (!playing) return;
+    if (selectedIndex >= visible.length - 1) {
+      setPlaying(false);
+      return;
+    }
+    const timer = window.setTimeout(() => select(selectedIndex + 1), speed);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing, selectedIndex, speed, visible.length]);
+
   function onKey(event: React.KeyboardEvent) {
     const page = Math.max(1, Math.floor(height / ROW) - 1);
     const moves: Record<string, number> = {
@@ -259,9 +273,38 @@ export function AgentLiveView({
   const remainingMs = deadline ? deadline - now : null;
   const windowMs = deadline && firstAt ? deadline - firstAt : null;
   const active = arena.state === "active";
+  const replay = !active;
+  const findingFor = (span: Span) => {
+    const id = span.attrs?.["nv.finding_id"];
+    return typeof id === "string"
+      ? arena.findings.find((finding) => finding.id === id) || {
+          id,
+          title: id,
+          verdict: "unknown",
+        }
+      : null;
+  };
 
   return (
     <div className="live-view">
+      {replay && (
+        <ReplayBar
+          index={selectedIndex}
+          total={visible.length}
+          playing={playing}
+          speed={speed}
+          onSpeed={setSpeed}
+          onPlay={() => {
+            if (selectedIndex >= visible.length - 1) select(0);
+            setPlaying(!playing);
+          }}
+          onStep={(next) => {
+            setPlaying(false);
+            select(next);
+          }}
+          exportHref={`/api/console/arenas/${id}/trace/export`}
+        />
+      )}
       <header className="live-header" aria-label="Agent status">
         <div className="live-who">
           <small>CONNECTED</small>
@@ -297,7 +340,7 @@ export function AgentLiveView({
           )}
         </div>
         <div className="live-now">
-          <small>CURRENT STEP</small>
+          <small>{replay ? "LAST STEP" : "CURRENT STEP"}</small>
           <strong>
             {last
               ? `${last.name} · ${last.actor}`
@@ -336,6 +379,15 @@ export function AgentLiveView({
           >
             Stop research
           </button>
+        )}
+        {active && (
+          <a
+            className="subtle-link live-export"
+            href={`/api/console/arenas/${id}/trace/export`}
+            download
+          >
+            Export trace ↓
+          </a>
         )}
       </header>
 
@@ -461,6 +513,11 @@ export function AgentLiveView({
                     {span.visibility === "operator" && (
                       <em className="live-tag">operator</em>
                     )}
+                    {findingFor(span) && (
+                      <em className="live-tag live-tag-finding">
+                        finding · {findingFor(span)!.verdict}
+                      </em>
+                    )}
                   </span>
                   <span className="live-status">
                     {span.status.replace("_", " ")}
@@ -481,6 +538,80 @@ export function AgentLiveView({
           </div>
         </div>
         <Inspector arena={arena} span={current} signals={signals} />
+      </div>
+    </div>
+  );
+}
+
+function ReplayBar({
+  index,
+  total,
+  playing,
+  speed,
+  onSpeed,
+  onPlay,
+  onStep,
+  exportHref,
+}: {
+  index: number;
+  total: number;
+  playing: boolean;
+  speed: number;
+  onSpeed: (value: number) => void;
+  onPlay: () => void;
+  onStep: (index: number) => void;
+  exportHref: string;
+}) {
+  return (
+    <div className="live-replay" role="group" aria-label="Replay controls">
+      <strong>Replay</strong>
+      <span>
+        This run has ended. Step through its actions in order; findings and
+        verdicts are linked to the spans that produced them.
+      </span>
+      <div className="live-replay-controls">
+        <button type="button" onClick={() => onStep(0)} aria-label="First step">
+          ⏮
+        </button>
+        <button
+          type="button"
+          onClick={() => onStep(Math.max(0, index - 1))}
+          aria-label="Previous step"
+        >
+          ◀
+        </button>
+        <button
+          type="button"
+          className="button button-gold"
+          onClick={onPlay}
+          aria-label={playing ? "Pause replay" : "Play replay"}
+        >
+          {playing ? "Pause" : "Play"}
+        </button>
+        <button
+          type="button"
+          onClick={() => onStep(Math.min(total - 1, index + 1))}
+          aria-label="Next step"
+        >
+          ▶
+        </button>
+        <label>
+          Speed
+          <select
+            value={speed}
+            onChange={(event) => onSpeed(Number(event.target.value))}
+          >
+            <option value={1200}>Slow</option>
+            <option value={600}>Normal</option>
+            <option value={150}>Fast</option>
+          </select>
+        </label>
+        <span aria-live="polite">
+          Step {index < 0 ? 0 : index + 1} of {total}
+        </span>
+        <a className="button button-outline" href={exportHref} download>
+          Export trace ↓
+        </a>
       </div>
     </div>
   );
@@ -659,7 +790,16 @@ function Inspector({
           <>
             <dt>Finding</dt>
             <dd>
-              <a href={`${base}?tab=findings`}>{finding} ↗</a>
+              <a href={`${base}?tab=findings`}>
+                {arena.findings.find((item) => item.id === finding)?.title ||
+                  finding}{" "}
+                ↗
+              </a>
+            </dd>
+            <dt>Verdict</dt>
+            <dd>
+              {arena.findings.find((item) => item.id === finding)?.verdict ||
+                "not recorded"}
             </dd>
           </>
         )}
