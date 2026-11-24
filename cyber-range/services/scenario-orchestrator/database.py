@@ -33,7 +33,7 @@ from models import (
     AgentBuild, ApiKey, Base, BudgetAccount, BudgetAction, BudgetControl, BudgetGate, Deployment,
     EvalChallenge, EvalRun, EvalSuite, EvalTrial, Evaluation, Event,
     ForwardLease, LifecycleRecipe, ModelConnection, PocJob,
-    ResetOperation,
+    ResetOperation, Span,
 )
 from states import LabStatus, validate_transition
 
@@ -1721,6 +1721,54 @@ class Database:
             return reapable
 
     # --- events (audit stream, ADR-0004) -------------------------------------
+
+    # --- spans (ADR-0018, OBS-01) ------------------------------------------
+
+    def insert_span(self, row: dict) -> int:
+        """Insert one prepared span row (see ``spans.build``); returns its id."""
+        with self._session() as session:
+            span = Span(**row)
+            session.add(span)
+            session.commit()
+            return span.id
+
+    def list_spans(self, *, arena_id=None, trace_id=None, trial_id=None,
+                   visibility=None, after_id=None, limit=500):
+        """Spans oldest-first by id. ``visibility`` restricts to those values."""
+        query = select(Span)
+        if arena_id is not None:
+            query = query.where(Span.arena_id == arena_id)
+        if trace_id is not None:
+            query = query.where(Span.trace_id == trace_id)
+        if trial_id is not None:
+            query = query.where(Span.trial_id == trial_id)
+        if visibility is not None:
+            query = query.where(Span.visibility.in_(tuple(visibility)))
+        if after_id is not None:
+            query = query.where(Span.id > after_id)
+        query = query.order_by(Span.id).limit(max(1, min(int(limit), 5000)))
+        with self._session() as session:
+            return [self._span_dict(row) for row in session.scalars(query).all()]
+
+    @staticmethod
+    def _span_dict(row) -> dict:
+        try:
+            attrs = json.loads(row.attrs) if row.attrs else {}
+        except ValueError:
+            attrs = {}
+        return {
+            "id": row.id, "span_id": row.span_id, "trace_id": row.trace_id,
+            "parent_span_id": row.parent_span_id, "arena_id": row.arena_id,
+            "evaluation_id": row.evaluation_id, "trial_id": row.trial_id,
+            "actor": row.actor, "actor_kind": row.actor_kind, "stance": row.stance,
+            "kind": row.kind, "name": row.name,
+            "started_at": _stringify(row.started_at), "ended_at": _stringify(row.ended_at),
+            "duration_ms": row.duration_ms, "status": row.status,
+            "error_class": row.error_class, "input_digest": row.input_digest,
+            "output_digest": row.output_digest, "input_preview": row.input_preview,
+            "output_preview": row.output_preview, "attrs": attrs,
+            "visibility": row.visibility,
+        }
 
     def record_event(self, lab_id, type, payload=None, actor="system"):
         """Append an audit event directly (e.g. reaper actions)."""

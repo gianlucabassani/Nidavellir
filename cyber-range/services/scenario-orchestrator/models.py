@@ -338,3 +338,42 @@ class EvalTrial(Base):
     error: Mapped[str | None] = mapped_column(Text)
     worker_claim: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class Span(Base):
+    """One action by a human, agent or the system (ADR-0018, OBS-01).
+
+    Written only by the orchestrator. Previews are redacted at write time; full
+    payloads stay in their content-addressed stores and are linked by digest.
+    """
+
+    __tablename__ = "spans"
+    __table_args__ = (
+        Index("ix_spans_arena_id_id", "arena_id", "id"),
+        Index("ix_spans_trace_id", "trace_id"),
+        Index("ix_spans_trial_id", "trial_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    span_id: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    trace_id: Mapped[str] = mapped_column(Text, nullable=False)
+    parent_span_id: Mapped[str | None] = mapped_column(Text)
+    arena_id: Mapped[str | None] = mapped_column(Text)
+    evaluation_id: Mapped[str | None] = mapped_column(Text)
+    trial_id: Mapped[str | None] = mapped_column(Text)
+    actor: Mapped[str] = mapped_column(Text, nullable=False)
+    actor_kind: Mapped[str] = mapped_column(Text, nullable=False)
+    stance: Mapped[str | None] = mapped_column(Text)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime)
+    duration_ms: Mapped[int | None] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    error_class: Mapped[str | None] = mapped_column(Text)
+    input_digest: Mapped[str | None] = mapped_column(Text)
+    output_digest: Mapped[str | None] = mapped_column(Text)
+    input_preview: Mapped[str | None] = mapped_column(Text)
+    output_preview: Mapped[str | None] = mapped_column(Text)
+    attrs: Mapped[str | None] = mapped_column(Text)  # JSON text
+    visibility: Mapped[str] = mapped_column(Text, nullable=False)
