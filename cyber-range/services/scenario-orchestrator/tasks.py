@@ -11,6 +11,7 @@ from celery import Celery
 
 import config
 import bindings
+import deploy_progress
 import lifecycle_manifest
 import monitor
 import research_session
@@ -411,9 +412,18 @@ def deploy_lab(self, instance_id, scenario_name, user_id, variables=None, provid
             result = {"success": False, "phase": "policy",
                       "error": "open egress was not acknowledged by an operator"}
         else:
-            result = orch.deploy(
-                scenario_name, instance_id, variables, scenario_config=scenario_config
-            )
+            with deploy_progress.reporting(db, instance_id):
+                try:
+                    result = orch.deploy(
+                        scenario_name, instance_id, variables, scenario_config=scenario_config
+                    )
+                except Exception as exc:
+                    deploy_progress.failed(f"deploy crashed: {type(exc).__name__}")
+                    raise
+                if result.get("success"):
+                    deploy_progress.done()
+                else:
+                    deploy_progress.failed(str(result.get("error") or ""))
     except Exception as e:  # noqa: BLE001 - a crash becomes a recorded failure
         logger.exception(f"[{instance_id}] deploy task crashed")
         result = {"success": False, "error": f"deploy crashed: {e}",
@@ -423,7 +433,11 @@ def deploy_lab(self, instance_id, scenario_name, user_id, variables=None, provid
     if result.get("success"):
         logger.info(f"[{instance_id}] Deployment successful. Updating DB.")
         recipe = db.get_lifecycle_recipe(instance_id)
+        if not (recipe and recipe.get("readiness")):
+            deploy_progress.record(db, instance_id, "readiness", "skipped",
+                                   reason="no readiness check declared")
         if recipe and recipe.get("readiness"):
+            deploy_progress.record(db, instance_id, "readiness", "started")
             deadline = time.monotonic() + min(
                 max(int(recipe["readiness"].get("timeout_seconds", 30)), 1), 120
             )
@@ -456,6 +470,10 @@ def deploy_lab(self, instance_id, scenario_name, user_id, variables=None, provid
                 recipe=recipe, provider_observation=runtime, readiness_result=readiness
             )
             db.record_event(instance_id, "lifecycle_observation", observed, actor="worker")
+            deploy_progress.record(
+                db, instance_id, "readiness", "done" if readiness.get("ready") else "failed",
+                status=str(readiness.get("status") or ""),
+            )
             if not readiness.get("ready"):
                 cleanup = orch.destroy(instance_id)
                 err = f"application readiness failed: {readiness.get('error') or readiness.get('status')}"

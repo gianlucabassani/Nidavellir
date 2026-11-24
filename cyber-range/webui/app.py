@@ -1068,12 +1068,35 @@ def console_evaluation_create():
     return jsonify(result), status
 
 
+# UX-05: the launch phases the worker reported, latest state per phase.
+_DEPLOY_PHASES = ("network", "pull", "nodes", "readiness")
+
+
+def _console_deploy_phases(events):
+    latest = {}
+    for event in reversed(events or []):  # events are newest-first
+        payload = event.get("payload") or {}
+        name = payload.get("phase")
+        if name not in _DEPLOY_PHASES:
+            continue
+        entry = latest.setdefault(name, {"phase": name, "started_at": None})
+        entry["state"] = payload.get("state")
+        entry["ts"] = event.get("ts")
+        if payload.get("state") == "started" and not entry["started_at"]:
+            entry["started_at"] = event.get("ts")
+        for key in ("image", "total", "error", "reason", "status"):
+            if isinstance(payload.get(key), (str, int)):
+                entry[key] = payload[key]
+    return [latest[name] for name in _DEPLOY_PHASES if name in latest]
+
+
 @app.route("/api/console/arenas/<instance_id>")
 def console_arena(instance_id):
     status, ok = _api_get(f"/status/{instance_id}")
     if not ok or not isinstance(status, dict):
         return jsonify({"error": "Arena state unavailable"}), 503
     events = _events(instance_id, limit=12)
+    phase_events = _events(instance_id, limit=40, type="deploy_phase")
     budget, budget_ok = _api_get(f"/arenas/{instance_id}/budget")
     if not budget_ok:
         budget = {}
@@ -1141,6 +1164,7 @@ def console_arena(instance_id):
         "topology": topology,
         "events": [{"type": event.get("type"), "ts": event.get("ts"),
                     "actor": event.get("actor") or "system"} for event in events],
+        "deploy_phases": _console_deploy_phases(phase_events),
         "findings": [{"id": finding.get("finding_id"), "title": finding.get("title"),
                       "verdict": _finding_verdict(finding)} for finding in findings],
         "poc_jobs": [{"id": job.get("id"), "status": job.get("status")}

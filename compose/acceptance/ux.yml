@@ -25,6 +25,8 @@ services:
     container_name: !reset null
     environment:
       NIDAVELLIR_POC_RUNNER_IMAGE: nidavellir/poc-runner:ux
+      # A slow simulated target, so launch phases are observable (UX-05).
+      NIDAVELLIR_MOCK_DEPLOY_SECONDS: "30"
 
   beat:
     container_name: !reset null

@@ -36,6 +36,7 @@ from contextlib import nullcontext
 from pathlib import PurePosixPath
 
 import config
+import deploy_progress
 import images
 import lifecycle_manifest
 import netguard
@@ -1230,6 +1231,7 @@ class DockerLocalProvider(RangeProvider):
         phase = "init"
         try:
             phase = "create networks"
+            deploy_progress.phase("network", segments=len(wanted))
             networks = {}
             for seg in wanted:
                 net_name = self._network_name(instance_id, seg)
@@ -1278,6 +1280,7 @@ class DockerLocalProvider(RangeProvider):
             sut_sources = self._prepare_sut_sources(instance_id, nodes, labels)
 
             phase = "start node containers"
+            deploy_progress.phase("nodes", total=len(nodes))
             records = []
             for node in nodes:
                 container = self._run_node(
@@ -1287,6 +1290,7 @@ class DockerLocalProvider(RangeProvider):
                 records.append((node, container))
 
             phase = "collect outputs"
+            deploy_progress.done("nodes")
             outputs = self._collect_outputs(instance_id, networks, wanted, records)
             outputs["egress"] = "blocked" if locked else "open"
             # FR-05: the effective limits (and any no-new-privileges opt-out)
@@ -1478,7 +1482,10 @@ class DockerLocalProvider(RangeProvider):
             return self.client.images.get(image)
         except Exception:  # noqa: BLE001 - not present locally yet
             logger.info(f"pulling image {image} to inspect its startup")
+            # A pull runs inside the nodes phase; report it without closing it.
+            deploy_progress.mark("pull", "started", image=str(image)[:200])
             pulled = self.client.images.pull(image)
+            deploy_progress.mark("pull", "done", image=str(image)[:200])
             return pulled[0] if isinstance(pulled, list) else pulled
 
     def _keepalive_run_args(self, instance_id, image) -> dict:
