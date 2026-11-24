@@ -1,5 +1,6 @@
 import { DisabledReason } from "../ui";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { getJson, jsonRequest } from "../api";
 import "./assistant.css";
 
@@ -42,6 +43,9 @@ export function ResearchAssistant({ arenaId }: { arenaId: string | null }) {
   const history = useRef<Message[]>([]);
   const request = useRef<AbortController | null>(null);
   const launcher = useRef<HTMLButtonElement>(null);
+  // UX-08: dock the launcher in the header so it never covers page content.
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => setSlot(document.getElementById("assistant-slot")), []);
   const composer = useRef<HTMLTextAreaElement>(null);
   const log = useRef<HTMLDivElement>(null);
 
@@ -233,35 +237,38 @@ export function ResearchAssistant({ arenaId }: { arenaId: string | null }) {
       : connection
         ? "no model connected"
         : "checking model connection";
+  const launcherButton = (
+    <button
+      ref={launcher}
+      className="assistant-launcher"
+      type="button"
+      aria-expanded={open}
+      aria-controls="research-assistant"
+      onClick={() => (open ? close() : setOpen(true))}
+      aria-label="Research assistant"
+      aria-describedby="assistant-model-state"
+      title={`Research assistant: ${modelState}`}
+    >
+      <span aria-hidden="true">✧</span>
+      <span className="assistant-launcher-label">Research assistant</span>
+      <i
+        className={`assistant-dot ${
+          connection?.configured
+            ? "connected"
+            : connection || connectionError
+              ? "missing"
+              : "checking"
+        }`}
+        aria-hidden="true"
+      />
+      <span id="assistant-model-state" className="visually-hidden">
+        {modelState}
+      </span>
+    </button>
+  );
   return (
     <>
-      <button
-        ref={launcher}
-        className="assistant-launcher"
-        type="button"
-        aria-expanded={open}
-        aria-controls="research-assistant"
-        onClick={() => (open ? close() : setOpen(true))}
-        aria-label="Research assistant"
-        aria-describedby="assistant-model-state"
-        title={`Research assistant: ${modelState}`}
-      >
-        <span aria-hidden="true">✧</span>
-        <span className="assistant-launcher-label">Research assistant</span>
-        <i
-          className={`assistant-dot ${
-            connection?.configured
-              ? "connected"
-              : connection || connectionError
-                ? "missing"
-                : "checking"
-          }`}
-          aria-hidden="true"
-        />
-        <span id="assistant-model-state" className="visually-hidden">
-          {modelState}
-        </span>
-      </button>
+      {slot ? createPortal(launcherButton, slot) : launcherButton}
       {open && (
         <aside
           id="research-assistant"

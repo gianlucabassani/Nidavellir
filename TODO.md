@@ -337,9 +337,11 @@ each, each with a browser check.
   Keeps harness neutrality and existing key/binding rules (FR-04).
   **Accept:** from a fresh arena to a connected agent with no shell command except
   starting the client.
-- [ ] **UX-08 — Polish blockers.** Floating assistant no longer covers table cells; ID
+- [x] **UX-08 — Polish blockers.** Floating assistant no longer covers table cells; ID
   breadcrumbs not truncated; styled `<select>`/`<details>`; initial theme from
   `prefers-color-scheme`; remove the "Legacy console" link once FR-31 parity holds.
+  *2026-11-24: the "Legacy console" link stays until FR-31 parity (ST-06); its
+  removal moves there.*
 
 ## OBS — observability of what the agent is doing (top product priority)
 

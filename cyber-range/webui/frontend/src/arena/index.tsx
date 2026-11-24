@@ -121,7 +121,7 @@ export function ArenaWorkspace({ id }: { id: string }) {
         <span>{value.name}</span>
       </div>
       <PageHead
-        overline={`RESEARCH / ARENA ${value.id.slice(0, 8)}`}
+        overline={`RESEARCH / ARENA ${value.id}`}
         title={value.name}
         subtitle={`${value.scenario} · ${value.simulation_mode ? "mock simulation" : value.provider} · ${readOnly ? "retained record" : "live workspace"}`}
         observed={value.observed_at}
