@@ -1265,6 +1265,42 @@ def console_arena_findings(instance_id):
     } for item in findings]})
 
 
+# UX-06: what an operator can attach as evidence, so forms offer a picker
+# instead of a pasted digest. Built from the arena's own audit events.
+@app.route("/api/console/arenas/<instance_id>/evidence-candidates")
+def console_arena_evidence_candidates(instance_id):
+    requests_, ok_requests = _api_get(
+        f"/deployments/{quote(instance_id, safe='')}/events?limit=200&type=http_request")
+    artifacts, ok_artifacts = _api_get(
+        f"/deployments/{quote(instance_id, safe='')}/events?limit=200&type=evidence_artifact")
+    if not (ok_requests and ok_artifacts):
+        return jsonify({"error": "Evidence candidates unavailable"}), 503
+    transactions, seen = [], set()
+    for event in (requests_ or {}).get("events") or []:
+        payload = event.get("payload") or {}
+        digest = payload.get("transaction_digest")
+        if not isinstance(digest, str) or digest in seen:
+            continue
+        seen.add(digest)
+        transactions.append({
+            "digest": digest, "method": payload.get("method"), "path": payload.get("path"),
+            "status": payload.get("status"), "node": payload.get("node"),
+            "ts": event.get("ts"), "actor": event.get("actor"),
+        })
+    items = []
+    for event in (artifacts or {}).get("events") or []:
+        payload = event.get("payload") or {}
+        digest = payload.get("digest")
+        if not isinstance(digest, str) or digest in seen:
+            continue
+        seen.add(digest)
+        items.append({
+            "digest": digest, "kind": payload.get("kind"), "node": payload.get("node"),
+            "bytes": payload.get("bytes"), "ts": event.get("ts"), "actor": event.get("actor"),
+        })
+    return jsonify({"transactions": transactions, "artifacts": items})
+
+
 @app.route("/api/console/arenas/<instance_id>/findings/<finding_id>/review")
 def console_finding_review(instance_id, finding_id):
     """Read the service-owned operator projection, including archived evidence."""

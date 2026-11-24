@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type React from "react";
 import { ControlEvidenceReview } from "./finding-review";
+import { EvidencePicker, useEvidenceCandidates } from "./evidence-picker";
 import type { ArenaData, FindingRecord, FindingReview } from "../types";
 import {
   useWorkspaceData,
@@ -29,6 +30,24 @@ export function FindingsWorkbench({ arena }: { arena: ArenaData }) {
   } | null>(null);
   const [note, setNote] = useState("");
   const [digest, setDigest] = useState("");
+  const prefill = (key: string) =>
+    (new URLSearchParams(window.location.search).get(key) || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  const [artifacts, setArtifacts] = useState<string[]>(() =>
+    prefill("artifact"),
+  );
+  const [transactions, setTransactions] = useState<string[]>(() =>
+    prefill("transaction"),
+  );
+  // UX-06: findings and evidence candidates follow the live arena stream.
+  const liveKey = `${arena.events[0]?.ts || ""}:${arena.events.length}:${arena.findings.length}`;
+  const candidates = useEvidenceCandidates(arena.id, liveKey);
+  useEffect(() => {
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveKey]);
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     if (selected && dialog.current && !dialog.current.open)
@@ -73,16 +92,12 @@ export function FindingsWorkbench({ arena }: { arena: ArenaData }) {
         node: String(fields.get("node") || "").trim(),
         evidence: String(fields.get("evidence") || "").trim(),
         poc: String(fields.get("poc") || "").trim(),
-        evidence_artifact_digests: String(fields.get("artifacts") || "")
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean),
-        transaction_digests: String(fields.get("transactions") || "")
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean),
+        evidence_artifact_digests: artifacts,
+        transaction_digests: transactions,
       });
       form.reset();
+      setArtifacts([]);
+      setTransactions([]);
       setMessage(
         "Finding recorded. Review its evidence and verification state below.",
       );
@@ -179,30 +194,22 @@ export function FindingsWorkbench({ arena }: { arena: ArenaData }) {
                   placeholder="Request, command or numbered steps"
                 />
               </label>
-              <label>
-                Evidence artifact digests
-                <input
-                  name="artifacts"
-                  defaultValue={
-                    new URLSearchParams(window.location.search).get(
-                      "artifact",
-                    ) || ""
-                  }
-                  placeholder="sha256:… (comma-separated)"
-                />
-              </label>
-              <label>
-                HTTP transaction digests
-                <input
-                  name="transactions"
-                  defaultValue={
-                    new URLSearchParams(window.location.search).get(
-                      "transaction",
-                    ) || ""
-                  }
-                  placeholder="sha256:… (comma-separated)"
-                />
-              </label>
+              <EvidencePicker
+                label="Evidence artifacts"
+                candidates={candidates.value}
+                kinds={["artifact"]}
+                multiple
+                value={artifacts}
+                onChange={setArtifacts}
+              />
+              <EvidencePicker
+                label="HTTP transactions"
+                candidates={candidates.value}
+                kinds={["transaction"]}
+                multiple
+                value={transactions}
+                onChange={setTransactions}
+              />
               <div className="poc-submit">
                 <span>
                   Attached digests must exist in this arena. The service
@@ -367,19 +374,18 @@ export function FindingsWorkbench({ arena }: { arena: ArenaData }) {
           </h2>
           <p>
             {selected?.verdict === "confirmed"
-              ? "Choose an immutable evidence digest from this arena. Manual confirmation stays separate from independent validation."
+              ? "Pick the immutable record from this arena that proves it. Manual confirmation stays separate from independent validation."
               : "Record why this finding is refuted. The service keeps the decision in the audit trail."}
           </p>
           {selected?.verdict === "confirmed" && (
-            <label>
-              Evidence digest
-              <input
-                required
-                value={digest}
-                onChange={(event) => setDigest(event.target.value)}
-                placeholder="sha256:…"
-              />
-            </label>
+            <EvidencePicker
+              label="Evidence"
+              candidates={candidates.value}
+              kinds={["transaction", "artifact"]}
+              multiple={false}
+              value={digest ? [digest] : []}
+              onChange={(next) => setDigest(next[0] || "")}
+            />
           )}
           <label>
             Decision note
@@ -402,11 +408,24 @@ export function FindingsWorkbench({ arena }: { arena: ArenaData }) {
             <button
               type="submit"
               className="button button-gold"
-              disabled={pending}
+              disabled={
+                pending || (selected?.verdict === "confirmed" && !digest)
+              }
+              aria-describedby={
+                selected?.verdict === "confirmed" && !digest
+                  ? "confirm-evidence-why"
+                  : undefined
+              }
             >
               {pending ? "Saving…" : `Record ${selected?.verdict}`}
             </button>
           </div>
+          {selected?.verdict === "confirmed" && !digest && (
+            <DisabledReason id="confirm-evidence-why">
+              Pick the evidence above (or paste its digest) to record a
+              confirmation.
+            </DisabledReason>
+          )}
         </form>
       </dialog>
     </>
