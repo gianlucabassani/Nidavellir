@@ -577,12 +577,16 @@ function SiteTable({
               : "0 sites"}
             {total !== value.pattern_total &&
               ` (filtered from ${value.pattern_total})`}{" "}
-            · page {page} of {pages}
+            ·{" "}
+            <span id="review-page-why">
+              page {page} of {pages}
+            </span>
           </span>
           <div>
             <button
               type="button"
               disabled={loading || page <= 1}
+              aria-describedby="review-page-why"
               onClick={() => goto(1)}
             >
               First
@@ -590,6 +594,7 @@ function SiteTable({
             <button
               type="button"
               disabled={loading || page <= 1}
+              aria-describedby="review-page-why"
               onClick={() => goto(page - 1)}
             >
               ← Previous
@@ -597,6 +602,7 @@ function SiteTable({
             <button
               type="button"
               disabled={loading || value.next_offset === null}
+              aria-describedby="review-page-why"
               onClick={() => goto(page + 1)}
             >
               Next →
@@ -604,6 +610,7 @@ function SiteTable({
             <button
               type="button"
               disabled={loading || page >= pages}
+              aria-describedby="review-page-why"
               onClick={() => goto(pages)}
             >
               Last

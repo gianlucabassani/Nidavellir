@@ -9,6 +9,7 @@ import {
   Panel,
   Status,
   useWorkspaceData,
+  DisabledReason,
 } from "../ui";
 
 const providers = [
@@ -273,12 +274,22 @@ export function Settings() {
                 placeholder="Required for local or custom providers"
               />
             </label>
+            {!value.model_connection.configured && !apiKey && (
+              <DisabledReason id="model-test-why">
+                Enter an API key to test a new connection.
+              </DisabledReason>
+            )}
             <div className="settings-model-actions">
               <button
                 type="button"
                 className="button button-outline"
                 disabled={
                   pending || (!value.model_connection.configured && !apiKey)
+                }
+                aria-describedby={
+                  !value.model_connection.configured && !apiKey
+                    ? "model-test-why"
+                    : undefined
                 }
                 onClick={() => void verifyModel()}
               >
@@ -359,6 +370,11 @@ export function Settings() {
             />
           </label>
         )}
+        {confirm !== "remove-model" && !reason.trim() && (
+          <DisabledReason id="confirm-reason-why">
+            Enter a reason above; it is recorded in the audit trail.
+          </DisabledReason>
+        )}
         <div className="dialog-actions">
           <button
             type="button"
@@ -374,6 +390,11 @@ export function Settings() {
               confirm === "stop" ? "button button-danger" : "button button-gold"
             }
             disabled={pending || (confirm !== "remove-model" && !reason.trim())}
+            aria-describedby={
+              confirm !== "remove-model" && !reason.trim()
+                ? "confirm-reason-why"
+                : undefined
+            }
             onClick={() => void confirmAction()}
           >
             {pending

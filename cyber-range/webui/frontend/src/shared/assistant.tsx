@@ -1,3 +1,4 @@
+import { DisabledReason } from "../ui";
 import { useEffect, useRef, useState } from "react";
 import { getJson, jsonRequest } from "../api";
 import "./assistant.css";
@@ -451,6 +452,9 @@ export function ResearchAssistant({ arenaId }: { arenaId: string | null }) {
               <button
                 type="button"
                 disabled={busy || !messages.length}
+                aria-describedby={
+                  !messages.length ? "assistant-why" : undefined
+                }
                 onClick={() => {
                   history.current = [];
                   setMessages([]);
@@ -466,11 +470,31 @@ export function ResearchAssistant({ arenaId }: { arenaId: string | null }) {
                 <button
                   type="submit"
                   disabled={!connection?.configured || !input.trim()}
+                  aria-describedby={
+                    !connection?.configured || !input.trim()
+                      ? "assistant-why"
+                      : undefined
+                  }
                 >
                   Send ↗
                 </button>
               )}
             </div>
+            {(!connection?.configured || !input.trim() || !messages.length) &&
+              !busy && (
+                <DisabledReason id="assistant-why">
+                  {!connection?.configured ? (
+                    <>
+                      No model connection is configured.{" "}
+                      <a href="/console/settings">Set one up in settings</a>.
+                    </>
+                  ) : !input.trim() ? (
+                    "Type a question to send."
+                  ) : (
+                    "Nothing to clear yet."
+                  )}
+                </DisabledReason>
+              )}
           </form>
         </aside>
       )}

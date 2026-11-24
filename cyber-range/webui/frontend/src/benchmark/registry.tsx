@@ -11,6 +11,7 @@ import {
   Panel,
   useWorkspaceData,
   BackLink,
+  DisabledReason,
 } from "../ui";
 
 type Kind = "builds" | "challenges" | "suites";
@@ -336,13 +337,32 @@ export function BenchmarkRegistry() {
               </p>
             )}
             <div className="registry-form-foot">
-              <span>Registration is immutable and checked by the service.</span>
+              {kind === "suites" && !selectedChallenges.length ? (
+                <DisabledReason id="register-why">
+                  Select at least one challenge for the suite above.
+                </DisabledReason>
+              ) : kind === "challenges" && !value.source_arenas.length ? (
+                <DisabledReason id="register-why">
+                  A challenge is derived from a retained arena, and there is
+                  none yet. <a href="/console?workspace=range">Launch one</a>.
+                </DisabledReason>
+              ) : (
+                <span>
+                  Registration is immutable and checked by the service.
+                </span>
+              )}
               <button
                 className="button button-gold"
                 disabled={
                   pending ||
                   (kind === "suites" && !selectedChallenges.length) ||
                   (kind === "challenges" && !value.source_arenas.length)
+                }
+                aria-describedby={
+                  (kind === "suites" && !selectedChallenges.length) ||
+                  (kind === "challenges" && !value.source_arenas.length)
+                    ? "register-why"
+                    : undefined
                 }
               >
                 {pending

@@ -488,17 +488,23 @@ export function HttpWorkbench({ arena }: { arena: ArenaData }) {
               <button
                 type="button"
                 disabled={offset === 0}
+                aria-describedby="http-page-why"
                 onClick={() => setOffset(Math.max(0, offset - 25))}
               >
                 ← Previous
               </button>
-              <span>
+              <span id="http-page-why">
                 {offset + 1}–{offset + value.transactions.length} of{" "}
                 {value.total}
+                {offset === 0 ? " · first page" : ""}
+                {offset + value.transactions.length >= value.total
+                  ? " · last page"
+                  : ""}
               </span>
               <button
                 type="button"
                 disabled={offset + value.transactions.length >= value.total}
+                aria-describedby="http-page-why"
                 onClick={() => setOffset(offset + 25)}
               >
                 Next →
