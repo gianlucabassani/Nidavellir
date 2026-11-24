@@ -1,6 +1,6 @@
 .arena-layout.forge-layout {
   display: grid;
-  grid-template-columns: 78px minmax(0, 1fr);
+  grid-template-columns: 190px minmax(0, 1fr);
   gap: 10px;
   align-items: start;
   margin-top: 12px;
@@ -8,119 +8,72 @@
 .arena-workspace-body {
   min-width: 0;
 }
-.arena-tool-rail {
+.arena-tool-list {
   position: sticky;
   top: 112px;
-  z-index: var(--z-rail);
-  padding: 6px;
+  padding: 8px;
   border: 1px solid #42516a;
   background: #152238;
   color: #d3ddeb;
 }
-.arena-tool-rail > a,
-.arena-rail-category > button {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  flex-direction: column;
-  gap: 6px;
-  padding: 13px 3px;
-  border: 0;
-  border-bottom: 1px solid #354760;
-  background: transparent;
-  color: #afbed2;
-  cursor: pointer;
-}
-.arena-tool-rail :is(a, button):focus-visible {
-  outline: 2px solid #e3bd75;
-  outline-offset: -2px;
-}
-.arena-tool-rail > a > span,
-.arena-rail-category > button > span {
-  font-size: 23px;
-  color: #d5b06a;
-}
-.arena-tool-rail small {
-  font-size: 9px;
-}
-.arena-tool-rail > a:hover {
-  text-decoration: none;
-}
-.arena-tool-rail [aria-current="page"],
-.arena-rail-category > button.active,
-.arena-rail-category > button[aria-expanded="true"] {
-  background: #2a3a53;
-  color: #f6d79c;
-}
-.arena-rail-category {
-  position: relative;
-}
-.arena-rail-category:last-child > button {
-  border-bottom: 0;
-}
-.arena-category-flyout {
-  position: absolute;
-  top: 0;
-  left: 100%;
-  width: 220px;
-  padding: 10px;
-  border: 1px solid #8c7754;
-  background: #1b2b43;
-  box-shadow: 0 10px 26px #0005;
-}
-.arena-category-flyout > strong {
+.arena-tool-list a {
   display: block;
-  padding: 5px 8px 10px;
-  color: #afbed2;
-  font: 10px monospace;
-}
-.arena-category-flyout > a {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 11px 8px;
+  padding: 8px 10px;
   color: #edf1f8;
-  font-size: 12px;
+  font-size: 13px;
+  border-left: 3px solid transparent;
 }
-.arena-category-flyout > a:hover {
+.arena-tool-list a:hover {
   background: #31415b;
   text-decoration: none;
 }
-.arena-category-flyout > a > span {
+.arena-tool-list a:focus-visible {
+  outline: 2px solid #e3bd75;
+  outline-offset: -2px;
+}
+.arena-tool-list a[aria-current="page"] {
+  background: #2a3a53;
+  color: #f6d79c;
+  border-left-color: #d5b06a;
+}
+.arena-tool-overview {
+  font-weight: 600;
+}
+.arena-tool-list section {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #354760;
+}
+.arena-tool-list h2 {
+  margin: 0 0 4px;
+  padding: 0 10px;
+  color: #afbed2;
+  font: 600 11px monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.arena-tool-list h2 > span {
   color: #d5b06a;
+}
+.arena-tool-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 @media (max-width: 760px) {
   .arena-layout.forge-layout {
     grid-template-columns: 1fr;
   }
-  .arena-tool-rail {
-    display: flex;
+  .arena-tool-list {
     position: relative;
     top: auto;
-    padding: 4px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 4px 10px;
   }
-  .arena-tool-rail > a,
-  .arena-rail-category {
-    flex: 1;
-    min-width: 0;
-  }
-  .arena-rail-category {
-    position: static;
-  }
-  .arena-tool-rail > a,
-  .arena-rail-category > button {
-    padding: 8px 3px;
-    border-bottom: 0;
-  }
-  .arena-tool-rail > a > span,
-  .arena-rail-category > button > span {
-    font-size: 18px;
-  }
-  .arena-category-flyout {
-    top: 100%;
-    left: 0;
-    width: 100%;
+  .arena-tool-list section {
+    margin-top: 0;
+    border-top: 0;
   }
 }
 

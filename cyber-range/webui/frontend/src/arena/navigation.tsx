@@ -1,4 +1,3 @@
-import { useRef, useState } from "react";
 import "./navigation.css";
 const categories = [
   {
@@ -34,6 +33,8 @@ const categories = [
     ],
   },
 ];
+// UX-03: every tool is a visible link in a persistent, grouped list: one
+// click and plain Tab order, no hover flyouts or hidden menus.
 export function ArenaNavigation({
   id,
   tab,
@@ -41,84 +42,38 @@ export function ArenaNavigation({
   id: string;
   tab: string | null;
 }) {
-  const [open, setOpen] = useState<string | null>(null);
-  const [pinned, setPinned] = useState<string | null>(null);
-  const triggers = useRef<Record<string, HTMLButtonElement | null>>({});
+  const href = (item: string) =>
+    `/console/arena/${encodeURIComponent(id)}${item === "forge" ? "" : `?tab=${item}`}`;
   return (
-    <nav
-      className="arena-tool-rail"
-      aria-label="Arena tooling"
-      onMouseLeave={() => setOpen(pinned)}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(pinned);
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          const active = open;
-          if (active) triggers.current[active]?.focus();
-          setOpen(null);
-          setPinned(null);
-          event.preventDefault();
-        }
-      }}
-    >
+    <nav className="arena-tool-list" aria-label="Arena tools">
       <a
-        className="arena-rail-overview"
-        href={`/console/arena/${encodeURIComponent(id)}`}
+        className="arena-tool-overview"
+        href={href("forge")}
         aria-current={tab === "forge" ? "page" : undefined}
       >
-        <span aria-hidden="true">⬡</span>
-        <small>Arena</small>
+        <span aria-hidden="true">⬡</span> Arena overview
       </a>
       {categories.map((category) => (
-        <div
-          className="arena-rail-category"
+        <section
           key={category.id}
-          onMouseEnter={() => setOpen(category.id)}
+          aria-labelledby={`arena-tools-${category.id}`}
         >
-          <button
-            ref={(element) => {
-              triggers.current[category.id] = element;
-            }}
-            type="button"
-            onFocus={() => setOpen(category.id)}
-            onClick={() => {
-              const next = pinned === category.id ? null : category.id;
-              setPinned(next);
-              setOpen(next);
-            }}
-            aria-expanded={open === category.id}
-            aria-controls={`arena-menu-${category.id}`}
-            className={
-              category.items.some((item) => item.tab === tab) ? "active" : ""
-            }
-          >
-            <span aria-hidden="true">{category.mark}</span>
-            <small>{category.label}</small>
-          </button>
-          {open === category.id && (
-            <div
-              className="arena-category-flyout"
-              id={`arena-menu-${category.id}`}
-            >
-              <strong>{category.label}</strong>
-              {category.items.map((item) => (
+          <h2 id={`arena-tools-${category.id}`}>
+            <span aria-hidden="true">{category.mark}</span> {category.label}
+          </h2>
+          <ul>
+            {category.items.map((item) => (
+              <li key={item.tab}>
                 <a
-                  key={item.tab}
-                  href={`/console/arena/${encodeURIComponent(id)}?tab=${item.tab}`}
+                  href={href(item.tab)}
                   aria-current={tab === item.tab ? "page" : undefined}
-                  onClick={() => {
-                    setOpen(null);
-                    setPinned(null);
-                  }}
                 >
                   {item.label}
-                  <span aria-hidden="true">↗</span>
                 </a>
-              ))}
-            </div>
-          )}
-        </div>
+              </li>
+            ))}
+          </ul>
+        </section>
       ))}
     </nav>
   );
