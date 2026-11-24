@@ -1,3 +1,4 @@
+import { navigate } from "../router";
 import { useState } from "react";
 import type React from "react";
 import { postJson } from "../api";
@@ -121,8 +122,9 @@ function NewSession() {
             }
           : {}),
       });
-      window.location.assign(
+      navigate(
         `/console/research/review/${encodeURIComponent(created.session_id)}`,
+        { replace: true },
       );
     } catch (reason) {
       setMessage(

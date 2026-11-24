@@ -9,6 +9,7 @@ import {
   Loading,
   ErrorState,
   ErrorBoundary,
+  BackLink,
 } from "../ui";
 import { PocWorkbench } from "./poc";
 import { FindingsWorkbench } from "./findings";
@@ -113,7 +114,7 @@ export function ArenaWorkspace({ id }: { id: string }) {
   return (
     <>
       <div className="arena-return">
-        <a href="/console?workspace=research">← Research</a>
+        <BackLink href="/console?workspace=research" label="Research" />
         <span>/</span>
         <span>{value.name}</span>
       </div>

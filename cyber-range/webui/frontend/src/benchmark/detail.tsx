@@ -8,6 +8,7 @@ import {
   PageHead,
   Loading,
   ErrorState,
+  BackLink,
 } from "../ui";
 
 const metricNames: Record<string, string> = {
@@ -62,7 +63,7 @@ export function EvaluationDetail({ id }: { id: string }) {
   return (
     <>
       <div className="arena-return">
-        <a href="/console?workspace=benchmark">← Benchmark</a>
+        <BackLink href="/console?workspace=benchmark" label="Benchmark" />
         <span>/</span>
         <span>Evaluation {value.id.slice(0, 8)}</span>
       </div>

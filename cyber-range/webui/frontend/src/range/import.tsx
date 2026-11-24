@@ -1,7 +1,8 @@
+import { navigate } from "../router";
 import { useState } from "react";
 import { ApiError, postJson } from "../api";
 import type { TopologyData } from "../types";
-import { Empty, PageHead, Panel } from "../ui";
+import { Empty, PageHead, Panel, BackLink } from "../ui";
 import { TopologyPreview } from "./topology";
 
 type Mode = "spec" | "vulhub" | "generate";
@@ -183,9 +184,9 @@ export function ScenarioImport() {
             });
       if (!result.id)
         throw new Error("The service did not return a scenario id.");
-      window.location.assign(
-        `/console/scenarios?id=${encodeURIComponent(result.id)}`,
-      );
+      navigate(`/console/scenarios?id=${encodeURIComponent(result.id)}`, {
+        replace: true,
+      });
     } catch (reason) {
       setMessage(reason instanceof Error ? reason.message : "Import failed");
     } finally {
@@ -196,7 +197,7 @@ export function ScenarioImport() {
   return (
     <>
       <div className="arena-return">
-        <a href="/console/scenarios">← Scenario library</a>
+        <BackLink href="/console/scenarios" label="Scenario library" />
         <span>/</span>
         <span>Import</span>
       </div>

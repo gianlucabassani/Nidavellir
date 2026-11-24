@@ -1,7 +1,8 @@
+import { navigate } from "../router";
 import { useRef, useState } from "react";
 import { postForm, postJson } from "../api";
 import type { ResearchPreview } from "../types";
-import { Panel, Empty, PageHead } from "../ui";
+import { Panel, Empty, PageHead, BackLink } from "../ui";
 import { SegmentMap } from "../topology/SegmentMap";
 
 type Step = 1 | 2 | 3;
@@ -221,9 +222,9 @@ export function NewResearch() {
       }>("/api/console/research/launch", pinned);
       if (!result.instance_id)
         throw new Error("The service did not return an arena ID.");
-      window.location.assign(
-        `/console/arena/${encodeURIComponent(result.instance_id)}`,
-      );
+      navigate(`/console/arena/${encodeURIComponent(result.instance_id)}`, {
+        replace: true,
+      });
     } catch (reason) {
       setMessage(reason instanceof Error ? reason.message : "Launch failed");
       setPending(false);
@@ -232,7 +233,7 @@ export function NewResearch() {
   return (
     <>
       <div className="arena-return">
-        <a href="/console?workspace=research">← Research</a>
+        <BackLink href="/console?workspace=research" label="Research" />
         <span>/</span>
         <span>New research</span>
       </div>

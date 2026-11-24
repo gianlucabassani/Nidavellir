@@ -311,7 +311,7 @@ each, each with a browser check.
   background refresh keeps the last data and shows a stale banner with retry, instead of
   `if (error) return <ErrorState/>` (`arena/index.tsx`, `benchmark/detail.tsx`, `ui.tsx`).
   **Accept:** kill the BFF mid-session; the arena stays readable and recovers on retry.
-- [ ] **UX-02 — Client-side navigation.** All in-console links use pushState (minimal
+- [x] **UX-02 — Client-side navigation.** All in-console links use pushState (minimal
   router, ADR amending ADR-0017 if a library is added); post-create redirects stop using
   `location.assign`; back/forward restore tab and scroll; breadcrumbs reflect the real
   origin (arena opened from Range must not say "← Research").

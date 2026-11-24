@@ -12,6 +12,7 @@ import {
   Panel,
   Status,
   useWorkspaceData,
+  BackLink,
 } from "../ui";
 
 const TERMINAL = ["destroyed", "failed", "error_destroying"];
@@ -85,7 +86,7 @@ export function AllArenas() {
   return (
     <>
       <div className="arena-return">
-        <a href="/console?workspace=research">← Research</a>
+        <BackLink href="/console?workspace=research" label="Research" />
         <span>/</span>
         <span>All arenas</span>
       </div>
@@ -292,7 +293,7 @@ export function AllEvaluations() {
   return (
     <>
       <div className="arena-return">
-        <a href="/console?workspace=benchmark">← Benchmark</a>
+        <BackLink href="/console?workspace=benchmark" label="Benchmark" />
         <span>/</span>
         <span>All evaluations</span>
       </div>

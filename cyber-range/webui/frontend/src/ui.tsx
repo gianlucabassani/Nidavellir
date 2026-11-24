@@ -6,6 +6,7 @@ import React, {
   useSyncExternalStore,
 } from "react";
 import { getJson } from "./api";
+import { goBack, origin } from "./router";
 import type { Workspace } from "./types";
 
 // UX-01: a failed background refresh keeps the last data. Each hook that holds
@@ -409,5 +410,22 @@ export function CopyField({ value, label }: { value: string; label: string }) {
         {copied ? "Copied" : "Copy"}
       </button>
     </div>
+  );
+}
+
+// UX-02: the breadcrumb names where this page was really opened from.
+export function BackLink({ href, label }: { href: string; label: string }) {
+  const target = origin({ href, label });
+  return (
+    <a
+      href={target.href}
+      onClick={(event) => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey) return;
+        event.preventDefault();
+        goBack(target);
+      }}
+    >
+      ← {target.label}
+    </a>
   );
 }
