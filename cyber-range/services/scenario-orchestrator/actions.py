@@ -171,6 +171,7 @@ async def run(request: Request, call_next: Callable[[Request], Awaitable[Respons
         response.headers["X-Action-ID"] = action_id
     spans.record(
         db, name=spec.name, kind="tool", actor=actor,
+        parent_span_id=spans.parent_from_traceparent(request.headers.get("traceparent")),
         actor_kind="agent" if role == "agent" else "human", stance=stance,
         arena_id=arena_id, started_at=started, ended_at=datetime.now(timezone.utc),
         status=_span_status(response.status_code, refused),

@@ -102,7 +102,37 @@ def _substitute(value, last_transaction):
     return value
 
 
-async def _play_mcp(arena_id, build, *, deadline_seconds=None):
+def _model_span_recorder(arena_id, build, trial_id, evaluation_id):
+    """OBS-03: one `model` span per provider call, in the trial's arena trace,
+    carrying the usage the driver measured (the same numbers the trial stores)."""
+    import spans  # noqa: PLC0415
+
+    db = Database()
+    config = build["config"]
+
+    def record(started, ended, measured, outcome):
+        measured = measured or {}
+        attrs = {"gen_ai.operation.name": "chat", "openinference.span.kind": "LLM",
+                 "gen_ai.request.model": config.get("model"),
+                 "gen_ai.system": config.get("provider"),
+                 "gen_ai.usage.input_tokens": measured.get("input_tokens"),
+                 "gen_ai.usage.output_tokens": measured.get("output_tokens"),
+                 "nv.cost_usd": measured.get("cost_usd"), "nv.outcome": outcome,
+                 "nv.build_id": build.get("id")}
+        spans.record(db, name="model.call", kind="model",
+                     actor=str(build.get("name") or build.get("id") or "model-driver"),
+                     actor_kind="agent", arena_id=arena_id, trial_id=trial_id,
+                     evaluation_id=evaluation_id,
+                     trace_id=spans.trace_id_for(arena_id=arena_id),
+                     started_at=started, ended_at=ended,
+                     status="ok" if measured or outcome == "end_turn" else "error",
+                     error_class=None if measured else outcome,
+                     attrs={k: v for k, v in attrs.items() if v is not None})
+    return record
+
+
+async def _play_mcp(arena_id, build, *, deadline_seconds=None, trial_id=None,
+                    evaluation_id=None):
     from mcp import ClientSession  # noqa: PLC0415
     from mcp.client.streamable_http import streamablehttp_client  # noqa: PLC0415
 
@@ -134,8 +164,10 @@ async def _play_mcp(arena_id, build, *, deadline_seconds=None):
                         return {"error": raw[:200]}
                 effective = {**build, "config": {**config, "deadline_seconds": min(
                     config["deadline_seconds"], deadline_seconds or config["deadline_seconds"])}}
-                return await eval_model_driver.run(session, arena_id, effective,
-                                                   connection, decode)
+                return await eval_model_driver.run(
+                    session, arena_id, effective, connection, decode,
+                    on_model_call=_model_span_recorder(arena_id, build, trial_id,
+                                                       evaluation_id))
             for step in build["config"]["plan"]:
                 args = _substitute(step["args"], last_transaction)
                 args["arena_id"] = arena_id
@@ -235,7 +267,9 @@ def _run_trial(db, trial, run, challenge, build, suite, claim):
             {"agent_name": principal, "stance": "attacker", "auto": False,
              "granted_by": "evaluation-worker"}, actor="evaluation-worker")
         execution = asyncio.run(_play_mcp(arena_id, build,
-                                         deadline_seconds=suite["deadline_seconds"]))
+                                         deadline_seconds=suite["deadline_seconds"],
+                                         trial_id=trial.get("id"),
+                                         evaluation_id=trial.get("evaluation_id")))
         return arena_id, after["observed_state_digest"], _trial_result(
             db, arena_id, execution, challenge)
     finally:

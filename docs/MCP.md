@@ -164,6 +164,10 @@ agent-under-test cannot enumerate the ground truth. See
   off-segment route is an allowlisted package mirror. See [`SECURITY.md`](./SECURITY.md).
 - **Audit.** Every tool call is an append-only event and a JSONL trace, aligned to
   OpenTelemetry-GenAI / OpenInference for export (see [`INTERNALS.md`](./INTERNALS.md)).
+  Each tool call that names an arena is also a span in the arena's trace
+  (`GET /arenas/{id}/spans`): the gateway sends W3C `traceparent` so the orchestrator's
+  action spans nest under the call, then reports the call as a self-reported span. The
+  JSONL file stays an optional local mirror.
 
 ## Configuration
 

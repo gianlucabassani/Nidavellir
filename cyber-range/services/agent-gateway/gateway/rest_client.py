@@ -41,13 +41,27 @@ class RestClient:
             self._http = requests
         return self._http
 
+    @staticmethod
+    def _headers(api_key: str) -> dict:
+        from gateway.spans import traceparent  # OBS-03: nest orchestrator spans
+
+        headers = {"X-API-Key": api_key}
+        parent = traceparent()
+        if parent:
+            headers["traceparent"] = parent
+        return headers
+
+    def report_span(self, api_key: str, arena_id: str, span: dict) -> dict:
+        """OBS-03: report one tool-call span (best-effort for the caller)."""
+        return self._request("POST", f"/arenas/{arena_id}/spans", api_key, json=span)
+
     def _request(self, method: str, path: str, api_key: str, json: dict | None = None):
         url = f"{self.base_url}{path}"
         try:
             resp = self.http.request(
                 method,
                 url,
-                headers={"X-API-Key": api_key},
+                headers=self._headers(api_key),
                 json=json,
                 timeout=self.timeout,
             )
