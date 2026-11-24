@@ -45,6 +45,11 @@ API_HEADERS = {"X-API-Key": API_KEY}
 # Public URL a BYO agent app (Claude Code, etc.) points its MCP client at to reach
 # the agent gateway. Shown in the in-arena "connect recipe" — override per host.
 GATEWAY_PUBLIC_URL = os.getenv("GATEWAY_PUBLIC_URL", "http://localhost:9000/mcp")
+# UX-07: how a client starts its own gateway over stdio (docker run -i). The
+# image and network are the Compose names of this install's agent-gateway.
+GATEWAY_IMAGE = os.environ.get("NIDAVELLIR_GATEWAY_IMAGE", "nidavellir-agent-gateway")
+GATEWAY_NETWORK = os.environ.get("NIDAVELLIR_GATEWAY_NETWORK", "nidavellir_nidavellir-network")
+GATEWAY_API_URL = os.environ.get("NIDAVELLIR_GATEWAY_API_URL", "http://orchestrator:8000")
 
 # Operator login for the dashboard itself.
 WEBUI_USERNAME = os.getenv("WEBUI_USERNAME", "admin")
@@ -3502,6 +3507,32 @@ def grant_binding_proxy(instance_id):
     }
     data, code = _api_post(f"/arenas/{instance_id}/bindings", payload)
     return jsonify(data), code
+
+
+# UX-07: connect an agent from the console. The key is minted and bound by the
+# orchestrator (operator-only) and returned once; it is never cached or logged.
+@app.route("/api/console/arenas/<instance_id>/agent-keys", methods=["POST"])
+def console_create_agent_key(instance_id):
+    body = request.get_json(silent=True) or {}
+    payload = {"name": str(body.get("name") or "").strip(),
+               "stance": str(body.get("stance") or "").strip()}
+    data, code = _api_post(f"/arenas/{quote(instance_id, safe='')}/agent-keys", payload)
+    if code == 201 and isinstance(data, dict):
+        data = {**data, "gateway": {"image": GATEWAY_IMAGE, "network": GATEWAY_NETWORK,
+                                     "api_url": GATEWAY_API_URL,
+                                     "http_url": GATEWAY_PUBLIC_URL}}
+    response = jsonify(data)
+    response.headers["Cache-Control"] = "no-store"
+    return response, code
+
+
+@app.route("/api/console/arenas/<instance_id>/agent-connection/<agent_name>")
+def console_agent_connection(instance_id, agent_name):
+    data, ok = _api_get(f"/arenas/{quote(instance_id, safe='')}/agent-connection/"
+                        f"{quote(agent_name, safe='')}")
+    if not ok or not isinstance(data, dict):
+        return jsonify({"error": "Agent connection unavailable"}), 503
+    return jsonify(data)
 
 
 @app.route("/api/arenas/<instance_id>/bindings/<agent_name>", methods=["DELETE"])

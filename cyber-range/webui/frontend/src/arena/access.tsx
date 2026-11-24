@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { jsonRequest, postJson } from "../api";
 import type { ArenaData } from "../types";
+import { ConnectAgent } from "./connect";
 import {
   ConfirmDialog,
   CopyField,
@@ -177,35 +178,26 @@ export function AgentAccess({ arena }: { arena: ArenaData }) {
         title="Connect your agent app"
         className="access-connect"
       >
-        <ol className="connect-steps">
-          <li>
-            <strong>Create an agent key</strong> (admin), then authorize it
-            above with a stance.
-            <CopyField
-              label="key command"
-              value="docker exec nidavellir-orchestrator python auth.py create-key red-team-1 agent"
-            />
-          </li>
-          <li>
-            <strong>Start the gateway</strong> carrying that key and stance.
-            <CopyField
-              label="gateway command"
-              value="NIDAVELLIR_AGENT_KEY=<agent-key> NIDAVELLIR_STANCE=attacker docker compose --profile agent-gateway up -d agent-gateway"
-            />
-          </li>
-          <li>
-            <strong>Add it to your client</strong>, for example Claude Code.
-            <CopyField
-              label="client command"
-              value={`claude mcp add --transport http nidavellir-arena ${arena.gateway_url || "http://localhost:9000/mcp"}`}
-            />
-          </li>
-          <li>
-            <strong>Point the agent at this arena</strong> with{" "}
-            <code>arena_id={arena.id}</code>. Its actions appear in the event
-            trace and Live activity, where you can pause or revoke it.
-          </li>
-        </ol>
+        <ConnectAgent arena={arena} key={arena.id} />
+        <details className="connect-advanced">
+          <summary>Advanced: a shared HTTP gateway started by an admin</summary>
+          <ol className="connect-steps">
+            <li>
+              Start the gateway with an agent key and stance.
+              <CopyField
+                label="gateway command"
+                value="NIDAVELLIR_AGENT_KEY=<agent-key> NIDAVELLIR_STANCE=attacker docker compose --profile agent-gateway up -d agent-gateway"
+              />
+            </li>
+            <li>
+              Add it to your client, for example Claude Code.
+              <CopyField
+                label="client command"
+                value={`claude mcp add --transport http nidavellir-arena ${arena.gateway_url || "http://localhost:9000/mcp"}`}
+              />
+            </li>
+          </ol>
+        </details>
       </Panel>
       {revoking && (
         <ConfirmDialog

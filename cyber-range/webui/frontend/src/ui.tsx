@@ -445,3 +445,12 @@ export function DisabledReason({
     </p>
   );
 }
+
+/** GET JSON, or null on any failure (for background status polls). */
+export async function getJsonSafe<T>(path: string): Promise<T | null> {
+  try {
+    return await getJson<T>(path);
+  } catch {
+    return null;
+  }
+}

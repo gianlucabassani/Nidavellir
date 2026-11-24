@@ -737,6 +737,21 @@ lifecycle tool. Operators/admins are never bound and bypass every check.
 - `DELETE /arenas/{id}/bindings/{agent_name}` → `{ "revoked": true|false }`.
   Operator-only; idempotent. This is the **kill** — the binding is torn down.
 
+**Console agent keys (UX-07).** An operator connects an agent without a shell:
+- `POST /arenas/{id}/agent-keys` `{ "name", "stance" }` → `201 { "agent_name",
+  "stance", "role": "agent", "api_key" }`. Operator-only; active arenas only
+  (`409` otherwise). Mints a `role=agent` key and binds it to this arena in that
+  stance (not persistent). The key is returned once; only its SHA-256 is stored,
+  and neither the key nor its hash appears in events (`agent_key_created`
+  records name and stance). A name used by any existing key is `409`.
+- `GET /arenas/{id}/agent-connection/{agent_name}` → `{ "bound", "stance",
+  "connected", "session", "key": { "exists", "revoked", "last_used_at" } }`.
+  Operator-only. `connected` comes from the agent's first `agent_session` event
+  in this arena (the gateway's `announce_agent`).
+The console turns the key into stdio MCP configs (`docker run -i … agent-gateway`)
+using `NIDAVELLIR_GATEWAY_IMAGE`, `NIDAVELLIR_GATEWAY_NETWORK` and
+`NIDAVELLIR_GATEWAY_API_URL` on the WebUI.
+
 **Kill-switch / pause (P2-11).** A reversible halt distinct from a kill — the
 binding stays in place but its driving actions are frozen:
 - `POST /arenas/{id}/bindings/{agent_name}/pause` → `{ "paused": true, … }`.

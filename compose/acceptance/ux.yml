@@ -37,6 +37,10 @@ services:
 
   webui:
     container_name: !reset null
+    environment:
+      # UX-07: client configs start this stack's gateway, not production's.
+      NIDAVELLIR_GATEWAY_IMAGE: nidavellir-ux-agent-gateway
+      NIDAVELLIR_GATEWAY_NETWORK: nidavellir-ux_nidavellir-network
     ports: !override ["127.0.0.1:15020:5000"]
     volumes: !override
       - ./cyber-range/webui:/app/webui

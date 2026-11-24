@@ -69,7 +69,13 @@ import validators
 import validation_evidence
 import evidence_review
 import vulhub_import
-from auth import Principal, ensure_bootstrap_key, hash_api_key, require_principal
+from auth import (
+    Principal,
+    ensure_bootstrap_key,
+    generate_api_key,
+    hash_api_key,
+    require_principal,
+)
 from database import AgentDeployRefused, Database, ExtendRefused, StopDenied
 from orchestrator import Orchestrator
 from providers import (
@@ -4372,6 +4378,87 @@ def grant_binding(
     )
     return {"bound": True, "agent_name": req.agent_name, "stance": req.stance,
             "persistent": req.persistent}
+
+
+class AgentKeyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
+    stance: str = Field(max_length=32)
+
+    @field_validator("stance")
+    @classmethod
+    def _known_stance(cls, value: str) -> str:
+        if value not in bindings.STANCES:
+            raise ValueError(f"stance must be one of {sorted(bindings.STANCES)}")
+        return value
+
+
+@app.post("/arenas/{instance_id}/agent-keys", status_code=201)
+def create_arena_agent_key(
+    instance_id: str,
+    req: AgentKeyRequest,
+    principal: Principal = Depends(require_principal),
+):
+    """UX-07: mint a role=agent key and bind it to this arena in one stance.
+
+    Operator-only. The key is returned once and only its SHA-256 is stored
+    (ADR-0002). It can never carry operator authority, and it reaches only
+    arenas it is bound to (FR-04): this binding is per-arena, not persistent.
+    A name already used by any key is refused so bindings stay unambiguous.
+    """
+    _require_operator(principal)
+    record = db.get_deployment(instance_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    if record.get("status") != LabStatus.ACTIVE:
+        raise HTTPException(status_code=409, detail="agent keys can be created only for an active arena")
+    if db.api_keys_by_name(req.name):
+        raise HTTPException(status_code=409, detail="an API key with this name already exists")
+    key = generate_api_key()
+    db.create_api_key(hash_api_key(key), name=req.name, role="agent")
+    db.record_event(
+        instance_id, bindings.BINDING_GRANT,
+        {"agent_name": req.name, "stance": req.stance, "auto": False,
+         "granted_by": principal.name, "persistent": False},
+        actor=principal.name,
+    )
+    db.record_event(instance_id, "agent_key_created",
+                    {"agent_name": req.name, "stance": req.stance},
+                    actor=principal.name)
+    logger.info("Created agent key '%s' bound to %s (stance=%s) by '%s'",
+                req.name, instance_id, req.stance, principal.name)
+    return {"agent_name": req.name, "stance": req.stance, "role": "agent",
+            "api_key": key}
+
+
+@app.get("/arenas/{instance_id}/agent-connection/{agent_name}")
+def arena_agent_connection(
+    instance_id: str, agent_name: str, principal: Principal = Depends(require_principal)
+):
+    """UX-07: whether ``agent_name`` has reached this arena. Operator-only.
+
+    ``connected`` is the first ``agent_session`` event that agent recorded here;
+    ``key.last_used_at`` shows the gateway authenticated even before that."""
+    _require_operator(principal)
+    if not db.get_deployment(instance_id):
+        raise HTTPException(status_code=404, detail="Arena not found")
+    binding = bindings.binding_for(_arena_binding_events(instance_id), agent_name)
+    sessions = db.list_events(instance_id, limit=None, types=("agent_session",))
+    mine = [event for event in sessions if event.get("actor") == agent_name]
+    first = min(mine, key=lambda event: event.get("ts") or "") if mine else None
+    keys = db.api_keys_by_name(agent_name)
+    used = sorted((k["last_used_at"] for k in keys if k["last_used_at"]), reverse=True)
+    return {
+        "agent_name": agent_name,
+        "bound": binding is not None,
+        "stance": (binding or {}).get("stance"),
+        "connected": first is not None,
+        "session": ({"ts": first.get("ts"), "model": (first.get("payload") or {}).get("model"),
+                     "provider": (first.get("payload") or {}).get("provider")}
+                    if first else None),
+        "key": {"exists": bool(keys), "revoked": bool(keys) and all(k["revoked"] for k in keys),
+                "last_used_at": used[0] if used else None},
+    }
 
 
 @app.get("/arenas/{instance_id}/bindings")

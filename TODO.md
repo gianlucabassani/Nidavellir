@@ -331,7 +331,7 @@ each, each with a browser check.
   with evidence" offer a searchable picker of the arena's transactions/artifacts (digest
   paste stays as fallback); findings refresh with the live stream.
   **Accept:** confirm a finding with evidence without copying a digest.
-- [ ] **UX-07 — Connect an agent from the console.** Access tab creates a scoped agent key
+- [x] **UX-07 — Connect an agent from the console.** Access tab creates a scoped agent key
   (operator action, shown once), shows ready-to-copy MCP config for several clients, and a
   "waiting for agent → connected" indicator from the first `agent_session` event.
   Keeps harness neutrality and existing key/binding rules (FR-04).
