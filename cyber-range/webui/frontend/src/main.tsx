@@ -33,20 +33,30 @@ function workspaceFromUrl(): Workspace {
   return value === "benchmark" || value === "range" ? value : "research";
 }
 
-function readTheme(): Theme {
+// UX-08: an explicit choice wins; otherwise follow the system preference.
+function storedTheme(): Theme | null {
   try {
-    return localStorage.getItem("nidavellir-theme") === "night"
-      ? "night"
-      : "day";
+    const value = localStorage.getItem("nidavellir-theme");
+    return value === "night" || value === "day" ? value : null;
   } catch {
-    return "day";
+    return null;
   }
+}
+
+function systemTheme(): Theme {
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches
+    ? "night"
+    : "day";
+}
+
+function readTheme(): Theme {
+  return storedTheme() || systemTheme();
 }
 
 function App() {
   const [workspace, setWorkspace] = useState<Workspace>(workspaceFromUrl);
   const [, setRouteVersion] = useState(0);
-  const [theme, setTheme] = useState<Theme>(readTheme);
+  const [theme, setThemeState] = useState<Theme>(readTheme);
   const heading = useRef<HTMLElement>(null);
   const username =
     document.getElementById("root")?.dataset.username || "Operator";
@@ -142,12 +152,25 @@ function App() {
   ];
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
+  }, [theme]);
+  useEffect(() => {
+    // Follow system changes until the operator picks a theme explicitly.
+    const media = window.matchMedia?.("(prefers-color-scheme: dark)");
+    if (!media) return;
+    const follow = () => {
+      if (!storedTheme()) setThemeState(systemTheme());
+    };
+    media.addEventListener("change", follow);
+    return () => media.removeEventListener("change", follow);
+  }, []);
+  function setTheme(next: Theme) {
+    setThemeState(next);
     try {
-      localStorage.setItem("nidavellir-theme", theme);
+      localStorage.setItem("nidavellir-theme", next);
     } catch {
       /* storage may be unavailable */
     }
-  }, [theme]);
+  }
   useEffect(() => {
     let lastPath = window.location.pathname;
     const onPop = () => {
@@ -238,6 +261,8 @@ function App() {
                 ))}
               </div>
             </details>
+            {/* UX-08: the assistant launcher docks here instead of floating over content. */}
+            <div id="assistant-slot" className="assistant-slot" />
             <button
               className="theme-toggle"
               type="button"

@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='anvil_logo.png') }}">
   <script>
     // Same day/night preference the console stores; storage may be unavailable.
-    try { if (localStorage.getItem("nidavellir-theme") === "night") document.documentElement.dataset.theme = "night"; } catch (e) {}
+    try { var t = localStorage.getItem("nidavellir-theme"); if (t === "night" || (!t && window.matchMedia("(prefers-color-scheme: dark)").matches)) document.documentElement.dataset.theme = "night"; } catch (e) {}
   </script>
   <style>
     /* Forge sign-in: navy plate on the warm stone page, brass accents. */

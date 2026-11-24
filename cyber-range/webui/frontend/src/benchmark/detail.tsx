@@ -65,10 +65,10 @@ export function EvaluationDetail({ id }: { id: string }) {
       <div className="arena-return">
         <BackLink href="/console?workspace=benchmark" label="Benchmark" />
         <span>/</span>
-        <span>Evaluation {value.id.slice(0, 8)}</span>
+        <span>Evaluation {value.id}</span>
       </div>
       <PageHead
-        overline={`BENCHMARK / EVALUATION ${value.id.slice(0, 8)}`}
+        overline={`BENCHMARK / EVALUATION ${value.id}`}
         title={
           value.state === "queued" || value.state === "running"
             ? "Evaluation progress"

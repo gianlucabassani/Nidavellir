@@ -1,12 +1,12 @@
+.assistant-slot {
+  display: contents;
+}
 .assistant-launcher {
-  position: fixed;
-  right: 24px;
-  bottom: 18px;
-  z-index: var(--z-assistant);
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 11px 16px;
+  padding: 9px 12px;
   border: 1px solid #ac8b51;
   border-radius: 4px;
   background: #16243a;
@@ -41,11 +41,11 @@
 .research-assistant {
   position: fixed;
   right: 24px;
-  bottom: 74px;
+  top: 104px;
   z-index: var(--z-assistant-panel);
   width: 400px;
   max-width: calc(100vw - 24px);
-  max-height: min(720px, calc(100dvh - 110px));
+  max-height: min(720px, calc(100dvh - 124px));
   display: flex;
   flex-direction: column;
   border: 1px solid #8c7754;
@@ -215,15 +215,11 @@
   }
 }
 @media (max-width: 600px) {
-  .assistant-launcher {
-    bottom: 12px;
-    right: 12px;
-  }
   .research-assistant {
     right: 12px;
-    bottom: 68px;
+    top: 84px;
     width: calc(100vw - 24px);
-    max-height: calc(100dvh - 92px);
+    max-height: calc(100dvh - 96px);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -241,4 +237,20 @@
   .assistant-launcher-label {
     display: none;
   }
+}
+/* UX-08: docked in the header, the launcher is a compact icon at every width;
+   its accessible name and tooltip still say "Research assistant". */
+.assistant-launcher {
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+}
+.assistant-launcher-label {
+  display: none;
+}
+.assistant-launcher .assistant-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
 }

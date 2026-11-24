@@ -959,8 +959,11 @@ summary:focus-visible {
 }
 .arena-return {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 4px 10px;
+  min-width: 0;
+  overflow-wrap: anywhere;
   margin-bottom: 19px;
   color: var(--subtle);
   font-size: 12px;
@@ -5344,4 +5347,79 @@ body {
 .access-connect > .connect-advanced,
 .access-connect > .scenario-description {
   margin: 0 22px 18px;
+}
+
+/* UX-08: one styled <select> and <details> across the console. :where() keeps
+   specificity at zero so component styles still win. */
+:where(select) {
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background-color: var(--surface);
+  color: var(--ink);
+}
+/* Chevron as longhands at (0,1,1) after every component rule, so a component's
+   `background` shorthand keeps its colour but cannot drop the arrow. */
+:root select {
+  appearance: none;
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%238a8f99' stroke-width='1.6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 12px 8px;
+}
+:where(select):hover {
+  border-color: var(--accent);
+}
+:where(select):focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+:where(select):disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+:where(details:not(.tools-menu, .profile, .forge-trace, .forge-lifecycle-menu))
+  > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--accent);
+  font-weight: 600;
+}
+:where(details:not(.tools-menu, .profile, .forge-trace, .forge-lifecycle-menu))
+  > summary::-webkit-details-marker {
+  display: none;
+}
+:where(details:not(.tools-menu, .profile, .forge-trace, .forge-lifecycle-menu))
+  > summary::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 6px solid currentColor;
+  transition: transform 120ms ease-out;
+}
+:where(
+    details[open]:not(
+        .tools-menu,
+        .profile,
+        .forge-trace,
+        .forge-lifecycle-menu
+      )
+  )
+  > summary::before {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(details) > summary::before {
+    transition: none;
+  }
+}
+.page-head .eyebrow {
+  overflow-wrap: anywhere;
 }
