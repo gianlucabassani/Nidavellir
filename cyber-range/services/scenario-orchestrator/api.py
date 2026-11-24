@@ -68,7 +68,9 @@ import source_bundle
 import validators
 import validation_evidence
 import evidence_review
+import actions
 import spans
+from actions import action
 import vulhub_import
 from auth import (
     Principal,
@@ -133,35 +135,11 @@ async def system_stop_denied_handler(_request: Request, exc: StopDenied):
                     media_type="application/json")
 
 
-def _budgeted_path(path: str, method: str) -> str | None:
-    """Only target-affecting writes consume an action; control and reads do not."""
-    if method != "POST":
-        return None
-    parts = path.strip("/").split("/")
-    if len(parts) < 3 or parts[0] != "arenas":
-        return None
-    suffix = "/".join(parts[2:])
-    if (suffix in {"reset", "destroy", "stop", "resume"}
-            or suffix.startswith("bindings/") or suffix == "bindings"
-            or suffix.endswith("/cancel")):
-        return None
-    charged = ("exec", "mitm/observe", "browser/visit", "http/request",
-               "files/upload", "files/download", "findings",
-               "findings/manual", "setup/step", "setup/upload", "setup/run",
-               "setup/propose", "setup/generate-proposals")
-    if (suffix in charged
-            or (suffix.startswith("http/transactions/") and suffix.endswith("/replay"))
-            or (suffix.startswith("setup/proposals/") and suffix.endswith("/approve"))
-            or (suffix.startswith("workspaces/") and suffix.endswith("/patch-artifacts"))
-            or (suffix.startswith("findings/") and suffix.endswith("/verify"))):
-        return parts[1]
-    return None
-
-
 @app.middleware("http")
 async def durable_budget_boundary(request: Request, call_next):
-    arena_id = _budgeted_path(request.url.path, request.method)
-    if arena_id is None:
+    """OBS-02: declared actions (``@action``) run through ``actions.run``."""
+    found = actions.match(app, request.scope)
+    if found is None:
         if (request.method == "POST" and request.url.path.endswith("/poc-jobs")
                 and (request.headers.get("X-Token-Budget")
                      or request.headers.get("X-Cost-Budget"))):
@@ -169,62 +147,12 @@ async def durable_budget_boundary(request: Request, call_next):
                 "detail": "token/cost caps cannot be enforced for this driver"
             }), status_code=422, media_type="application/json")
         return await call_next(request)
-    from auth import hash_api_key
-
-    key = request.headers.get("X-API-Key")
-    principal = db.get_api_key(hash_api_key(key)) if key else None
-    if principal is None:  # leave authentication error to the normal dependency
-        return await call_next(request)
-    arena = db.get_deployment(arena_id)
-    if arena is None or arena.get("status") != "active":
-        # Preserve the existing route's 404/409 response. The reservation gate
-        # repeats this check transactionally for an arena that changes state.
-        return await call_next(request)
-    if principal["role"] == "agent":
-        suffix = request.url.path.partition(f"/arenas/{arena_id}/")[2]
-        if suffix == "findings/manual" or suffix.endswith("/verify"):
-            return await call_next(request)
-        capability = (bindings.CAP_OBSERVE if suffix == "mitm/observe" else
-                      bindings.CAP_SETUP if suffix.startswith("setup/") else
-                      bindings.CAP_WORKSPACE if suffix.startswith("workspaces/") else
-                      bindings.CAP_EXEC)
-        try:
-            _require_binding(Principal(principal["name"], "agent"), arena_id, capability)
-        except HTTPException:
-            return await call_next(request)
-    if request.headers.get("X-Token-Budget") or request.headers.get("X-Cost-Budget"):
-        return Response(
-            content=json.dumps({"detail": "token/cost caps cannot be enforced for this driver"}),
-            status_code=422, media_type="application/json",
-        )
-    body = await request.body()
-    digest = hashlib.sha256(request.method.encode() + request.url.path.encode() + body).hexdigest()
-    action_key = request.headers.get("X-Action-Key") or str(uuid.uuid4())
-    if not re.fullmatch(r"[A-Za-z0-9._:-]{8,128}", action_key):
-        return Response(content='{"detail":"invalid X-Action-Key"}', status_code=422,
-                        media_type="application/json")
-    try:
-        action_id, deadline = db.reserve_budget_action(
-            arena_id, key=action_key, digest=digest,
-            kind=request.url.path.partition(f"/arenas/{arena_id}/")[2],
-            actor=principal["name"],
-        )
-    except ValueError as exc:
-        detail = str(exc)
-        code = 429 if "budget exhausted" in detail else 423
-        return Response(content=json.dumps({"detail": detail}), status_code=code,
-                        media_type="application/json")
-    request.state.budget_deadline = deadline
-    try:
-        response = await call_next(request)
-    except Exception:
-        db.settle_budget_action(action_id, outcome="unknown")
-        raise
-    outcome = ("spent" if response.status_code < 400 else
-               "released" if response.status_code < 500 else "unknown")
-    db.settle_budget_action(action_id, outcome=outcome)
-    response.headers["X-Action-ID"] = action_id
-    return response
+    spec, params = found
+    return await actions.run(
+        request, call_next, spec=spec, arena_id=params["instance_id"], db=db,
+        authorize=lambda name, arena, capability: _require_binding(
+            Principal(name, "agent"), arena, capability),
+    )
 
 RATE_LIMIT_DEPLOY = os.getenv("RATE_LIMIT_DEPLOY", "10/minute")
 RATE_LIMIT_DESTROY = os.getenv("RATE_LIMIT_DESTROY", "30/minute")
@@ -2654,6 +2582,7 @@ def _run_arena_browser(
 
 
 @app.post("/arenas/{instance_id}/browser/visit")
+@action("browser/visit")
 @limiter.limit(RATE_LIMIT_EXEC)
 def browser_visit(
     request: Request,
@@ -2690,6 +2619,7 @@ def browser_visit(
 
 
 @app.post("/arenas/{instance_id}/http/request")
+@action("http/request")
 @limiter.limit(RATE_LIMIT_EXEC)
 def arena_http_request(
     request: Request,
@@ -2960,6 +2890,7 @@ class HttpReplayRequest(BaseModel):
 
 
 @app.post("/arenas/{instance_id}/http/transactions/{digest}/replay")
+@action("http/replay")
 @limiter.limit(RATE_LIMIT_EXEC)
 def replay_arena_http_transaction(
     request: Request,
@@ -3004,6 +2935,7 @@ def replay_arena_http_transaction(
 
 
 @app.post("/arenas/{instance_id}/files/upload")
+@action("files/upload")
 @limiter.limit(RATE_LIMIT_EXEC)
 def upload_arena_file(
     request: Request,
@@ -3042,6 +2974,7 @@ def upload_arena_file(
 
 
 @app.post("/arenas/{instance_id}/files/download")
+@action("files/download")
 @limiter.limit(RATE_LIMIT_EXEC)
 def download_arena_file(
     request: Request,
@@ -3090,6 +3023,7 @@ def download_arena_file(
 
 
 @app.post("/arenas/{instance_id}/exec")
+@action("exec")
 @limiter.limit(RATE_LIMIT_EXEC)
 def exec_in_arena(
     request: Request,
@@ -3193,6 +3127,7 @@ class MitmObserveRequest(BaseModel):
 
 
 @app.post("/arenas/{instance_id}/mitm/observe")
+@action("mitm/observe", capability=bindings.CAP_OBSERVE)
 @limiter.limit(RATE_LIMIT_EXEC)
 def mitm_observe(
     request: Request,
@@ -5123,6 +5058,7 @@ def _complete_workspace_diff(
 
 
 @app.post("/arenas/{instance_id}/workspaces/{workspace_node}/patch-artifacts")
+@action("workspace/patch-artifact", capability=bindings.CAP_WORKSPACE)
 def export_workspace_patch(
     instance_id: str,
     workspace_node: str,
@@ -5534,6 +5470,7 @@ class SetupStepRequest(BaseModel):
 
 
 @app.post("/arenas/{instance_id}/setup/step")
+@action("setup/step", capability=bindings.CAP_SETUP)
 def setup_step(
     instance_id: str,
     req: SetupStepRequest,
@@ -5591,6 +5528,7 @@ class SetupProposeRequest(BaseModel):
 
 
 @app.post("/arenas/{instance_id}/setup/propose")
+@action("setup/propose", capability=bindings.CAP_SETUP)
 def setup_propose(
     instance_id: str,
     req: SetupProposeRequest,
@@ -5629,6 +5567,7 @@ def setup_propose(
 
 
 @app.post("/arenas/{instance_id}/setup/generate-proposals")
+@action("setup/generate-proposals", capability=bindings.CAP_SETUP)
 def setup_generate_proposals(
     instance_id: str, principal: Principal = Depends(require_principal)
 ):
@@ -5761,6 +5700,7 @@ def setup_proposals_list(
 
 
 @app.post("/arenas/{instance_id}/setup/proposals/{step_id}/approve")
+@action("setup/approve", capability=bindings.CAP_SETUP)
 def setup_proposal_approve(
     instance_id: str, step_id: str, principal: Principal = Depends(require_principal)
 ):
@@ -5823,6 +5763,7 @@ class SetupRunRequest(BaseModel):
 
 
 @app.post("/arenas/{instance_id}/setup/run")
+@action("setup/run", capability=bindings.CAP_SETUP)
 def setup_run(
     instance_id: str,
     req: SetupRunRequest,
@@ -5859,6 +5800,7 @@ class SetupUploadRequest(BaseModel):
 
 
 @app.post("/arenas/{instance_id}/setup/upload")
+@action("setup/upload", capability=bindings.CAP_SETUP)
 def setup_upload(
     instance_id: str,
     req: SetupUploadRequest,
@@ -6529,6 +6471,7 @@ class FindingRequest(BaseModel):
 
 
 @app.post("/arenas/{instance_id}/findings")
+@action("findings")
 def report_finding(
     instance_id: str,
     req: FindingRequest,
@@ -6751,6 +6694,7 @@ def _check_causality_refs(principal: Principal, instance_id: str,
 
 
 @app.post("/arenas/{instance_id}/findings/manual")
+@action("findings/manual", operator_only=True)
 def add_manual_finding(
     instance_id: str,
     req: FindingRequest,
@@ -6816,6 +6760,7 @@ def review_finding(instance_id: str, finding_id: str,
 
 
 @app.post("/arenas/{instance_id}/findings/{finding_id}/verify")
+@action("findings/verify", operator_only=True)
 def verify_finding(
     instance_id: str,
     finding_id: str,

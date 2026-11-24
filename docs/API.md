@@ -21,6 +21,12 @@ account. PoC jobs hold the reservation until completion; a queued cancellation
 releases it, and an interrupted execution retains a charge. A reset replacement
 inherits the source allowance.
 
+Which routes reserve is declared on the route (`@action` in `actions.py`, OBS-02),
+not inferred from the URL. Every call to a declared action by an authenticated key
+also records one span (`GET /arenas/{id}/spans`), including refused calls: status
+`budget_refused` for an exhausted or stopped budget, `denied` for 401/403/423, and
+`error` for other failures.
+
 Operators can `POST /arenas/{id}/budget/policy` with `action_cap`, ISO
 `deadline` and `reason`, `POST /arenas/{id}/stop` or `/resume` with `reason`
 and an `idempotency_key`.
