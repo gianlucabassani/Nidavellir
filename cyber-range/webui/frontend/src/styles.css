@@ -5291,3 +5291,57 @@ body {
 .evidence-picker-extra code {
   overflow-wrap: anywhere;
 }
+
+/* UX-07: connect an agent. */
+.connect-flow {
+  display: grid;
+  gap: 12px;
+}
+.connect-key {
+  padding: 10px 12px;
+  border-left: 4px solid var(--warning);
+  background: var(--warning-soft);
+  color: var(--ink, inherit);
+}
+.connect-key p {
+  margin: 4px 0 8px;
+}
+.connect-clients [role="tablist"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.connect-clients [role="tab"] {
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.connect-clients [role="tab"][aria-selected="true"] {
+  border-color: var(--warning);
+  font-weight: 600;
+}
+.connect-clients .copy-field code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.connect-indicator {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+}
+.connect-connected {
+  border-color: var(--success);
+}
+.connect-advanced {
+  margin-top: 12px;
+}
+.access-connect > .connect-flow,
+.access-connect > .connect-form,
+.access-connect > .connect-advanced,
+.access-connect > .scenario-description {
+  margin: 0 22px 18px;
+}

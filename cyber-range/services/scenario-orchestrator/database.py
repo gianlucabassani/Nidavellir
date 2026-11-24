@@ -2033,6 +2033,15 @@ class Database:
         with self._session() as session:
             return len(session.scalars(select(ApiKey).where(ApiKey.revoked == 0)).all())
 
+    def api_keys_by_name(self, name):
+        """Key metadata (never the hash) for every key with this name."""
+        with self._session() as session:
+            rows = session.scalars(select(ApiKey).where(ApiKey.name == name)).all()
+            return [{"name": key.name, "role": key.role,
+                     "created_at": _stringify(key.created_at),
+                     "last_used_at": _stringify(key.last_used_at),
+                     "revoked": bool(key.revoked)} for key in rows]
+
     def revoke_api_keys_by_name(self, name):
         """Revoke (not delete: keep the audit trail) all keys with this name."""
         with self._session() as session:
