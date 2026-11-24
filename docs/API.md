@@ -737,6 +737,14 @@ lifecycle tool. Operators/admins are never bound and bypass every check.
 - `DELETE /arenas/{id}/bindings/{agent_name}` → `{ "revoked": true|false }`.
   Operator-only; idempotent. This is the **kill** — the binding is torn down.
 
+**Spans (OBS-01, ADR-0018).** `GET /arenas/{id}/spans?after_id=&limit=` →
+`{ "spans": [...], "next_after_id" }`, oldest first. One span per action: trace and
+span IDs, actor and actor kind, kind (`tool` / `model` / `lifecycle` / `validation` /
+`agent`), timings, status (`ok` / `error` / `denied` / `budget_refused`), digests of the
+full input and output, previews of at most 2 KiB redacted at write time, and `attrs`.
+Operators read all spans; an agent key must be bound to the arena and reads only
+`agent`-visibility spans (validation spans are always operator-only).
+
 **Console agent keys (UX-07).** An operator connects an agent without a shell:
 - `POST /arenas/{id}/agent-keys` `{ "name", "stance" }` → `201 { "agent_name",
   "stance", "role": "agent", "api_key" }`. Operator-only; active arenas only
