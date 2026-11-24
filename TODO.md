@@ -351,7 +351,7 @@ why did it stop. Today the gateway JSONL trace never reaches the UI, the arena s
 event types with no payload, and "live" is a 2 s BFF poll plus full projection refetch.
 Order: data model first, then views.
 
-- [ ] **OBS-01 — Span model (Fable FR-10).** `spans` table (trace/parent IDs, arena/
+- [x] **OBS-01 — Span model (Fable FR-10).** `spans` table (trace/parent IDs, arena/
   evaluation/trial links, actor kind, tool, timings, status incl. denied/budget_refused,
   input/output digests, redacted previews, attrs incl. tokens/cost); operator-visibility
   for validator/truth spans. ADR required. **Accept:** as FR-10 in the review.

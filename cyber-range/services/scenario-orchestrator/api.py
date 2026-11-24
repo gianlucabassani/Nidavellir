@@ -68,6 +68,7 @@ import source_bundle
 import validators
 import validation_evidence
 import evidence_review
+import spans
 import vulhub_import
 from auth import (
     Principal,
@@ -3259,6 +3260,26 @@ def list_events(limit: int = 100, type: str | None = None,
     limit = max(1, min(limit, EVENTS_MAX_LIMIT))
     types = [type] if type else None
     return {"events": db.list_events(limit=limit, types=types)}
+
+
+@app.get("/arenas/{instance_id}/spans")
+def list_arena_spans(
+    instance_id: str,
+    after_id: int | None = Query(default=None, ge=0),
+    limit: int = Query(default=500, ge=1, le=5000),
+    principal: Principal = Depends(require_principal),
+):
+    """The arena's spans oldest-first after ``after_id`` (ADR-0018, OBS-01).
+
+    Operators read every span. An agent key must be bound to the arena (FR-04)
+    and reads only ``agent``-visibility spans; validation and other
+    operator-only spans are never returned to it."""
+    if not db.get_deployment(instance_id):
+        raise HTTPException(status_code=404, detail="Arena not found")
+    _require_arena_member(principal, instance_id)
+    rows = db.list_spans(arena_id=instance_id, after_id=after_id, limit=limit,
+                         visibility=spans.visible_to(principal.role))
+    return {"spans": rows, "next_after_id": rows[-1]["id"] if rows else after_id}
 
 
 @app.get("/deployments/{instance_id}/events")

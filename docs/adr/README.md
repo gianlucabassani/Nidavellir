@@ -32,6 +32,12 @@ contributors understand the reasoning instead of re-litigating it.
 | [0010](0010-eval-layer.md) | Eval records/export, reference harness, batch suite, and replay | Accepted |
 | [0011](0011-research-sessions-change-intelligence.md) | Reproducible research sessions and change intelligence | Accepted |
 | [0012](0012-gui-first-product-model.md) | GUI-first product model and console information architecture | Proposed |
+| [0013](0013-replacement-reset-lifecycle.md) | Replacement reset with immutable recipes and observed equivalence | Accepted (2026-09-21) |
+| [0014](0014-confined-poc-execution.md) | Worker-owned networkless PoC execution with fixed-target relays | Accepted (2026-09-22) |
+| [0015](0015-durable-budgets-stop.md) | Orchestrator-owned action budgets and stop gates | Accepted; NV-04 acceptance gates passed 2026-09-23 |
+| [0016](0016-scoped-research-forwards.md) | Authenticated fixed-destination research forwards | Accepted; NV-05 acceptance gates passed 2026-09-23 |
+| [0017](0017-react-operator-console-rendering.md) | React rendering for the operator console | Accepted — default cutover approved 2026-10-07; verification follow-ups open |
+| [0018](0018-span-model.md) | Span model for agent and operator actions | Accepted |
 
 > **Product framing:** the 2026-06-13 pivot established the bring-your-own-agent
 > arena. The 2026-08-10 reorganization (ADR-0012) makes the GUI-driven
