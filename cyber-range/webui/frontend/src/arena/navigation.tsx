@@ -16,6 +16,7 @@ const categories = [
     mark: "⇄",
     items: [
       { tab: "http", label: "HTTP capture & replay" },
+      { tab: "terminal", label: "Shell & logs" },
       { tab: "browser", label: "Browser" },
       { tab: "poc", label: "Confined PoC" },
       { tab: "transfer", label: "File transfer" },

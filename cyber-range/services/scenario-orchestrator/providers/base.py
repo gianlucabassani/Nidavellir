@@ -72,6 +72,16 @@ class RangeProvider(ABC):
             f"the {self.name!r} provider does not support exec_in_node yet"
         )
 
+    def node_logs(self, instance_id: str, node: str, *, tail: int = 200,
+                  since: float | None = None) -> dict:
+        """The last ``tail`` log lines of one arena node, optionally only those
+        after ``since`` (epoch seconds). Result contract:
+            {"success": True, "lines": [{"ts": str, "text": str}]}
+          | {"success": False, "error": "..."}"""
+        raise NotImplementedError(
+            f"the {self.name!r} provider does not support node logs yet"
+        )
+
     def set_node_egress(self, instance_id: str, node: str, open: bool) -> dict:
         """Open or close a node's internet egress during the SUT setup phase
         (the configurator capability, ADR-0007 / P2-10). Opening lets the node

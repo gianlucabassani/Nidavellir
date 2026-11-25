@@ -9,6 +9,7 @@ import hashlib
 import logging
 import os
 import time
+from datetime import datetime, timezone
 
 import deploy_progress
 
@@ -105,6 +106,16 @@ class MockProvider(RangeProvider):
             "stdout": f"[mock {node}] $ {command}\n(simulated; MOCK_MODE)\n",
             "stderr": "",
         }
+
+    def node_logs(self, instance_id, node, *, tail=200, since=None):
+        # A simulated node has no process output; three stable lines per
+        # minute make the tail viewer demoable without pretending otherwise.
+        now = int(time.time())
+        start = int(since) + 1 if since else now - 600
+        lines = [{"ts": datetime.fromtimestamp(t, timezone.utc).isoformat(),
+                  "text": f"[mock {node}] heartbeat (simulated; MOCK_MODE)"}
+                 for t in range(start - start % 20 + 20, now + 1, 20)]
+        return {"success": True, "lines": lines[-tail:]}
 
     def set_node_egress(self, instance_id, node, open):
         logger.info(f"[{instance_id}] 🎭 SIMULATING setup egress {'open' if open else 'close'} on {node}")

@@ -2779,3 +2779,24 @@ def test_benchmark_preflight_projects_suite_limits_without_build_secrets(client,
     assert selected["action_cap"] == 12
     assert selected["deadline_seconds"] == 600
     assert b"never-export" not in response.data
+
+
+def test_console_node_logs_proxy_keeps_service_status_and_quotes_node(client, monkeypatch):
+    """UX-13: the log tail passes tail/since through and keeps the API's own
+    status (409 inactive, 403 non-operator) instead of a generic 503."""
+    import app as webui_module
+
+    calls = []
+
+    def fake(path, timeout=10):
+        calls.append(path)
+        return ({"error": "Arena is 'destroyed', not active"}, 409) if "dead" in path \
+            else ({"node": "victim", "lines": []}, 200)
+
+    monkeypatch.setattr(webui_module, "_api_get_status", fake)
+    assert _login(client).status_code == 302
+    ok = client.get("/api/console/arenas/a1/nodes/vic tim/logs?tail=50&since=17")
+    assert ok.status_code == 200
+    assert calls[-1] == "/arenas/a1/nodes/vic%20tim/logs?tail=50&since=17"
+    dead = client.get("/api/console/arenas/dead/nodes/victim/logs")
+    assert dead.status_code == 409 and "not active" in dead.get_json()["error"]

@@ -14,6 +14,7 @@ import {
 import { PocWorkbench } from "./poc";
 import { FindingsWorkbench } from "./findings";
 import { HttpWorkbench } from "./http";
+import { TerminalWorkbench } from "./terminal";
 import { EvidenceWorkbench } from "./evidence";
 import { SetupWorkbench } from "./setup";
 import { AgentAccess } from "./access";
@@ -254,6 +255,8 @@ export function ArenaWorkspace({ id }: { id: string }) {
               <SetupWorkbench arena={value} compactFlow />
             ) : tab === "http" ? (
               <HttpWorkbench arena={value} />
+            ) : tab === "terminal" ? (
+              <TerminalWorkbench arena={value} />
             ) : tab === "poc" ? (
               <PocWorkbench arena={value} />
             ) : tab === "findings" ? (

@@ -2143,6 +2143,27 @@ class DockerLocalProvider(RangeProvider):
             "stderr": self._decode(stderr),
         }
 
+    LOG_LINE_CAP = 4096
+
+    def node_logs(self, instance_id, node, *, tail=200, since=None):
+        container = self._find_node_container(instance_id, node)
+        if container is None:
+            return {"success": False, "error": f"node {node!r} not found in arena {instance_id}"}
+        try:
+            kwargs = {"tail": int(tail), "timestamps": True}
+            if since:
+                kwargs["since"] = int(since) + 1  # whole seconds; never repeat the last line
+            raw = container.logs(**kwargs)
+        except Exception as e:
+            logger.error(f"[{instance_id}] logs of {node} failed: {e}")
+            return {"success": False, "error": str(e)}
+        lines = []
+        text = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw or "")
+        for line in text.splitlines()[-int(tail):]:
+            ts, _, text = line.partition(" ")
+            lines.append({"ts": ts, "text": text[: self.LOG_LINE_CAP]})
+        return {"success": True, "lines": lines[-int(tail):]}
+
     @staticmethod
     def _validate_workspace_path(path: str | None) -> str | None:
         """Validate a caller-supplied pathspec without resolving it on the host.
