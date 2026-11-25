@@ -693,6 +693,34 @@ def test_console_evaluation_projection_exposes_results_without_private_trial_dat
     assert b"secret-validator" not in response.data
 
 
+def test_console_evaluation_dashboard_routes_proxy_compare_history_and_usage(client, monkeypatch):
+    """UX-11/12: per-trial usage passes through; compare and history proxy the
+    orchestrator with quoted parameters; the console pages are served."""
+    import app as webui_module
+
+    calls = []
+    record = {"id": "eval-1", "state": "complete", "suite_id": "suite-1",
+              "runs": [{"id": "run-1", "side": "baseline", "challenge_id": "c"}],
+              "trials": [{"id": "t1", "run_id": "run-1", "seed": 1, "state": "completed",
+                          "usage": {"actions": 4, "tokens": None}}]}
+
+    def fake(path, timeout=5):
+        calls.append(path)
+        return (record if path == "/evaluations/eval-1" else {"ok": path}), True
+
+    monkeypatch.setattr(webui_module, "_api_get", fake)
+    assert _login(client).status_code == 302
+    trial = client.get("/api/console/evaluations/eval-1").get_json()["trials"][0]
+    assert trial["actions"] == 4 and trial["tokens"] is None
+    assert client.get("/api/console/evaluations/eval-1/compare?a=t1").status_code == 400
+    assert client.get("/api/console/evaluations/eval-1/compare?a=t%2F1&b=t2").status_code == 200
+    assert calls[-1] == "/evaluations/eval-1/compare?a=t%2F1&b=t2"
+    assert client.get("/api/console/eval-suites/suite-1/history").status_code == 200
+    assert calls[-1] == "/eval-suites/suite-1/history"
+    for page in ("/console/evaluations/eval-1/compare", "/console/suites/suite-1/history"):
+        assert client.get(page).status_code != 404  # 503 without a built bundle (CI)
+
+
 def test_console_evaluation_create_validates_input_and_uses_csrf(client, monkeypatch):
     import app as webui_module
 

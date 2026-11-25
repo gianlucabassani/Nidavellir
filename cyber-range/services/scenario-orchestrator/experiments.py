@@ -400,3 +400,135 @@ def compare(record):
             "verified_difference_mean": sum(differences) / len(differences)
             if differences else None, "verified_difference_range":
             [min(differences), max(differences)] if differences else None}
+
+
+# --- UX-11/12: dashboard, history and trial comparison --------------------------
+
+
+def trial_passed(trial):
+    """A completed trial's verdict (True/False), else None: a trial that did not
+    complete has no verdict, never a failing one."""
+    if not trial or trial.get("state") != "completed" or not trial.get("result"):
+        return None
+    meta = (trial["result"].get("export") or {}).get("metadata") or {}
+    value = meta.get("pass@1")
+    return None if value is None else bool(value)
+
+
+def trial_usage(spans_by_arena):
+    """Per arena: agent actions (tool spans) and model tokens, None when the run
+    reported no model usage (unmeasured is not zero)."""
+    usage = {}
+    for arena_id, rows in spans_by_arena.items():
+        actions, tokens, measured = 0, 0, False
+        for row in rows:
+            if row.get("kind") == "tool" and row.get("actor_kind") == "agent":
+                actions += 1
+            elif row.get("kind") == "model":
+                attrs = row.get("attrs") or {}
+                for key in ("gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens"):
+                    if isinstance(attrs.get(key), (int, float)):
+                        tokens += int(attrs[key])
+                        measured = True
+        usage[arena_id] = {"actions": actions, "tokens": tokens if measured else None}
+    return usage
+
+
+def _step(row, index):
+    attrs = row.get("attrs") or {}
+    return {"index": index, "span_id": row.get("span_id"), "name": row.get("name"),
+            "status": row.get("status"), "input_digest": row.get("input_digest"),
+            "input_preview": row.get("input_preview"),
+            "method": attrs.get("http.method"), "route": attrs.get("http.route"),
+            "status_code": attrs.get("http.status_code"),
+            "transaction_digest": attrs.get("nv.transaction_digest"),
+            "finding_id": attrs.get("nv.finding_id"),
+            "started_at": row.get("started_at"), "duration_ms": row.get("duration_ms")}
+
+
+def trial_steps(rows):
+    """The agent's actions in order: the steps two trials are aligned on."""
+    tools = [row for row in rows if row.get("kind") == "tool"
+             and row.get("actor_kind") == "agent"]
+    return [_step(row, index) for index, row in enumerate(tools)]
+
+
+def align(steps_a, steps_b):
+    """Align two trials step by step. A step matches when the same tool was
+    called with the same input; ``first_divergence`` is the first step that does
+    not (None when both runs are identical). ``only_in_a``/``only_in_b`` list the
+    steps whose call never occurs anywhere in the other run."""
+    def key(step):
+        return (step["name"], step["input_digest"])
+
+    rows = []
+    first = None
+    for index in range(max(len(steps_a), len(steps_b))):
+        a = steps_a[index] if index < len(steps_a) else None
+        b = steps_b[index] if index < len(steps_b) else None
+        if a and b and key(a) == key(b):
+            relation = "same"
+        elif a and b and a["name"] == b["name"]:
+            relation = "different_input"
+        elif a and b:
+            relation = "different_tool"
+        else:
+            relation = "only_a" if a else "only_b"
+        if relation != "same" and first is None:
+            first = index
+        rows.append({"index": index, "relation": relation, "a": a, "b": b})
+    keys_a, keys_b = {key(s) for s in steps_a}, {key(s) for s in steps_b}
+    tools_a, tools_b = {s["name"] for s in steps_a}, {s["name"] for s in steps_b}
+    return {"steps": rows, "first_divergence": first,
+            "only_in_a": [s["index"] for s in steps_a if key(s) not in keys_b],
+            "only_in_b": [s["index"] for s in steps_b if key(s) not in keys_a],
+            "tools_only_in_a": sorted(tools_a - tools_b),
+            "tools_only_in_b": sorted(tools_b - tools_a)}
+
+
+def _scope(label):
+    """Series scope: held-out material is never mixed with anything else."""
+    return "held-out" if label == "held-out" else "calibration"
+
+
+def history(records):
+    """Outcome over time per (agent build, evidence scope) across a suite's
+    evaluations, oldest first, plus flaky cells: one build, one challenge, one
+    seed, different verdicts. Infrastructure failures are counted, never scored."""
+    series, cells = {}, {}
+    for record in sorted(records, key=lambda r: str(r.get("created_at") or "")):
+        runs = {run["id"]: run for run in record.get("runs") or []}
+        labels = {c["id"]: c.get("label") for c in record.get("challenges") or []}
+        points = {}
+        for trial in record.get("trials") or []:
+            run = runs.get(trial.get("run_id"))
+            if not run:
+                continue
+            scope = _scope(labels.get(run["challenge_id"]))
+            point = points.setdefault((run["build_id"], scope), {
+                "evaluation_id": record["id"], "at": record.get("created_at"),
+                "side": run.get("side"), "completed": 0, "passed": 0,
+                "infrastructure_failures": 0, "agent_failures": 0})
+            state = trial.get("state")
+            if state == "infrastructure_failure":
+                point["infrastructure_failures"] += 1
+            elif state == "agent_failure":
+                point["agent_failures"] += 1
+            verdict = trial_passed(trial)
+            if verdict is not None:
+                point["completed"] += 1
+                point["passed"] += verdict
+                cells.setdefault((run["build_id"], run["challenge_id"], trial["seed"]),
+                                 []).append({"evaluation_id": record["id"],
+                                             "passed": verdict})
+        for (build_id, scope), point in points.items():
+            point["pass_rate"] = (point["passed"] / point["completed"]
+                                  if point["completed"] else None)
+            series.setdefault((build_id, scope), []).append(point)
+    flaky = [{"build_id": build_id, "challenge_id": challenge_id, "seed": seed,
+              "verdicts": verdicts}
+             for (build_id, challenge_id, seed), verdicts in sorted(cells.items())
+             if len({v["passed"] for v in verdicts}) > 1]
+    return {"series": [{"build_id": build_id, "scope": scope, "points": points}
+                       for (build_id, scope), points in sorted(series.items())],
+            "flaky": flaky}

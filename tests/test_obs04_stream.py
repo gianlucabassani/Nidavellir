@@ -125,7 +125,7 @@ def test_cursor_parsing():
 
 def test_inserts_publish_after_commit_only(monkeypatch):
     sent = []
-    monkeypatch.setattr(streams, "publish", lambda messages: sent.extend(messages))
+    monkeypatch.setattr(streams, "publish", lambda messages, evaluations=(): sent.extend(messages))
     db = Database()
     arena = active_arena()
     sent.clear()

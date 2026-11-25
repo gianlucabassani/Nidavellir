@@ -12,6 +12,8 @@ import { Benchmark } from "./benchmark";
 import { BenchmarkRegistry } from "./benchmark/registry";
 import { NewComparison } from "./benchmark/new";
 import { EvaluationDetail } from "./benchmark/detail";
+import { TrialCompare } from "./benchmark/compare";
+import { SuiteHistoryPage } from "./benchmark/history";
 import { Range } from "./range";
 import { NewArena } from "./range/new";
 import { ScenarioLibrary } from "./range/library";
@@ -101,17 +103,29 @@ function App() {
         window.location.pathname.slice("/console/research/campaigns/".length),
       )
     : null;
-  const evaluationId =
+  const evaluationPath =
     !newComparison &&
     window.location.pathname.startsWith("/console/evaluations/")
-      ? decodeURIComponent(
-          window.location.pathname.slice("/console/evaluations/".length),
-        )
+      ? window.location.pathname.slice("/console/evaluations/".length)
       : null;
+  const compareId = evaluationPath?.endsWith("/compare")
+    ? decodeURIComponent(evaluationPath.slice(0, -"/compare".length))
+    : null;
+  const evaluationId =
+    evaluationPath && !compareId ? decodeURIComponent(evaluationPath) : null;
+  const suiteMatch = window.location.pathname.match(
+    /^\/console\/suites\/([^/]+)\/history$/,
+  );
+  const suiteHistoryId = suiteMatch ? decodeURIComponent(suiteMatch[1]) : null;
   const activeWorkspace: Workspace | null =
     activity || agentsLibrary || targetsLibrary || settingsPage || profilePage
       ? null
-      : evaluationId || newComparison || benchmarkRegistry || allEvaluations
+      : evaluationId ||
+          compareId ||
+          suiteHistoryId ||
+          newComparison ||
+          benchmarkRegistry ||
+          allEvaluations
         ? "benchmark"
         : newResearch ||
             boardPage ||
@@ -357,6 +371,13 @@ function App() {
             <Settings />
           ) : profilePage ? (
             <Profile username={username} theme={theme} setTheme={setTheme} />
+          ) : compareId ? (
+            <TrialCompare
+              key={window.location.search}
+              evaluationId={compareId}
+            />
+          ) : suiteHistoryId ? (
+            <SuiteHistoryPage suiteId={suiteHistoryId} />
           ) : evaluationId ? (
             <EvaluationDetail id={evaluationId} />
           ) : workspace === "research" ? (

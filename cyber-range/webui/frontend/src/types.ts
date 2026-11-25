@@ -98,7 +98,10 @@ export type EvaluationDetailData = {
     passed: boolean | number | null;
     cost_usd: number | null;
     duration_seconds: number | null;
+    actions: number | null;
+    tokens: number | null;
   }[];
+  suite_id: string | null;
   observed_at: string;
 };
 export type Scenario = {

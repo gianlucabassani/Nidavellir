@@ -26,6 +26,8 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 CHANNEL = "nv:arena:{}"
+# UX-11: evaluation and trial state changes, and model spans of its trials.
+EVALUATION_CHANNEL = "nv:evaluation:{}"
 # Every message is also sent here for cross-arena views (OBS-06 board).
 GLOBAL_CHANNEL = "nv:all"
 KEEPALIVE_SECONDS = float(os.getenv("NIDAVELLIR_STREAM_KEEPALIVE_SECONDS", "15"))
@@ -58,14 +60,18 @@ def _redis():
     return _client
 
 
-def publish(messages: list[tuple[str, str, int]]) -> None:
-    """Publish (arena_id, kind, id) messages; never raises."""
-    if not messages:
+def publish(messages: list[tuple[str, str, int]],
+            evaluations: set[str] | frozenset[str] = frozenset()) -> None:
+    """Publish (arena_id, kind, id) messages and one change notice per touched
+    evaluation; never raises."""
+    if not messages and not evaluations:
         return
     client = _redis()
     if client is None:
         return
     try:
+        for evaluation_id in sorted(evaluations):
+            client.publish(EVALUATION_CHANNEL.format(evaluation_id), "changed")
         for arena_id, kind, row_id in messages:
             message = json.dumps({"kind": kind, "id": row_id})
             client.publish(CHANNEL.format(arena_id), message)
@@ -75,31 +81,49 @@ def publish(messages: list[tuple[str, str, int]]) -> None:
         logger.warning("stream publish failed", exc_info=True)
 
 
+def touch_evaluation(session: Session, evaluation_id: str | None) -> None:
+    """Mark an evaluation changed by a bulk statement the ORM cannot see; the
+    notice is published only if the transaction commits."""
+    if evaluation_id:
+        session.info.setdefault("nv_stream_evaluations", set()).add(evaluation_id)
+
+
 def install() -> None:
     """Publish inserted events and spans after their transaction commits."""
     if getattr(install, "done", False):
         return
     install.done = True
-    from models import Event, Span  # noqa: PLC0415
+    from models import EvalTrial, Evaluation, Event, Span  # noqa: PLC0415
 
     @sa_event.listens_for(Session, "after_flush")
     def _collect(session, _context):
         pending = session.info.setdefault("nv_stream", [])
+        touched = session.info.setdefault("nv_stream_evaluations", set())
         for obj in session.new:
             if isinstance(obj, Event):
                 pending.append((obj.lab_id, "event", obj))
-            elif isinstance(obj, Span) and obj.arena_id:
-                pending.append((obj.arena_id, "span", obj))
+            elif isinstance(obj, Span):
+                if obj.arena_id:
+                    pending.append((obj.arena_id, "span", obj))
+                if obj.evaluation_id:
+                    touched.add(obj.evaluation_id)
+        for obj in (*session.new, *session.dirty):
+            if isinstance(obj, EvalTrial):
+                touched.add(obj.evaluation_id)
+            elif isinstance(obj, Evaluation):
+                touched.add(obj.id)
 
     @sa_event.listens_for(Session, "after_commit")
     def _publish(session):
         pending = session.info.pop("nv_stream", [])
+        touched = session.info.pop("nv_stream_evaluations", set())
         publish([(arena, kind, obj.id) for arena, kind, obj in pending
-                 if getattr(obj, "id", None) is not None])
+                 if getattr(obj, "id", None) is not None], touched)
 
     @sa_event.listens_for(Session, "after_rollback")
     def _drop(session):
         session.info.pop("nv_stream", None)
+        session.info.pop("nv_stream_evaluations", None)
 
 
 def parse_cursor(value: str | None) -> tuple[int, int] | None:
@@ -201,47 +225,62 @@ def _wait(pubsub, deadline: float) -> bool:
     return False
 
 
-def redis_subscribe(arena_id: str):
+def _subscribe_channel(channel: str):
     client = _redis()
     if client is None:
         return None
     try:
         pubsub = client.pubsub()
-        pubsub.subscribe(CHANNEL.format(arena_id))
+        pubsub.subscribe(channel)
         return pubsub
     except Exception:  # noqa: BLE001
         return None
+
+
+def redis_subscribe(arena_id: str):
+    return _subscribe_channel(CHANNEL.format(arena_id))
 
 
 def redis_subscribe_global():
-    client = _redis()
-    if client is None:
-        return None
-    try:
-        pubsub = client.pubsub()
-        pubsub.subscribe(GLOBAL_CHANNEL)
-        return pubsub
-    except Exception:  # noqa: BLE001
-        return None
+    return _subscribe_channel(GLOBAL_CHANNEL)
 
 
-def board_frames(build: Callable[[], dict], *, subscribe=None,
-                 max_seconds: float | None = None, min_interval: float = 1.0) -> Iterator[str]:
-    """``board`` frames: one now, then one after each burst of platform activity
-    (at most one per ``min_interval``). Idle time is computed by the client from
-    each arena's last action, so no frame is needed just because time passed."""
+def redis_subscribe_evaluation(evaluation_id: str):
+    return _subscribe_channel(EVALUATION_CHANNEL.format(evaluation_id))
+
+
+def board_frames(build: Callable[[], dict | None], *, subscribe=None,
+                 max_seconds: float | None = None, min_interval: float = 1.0,
+                 name: str = "board",
+                 done: Callable[[dict], bool] | None = None) -> Iterator[str]:
+    """Snapshot frames: one now, then one after each burst of activity (at most
+    one per ``min_interval``). Idle time is computed by the client from each
+    arena's last action, so no frame is needed just because time passed.
+
+    ``build`` returning None ends the stream (the subject is gone); ``done``
+    ends it after the frame it approves (a finished evaluation never changes)."""
     deadline = time.monotonic() + (MAX_SECONDS if max_seconds is None else max_seconds)
     pubsub = subscribe() if subscribe else None
     try:
         yield "retry: 3000\n\n"
-        yield sse("board", build())
+        snapshot = build()
+        if snapshot is None:
+            return
+        yield sse(name, snapshot)
+        if done is not None and done(snapshot):
+            return
         while time.monotonic() < deadline:
             if _wait(pubsub, deadline):
                 time.sleep(min(min_interval, max(0.0, deadline - time.monotonic())))
                 if pubsub is not None:  # fold the burst into one rebuild
                     while pubsub.get_message(ignore_subscribe_messages=True, timeout=0):
                         pass
-                yield sse("board", build())
+                snapshot = build()
+                if snapshot is None:
+                    return
+                yield sse(name, snapshot)
+                if done is not None and done(snapshot):
+                    return
             elif time.monotonic() < deadline:
                 yield ": keepalive\n\n"
     finally:

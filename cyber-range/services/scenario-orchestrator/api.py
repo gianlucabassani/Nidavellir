@@ -7463,7 +7463,104 @@ def get_evaluation(evaluation_id: str,
     import experiments  # noqa: PLC0415
     record["kind"] = "single_trial_smoke" if len(record["runs"]) == 1 else "paired"
     record["comparison"] = experiments.compare(record)
+    usage = experiments.trial_usage(db.spans_for_arenas(
+        [trial.get("arena_id") for trial in record["trials"]]))
+    for trial in record["trials"]:
+        trial["usage"] = usage.get(trial.get("arena_id"))
     return record
+
+
+_EVALUATION_ACTIVE = ("queued", "running")
+
+
+def _evaluation_progress(evaluation_id: str) -> dict | None:
+    record = db.get_evaluation(evaluation_id)
+    if record is None:
+        return None
+    states = [trial.get("state") for trial in record["trials"]]
+    return {"id": evaluation_id, "state": record["state"],
+            "updated_at": record.get("updated_at"),
+            "progress": {"total": len(states),
+                         "finished": sum(s in ("completed", "infrastructure_failure",
+                                               "agent_failure") for s in states),
+                         "running": sum(s == "running" for s in states)}}
+
+
+@app.get("/evaluations/{evaluation_id}/stream")
+def evaluation_stream(evaluation_id: str,
+                      principal: Principal = Depends(require_principal)):
+    """UX-11: ``evaluation`` frames (state and progress) pushed when a trial or
+    the evaluation changes; the stream ends once the evaluation is finished.
+    Operator-only, like the evaluation itself."""
+    _require_operator(principal)
+    if db.get_evaluation(evaluation_id) is None:
+        raise HTTPException(status_code=404, detail="evaluation not found")
+    frames = streams.board_frames(
+        lambda: _evaluation_progress(evaluation_id), name="evaluation",
+        subscribe=lambda: streams.redis_subscribe_evaluation(evaluation_id),
+        done=lambda snapshot: snapshot["state"] not in _EVALUATION_ACTIVE)
+    return StreamingResponse(frames, media_type="text/event-stream", headers={
+        "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.get("/evaluations/{evaluation_id}/compare")
+def compare_evaluation_trials(evaluation_id: str, a: str, b: str,
+                              principal: Principal = Depends(require_principal)):
+    """UX-12: two trials of one evaluation side by side, aligned by step, with
+    the first divergence, and their findings and verdicts. Operator-only."""
+    _require_operator(principal)
+    record = db.get_evaluation(evaluation_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="evaluation not found")
+    trials = {trial["id"]: trial for trial in record["trials"]}
+    if a not in trials or b not in trials:
+        raise HTTPException(status_code=404, detail="trial not in this evaluation")
+    if a == b:
+        raise HTTPException(status_code=422, detail="choose two distinct trials")
+    import experiments  # noqa: PLC0415
+    runs = {run["id"]: run for run in record["runs"]}
+    arenas = [trials[a].get("arena_id"), trials[b].get("arena_id")]
+    by_arena = db.spans_for_arenas(arenas, kinds=("tool",))
+
+    def side(trial):
+        run = runs.get(trial["run_id"]) or {}
+        arena_id = trial.get("arena_id")
+        return {"id": trial["id"], "seed": trial["seed"], "state": trial["state"],
+                "side": run.get("side"), "build_id": run.get("build_id"),
+                "challenge_id": run.get("challenge_id"), "arena_id": arena_id,
+                "starting_digest": trial.get("starting_digest"),
+                "passed": experiments.trial_passed(trial),
+                "findings": _findings_with_verdicts(arena_id) if arena_id else []}
+
+    steps_a = experiments.trial_steps(by_arena.get(arenas[0], []))
+    steps_b = experiments.trial_steps(by_arena.get(arenas[1], []))
+    return {"evaluation_id": evaluation_id, "a": side(trials[a]), "b": side(trials[b]),
+            "same_start": bool(trials[a].get("starting_digest")) and
+            trials[a].get("starting_digest") == trials[b].get("starting_digest"),
+            **experiments.align(steps_a, steps_b)}
+
+
+@app.get("/eval-suites/{suite_id}/history")
+def eval_suite_history(suite_id: str, principal: Principal = Depends(require_principal)):
+    """UX-11: outcome over time by agent build for one suite, and flaky cells.
+    Calibration and held-out material are separate series. Operator-only."""
+    _require_operator(principal)
+    suite = db.get_eval_suite(suite_id)
+    if suite is None:
+        raise HTTPException(status_code=404, detail="suite not found")
+    import experiments  # noqa: PLC0415
+    records = [r for r in (db.get_evaluation(eid)
+                           for eid in db.evaluation_ids_for_suite(suite_id)) if r]
+    builds = {build["id"]: build for build in db.list_agent_builds()}
+    data = experiments.history(records)
+    return {"suite": {"id": suite["id"], "name": suite.get("name")},
+            "evaluations": len(records),
+            "builds": {bid: {"name": (builds.get(bid) or {}).get("name") or bid,
+                             "version": (builds.get(bid) or {}).get("version")}
+                       for bid in {s["build_id"] for s in data["series"]}},
+            "challenges": {c["id"]: c.get("name") or c["id"]
+                           for r in records for c in r.get("challenges") or []},
+            **data}
 
 
 # --- Research code-intel (variant-hunt collect+derive) -----------------------

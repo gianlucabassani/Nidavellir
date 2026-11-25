@@ -25,6 +25,9 @@ export function routeLabel(url: URL): string {
         : "Research";
   }
   if (path.startsWith("/console/arena/")) return "Arena";
+  if (path.startsWith("/console/evaluations/") && path.endsWith("/compare"))
+    return "Trial comparison";
+  if (path.startsWith("/console/suites/")) return "Suite history";
   if (
     path.startsWith("/console/evaluations/") &&
     path !== "/console/evaluations/new"
