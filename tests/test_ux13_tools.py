@@ -114,3 +114,59 @@ def test_ledger_rows_carry_method_path_status_and_size(monkeypatch, tmp_path):
     payload.write_text("{}")
     rows = http_transactions.list_transactions("arena-x")["transactions"]
     assert len(rows) == 2 and sum(row["summary"] is None for row in rows) == 1
+
+
+# --- global search ------------------------------------------------------------------
+
+
+def _seed_search():
+    import spans
+
+    db = Database()
+    arena = active_arena("search-scenario")
+    tx = "sha256:" + "c0ffee" + "1" * 58
+    db.record_event(arena, "http_request", {"method": "GET", "path": "/admin/users",
+                    "status": 403, "transaction_digest": tx}, actor="op")
+    db.record_event(arena, "finding", {"finding_id": "fid-1",
+                    "title": "Stored XSS in profile bio"}, actor="agent")
+    spans.record(db, name="http/request", kind="tool", actor="op", actor_kind="human",
+                 arena_id=arena, input={"url": "/admin/users"},
+                 attrs={"nv.transaction_digest": tx})
+    return arena, tx
+
+
+def test_search_finds_text_across_findings_transactions_spans_and_arenas():
+    arena, tx = _seed_search()
+    operator = client("operator")
+    found = operator.get("/search", params={"q": "stored xss"}).json()
+    assert found["mode"] == "text"
+    assert any(f["arena_id"] == arena and f["title"].startswith("Stored XSS")
+               for f in found["findings"])
+    found = operator.get("/search", params={"q": "admin users"}).json()
+    assert any(t["digest"] == tx for t in found["transactions"])
+    assert any(s["arena_id"] == arena for s in found["spans"])
+    assert any(a["id"] == arena for a in
+               operator.get("/search", params={"q": "search-scen"}).json()["arenas"])
+
+
+def test_search_by_digest_prefix_with_or_without_scheme():
+    arena, tx = _seed_search()
+    operator = client("operator")
+    for q in (tx[:20], tx[7:20]):
+        found = operator.get("/search", params={"q": q}).json()
+        assert found["mode"] == "digest"
+        assert any(t["digest"] == tx and t["arena_id"] == arena for t in found["transactions"])
+        assert any(s["arena_id"] == arena for s in found["spans"])
+    assert any(a["id"] == arena for a in
+               operator.get("/search", params={"q": arena[:8]}).json()["arenas"])
+
+
+def test_search_is_operator_only_bounded_and_treats_wildcards_literally():
+    operator = client("operator")
+    assert client("agent").get("/search", params={"q": "admin"}).status_code == 403
+    assert operator.get("/search", params={"q": "a"}).status_code == 422
+    assert operator.get("/search", params={"q": "x" * 201}).status_code == 422
+    assert operator.get("/search", params={"q": "%%"}).json()["mode"] == "none"
+    found = operator.get("/search", params={"q": "100%_match"}).json()
+    assert found["mode"] == "text"
+    assert all(len(found[k]) <= 10 for k in ("arenas", "findings", "transactions", "spans"))

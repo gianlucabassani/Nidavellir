@@ -2819,3 +2819,16 @@ def test_console_exec_validates_and_posts_one_exec_action(client, monkeypatch):
                      json={"node": "v", "command": "id", "extra": "x"}, headers=headers)
     assert ok.status_code == 200
     assert sent == [("/arenas/a1/exec", {"node": "v", "command": "id", "timeout": 30})]
+
+
+def test_console_search_short_query_skips_the_api_and_long_ones_are_encoded(client, monkeypatch):
+    import app as webui_module
+
+    calls = []
+    monkeypatch.setattr(webui_module, "_api_get_status", lambda path, timeout=10: (
+        calls.append(path) or ({"mode": "text"}, 200)))
+    assert _login(client).status_code == 302
+    assert client.get("/api/console/search?q=a").get_json()["mode"] == "none"
+    assert calls == []
+    assert client.get("/api/console/search?q=admin users&x=1").status_code == 200
+    assert calls == ["/search?q=admin+users"]

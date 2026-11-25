@@ -3257,6 +3257,17 @@ def arena_stream(instance_id):
                          request.headers.get("Last-Event-ID", ""))
 
 
+@app.route("/api/console/search")
+def console_search():
+    """UX-13: global search for the command palette."""
+    query = request.args.get("q", "").strip()
+    if len(query) < 2:
+        return jsonify({"query": query, "mode": "none", "arenas": [], "findings": [],
+                        "transactions": [], "spans": []})
+    data, code = _api_get_status("/search?" + urlencode({"q": query[:200]}))
+    return jsonify(data), code
+
+
 @app.route("/api/console/board")
 def console_board():
     """OBS-06: the cross-arena agents board snapshot."""

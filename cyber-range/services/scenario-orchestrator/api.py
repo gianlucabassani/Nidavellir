@@ -3403,6 +3403,17 @@ def _stringify_now() -> str:
     return db_now().isoformat(sep=" ")
 
 
+@app.get("/search")
+def global_search(q: str = Query(min_length=2, max_length=200),
+                  principal: Principal = Depends(require_principal)):
+    """UX-13: arenas, findings, HTTP transactions and spans by text or by
+    digest prefix (``sha256:`` optional, at least 6 hex characters). Operator-only."""
+    _require_operator(principal)
+    import search  # noqa: PLC0415
+    with db._session() as session:
+        return search.search(session, q)
+
+
 @app.get("/board")
 def get_board(principal: Principal = Depends(require_principal)):
     """OBS-06: every live arena, its agents, last action, error rate, budget and
