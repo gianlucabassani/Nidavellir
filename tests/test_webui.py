@@ -2800,3 +2800,22 @@ def test_console_node_logs_proxy_keeps_service_status_and_quotes_node(client, mo
     assert calls[-1] == "/arenas/a1/nodes/vic%20tim/logs?tail=50&since=17"
     dead = client.get("/api/console/arenas/dead/nodes/victim/logs")
     assert dead.status_code == 409 and "not active" in dead.get_json()["error"]
+
+
+def test_console_exec_validates_and_posts_one_exec_action(client, monkeypatch):
+    """UX-13: the shell proxy sends exactly node/command/timeout to `exec`."""
+    import app as webui_module
+
+    sent = []
+    monkeypatch.setattr(webui_module, "_api_post", lambda path, payload=None, timeout=15: (
+        sent.append((path, payload)) or ({"exit_code": 0, "stdout": "uid=0", "stderr": ""}, 200)))
+    token = _csrf_token(client)
+    assert _login(client).status_code == 302
+    headers = {"X-CSRFToken": token}
+    bad = client.post("/api/console/arenas/a1/exec", json={"node": "v", "command": " "},
+                      headers=headers)
+    assert bad.status_code == 400 and sent == []
+    ok = client.post("/api/console/arenas/a1/exec",
+                     json={"node": "v", "command": "id", "extra": "x"}, headers=headers)
+    assert ok.status_code == 200
+    assert sent == [("/arenas/a1/exec", {"node": "v", "command": "id", "timeout": 30})]

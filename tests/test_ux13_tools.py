@@ -72,3 +72,21 @@ def test_docker_logs_split_timestamps_keep_newest_and_cap_lines():
     assert len(result["lines"][-1]["text"]) == DockerLocalProvider.LOG_LINE_CAP
     provider._find_node_container = lambda *_: None
     assert provider.node_logs("a", "victim")["success"] is False
+
+
+# --- operator shell -------------------------------------------------------------
+
+
+def test_each_shell_command_is_an_exec_span_and_an_audit_event():
+    import spans as _spans  # noqa: F401 - the action middleware records spans
+
+    arena = active_arena()
+    operator = client("operator")
+    for command in ("id", "uname -a"):
+        response = operator.post(f"/arenas/{arena}/exec",
+                                 json={"node": "victim", "command": command})
+        assert response.status_code == 200, response.text
+    rows = [row for row in Database().list_spans(arena_id=arena) if row["name"] == "exec"]
+    assert len(rows) == 2
+    assert all(row["actor_kind"] == "human" and row["status"] == "ok" for row in rows)
+    assert len(Database().list_events(arena, limit=10, types=["agent_exec"])) == 2

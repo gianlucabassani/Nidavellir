@@ -3448,6 +3448,22 @@ def console_node_logs(instance_id, node):
     return jsonify(data), code
 
 
+@app.route("/api/console/arenas/<instance_id>/exec", methods=["POST"])
+def console_exec(instance_id):
+    """UX-13: one operator shell command through the arena's `exec` action, so
+    it is budgeted, audited and recorded as a span like any other action."""
+    body = request.get_json(silent=True) or {}
+    command, node = body.get("command"), body.get("node")
+    if not isinstance(command, str) or not command.strip() or not isinstance(node, str):
+        return jsonify({"error": "Choose a node and enter a command"}), 400
+    timeout = body.get("timeout", 30)
+    payload = {"node": node, "command": command,
+               "timeout": timeout if isinstance(timeout, int) else 30}
+    data, code = _api_post(f"/arenas/{quote(instance_id, safe='')}/exec", payload,
+                           timeout=130)
+    return jsonify(data), code
+
+
 @app.route("/api/arenas/<instance_id>/http/request", methods=["POST"])
 def http_request_proxy(instance_id):
     """Drive one arena-target HTTP transaction from the workspace."""
