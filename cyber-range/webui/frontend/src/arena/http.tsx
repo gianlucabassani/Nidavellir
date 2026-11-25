@@ -50,10 +50,23 @@ export function HttpWorkbench({ arena }: { arena: ArenaData }) {
   const [params, setParams] = useState("");
   const [headers, setHeaders] = useState("");
   const [body, setBody] = useState("");
-  const [pair, setPair] = useState<{ left: string; right: string }>({
-    left: "",
-    right: "",
+  const [pair, setPairState] = useState<{ left: string; right: string }>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return { left: params.get("a") || "", right: params.get("b") || "" };
   });
+  // The A/B selection lives in the URL with the pane, so reload and back
+  // restore the comparison, not just the tab.
+  const setPair = (next: { left: string; right: string }) => {
+    setPairState(next);
+    const url = new URL(window.location.href);
+    for (const [key, value] of [
+      ["a", next.left],
+      ["b", next.right],
+    ] as const)
+      if (value) url.searchParams.set(key, value);
+      else url.searchParams.delete(key);
+    history.replaceState(history.state, "", url);
+  };
   const [credentialSource, setCredentialSource] = useState("");
   const [credentialHeaders, setCredentialHeaders] = useState("Authorization");
   const [inheritedHeaders, setInheritedHeaders] = useState<string[]>([]);
@@ -146,7 +159,22 @@ export function HttpWorkbench({ arena }: { arena: ArenaData }) {
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get("digest");
     if (requested) void inspect(requested);
-    // The URL selects the first inspection; later selections stay local to this tab.
+    // In-console navigation (search, palette, back/forward) to this same tab
+    // with another ?digest= or ?pane= applies it without remounting.
+    let lastDigest = requested;
+    const onNavigate = () => {
+      const params = new URLSearchParams(window.location.search);
+      const digest = params.get("digest");
+      const nextPane = params.get("pane");
+      if (PANES.some((item) => item.id === nextPane))
+        setPaneState(nextPane as Pane);
+      if (digest && digest !== lastDigest) {
+        lastDigest = digest;
+        void inspect(digest, false, Boolean(nextPane));
+      }
+    };
+    window.addEventListener("popstate", onNavigate);
+    return () => window.removeEventListener("popstate", onNavigate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 

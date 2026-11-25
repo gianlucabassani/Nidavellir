@@ -1,5 +1,5 @@
 import "./navigation.css";
-const categories = [
+export const categories = [
   {
     id: "prepare",
     label: "Prepare",
