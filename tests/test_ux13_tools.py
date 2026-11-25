@@ -78,8 +78,6 @@ def test_docker_logs_split_timestamps_keep_newest_and_cap_lines():
 
 
 def test_each_shell_command_is_an_exec_span_and_an_audit_event():
-    import spans as _spans  # noqa: F401 - the action middleware records spans
-
     arena = active_arena()
     operator = client("operator")
     for command in ("id", "uname -a"):
@@ -90,3 +88,29 @@ def test_each_shell_command_is_an_exec_span_and_an_audit_event():
     assert len(rows) == 2
     assert all(row["actor_kind"] == "human" and row["status"] == "ok" for row in rows)
     assert len(Database().list_events(arena, limit=10, types=["agent_exec"])) == 2
+
+
+# --- HTTP ledger rows -------------------------------------------------------------
+
+
+def test_ledger_rows_carry_method_path_status_and_size(monkeypatch, tmp_path):
+    import config
+    import http_transactions
+
+    monkeypatch.setattr(config, "HTTP_TRANSACTIONS_DIR", tmp_path / "tx")
+    http_transactions.record("arena-x", request={
+        "node": "victim", "method": "POST", "path": "/login", "params": {},
+        "headers": {}, "body": "u=a"}, response={"status": 302, "body_bytes": 0})
+    stored = http_transactions.record("arena-x", request={
+        "node": "victim", "method": "GET", "path": "/admin", "params": {},
+        "headers": {}, "body": None}, response={"status": 403, "body_bytes": 1536},
+        elapsed_ms=12)
+    rows = http_transactions.list_transactions("arena-x")["transactions"]
+    summaries = {row["digest"]: row["summary"] for row in rows}
+    assert summaries[stored["digest"]] == {"method": "GET", "path": "/admin",
+        "node": "victim", "status": 403, "response_bytes": 1536}
+    # A tampered envelope fails verification: no summary, row still listed.
+    payload = next((tmp_path / "tx").rglob("transaction.json"))
+    payload.write_text("{}")
+    rows = http_transactions.list_transactions("arena-x")["transactions"]
+    assert len(rows) == 2 and sum(row["summary"] is None for row in rows) == 1

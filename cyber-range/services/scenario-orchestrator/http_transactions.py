@@ -158,5 +158,24 @@ def list_transactions(
     manifests.sort(key=lambda m: (m.get("created_at") or "", m.get("digest") or ""))
     manifests.reverse()  # newest first
     total = len(manifests)
-    window = manifests[offset : offset + limit]
+    window = [{**manifest, "summary": _summary(arena_id, manifest.get("digest"))}
+              for manifest in manifests[offset : offset + limit]]
     return {"total": total, "offset": offset, "limit": limit, "transactions": window}
+
+
+def _summary(arena_id: str, digest) -> dict | None:
+    """UX-13: what a ledger row shows: method, path, status and response size,
+    read from the verified envelope. None when it cannot be verified."""
+    try:
+        _, envelope = get(arena_id, digest)
+    except (HttpTransactionError, OSError, ValueError, TypeError):
+        return None
+    request = envelope.get("request") or {}
+    response = envelope.get("response") or {}
+    status = response.get("status")
+    size = response.get("body_bytes")
+    return {"method": str(request.get("method") or "")[:16] or None,
+            "path": str(request.get("path") or "")[:512] or None,
+            "node": str(request.get("node") or "")[:64] or None,
+            "status": status if isinstance(status, int) else None,
+            "response_bytes": size if isinstance(size, int) else None}
