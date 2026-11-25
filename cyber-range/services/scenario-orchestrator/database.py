@@ -340,6 +340,26 @@ class Database:
                 select(EvalChallenge).where(EvalChallenge.id.in_(challenge_ids))).all()]
             return data
 
+    def evaluation_ids_for_suite(self, suite_id, limit=200):
+        """UX-11 history: a suite's evaluations, newest first."""
+        with self._session() as session:
+            return list(session.scalars(select(Evaluation.id).where(
+                Evaluation.suite_id == suite_id).order_by(
+                Evaluation.created_at.desc()).limit(limit)).all())
+
+    def spans_for_arenas(self, arena_ids, kinds=("tool", "model"), limit=20000):
+        """Spans of several arenas grouped by arena, oldest first (UX-11/12)."""
+        ids = sorted({a for a in arena_ids if a})
+        out = {arena_id: [] for arena_id in ids}
+        if not ids:
+            return out
+        query = (select(Span).where(Span.arena_id.in_(ids), Span.kind.in_(tuple(kinds)))
+                 .order_by(Span.id).limit(limit))
+        with self._session() as session:
+            for row in session.scalars(query).all():
+                out[row.arena_id].append(self._span_dict(row))
+        return out
+
     def get_eval_challenge_for_arena(self, arena_id):
         with self._session() as session:
             trial = session.scalar(select(EvalTrial).where(EvalTrial.arena_id == arena_id))
@@ -357,6 +377,14 @@ class Database:
                 EvalTrial.id == trial_id).scalar_subquery(),
             Evaluation.state == "running").values(updated_at=now))
 
+    @staticmethod
+    def _touch_trial(session, trial_id):
+        """UX-11: a trial's state change is a change of its evaluation's stream."""
+        import streams  # noqa: PLC0415
+
+        streams.touch_evaluation(session, session.scalar(
+            select(EvalTrial.evaluation_id).where(EvalTrial.id == trial_id)))
+
     def claim_eval_trial(self, trial_id, claim):
         now = db_now()
         with self._session() as session:
@@ -365,6 +393,7 @@ class Database:
                 .values(state="running", worker_claim=claim, updated_at=now))
             if result.rowcount == 1:
                 self._eval_heartbeat(session, trial_id, now)
+                self._touch_trial(session, trial_id)
             session.commit()
             return result.rowcount == 1
 
@@ -374,6 +403,8 @@ class Database:
                 EvalTrial.id == trial_id, EvalTrial.worker_claim == claim,
                 EvalTrial.state == "running", EvalTrial.arena_id.is_(None))
                 .values(arena_id=arena_id, updated_at=db_now())).rowcount
+            if changed == 1:
+                self._touch_trial(session, trial_id)
             session.commit()
             return changed == 1
 
@@ -383,6 +414,10 @@ class Database:
             if expected is not None:
                 stmt = stmt.where(Evaluation.state == expected)
             changed = session.execute(stmt.values(state=state, updated_at=db_now())).rowcount
+            if changed == 1:
+                import streams  # noqa: PLC0415
+
+                streams.touch_evaluation(session, evaluation_id)
             session.commit()
             return changed == 1
 
@@ -404,6 +439,10 @@ class Database:
                 EvalTrial.state.in_(("running", "queued")))
                 .values(state="infrastructure_failure", error=error,
                         updated_at=db_now())).rowcount
+            if changed:
+                import streams  # noqa: PLC0415
+
+                streams.touch_evaluation(session, evaluation_id)
             session.commit()
             return changed
 
@@ -443,6 +482,7 @@ class Database:
                     error=error, updated_at=now)).rowcount
             if changed == 1:
                 self._eval_heartbeat(session, trial_id, now)
+                self._touch_trial(session, trial_id)
             session.commit()
             return changed == 1
 

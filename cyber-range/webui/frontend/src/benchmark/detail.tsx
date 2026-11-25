@@ -1,5 +1,14 @@
-import { useEffect, useRef } from "react";
 import type { EvaluationDetailData } from "../types";
+import {
+  ACTIVE,
+  DifferencePlot,
+  Distribution,
+  OutcomeGrid,
+  format as number,
+  intervalLabel as interval,
+  metricName,
+  useEvaluationStream,
+} from "./dashboard";
 import {
   useWorkspaceData,
   Status,
@@ -10,26 +19,6 @@ import {
   ErrorState,
   BackLink,
 } from "../ui";
-
-const metricNames: Record<string, string> = {
-  verified: "Verified findings",
-  false_claims: "False claims",
-  requests: "Requests",
-  latency_seconds: "Latency (s)",
-  cost_usd: "Cost (USD)",
-};
-
-function number(value: number | null | undefined) {
-  return value == null
-    ? "—"
-    : new Intl.NumberFormat("en", { maximumFractionDigits: 2 }).format(value);
-}
-
-function interval(status: string | null | undefined) {
-  return status
-    ? status.replaceAll("_", " ").replace(/^./, (first) => first.toUpperCase())
-    : "Unavailable";
-}
 
 function evidenceScope(scope: string) {
   return scope === "calibration_or_unknown"
@@ -42,20 +31,7 @@ export function EvaluationDetail({ id }: { id: string }) {
     useWorkspaceData<EvaluationDetailData>(
       `/api/console/evaluations/${encodeURIComponent(id)}`,
     );
-  const refreshRef = useRef(refresh);
-  refreshRef.current = refresh;
-  useEffect(() => {
-    if (value?.state !== "queued" && value?.state !== "running") return;
-    const check = () => {
-      if (document.visibilityState === "visible") refreshRef.current();
-    };
-    const timer = window.setInterval(check, 8000);
-    document.addEventListener("visibilitychange", check);
-    return () => {
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", check);
-    };
-  }, [value?.state]);
+  useEvaluationStream(id, ACTIVE.has(value?.state || ""), refresh);
   if (loading && !value) return <Loading />;
   if (error && !value) return <ErrorState message={error} refresh={refresh} />;
   if (!value) return null;
@@ -65,7 +41,17 @@ export function EvaluationDetail({ id }: { id: string }) {
       <div className="arena-return">
         <BackLink href="/console?workspace=benchmark" label="Benchmark" />
         <span>/</span>
-        <span>Evaluation {value.id}</span>
+        <span className="evaluation-crumb" title={value.id}>
+          Evaluation {value.id}
+        </span>
+        {value.suite_id && (
+          <a
+            className="inline-action crumb-aside"
+            href={`/console/suites/${encodeURIComponent(value.suite_id)}/history`}
+          >
+            Suite history
+          </a>
+        )}
       </div>
       <PageHead
         overline={`BENCHMARK / EVALUATION ${value.id}`}
@@ -100,8 +86,8 @@ export function EvaluationDetail({ id }: { id: string }) {
               finished
             </strong>
             <span>
-              {value.progress.running} running · Results refresh while this page
-              is open.
+              {value.progress.running} running · Results update live while this
+              page is open.
             </span>
           </div>
           <progress
@@ -145,12 +131,11 @@ export function EvaluationDetail({ id }: { id: string }) {
                 <span>PAIRS</span>
                 <span>BOOTSTRAP 95%</span>
                 <span>INTERVAL</span>
+                <span>DIFFERENCE (CANDIDATE − BASELINE)</span>
               </div>
               {metrics.map(([name, metric]) => (
                 <div className="result-table-row" key={name}>
-                  <strong>
-                    {metricNames[name] || name.replaceAll("_", " ")}
-                  </strong>
+                  <strong>{metricName(name)}</strong>
                   <span>{number(metric.mean)}</span>
                   <span>{metric.pairs ?? "—"}</span>
                   <span>
@@ -159,11 +144,16 @@ export function EvaluationDetail({ id }: { id: string }) {
                       : "Unavailable"}
                   </span>
                   <span>{interval(metric.interval_status)}</span>
+                  <span>
+                    <DifferencePlot name={name} metric={metric} />
+                  </span>
                 </div>
               ))}
               <p className="result-interval-note">
-                A constant paired difference is degenerate; it does not
-                establish a variability interval.
+                Dot: mean paired difference; bar: bootstrap 95% interval (dashed
+                when there are too few pairs). A constant paired difference is
+                degenerate: it is drawn as a hollow dot with no interval,
+                because zero width does not establish certainty.
               </p>
             </div>
           ) : (
@@ -213,7 +203,60 @@ export function EvaluationDetail({ id }: { id: string }) {
           )}
         </Panel>
         <Panel
-          eyebrow="03 / EVIDENCE"
+          eyebrow="03 / OUTCOMES"
+          title="Outcome by seed"
+          className="result-trials"
+        >
+          {value.trials.length ? (
+            <OutcomeGrid
+              evaluation={value}
+              challengeNames={Object.fromEntries(
+                value.challenges.map((challenge) => [
+                  challenge.id,
+                  challenge.name,
+                ]),
+              )}
+            />
+          ) : (
+            <Empty
+              title="No trials scheduled"
+              detail="The outcome grid fills in as trials are scheduled."
+            />
+          )}
+        </Panel>
+        <Panel
+          eyebrow="04 / DISTRIBUTIONS"
+          title="Duration, actions and tokens"
+          className="result-trials"
+        >
+          <div className="distributions">
+            <Distribution
+              title="Duration"
+              unit="s"
+              trials={value.trials}
+              pick={(trial) => trial.duration_seconds}
+            />
+            <Distribution
+              title="Agent actions"
+              unit="actions"
+              trials={value.trials}
+              pick={(trial) => trial.actions}
+            />
+            <Distribution
+              title="Model tokens"
+              unit="tokens"
+              trials={value.trials}
+              pick={(trial) => trial.tokens}
+            />
+          </div>
+          <p className="result-interval-note">
+            Over trials that ran. {value.infrastructure_failed_pairs ?? 0}{" "}
+            pair(s) with an infrastructure failure are excluded and counted
+            separately, never as zero.
+          </p>
+        </Panel>
+        <Panel
+          eyebrow="05 / EVIDENCE"
           title="Trial records"
           className="result-trials"
         >

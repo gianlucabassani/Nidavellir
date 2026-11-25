@@ -1,0 +1,344 @@
+/* UX-11/12: evaluation dashboard, suite history and trial comparison. */
+.result-grid .result-metrics {
+  grid-column: 1 / -1;
+}
+@media (min-width: 601px) {
+  .result-metrics .result-table-head,
+  .result-metrics .result-table-row {
+    grid-template-columns:
+      minmax(120px, 1fr) 60px 55px minmax(115px, 0.8fr)
+      minmax(105px, 0.8fr) minmax(160px, 1.2fr);
+  }
+}
+.diff-plot {
+  display: block;
+  width: 100%;
+  max-width: 240px;
+  height: 30px;
+}
+.diff-plot-empty {
+  color: var(--muted);
+  font-size: 12px;
+}
+.diff-zero {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.diff-interval {
+  stroke: var(--accent);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+.diff-interval-weak {
+  stroke-dasharray: 4 3;
+  stroke-width: 2;
+}
+.diff-mean {
+  fill: var(--accent);
+}
+.diff-mean-degenerate {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.crumb-aside {
+  margin-left: auto;
+}
+.evaluation-crumb {
+  overflow-wrap: anywhere;
+}
+
+.outcome-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.outcome-grid th,
+.outcome-grid td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  text-align: left;
+}
+.outcome-grid thead th {
+  color: var(--subtle);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.outcome-cell {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-right: 4px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-weight: 800;
+  text-decoration: none;
+}
+a.outcome-cell:hover,
+a.outcome-cell:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+.outcome-pass {
+  border-color: var(--success);
+  background: var(--success-soft);
+  color: var(--success);
+}
+.outcome-fail {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.outcome-infra {
+  border-style: dashed;
+  border-color: var(--warning);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.outcome-agent {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.outcome-pending,
+.outcome-unknown,
+.outcome-missing {
+  color: var(--muted);
+}
+.outcome-legend {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.result-trials > .trial-results-scroll,
+.result-trials > .distributions {
+  padding: 0 22px 18px;
+}
+
+.distributions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+}
+.distribution {
+  display: grid;
+  gap: 6px;
+}
+.distribution-row {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  align-items: center;
+  gap: 2px 8px;
+  font-size: 12px;
+}
+.distribution-row svg {
+  width: 100%;
+  height: 22px;
+}
+.distribution-row small {
+  grid-column: 2;
+  color: var(--muted);
+}
+.distribution-row em {
+  color: var(--muted);
+}
+.distribution-scale {
+  color: var(--subtle);
+  font-size: 11px;
+}
+.distribution-axis {
+  stroke: var(--line);
+}
+.distribution-dot {
+  fill-opacity: 0.6;
+}
+.distribution-baseline {
+  fill: var(--muted);
+}
+.distribution-candidate {
+  fill: var(--accent);
+}
+.distribution-median {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.compare-select {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin: 14px 0;
+}
+.compare-select label {
+  display: grid;
+  gap: 4px;
+  color: var(--subtle);
+  font-size: 11px;
+  font-weight: 800;
+}
+.compare-select select {
+  min-width: 220px;
+  max-width: 100%;
+}
+.compare-select small {
+  flex-basis: 100%;
+  color: var(--muted);
+}
+.compare-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1px;
+  margin: 14px 0;
+  border: 1px solid var(--line);
+  background: var(--line);
+}
+.compare-summary > div {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  background: var(--surface);
+}
+.compare-summary small {
+  color: var(--subtle);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+.compare-summary strong {
+  color: var(--accent);
+  font-size: 18px;
+  text-transform: capitalize;
+}
+.compare-summary span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.compare-tools {
+  display: grid;
+  gap: 4px;
+}
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  table-layout: fixed;
+}
+.compare-table thead th:first-child {
+  width: 90px;
+}
+.compare-table thead th:nth-child(3) {
+  width: 130px;
+}
+.compare-table th,
+.compare-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  text-align: left;
+  vertical-align: top;
+}
+.compare-step strong {
+  display: inline;
+}
+.compare-step code {
+  display: block;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 11px;
+}
+.compare-digest {
+  display: block;
+  color: var(--subtle);
+}
+.compare-absent {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  font-size: 10px;
+  font-weight: 800;
+}
+.compare-status-error strong,
+.compare-status-denied strong,
+.compare-status-budget_refused strong {
+  color: var(--danger);
+}
+.compare-none {
+  color: var(--muted);
+}
+.compare-relation {
+  color: var(--muted);
+}
+.compare-different_tool .compare-relation,
+.compare-only_a .compare-relation,
+.compare-only_b .compare-relation,
+.compare-different_input .compare-relation {
+  color: var(--warning);
+  font-weight: 700;
+}
+.compare-divergence {
+  background: var(--warning-soft);
+  box-shadow: inset 4px 0 0 var(--gold);
+}
+.compare-flag {
+  display: block;
+  color: var(--warning);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.compare-findings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 18px;
+  margin-top: 18px;
+}
+.panel > .trial-results-scroll {
+  padding: 0 22px 18px;
+}
+
+.history-series {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 18px;
+  padding: 0 22px 18px;
+}
+.history-series figure {
+  margin: 0;
+}
+.history-series figcaption {
+  font-weight: 800;
+}
+.history-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.history-axis,
+.history-grid {
+  stroke: var(--line);
+}
+.history-grid {
+  stroke-dasharray: 3 3;
+}
+.history-tick {
+  fill: var(--subtle);
+  font-size: 10px;
+}
+.history-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.history-dot {
+  fill: var(--accent);
+}
+.history-infra {
+  fill: var(--warning);
+  font-size: 13px;
+}

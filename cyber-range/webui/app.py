@@ -763,8 +763,10 @@ def overview():
 @app.route("/console/evaluations")
 @app.route("/console/evaluations/new")
 @app.route("/console/evaluations/<evaluation_id>")
+@app.route("/console/evaluations/<evaluation_id>/compare")
+@app.route("/console/suites/<suite_id>/history")
 def royal_console(instance_id=None, evaluation_id=None, review_session_id=None,
-                  campaign_id=None):
+                  campaign_id=None, suite_id=None):
     """The default React console; legacy task routes stay mounted for fallback."""
     manifest_path = Path(app.static_folder) / "console" / ".vite" / "manifest.json"
     try:
@@ -1053,10 +1055,41 @@ def console_evaluation(evaluation_id):
                     "side": runs.get(trial.get("run_id"), {}).get("side"),
                     "challenge_id": runs.get(trial.get("run_id"), {}).get("challenge_id"),
                     "error": str(trial.get("error"))[:500] if trial.get("error") else None,
-                    **_console_trial_metrics(trial)}
+                    **_console_trial_metrics(trial),
+                    "actions": (trial.get("usage") or {}).get("actions"),
+                    "tokens": (trial.get("usage") or {}).get("tokens")}
                    for trial in trials],
+        "suite_id": record.get("suite_id"),
         "observed_at": datetime.now().astimezone().isoformat(),
     })
+
+
+@app.route("/api/console/evaluations/<evaluation_id>/stream")
+def console_evaluation_stream(evaluation_id):
+    """UX-11: `evaluation` frames (state and progress) pushed on trial changes."""
+    return _relay_stream(f"/evaluations/{quote(evaluation_id, safe='')}/stream")
+
+
+@app.route("/api/console/evaluations/<evaluation_id>/compare")
+def console_evaluation_compare(evaluation_id):
+    """UX-12: two trials aligned by step with the first divergence."""
+    a, b = request.args.get("a", ""), request.args.get("b", "")
+    if not a or not b:
+        return jsonify({"error": "Choose two trials to compare"}), 400
+    data, ok = _api_get(f"/evaluations/{quote(evaluation_id, safe='')}/compare?"
+                        f"a={quote(a, safe='')}&b={quote(b, safe='')}", timeout=15)
+    if not ok or not isinstance(data, dict):
+        return jsonify({"error": "Trial comparison unavailable"}), 503
+    return jsonify(data)
+
+
+@app.route("/api/console/eval-suites/<suite_id>/history")
+def console_suite_history(suite_id):
+    """UX-11: a suite's outcome over time by build, and flaky cells."""
+    data, ok = _api_get(f"/eval-suites/{quote(suite_id, safe='')}/history", timeout=20)
+    if not ok or not isinstance(data, dict):
+        return jsonify({"error": "Suite history unavailable"}), 503
+    return jsonify(data)
 
 
 @app.route("/api/console/evaluations", methods=["POST"])
