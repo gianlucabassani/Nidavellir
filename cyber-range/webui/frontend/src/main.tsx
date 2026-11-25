@@ -13,6 +13,7 @@ import { BenchmarkRegistry } from "./benchmark/registry";
 import { NewComparison } from "./benchmark/new";
 import { EvaluationDetail } from "./benchmark/detail";
 import { TrialCompare } from "./benchmark/compare";
+import { CommandPalette, PaletteButton } from "./shared/palette";
 import { SuiteHistoryPage } from "./benchmark/history";
 import { Range } from "./range";
 import { NewArena } from "./range/new";
@@ -263,6 +264,7 @@ function App() {
             ))}
           </nav>
           <div className="header-actions">
+            <PaletteButton />
             <details className="tools-menu">
               <summary>
                 Library <span aria-hidden="true">⌄</span>
@@ -322,6 +324,7 @@ function App() {
           </div>
         </div>
       </header>
+      <CommandPalette />
       <main className="workspace-main" id="main" ref={heading}>
         <StaleBanner />
         <ErrorBoundary

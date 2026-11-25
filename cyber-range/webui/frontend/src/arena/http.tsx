@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import "./http-panes.css";
 import type React from "react";
 import { MapTargetNotice, useMapTarget } from "./target";
 import { HttpComparisonWorkbench } from "./http-comparison";
@@ -9,13 +10,27 @@ import type {
 } from "../types";
 import {
   useWorkspaceData,
-  Status,
   formatObserved,
   Panel,
   Empty,
   Loading,
   ErrorState,
 } from "../ui";
+
+type Pane = "request" | "compare" | "detail";
+const PANES: { id: Pane; label: string }[] = [
+  { id: "request", label: "Request" },
+  { id: "compare", label: "Compare" },
+  { id: "detail", label: "Detail" },
+];
+
+function formatBytes(value: number) {
+  return value < 1024
+    ? `${value} B`
+    : value < 1024 * 1024
+      ? `${(value / 1024).toFixed(1)} KB`
+      : `${(value / 1024 / 1024).toFixed(1)} MB`;
+}
 
 export function HttpWorkbench({ arena }: { arena: ArenaData }) {
   const id = encodeURIComponent(arena.id);
@@ -35,10 +50,23 @@ export function HttpWorkbench({ arena }: { arena: ArenaData }) {
   const [params, setParams] = useState("");
   const [headers, setHeaders] = useState("");
   const [body, setBody] = useState("");
-  const [pair, setPair] = useState<{ left: string; right: string }>({
-    left: "",
-    right: "",
+  const [pair, setPairState] = useState<{ left: string; right: string }>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return { left: params.get("a") || "", right: params.get("b") || "" };
   });
+  // The A/B selection lives in the URL with the pane, so reload and back
+  // restore the comparison, not just the tab.
+  const setPair = (next: { left: string; right: string }) => {
+    setPairState(next);
+    const url = new URL(window.location.href);
+    for (const [key, value] of [
+      ["a", next.left],
+      ["b", next.right],
+    ] as const)
+      if (value) url.searchParams.set(key, value);
+      else url.searchParams.delete(key);
+    history.replaceState(history.state, "", url);
+  };
   const [credentialSource, setCredentialSource] = useState("");
   const [credentialHeaders, setCredentialHeaders] = useState("Authorization");
   const [inheritedHeaders, setInheritedHeaders] = useState<string[]>([]);
@@ -48,11 +76,30 @@ export function HttpWorkbench({ arena }: { arena: ArenaData }) {
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
   const [formOpen, setFormOpen] = useState(editable && targets.length > 0);
+  const [pane, setPaneState] = useState<Pane>(() => {
+    const requested = new URLSearchParams(window.location.search).get("pane");
+    return PANES.some((item) => item.id === requested)
+      ? (requested as Pane)
+      : new URLSearchParams(window.location.search).get("digest")
+        ? "detail"
+        : "request";
+  });
+  const setPane = (next: Pane) => {
+    setPaneState(next);
+    const url = new URL(window.location.href);
+    url.searchParams.set("pane", next);
+    history.replaceState(history.state, "", url);
+  };
   const formRef = useRef<HTMLFormElement>(null);
 
-  async function inspect(digest: string, prepareReplay = false) {
+  async function inspect(
+    digest: string,
+    prepareReplay = false,
+    keepPane = false,
+  ) {
     setDetailError("");
     if (prepareReplay) {
+      setPane("request");
       setFormOpen(false);
       setMessage("Preparing stored request…");
     }
@@ -74,6 +121,7 @@ export function HttpWorkbench({ arena }: { arena: ArenaData }) {
         );
       const transaction = { ...data, digest } as HttpTransaction;
       setDetail(transaction);
+      if (!prepareReplay && !keepPane) setPane("detail");
       if (prepareReplay) {
         const request = transaction.request;
         mapTarget.clear();
@@ -111,7 +159,22 @@ export function HttpWorkbench({ arena }: { arena: ArenaData }) {
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get("digest");
     if (requested) void inspect(requested);
-    // The URL selects the first inspection; later selections stay local to this tab.
+    // In-console navigation (search, palette, back/forward) to this same tab
+    // with another ?digest= or ?pane= applies it without remounting.
+    let lastDigest = requested;
+    const onNavigate = () => {
+      const params = new URLSearchParams(window.location.search);
+      const digest = params.get("digest");
+      const nextPane = params.get("pane");
+      if (PANES.some((item) => item.id === nextPane))
+        setPaneState(nextPane as Pane);
+      if (digest && digest !== lastDigest) {
+        lastDigest = digest;
+        void inspect(digest, false, Boolean(nextPane));
+      }
+    };
+    window.addEventListener("popstate", onNavigate);
+    return () => window.removeEventListener("popstate", onNavigate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -189,14 +252,18 @@ export function HttpWorkbench({ arena }: { arena: ArenaData }) {
             ? result.detail
             : result.error || `Request rejected (${response.status})`,
         );
-      if (replayOf && result.transaction_digest)
-        setPair({ left: replayOf, right: result.transaction_digest });
+      const compared = Boolean(replayOf && result.transaction_digest);
+      if (compared) {
+        setPair({ left: replayOf!, right: result.transaction_digest });
+        setPane("compare");
+      }
       setReplayOf(null);
       setFormOpen(false);
       setMessage(`${method} ${path} → ${result.status}. Transaction recorded.`);
       setOffset(0);
       refresh();
-      if (result.transaction_digest) await inspect(result.transaction_digest);
+      if (result.transaction_digest)
+        await inspect(result.transaction_digest, false, compared);
     } catch (reason) {
       setMessage(reason instanceof Error ? reason.message : "Request failed");
     } finally {
@@ -205,195 +272,7 @@ export function HttpWorkbench({ arena }: { arena: ArenaData }) {
   }
 
   return (
-    <div className="http-work-grid">
-      <Panel
-        eyebrow="01 / DRIVE"
-        title="Arena HTTP request"
-        className="http-drive-panel"
-      >
-        <p className="http-intro">
-          Send to a target node inside this arena. The service scopes access,
-          records the response, and assigns an immutable digest.
-        </p>
-        {!editable ? (
-          <Empty
-            title="Archived transaction record"
-            detail="Requests and replays are unavailable after teardown. Stored transactions remain reviewable."
-          />
-        ) : !targets.length ? (
-          <Empty
-            title="No web-capable target"
-            detail="This arena has no declared target service for HTTP requests."
-          />
-        ) : (
-          <>
-            {!formOpen && (
-              <button
-                type="button"
-                className="button button-gold http-open"
-                onClick={() => setFormOpen(true)}
-              >
-                Send request ↗
-              </button>
-            )}
-            {formOpen && (
-              <form className="http-form" ref={formRef} onSubmit={submit}>
-                <MapTargetNotice
-                  requested={mapTarget.requested}
-                  accepted={mapTarget.accepted}
-                  tool="HTTP"
-                />
-                {replayOf && (
-                  <p className="http-replay-note">
-                    Replaying {replayOf}. Edits create a linked copy; the
-                    original stays intact.
-                  </p>
-                )}
-                <div className="http-request-line">
-                  <label>
-                    Method
-                    <select
-                      value={method}
-                      onChange={(event) => setMethod(event.target.value)}
-                    >
-                      {[
-                        "GET",
-                        "POST",
-                        "PUT",
-                        "PATCH",
-                        "DELETE",
-                        "HEAD",
-                        "OPTIONS",
-                      ].map((item) => (
-                        <option key={item}>{item}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Path
-                    <input
-                      value={path}
-                      onChange={(event) => setPath(event.target.value)}
-                      required
-                      maxLength={2048}
-                      spellCheck={false}
-                      placeholder="/records/42"
-                    />
-                  </label>
-                </div>
-                <label>
-                  Target node
-                  <select
-                    value={node}
-                    onChange={(event) => {
-                      mapTarget.clear();
-                      setNode(event.target.value);
-                    }}
-                  >
-                    {targets.map((target) => (
-                      <option key={target.name} value={target.name}>
-                        {target.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Params
-                  <input
-                    value={params}
-                    onChange={(event) => setParams(event.target.value)}
-                    spellCheck={false}
-                    placeholder="key=value&amp;page=2"
-                  />
-                </label>
-                <label>
-                  Headers
-                  <textarea
-                    aria-label="Request headers"
-                    value={headers}
-                    onChange={(event) => setHeaders(event.target.value)}
-                    rows={3}
-                    spellCheck={false}
-                    placeholder="X-Research-Token: value (one per line)"
-                  />
-                </label>
-                {replayOf && (
-                  <fieldset className="http-identity">
-                    <legend>Account for this replay</legend>
-                    <p>
-                      Stored headers are inherited server-side:{" "}
-                      {inheritedHeaders.join(", ") || "none withheld"}. Values
-                      stay out of this editor.
-                    </p>
-                    <label>
-                      Credential source transaction (optional)
-                      <input
-                        value={credentialSource}
-                        onChange={(event) =>
-                          setCredentialSource(event.target.value)
-                        }
-                        placeholder="sha256:… from this arena"
-                        maxLength={71}
-                      />
-                    </label>
-                    <label>
-                      Credential header names
-                      <input
-                        value={credentialHeaders}
-                        onChange={(event) =>
-                          setCredentialHeaders(event.target.value)
-                        }
-                        placeholder="Authorization, Cookie"
-                      />
-                    </label>
-                    <p>
-                      Leave the source empty to keep the original account.
-                      Override request IDs in Headers when the target requires
-                      unique IDs.
-                    </p>
-                  </fieldset>
-                )}
-                <label>
-                  Body
-                  <textarea
-                    aria-label="Request body"
-                    value={body}
-                    onChange={(event) => setBody(event.target.value)}
-                    rows={5}
-                    spellCheck={false}
-                    placeholder="Optional text body"
-                  />
-                </label>
-                <div className="http-form-actions">
-                  <button
-                    type="button"
-                    className="button button-outline"
-                    disabled={pending}
-                    onClick={() => {
-                      setFormOpen(false);
-                      setReplayOf(null);
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button className="button button-gold" disabled={pending}>
-                    {pending
-                      ? "Sending…"
-                      : replayOf
-                        ? "Replay with edits ↗"
-                        : "Send and record ↗"}
-                  </button>
-                </div>
-              </form>
-            )}
-          </>
-        )}
-        {message && (
-          <p className="poc-message" role="status">
-            {message}
-          </p>
-        )}
-      </Panel>
+    <div className="http-work-grid http-panes">
       <Panel
         eyebrow="02 / LEDGER"
         title="Recorded transactions"
@@ -415,21 +294,29 @@ export function HttpWorkbench({ arena }: { arena: ArenaData }) {
                 <article key={item.digest} className="http-transaction">
                   <div>
                     <span className="tiny-tag">HTTP</span>
-                    <strong>
-                      {detail?.digest === item.digest
-                        ? `${detail.request.method} ${detail.request.path}`
-                        : "Recorded transaction"}
+                    <strong className="http-row-line">
+                      {item.summary?.method && item.summary.path
+                        ? `${item.summary.method} ${item.summary.path}`
+                        : "Transaction (summary unavailable)"}
                     </strong>
-                    {detail?.digest === item.digest && (
-                      <Status value={String(detail.response.status)} />
+                    {item.summary?.status != null && (
+                      <span
+                        className={`http-status http-status-${String(item.summary.status)[0]}xx`}
+                      >
+                        {item.summary.status}
+                      </span>
                     )}
                   </div>
                   <small>
+                    {item.summary?.node ? `${item.summary.node} · ` : ""}
+                    {item.summary?.response_bytes != null
+                      ? `${formatBytes(item.summary.response_bytes)} response`
+                      : `${item.bytes ?? "?"} stored bytes`}
+                    {item.elapsed_ms != null ? ` · ${item.elapsed_ms} ms` : ""}
+                    {" · "}
                     {item.created_at
                       ? formatObserved(item.created_at)
-                      : "Time unknown"}{" "}
-                    · {item.bytes ?? "?"} stored bytes
-                    {item.elapsed_ms != null ? ` · ${item.elapsed_ms} ms` : ""}
+                      : "Time unknown"}
                   </small>
                   <code>{item.digest}</code>
                   {item.replay_of && <small>Replay of {item.replay_of}</small>}
@@ -453,24 +340,20 @@ export function HttpWorkbench({ arena }: { arena: ArenaData }) {
                     <button
                       type="button"
                       className="button button-outline"
-                      onClick={() =>
-                        setPair((previous) => ({
-                          ...previous,
-                          left: item.digest,
-                        }))
-                      }
+                      onClick={() => {
+                        if (pair.right) setPane("compare");
+                        setPair({ ...pair, left: item.digest });
+                      }}
                     >
                       Set A
                     </button>
                     <button
                       type="button"
                       className="button button-outline"
-                      onClick={() =>
-                        setPair((previous) => ({
-                          ...previous,
-                          right: item.digest,
-                        }))
-                      }
+                      onClick={() => {
+                        if (pair.left) setPane("compare");
+                        setPair({ ...pair, right: item.digest });
+                      }}
                     >
                       Set B
                     </button>
@@ -518,66 +401,303 @@ export function HttpWorkbench({ arena }: { arena: ArenaData }) {
           />
         )}
       </Panel>
-      <HttpComparisonWorkbench
-        arenaId={arena.id}
-        pair={pair}
-        onSelect={setPair}
-      />
-      <Panel
-        eyebrow="03 / INSPECT"
-        title="Transaction detail"
-        className="http-detail-panel"
-      >
-        {detailError && (
-          <p className="form-error" role="alert">
-            {detailError}
-          </p>
-        )}
-        {detail ? (
-          <div className="http-detail">
-            <div className="http-detail-head">
-              <strong>
-                {detail.request.method} {detail.request.path}
-              </strong>
-              <code>{detail.digest}</code>
-            </div>
-            <p>
-              Authentication header values are withheld.{" "}
-              {detail.preview_clipped
-                ? "Response preview clipped; use the retained transaction for full captured content."
+      <div className="http-pane-area">
+        <div
+          className="http-pane-tabs"
+          role="tablist"
+          aria-label="HTTP tool panes"
+        >
+          {PANES.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              id={`http-tab-${item.id}`}
+              aria-selected={pane === item.id}
+              aria-controls={`http-pane-${item.id}`}
+              className={pane === item.id ? "active" : ""}
+              onClick={() => setPane(item.id)}
+            >
+              {item.label}
+              {item.id === "compare" && pair.left && pair.right
+                ? " · A/B set"
                 : ""}
+            </button>
+          ))}
+        </div>
+        <div
+          role="tabpanel"
+          id="http-pane-request"
+          aria-labelledby="http-tab-request"
+          hidden={pane !== "request"}
+        >
+          <Panel
+            eyebrow="01 / DRIVE"
+            title="Arena HTTP request"
+            className="http-drive-panel"
+          >
+            <p className="http-intro">
+              Send to a target node inside this arena. The service scopes
+              access, records the response, and assigns an immutable digest.
             </p>
-            <div className="http-detail-columns">
-              <section>
-                <h3>Request</h3>
-                <pre>{JSON.stringify(detail.request, null, 2)}</pre>
-              </section>
-              <section>
-                <h3>Response · {detail.response.status}</h3>
-                <pre>{JSON.stringify(detail.response, null, 2)}</pre>
-              </section>
-            </div>
-            <div className="panel-foot">
-              <span>
-                {detail.replay_of
-                  ? `Linked replay of ${detail.replay_of}`
-                  : "Original transaction"}
-              </span>
-              <a
-                className="inline-action"
-                href={`/console/arena/${id}?tab=findings&transaction=${encodeURIComponent(detail.digest)}`}
-              >
-                Use in finding ↗
-              </a>
-            </div>
-          </div>
-        ) : (
-          <Empty
-            title="Choose a transaction"
-            detail="Inspect the bounded request and response, or replay a stored request with edits."
+            {!editable ? (
+              <Empty
+                title="Archived transaction record"
+                detail="Requests and replays are unavailable after teardown. Stored transactions remain reviewable."
+              />
+            ) : !targets.length ? (
+              <Empty
+                title="No web-capable target"
+                detail="This arena has no declared target service for HTTP requests."
+              />
+            ) : (
+              <>
+                {!formOpen && (
+                  <button
+                    type="button"
+                    className="button button-gold http-open"
+                    onClick={() => {
+                      setFormOpen(true);
+                      setPane("request");
+                    }}
+                  >
+                    Send request ↗
+                  </button>
+                )}
+                {formOpen && (
+                  <form className="http-form" ref={formRef} onSubmit={submit}>
+                    <MapTargetNotice
+                      requested={mapTarget.requested}
+                      accepted={mapTarget.accepted}
+                      tool="HTTP"
+                    />
+                    {replayOf && (
+                      <p className="http-replay-note">
+                        Replaying {replayOf}. Edits create a linked copy; the
+                        original stays intact.
+                      </p>
+                    )}
+                    <div className="http-request-line">
+                      <label>
+                        Method
+                        <select
+                          value={method}
+                          onChange={(event) => setMethod(event.target.value)}
+                        >
+                          {[
+                            "GET",
+                            "POST",
+                            "PUT",
+                            "PATCH",
+                            "DELETE",
+                            "HEAD",
+                            "OPTIONS",
+                          ].map((item) => (
+                            <option key={item}>{item}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Path
+                        <input
+                          value={path}
+                          onChange={(event) => setPath(event.target.value)}
+                          required
+                          maxLength={2048}
+                          spellCheck={false}
+                          placeholder="/records/42"
+                        />
+                      </label>
+                    </div>
+                    <label>
+                      Target node
+                      <select
+                        value={node}
+                        onChange={(event) => {
+                          mapTarget.clear();
+                          setNode(event.target.value);
+                        }}
+                      >
+                        {targets.map((target) => (
+                          <option key={target.name} value={target.name}>
+                            {target.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Params
+                      <input
+                        value={params}
+                        onChange={(event) => setParams(event.target.value)}
+                        spellCheck={false}
+                        placeholder="key=value&amp;page=2"
+                      />
+                    </label>
+                    <label>
+                      Headers
+                      <textarea
+                        aria-label="Request headers"
+                        value={headers}
+                        onChange={(event) => setHeaders(event.target.value)}
+                        rows={3}
+                        spellCheck={false}
+                        placeholder="X-Research-Token: value (one per line)"
+                      />
+                    </label>
+                    {replayOf && (
+                      <fieldset className="http-identity">
+                        <legend>Account for this replay</legend>
+                        <p>
+                          Stored headers are inherited server-side:{" "}
+                          {inheritedHeaders.join(", ") || "none withheld"}.
+                          Values stay out of this editor.
+                        </p>
+                        <label>
+                          Credential source transaction (optional)
+                          <input
+                            value={credentialSource}
+                            onChange={(event) =>
+                              setCredentialSource(event.target.value)
+                            }
+                            placeholder="sha256:… from this arena"
+                            maxLength={71}
+                          />
+                        </label>
+                        <label>
+                          Credential header names
+                          <input
+                            value={credentialHeaders}
+                            onChange={(event) =>
+                              setCredentialHeaders(event.target.value)
+                            }
+                            placeholder="Authorization, Cookie"
+                          />
+                        </label>
+                        <p>
+                          Leave the source empty to keep the original account.
+                          Override request IDs in Headers when the target
+                          requires unique IDs.
+                        </p>
+                      </fieldset>
+                    )}
+                    <label>
+                      Body
+                      <textarea
+                        aria-label="Request body"
+                        value={body}
+                        onChange={(event) => setBody(event.target.value)}
+                        rows={5}
+                        spellCheck={false}
+                        placeholder="Optional text body"
+                      />
+                    </label>
+                    <div className="http-form-actions">
+                      <button
+                        type="button"
+                        className="button button-outline"
+                        disabled={pending}
+                        onClick={() => {
+                          setFormOpen(false);
+                          setReplayOf(null);
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button className="button button-gold" disabled={pending}>
+                        {pending
+                          ? "Sending…"
+                          : replayOf
+                            ? "Replay with edits ↗"
+                            : "Send and record ↗"}
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </>
+            )}
+            {message && (
+              <p className="poc-message" role="status">
+                {message}
+              </p>
+            )}
+          </Panel>
+        </div>
+        <div
+          role="tabpanel"
+          id="http-pane-compare"
+          aria-labelledby="http-tab-compare"
+          hidden={pane !== "compare"}
+        >
+          <HttpComparisonWorkbench
+            arenaId={arena.id}
+            pair={pair}
+            onSelect={setPair}
           />
-        )}
-      </Panel>
+        </div>
+        <div
+          role="tabpanel"
+          id="http-pane-detail"
+          aria-labelledby="http-tab-detail"
+          hidden={pane !== "detail"}
+        >
+          <Panel
+            eyebrow="03 / INSPECT"
+            title="Transaction detail"
+            className="http-detail-panel"
+          >
+            {detailError && (
+              <p className="form-error" role="alert">
+                {detailError}
+              </p>
+            )}
+            {detail ? (
+              <div className="http-detail">
+                <div className="http-detail-head">
+                  <strong>
+                    {detail.request.method} {detail.request.path}
+                  </strong>
+                  <code>{detail.digest}</code>
+                </div>
+                <p>
+                  Authentication header values are withheld.{" "}
+                  {detail.preview_clipped
+                    ? "Response preview clipped; use the retained transaction for full captured content."
+                    : ""}
+                </p>
+                <div className="http-detail-columns">
+                  <section>
+                    <h3>Request</h3>
+                    <pre>{JSON.stringify(detail.request, null, 2)}</pre>
+                  </section>
+                  <section>
+                    <h3>Response · {detail.response.status}</h3>
+                    <pre>{JSON.stringify(detail.response, null, 2)}</pre>
+                  </section>
+                </div>
+                <div className="panel-foot">
+                  <span>
+                    {detail.replay_of
+                      ? `Linked replay of ${detail.replay_of}`
+                      : "Original transaction"}
+                  </span>
+                  <a
+                    className="inline-action"
+                    href={`/console/arena/${id}?tab=findings&transaction=${encodeURIComponent(detail.digest)}`}
+                  >
+                    Use in finding ↗
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <Empty
+                title="Choose a transaction"
+                detail="Inspect the bounded request and response, or replay a stored request with edits."
+              />
+            )}
+          </Panel>
+        </div>
+      </div>
     </div>
   );
 }

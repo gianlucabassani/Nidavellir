@@ -6,6 +6,94 @@ import { Empty, ErrorState, Loading, Panel, useWorkspaceData } from "../ui";
 
 type Pair = { left: string; right: string };
 
+type DiffRow =
+  | { kind: "hunk"; text: string }
+  | {
+      kind: "line";
+      left: string | null;
+      right: string | null;
+      change: "same" | "changed" | "removed" | "added";
+    };
+
+/** A unified diff as aligned A/B rows: runs of removals and additions pair
+ * up line by line; context lines appear on both sides. */
+export function sideBySide(diff: string): DiffRow[] {
+  const rows: DiffRow[] = [];
+  let removed: string[] = [];
+  let added: string[] = [];
+  const flush = () => {
+    for (let i = 0; i < Math.max(removed.length, added.length); i++) {
+      const left = removed[i] ?? null;
+      const right = added[i] ?? null;
+      rows.push({
+        kind: "line",
+        left,
+        right,
+        change:
+          left != null && right != null
+            ? "changed"
+            : left != null
+              ? "removed"
+              : "added",
+      });
+    }
+    removed = [];
+    added = [];
+  };
+  for (const line of diff.split("\n")) {
+    if (line.startsWith("---") || line.startsWith("+++")) continue;
+    if (line.startsWith("@@")) {
+      flush();
+      rows.push({ kind: "hunk", text: line });
+    } else if (line.startsWith("-")) removed.push(line.slice(1));
+    else if (line.startsWith("+")) added.push(line.slice(1));
+    else if (line.startsWith(" ")) {
+      flush();
+      rows.push({
+        kind: "line",
+        left: line.slice(1),
+        right: line.slice(1),
+        change: "same",
+      });
+    }
+  }
+  flush();
+  return rows;
+}
+
+function SideBySideDiff({ diff, label }: { diff: string; label: string }) {
+  const rows = sideBySide(diff);
+  if (!rows.length) return null;
+  return (
+    <div className="http-diff" role="table" aria-label={label}>
+      <div className="http-diff-head" role="row">
+        <span role="columnheader">A</span>
+        <span role="columnheader">B</span>
+      </div>
+      {rows.map((row, index) =>
+        row.kind === "hunk" ? (
+          <div key={index} className="http-diff-hunk" role="row">
+            <span role="cell">{row.text}</span>
+          </div>
+        ) : (
+          <div
+            key={index}
+            className={`http-diff-row http-diff-${row.change}`}
+            role="row"
+          >
+            <code role="cell" className="http-diff-a">
+              {row.left ?? ""}
+            </code>
+            <code role="cell" className="http-diff-b">
+              {row.right ?? ""}
+            </code>
+          </div>
+        ),
+      )}
+    </div>
+  );
+}
+
 function ComparedResponses({ arenaId, pair }: { arenaId: string; pair: Pair }) {
   const id = encodeURIComponent(arenaId);
   const { value, error, loading, refresh } = useWorkspaceData<HttpComparison>(
@@ -68,18 +156,37 @@ function ComparedResponses({ arenaId, pair }: { arenaId: string; pair: Pair }) {
           ? "Complete captured body comparison."
           : "Review the capture and preview limits above."}
       </p>
-      <pre aria-label="Response body diff">
-        {value.body_diff || "No differences visible in these previews."}
-      </pre>
+      {value.body_diff ? (
+        <>
+          <SideBySideDiff
+            diff={value.body_diff}
+            label="Response body diff, side by side"
+          />
+          <details>
+            <summary>Unified diff</summary>
+            <pre aria-label="Response body diff">{value.body_diff}</pre>
+          </details>
+        </>
+      ) : (
+        <pre aria-label="Response body diff">
+          No differences visible in these previews.
+        </pre>
+      )}
       <h3>Response header differences</h3>
       <p>
         Cookie values, redirect query values and unrecognized headers are
         withheld.
       </p>
-      <pre aria-label="Response header diff">
-        {value.response_headers_diff ||
-          "No differences in projected response headers."}
-      </pre>
+      {value.response_headers_diff ? (
+        <SideBySideDiff
+          diff={value.response_headers_diff}
+          label="Response header diff"
+        />
+      ) : (
+        <pre aria-label="Response header diff">
+          No differences in projected response headers.
+        </pre>
+      )}
       <a
         className="inline-action"
         href={`/console/arena/${id}?tab=findings&transaction=${encodeURIComponent(pair.left + "," + pair.right)}`}

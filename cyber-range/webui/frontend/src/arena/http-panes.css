@@ -1,0 +1,129 @@
+/* UX-13: HTTP tool as panes, ledger rows and side-by-side diff. */
+.http-panes {
+  grid-template-columns: minmax(300px, 0.8fr) minmax(0, 1.4fr);
+}
+.http-panes .http-ledger-panel {
+  position: sticky;
+  top: 12px;
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+}
+.http-panes .http-detail-panel {
+  grid-column: auto;
+}
+.http-pane-area {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.http-pane-tabs {
+  display: flex;
+  gap: 1px;
+  border: 1px solid var(--line);
+  background: var(--line);
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.http-pane-tabs button {
+  padding: 8px 16px;
+  border: 0;
+  background: var(--surface);
+  color: var(--muted);
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.http-pane-tabs button.active {
+  background: var(--accent-soft);
+  color: var(--ink);
+  box-shadow: inset 0 -3px 0 var(--gold);
+}
+.http-pane-tabs button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+.http-row-line {
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+}
+.http-status {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 800;
+}
+.http-status-2xx {
+  border-color: var(--success);
+  background: var(--success-soft);
+  color: var(--success);
+}
+.http-status-3xx {
+  border-color: var(--warning);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.http-status-4xx,
+.http-status-5xx {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.http-diff {
+  margin: 8px 0 14px;
+  border: 1px solid var(--line);
+  font-size: 12px;
+  max-height: 480px;
+  overflow: auto;
+}
+.http-diff-head,
+.http-diff-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.http-diff-head span {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-soft);
+  color: var(--subtle);
+  font-weight: 900;
+}
+.http-diff-hunk span {
+  display: block;
+  padding: 2px 8px;
+  background: var(--surface-soft);
+  color: var(--subtle);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.http-diff-row code {
+  display: block;
+  min-height: 1.4em;
+  padding: 1px 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.http-diff-a {
+  border-right: 1px solid var(--line-soft);
+}
+.http-diff-changed .http-diff-a,
+.http-diff-removed .http-diff-a {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.http-diff-changed .http-diff-b,
+.http-diff-added .http-diff-b {
+  background: var(--success-soft);
+  color: var(--success);
+}
+@media (max-width: 860px) {
+  .http-panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .http-panes .http-ledger-panel {
+    position: static;
+    max-height: none;
+  }
+}

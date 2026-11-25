@@ -386,7 +386,7 @@ Order: data model first, then views.
 
 - [x] **UX-11 — Evaluation dashboard (FR-16)** and **UX-12 — trial comparison (FR-17)**:
   side-by-side timelines aligned by step, first divergence highlighted.
-- [ ] **UX-13 — Tools of the job (FR-18):** node log tail, operator shell over exec (each
+- [x] **UX-13 — Tools of the job (FR-18):** node log tail, operator shell over exec (each
   command a span), HTTP tool as panes with real ledger rows and coloured diff, global
   search incl. digest prefix, command palette (Ctrl/Cmd-K).
 - [ ] **UX-14 — Operations page (FR-19).**

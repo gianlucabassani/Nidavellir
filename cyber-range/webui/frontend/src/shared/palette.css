@@ -1,0 +1,107 @@
+/* UX-13: command palette. */
+.palette {
+  width: min(640px, calc(100vw - 32px));
+  max-height: min(70vh, 560px);
+  margin: 12vh auto auto;
+  padding: 0;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 24px 60px #0004;
+}
+.palette[open] {
+  display: flex;
+  flex-direction: column;
+}
+.palette::backdrop {
+  background: #0006;
+}
+.palette-input {
+  width: 100%;
+  padding: 16px 18px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font-size: 16px;
+}
+.palette-input:focus {
+  outline: none;
+  box-shadow: inset 0 -2px 0 var(--gold);
+}
+.palette-status {
+  min-height: 0;
+  padding: 0 18px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.palette-status:not(:empty) {
+  padding: 6px 18px;
+}
+.palette-list {
+  flex: 1;
+  margin: 0;
+  padding: 4px 0;
+  overflow: auto;
+  list-style: none;
+}
+.palette-group {
+  padding: 8px 18px 4px;
+  color: var(--subtle);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.palette-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 18px;
+  cursor: pointer;
+}
+.palette-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.palette-item small {
+  flex-shrink: 0;
+  max-width: 45%;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.palette-item.active {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--gold);
+}
+.palette-empty {
+  padding: 14px 18px;
+  color: var(--muted);
+}
+.palette-foot {
+  padding: 8px 18px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--subtle);
+  font-size: 11px;
+}
+.palette-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--bar-edge);
+  background: transparent;
+  color: var(--bar-ink);
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.palette-trigger kbd {
+  padding: 0 4px;
+  white-space: nowrap;
+  border: 1px solid var(--bar-edge);
+  font-size: 11px;
+}

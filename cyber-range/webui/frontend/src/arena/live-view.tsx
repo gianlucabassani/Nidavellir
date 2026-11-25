@@ -206,6 +206,22 @@ export function AgentLiveView({
     );
   }, [id, current?.id]);
 
+  // UX-13: ?span=<span_id> (from search) selects that span once it is loaded.
+  const deepLink = useRef(
+    new URLSearchParams(window.location.search).get("span"),
+  );
+  useEffect(() => {
+    if (!deepLink.current || !loaded) return;
+    const index = visible.findIndex(
+      (span) => span.span_id === deepLink.current,
+    );
+    if (index >= 0) {
+      deepLink.current = null;
+      select(index);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, visible]);
+
   function select(index: number) {
     const span = visible[Math.max(0, Math.min(visible.length - 1, index))];
     if (!span) return;

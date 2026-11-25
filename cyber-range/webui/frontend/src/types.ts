@@ -285,6 +285,13 @@ export type HttpTransactionManifest = {
   bytes: number;
   actor: string | null;
   elapsed_ms: number | null;
+  summary?: {
+    method: string | null;
+    path: string | null;
+    node: string | null;
+    status: number | null;
+    response_bytes: number | null;
+  } | null;
 };
 export type ActivityData = {
   findings: {

@@ -74,6 +74,7 @@ import otlp
 import board
 import spans
 import streams
+from redaction import redact
 import telemetry
 from actions import action
 import vulhub_import
@@ -3178,6 +3179,54 @@ def exec_in_arena(
     }
 
 
+NODE_LOG_TAIL_MAX = 1000
+
+
+@app.get("/arenas/{instance_id}/nodes/{node}/logs")
+def arena_node_logs(
+    instance_id: str,
+    node: str,
+    tail: int = Query(default=200, ge=1, le=NODE_LOG_TAIL_MAX),
+    since: float | None = Query(default=None, ge=0),
+    principal: Principal = Depends(require_principal),
+):
+    """UX-13: a bounded tail of one node's container log. Operator-only and
+    redacted. Opening the tail (no ``since``) is an audited action; follow-up
+    reads with ``since`` are not re-audited, and nothing is budgeted."""
+    _require_operator(principal)
+    record = db.get_deployment(instance_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    if record.get("status") != "active":
+        raise HTTPException(
+            status_code=409, detail=f"Arena is '{record.get('status')}', not active")
+    outputs = record.get("outputs") or {}
+    if isinstance(outputs, str):
+        try:
+            outputs = json.loads(outputs)
+        except json.JSONDecodeError:
+            outputs = {}
+    known = {k[len("node_"):-len("_name")] for k in outputs
+             if k.startswith("node_") and k.endswith("_name")}
+    if node not in known:
+        raise HTTPException(status_code=404, detail="Unknown node")
+    orch = Orchestrator(
+        provider_name=record.get("effective_provider") or record.get("provider"))
+    try:
+        result = orch.node_logs(instance_id, node, tail=tail, since=since)
+    except NotImplementedError as e:
+        raise HTTPException(status_code=501, detail=str(e)) from e
+    if not result.get("success"):
+        raise HTTPException(status_code=502, detail="log read failed")
+    lines = [{"ts": str(line.get("ts") or ""), "text": redact(line.get("text") or "")}
+             for line in result.get("lines") or []][-tail:]
+    if since is None:
+        db.record_event(instance_id, "node_logs_read",
+                        {"node": node, "tail": tail, "lines": len(lines)},
+                        actor=principal.name)
+    return {"node": node, "lines": lines}
+
+
 class MitmObserveRequest(BaseModel):
     seconds: int = Field(default=6, ge=1, le=60)
     max_packets: int = Field(default=200, ge=1, le=2000)
@@ -3352,6 +3401,17 @@ def _board_snapshot() -> dict:
 
 def _stringify_now() -> str:
     return db_now().isoformat(sep=" ")
+
+
+@app.get("/search")
+def global_search(q: str = Query(min_length=2, max_length=200),
+                  principal: Principal = Depends(require_principal)):
+    """UX-13: arenas, findings, HTTP transactions and spans by text or by
+    digest prefix (``sha256:`` optional, at least 6 hex characters). Operator-only."""
+    _require_operator(principal)
+    import search  # noqa: PLC0415
+    with db._session() as session:
+        return search.search(session, q)
 
 
 @app.get("/board")

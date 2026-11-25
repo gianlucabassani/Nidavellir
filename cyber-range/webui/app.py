@@ -126,6 +126,21 @@ def _api_post(path, payload=None, timeout=15):
     return data, resp.status_code
 
 
+def _api_get_status(path, timeout=10):
+    """GET JSON from the orchestrator; returns (json, status_code) with the
+    service's own error message on a non-200, like `_api_post`."""
+    try:
+        resp = requests.get(f"{API_URL}{path}", headers=API_HEADERS, timeout=timeout)
+    except requests.RequestException:
+        return {"error": "orchestrator unreachable"}, 502
+    if resp.status_code != 200:
+        return {"error": _api_error(resp)}, resp.status_code
+    try:
+        return resp.json(), 200
+    except ValueError:
+        return {"error": "invalid orchestrator response"}, 502
+
+
 def _api_get(path, timeout=5):
     """GET {API_URL}{path}; returns (json_or_None, ok)."""
     try:
@@ -3242,6 +3257,17 @@ def arena_stream(instance_id):
                          request.headers.get("Last-Event-ID", ""))
 
 
+@app.route("/api/console/search")
+def console_search():
+    """UX-13: global search for the command palette."""
+    query = request.args.get("q", "").strip()
+    if len(query) < 2:
+        return jsonify({"query": query, "mode": "none", "arenas": [], "findings": [],
+                        "transactions": [], "spans": []})
+    data, code = _api_get_status("/search?" + urlencode({"q": query[:200]}))
+    return jsonify(data), code
+
+
 @app.route("/api/console/board")
 def console_board():
     """OBS-06: the cross-arena agents board snapshot."""
@@ -3419,6 +3445,34 @@ def validation_evidence_proxy(instance_id, digest):
         f"/arenas/{instance_id}/validation-evidence/{quote(digest, safe='')}"
     )
     return jsonify(data or {"error": "not found"}), (200 if ok else 404)
+
+
+@app.route("/api/console/arenas/<instance_id>/nodes/<node>/logs")
+def console_node_logs(instance_id, node):
+    """UX-13: bounded, redacted node log tail (operator-only in the API)."""
+    params = {"tail": request.args.get("tail", "200")}
+    if request.args.get("since"):
+        params["since"] = request.args["since"]
+    data, code = _api_get_status(
+        f"/arenas/{quote(instance_id, safe='')}/nodes/{quote(node, safe='')}/logs?"
+        + urlencode(params))
+    return jsonify(data), code
+
+
+@app.route("/api/console/arenas/<instance_id>/exec", methods=["POST"])
+def console_exec(instance_id):
+    """UX-13: one operator shell command through the arena's `exec` action, so
+    it is budgeted, audited and recorded as a span like any other action."""
+    body = request.get_json(silent=True) or {}
+    command, node = body.get("command"), body.get("node")
+    if not isinstance(command, str) or not command.strip() or not isinstance(node, str):
+        return jsonify({"error": "Choose a node and enter a command"}), 400
+    timeout = body.get("timeout", 30)
+    payload = {"node": node, "command": command,
+               "timeout": timeout if isinstance(timeout, int) else 30}
+    data, code = _api_post(f"/arenas/{quote(instance_id, safe='')}/exec", payload,
+                           timeout=130)
+    return jsonify(data), code
 
 
 @app.route("/api/arenas/<instance_id>/http/request", methods=["POST"])

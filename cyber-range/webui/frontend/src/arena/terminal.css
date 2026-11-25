@@ -1,0 +1,73 @@
+/* UX-13: shell and log tail. */
+.terminal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 18px;
+}
+@media (max-width: 600px) {
+  .terminal-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.terminal-panel > :not(.panel-head) {
+  margin-left: 22px;
+  margin-right: 22px;
+}
+.terminal-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.terminal-bar label {
+  display: grid;
+  gap: 4px;
+  color: var(--subtle);
+  font-size: 11px;
+  font-weight: 800;
+}
+.terminal-bar small {
+  color: var(--muted);
+}
+.terminal-follow {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+}
+.terminal-output {
+  height: 420px;
+  margin-bottom: 18px;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  background: var(--bar);
+  color: var(--bar-ink);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.terminal-output time {
+  color: var(--gold);
+}
+.terminal-command {
+  color: var(--gold);
+}
+.terminal-error {
+  color: #f2a7b5;
+}
+.terminal-meta {
+  color: #b8b2c4;
+}
+.terminal-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.terminal-form input {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}

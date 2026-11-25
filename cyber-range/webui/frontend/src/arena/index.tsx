@@ -14,6 +14,7 @@ import {
 import { PocWorkbench } from "./poc";
 import { FindingsWorkbench } from "./findings";
 import { HttpWorkbench } from "./http";
+import { TerminalWorkbench } from "./terminal";
 import { EvidenceWorkbench } from "./evidence";
 import { SetupWorkbench } from "./setup";
 import { AgentAccess } from "./access";
@@ -22,7 +23,9 @@ import { Infrastructure } from "./infrastructure";
 import { BrowserWorkbench } from "./browser";
 import { TransferWorkbench } from "./transfer";
 import { ForgeOverview } from "./forge";
-import { ArenaNavigation } from "./navigation";
+import { ArenaNavigation, categories } from "./navigation";
+import { usePaletteActions } from "../shared/palette";
+import { navigate } from "../router";
 import { LaunchProgress } from "./progress";
 import { AgentLiveView, type SpanFeed } from "./live-view";
 import type { Span } from "../types";
@@ -155,6 +158,37 @@ export function ArenaWorkspace({ id }: { id: string }) {
       setGatePending(false);
     }
   }
+  // UX-13: the arena's tools and its primary action in the command palette.
+  // Stop opens the same confirmation dialog as the button.
+  usePaletteActions(`arena:${id}`, [
+    ...(value?.state === "active"
+      ? [
+          {
+            id: "stop",
+            label: "Stop research on this arena…",
+            hint: "asks to confirm",
+            run: () => {
+              setGateError("");
+              setConfirmAction("stop");
+            },
+          },
+        ]
+      : []),
+    {
+      id: "tab:live",
+      label: "Open agent live view",
+      run: () => navigate(`/console/arena/${encodeURIComponent(id)}?tab=live`),
+    },
+    ...categories.flatMap((category) =>
+      category.items.map((item) => ({
+        id: `tab:${item.tab}`,
+        label: `Open ${item.label}`,
+        hint: category.label,
+        run: () =>
+          navigate(`/console/arena/${encodeURIComponent(id)}?tab=${item.tab}`),
+      })),
+    ),
+  ]);
   if (loading && !value) return <Loading />;
   if (error && !value) return <ErrorState message={error} refresh={refresh} />;
   if (!value) return null;
@@ -254,6 +288,8 @@ export function ArenaWorkspace({ id }: { id: string }) {
               <SetupWorkbench arena={value} compactFlow />
             ) : tab === "http" ? (
               <HttpWorkbench arena={value} />
+            ) : tab === "terminal" ? (
+              <TerminalWorkbench arena={value} />
             ) : tab === "poc" ? (
               <PocWorkbench arena={value} />
             ) : tab === "findings" ? (

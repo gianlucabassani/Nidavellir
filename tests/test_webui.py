@@ -2779,3 +2779,56 @@ def test_benchmark_preflight_projects_suite_limits_without_build_secrets(client,
     assert selected["action_cap"] == 12
     assert selected["deadline_seconds"] == 600
     assert b"never-export" not in response.data
+
+
+def test_console_node_logs_proxy_keeps_service_status_and_quotes_node(client, monkeypatch):
+    """UX-13: the log tail passes tail/since through and keeps the API's own
+    status (409 inactive, 403 non-operator) instead of a generic 503."""
+    import app as webui_module
+
+    calls = []
+
+    def fake(path, timeout=10):
+        calls.append(path)
+        return ({"error": "Arena is 'destroyed', not active"}, 409) if "dead" in path \
+            else ({"node": "victim", "lines": []}, 200)
+
+    monkeypatch.setattr(webui_module, "_api_get_status", fake)
+    assert _login(client).status_code == 302
+    ok = client.get("/api/console/arenas/a1/nodes/vic tim/logs?tail=50&since=17")
+    assert ok.status_code == 200
+    assert calls[-1] == "/arenas/a1/nodes/vic%20tim/logs?tail=50&since=17"
+    dead = client.get("/api/console/arenas/dead/nodes/victim/logs")
+    assert dead.status_code == 409 and "not active" in dead.get_json()["error"]
+
+
+def test_console_exec_validates_and_posts_one_exec_action(client, monkeypatch):
+    """UX-13: the shell proxy sends exactly node/command/timeout to `exec`."""
+    import app as webui_module
+
+    sent = []
+    monkeypatch.setattr(webui_module, "_api_post", lambda path, payload=None, timeout=15: (
+        sent.append((path, payload)) or ({"exit_code": 0, "stdout": "uid=0", "stderr": ""}, 200)))
+    token = _csrf_token(client)
+    assert _login(client).status_code == 302
+    headers = {"X-CSRFToken": token}
+    bad = client.post("/api/console/arenas/a1/exec", json={"node": "v", "command": " "},
+                      headers=headers)
+    assert bad.status_code == 400 and sent == []
+    ok = client.post("/api/console/arenas/a1/exec",
+                     json={"node": "v", "command": "id", "extra": "x"}, headers=headers)
+    assert ok.status_code == 200
+    assert sent == [("/arenas/a1/exec", {"node": "v", "command": "id", "timeout": 30})]
+
+
+def test_console_search_short_query_skips_the_api_and_long_ones_are_encoded(client, monkeypatch):
+    import app as webui_module
+
+    calls = []
+    monkeypatch.setattr(webui_module, "_api_get_status", lambda path, timeout=10: (
+        calls.append(path) or ({"mode": "text"}, 200)))
+    assert _login(client).status_code == 302
+    assert client.get("/api/console/search?q=a").get_json()["mode"] == "none"
+    assert calls == []
+    assert client.get("/api/console/search?q=admin users&x=1").status_code == 200
+    assert calls == ["/search?q=admin+users"]

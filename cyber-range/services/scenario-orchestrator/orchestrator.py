@@ -59,6 +59,11 @@ class Orchestrator:
         )
         return self.provider.exec_in_node(instance_id, node, command, timeout)
 
+    def node_logs(self, instance_id: str, node: str, *, tail: int = 200,
+                  since: float | None = None):
+        """UX-13: bounded node log tail from the arena's own provider."""
+        return self.provider.node_logs(instance_id, node, tail=tail, since=since)
+
     def set_node_egress(self, instance_id: str, node: str, open: bool):
         """Open/close a victim node's setup-time egress (configurator capability,
         ADR-0007). Delegates to the provider the arena was deployed with."""

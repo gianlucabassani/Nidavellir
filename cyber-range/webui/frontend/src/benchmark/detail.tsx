@@ -1,4 +1,6 @@
 import type { EvaluationDetailData } from "../types";
+import { navigate } from "../router";
+import { usePaletteActions } from "../shared/palette";
 import {
   ACTIVE,
   DifferencePlot,
@@ -32,6 +34,47 @@ export function EvaluationDetail({ id }: { id: string }) {
       `/api/console/evaluations/${encodeURIComponent(id)}`,
     );
   useEvaluationStream(id, ACTIVE.has(value?.state || ""), refresh);
+  const firstPair = (() => {
+    const trials = value?.trials || [];
+    for (const baseline of trials) {
+      if (baseline.side !== "baseline" || !baseline.arena_id) continue;
+      const candidate = trials.find(
+        (trial) =>
+          trial.side === "candidate" &&
+          trial.arena_id &&
+          trial.seed === baseline.seed &&
+          trial.challenge_id === baseline.challenge_id,
+      );
+      if (candidate) return { baseline, candidate };
+    }
+    return null;
+  })();
+  usePaletteActions(`evaluation:${id}`, [
+    ...(firstPair
+      ? [
+          {
+            id: "compare",
+            label: `Compare baseline and candidate, seed ${firstPair.baseline.seed}`,
+            run: () =>
+              navigate(
+                `/console/evaluations/${encodeURIComponent(id)}/compare?a=${encodeURIComponent(firstPair.baseline.id)}&b=${encodeURIComponent(firstPair.candidate.id)}`,
+              ),
+          },
+        ]
+      : []),
+    ...(value?.suite_id
+      ? [
+          {
+            id: "history",
+            label: "Open suite history",
+            run: () =>
+              navigate(
+                `/console/suites/${encodeURIComponent(value.suite_id!)}/history`,
+              ),
+          },
+        ]
+      : []),
+  ]);
   if (loading && !value) return <Loading />;
   if (error && !value) return <ErrorState message={error} refresh={refresh} />;
   if (!value) return null;
