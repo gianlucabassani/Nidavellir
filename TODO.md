@@ -456,7 +456,14 @@ Order: data model first, then views.
   - The tree grows from its roots on open, and new steps sprout.
   - The routes are a full-height panel: filters, cards with outcome, claim and activity; hover lights a branch, click focuses it. The step inspector sits below.
   - The Live view keeps only the step log.
-  - Browser check: `scripts/ux26-browser-check.cjs`.
+  - Rebuilt by UX-27; its browser check was replaced by UX-27's.
+- [x] **UX-27 — The run tree: the run's shape, not every step (#95).**
+  - The orchestrator folds the run (`GET /arenas/{id}/run-tree`, about 20 KB for 2,000 spans): agent cycles as rings on the trunk; one branch per route episode; failed calls clustered; findings as fruit.
+  - Short and background episodes stay on the trunk, so housekeeping never draws a branch across the run.
+  - The tree has the whole page, with a sticky toolbar: search with per-route matches, filters, replay, density.
+  - What you open slides in from the right: a route, a cycle or the trunk, with Summary / Steps (loaded on open, with input and output) / Errors.
+  - The page polls every 10 s while live.
+  - Browser check: `scripts/ux27-browser-check.cjs`.
 - [ ] **UX-21 — Benchmark lobby and live match (future, #78).** Game-like screens for every evaluation run:
   - a "Waiting for an agent to join" lobby: harness and agent cards from the reported client identity and the registered build; operators mark each side Ready, then start;
   - a live match: one actions-over-time chart for both sides with findings marked, observability (tokens, model calls, errors, budget) and a live classification scoreboard;

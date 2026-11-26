@@ -38,6 +38,18 @@ The current console exposes arena stop in the workspace and system stop under
 Settings. Operator MCP tools expose the same stop controls; all stances can
 read their bound arena budget.
 
+Operators can `GET /arenas/{id}/run-tree` (UX-27): the run folded into its
+shape for the console's Timeline page, instead of one record per span. The
+agent's cycles (each opens at `announce_agent`); the routes it pursued (a
+declared hypothesis, else an HTTP path prefix with three or more steps), each
+with state (finding, refuted, tested, open), counts, tool mix and its episodes
+(a route that goes quiet for 10 minutes starts a new episode; short or
+background episodes, ones that wrap whole episodes of other routes, stay on the
+trunk); failed calls; findings linked to their route; totals. Self-reported
+gateway calls fold into the enforced call they duplicate. `q` adds per-route
+match counts over step targets and inputs. `GET /arenas/{id}/run-tree/steps?
+route=<key>|trunk` returns one route's steps with input and output previews.
+
 Operators can `GET /system/operations` (UX-14): one read-only snapshot with
 dependency readiness (database, Redis, worker heartbeat when required, Docker),
 the Celery queue depth, the worker heartbeat age, running confined PoC jobs,

@@ -3439,6 +3439,54 @@ def arena_activity(instance_id: str, buckets: int = Query(default=24, ge=4, le=9
     return summary
 
 
+RUN_TREE_ROWS = 20000
+
+
+def _run_tree_context(instance_id: str, principal: Principal):
+    _require_operator(principal)
+    record = db.get_deployment(instance_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    return record
+
+
+@app.get("/arenas/{instance_id}/run-tree")
+def arena_run_tree(instance_id: str, q: str | None = Query(default=None, max_length=200),
+                   principal: Principal = Depends(require_principal)):
+    """UX-27: the run as a tree, aggregated here so the console draws the
+    shape of the run instead of one mark per span: the agent's cycles, the
+    routes it pursued (split into episodes), failed calls, findings. `q`
+    counts matches per route in step targets and inputs. Operator-only."""
+    import run_tree  # noqa: PLC0415
+
+    record = _run_tree_context(instance_id, principal)
+    rows = db.run_tree_rows(instance_id, limit=RUN_TREE_ROWS)
+    findings = [{**(e.get("payload") or {}), "ts": e.get("ts")}
+                for e in reversed(_finding_events(instance_id))]
+    tested = [e.get("payload") or {} for e in db.list_events(
+        lab_id=instance_id, limit=None, types=("hypothesis_tested",))]
+    live = record.get("status") in ("pending", "deploying", "active")
+    tree = run_tree.build(rows, findings=findings, tested=tested,
+                          started_at=record.get("created_at"), now=db_now(), live=live,
+                          truncated=len(rows) >= RUN_TREE_ROWS)
+    if q and q.strip():
+        tree["search"] = run_tree.search(rows, q.strip())
+    return tree
+
+
+@app.get("/arenas/{instance_id}/run-tree/steps")
+def arena_run_tree_steps(instance_id: str, route: str = Query(..., max_length=80),
+                         principal: Principal = Depends(require_principal)):
+    """UX-27: the steps of one route (`route=trunk` for the agent's own steps),
+    with input and output previews. Operator-only."""
+    import run_tree  # noqa: PLC0415
+
+    record = _run_tree_context(instance_id, principal)
+    rows = db.run_tree_rows(instance_id, with_output=True, limit=RUN_TREE_ROWS)
+    return run_tree.route_steps(rows, None if route == "trunk" else route,
+                                started_at=record.get("created_at"))
+
+
 @app.get("/activity/recent")
 def recent_activity(minutes: int = Query(default=60, ge=5, le=1440),
                     buckets: int = Query(default=12, ge=4, le=96),

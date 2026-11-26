@@ -21,7 +21,7 @@ import { usePaletteActions } from "../shared/palette";
 import { navigate } from "../router";
 import { LaunchProgress } from "./progress";
 import { AgentLiveView, type SpanFeed } from "./live-view";
-import { TimelinePage } from "./timeline-page";
+import { RunTreePage } from "./run-tree/page";
 import type { Span } from "../types";
 
 export function ArenaWorkspace({ id }: { id: string }) {
@@ -231,7 +231,7 @@ export function ArenaWorkspace({ id }: { id: string }) {
                 }}
               />
             ) : tab === "timeline" ? (
-              <TimelinePage arena={value} feed={spanFeed} />
+              <RunTreePage arena={value} />
             ) : tab === "browser" ? (
               <BrowserWorkbench arena={value} />
             ) : tab === "transfer" ? (
