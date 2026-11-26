@@ -1,4 +1,4 @@
-"""UX-27: the run as a tree, aggregated on the server.
+"""UX-27/28: the run folded on the server for the Timeline page.
 
 The console no longer draws one mark per span. It draws the shape of the
 run: the agent's cycles on the trunk, the routes it pursued as branches
@@ -12,6 +12,10 @@ folded into it. An episode is a run of a route's steps without a gap of
 EPISODE_GAP seconds; an episode with fewer than MIN_STEPS steps and no
 outcome stays on the trunk, so sporadic housekeeping never draws a branch
 across the whole run.
+
+UX-28 draws the run against its time budget: ``clock`` places the arena's
+start and deadline on the run's own seconds, and the model adds the agent's
+verdicts, a flat list of failed calls, the tool mix and activity buckets.
 """
 from __future__ import annotations
 
@@ -25,12 +29,14 @@ MIN_STEPS = 3
 BACKGROUND_WRAPS = 2
 TWIN_SECONDS = 3.0
 MAX_ERRORS = 200
+MAX_FAILURES = 500
 FINDING_NAMES = {"findings", "findings/manual", "report_finding"}
 CYCLE_NAMES = {"announce_agent"}
 
 _HYP = re.compile(r'"hypothesis_id"\s*:\s*"([^"]{1,64})"')
 _DECLARED = re.compile(r'"contract"\s*:\s*\{[\s\S]*?"id"\s*:\s*"([^"]{1,64})"')
-_CLAIM = re.compile(r'"(?:title|invariant|expected_observable)"\s*:\s*"((?:[^"\\]|\\.){1,240})')
+_CLAIMS = [re.compile(rf'"{field}"\s*:\s*"((?:[^"\\]|\\.){{1,240}})')
+           for field in ("title", "invariant", "expected_observable")]
 _PATH = re.compile(r'"path"\s*:\s*"([^"]{1,512})"')
 _OUTCOME = re.compile(r'"outcome"\s*:\s*"([^"]{1,32})"')
 _FINDING_IDS = re.compile(r'"finding_ids"\s*:\s*\[([^\]]*)\]')
@@ -142,9 +148,11 @@ def fold(rows: list[dict]) -> list[dict]:
 
 
 def build(rows: list[dict], *, findings: list[dict], tested: list[dict],
-          started_at, now, live: bool, truncated: bool = False) -> dict:
+          started_at, now, live: bool, truncated: bool = False,
+          deadline=None, deadline_source: str | None = None) -> dict:
     """The compact run model. ``findings``: finding event payloads with ts;
-    ``tested``: hypothesis_tested payloads (outcomes and finding links)."""
+    ``tested``: hypothesis_tested payloads (outcomes and finding links, with
+    ts when known). ``deadline``: the end of the run's time budget (UX-28)."""
     steps = fold(rows)
     t0 = min([_ts(started_at)] + [s["at"] for s in steps if s["at"]]) if steps else _ts(started_at)
     end = max([s["end"] for s in steps] + [_ts(now) if live else 0, t0])
@@ -156,10 +164,12 @@ def build(rows: list[dict], *, findings: list[dict], tested: list[dict],
     linked: dict[str, str] = {}
     outcomes: dict[str, str] = {}
     by_key: dict[str, list[dict]] = defaultdict(list)
+    verdicts: list[dict] = []
     for step in steps:
         key = step["key"]
         if step["name"] == "register_hypothesis" and key:
-            claim = _CLAIM.search(step.get("input_preview") or "")
+            preview = step.get("input_preview") or ""
+            claim = next((m for m in (p.search(preview) for p in _CLAIMS) if m), None)
             if claim:
                 claims.setdefault(key, _unescape(claim.group(1)))
         if step["name"] == "mark_hypothesis_tested" and key:
@@ -167,13 +177,21 @@ def build(rows: list[dict], *, findings: list[dict], tested: list[dict],
             if outcome:
                 outcomes[key] = outcome.group(1)
             ids = _FINDING_IDS.search(step.get("input_preview") or "")
-            for fid in re.findall(r'"([0-9a-f]{6,32})"', ids.group(1) if ids else ""):
+            fids = re.findall(r'"([\w.-]{1,64})"', ids.group(1) if ids else "")
+            for fid in fids:
                 linked.setdefault(fid, key)
+            verdicts.append({"at": step["at"], "id": key[2:],
+                             "outcome": outcome.group(1) if outcome else None, "findings": fids})
         if key:
             by_key[key].append(step)
+    marked = {v["id"] for v in verdicts}
     for record in tested:
         if record.get("hypothesis_id") and record.get("outcome"):
             outcomes.setdefault(f"h:{record['hypothesis_id']}", record["outcome"])
+            if record["hypothesis_id"] not in marked and _ts(record.get("ts")):
+                verdicts.append({"at": _ts(record.get("ts")), "id": record["hypothesis_id"],
+                                 "outcome": record["outcome"],
+                                 "findings": list(record.get("finding_ids") or [])})
     finding_route: dict[str, str] = dict(linked)
     for record in tested:
         for fid in record.get("finding_ids") or []:
@@ -191,8 +209,12 @@ def build(rows: list[dict], *, findings: list[dict], tested: list[dict],
             near = [s for s in steps if s["name"] in FINDING_NAMES and s["key"]
                     and abs(s["at"] - at) <= 30]
             route = near[0]["key"] if near else None
+        dedup = item.get("dedup") if isinstance(item.get("dedup"), dict) else {}
         found.append({"id": item.get("finding_id"), "title": item.get("title") or "Finding",
-                      "severity": item.get("severity"), "t": rel(at), "route": route})
+                      "severity": item.get("severity"), "t": rel(at), "route": route,
+                      "relation": dedup.get("relation") or ("variant" if item.get("variant_of")
+                                                            else "independent"),
+                      "related": dedup.get("related_finding_id") or item.get("variant_of")})
 
     def errors_of(items):
         return [{"t": rel(s["at"]), "id": s["id"], "tool": s["name"], "status": s["status"],
@@ -270,7 +292,33 @@ def build(rows: list[dict], *, findings: list[dict], tested: list[dict],
                        "steps": len(inside),
                        "errors": len([s for s in inside if s.get("status") not in (None, "ok")])})
     trunk_steps.sort(key=lambda s: s["at"])
+    # Activity per bucket for the overview strip and idle detection.
+    total = max(1.0, end - t0)
+    bucket = next((b for b in (60, 120, 300, 600, 900, 1800, 3600) if total / b <= 360),
+                  int(-(-total // 360)))
+    count = int(total // bucket) + 1
+    per_steps = [0] * count
+    per_errors = [0] * count
+    for step in steps:
+        index = min(count - 1, max(0, int((step["at"] - t0) // bucket)))
+        per_steps[index] += 1
+        if step.get("status") not in (None, "ok"):
+            per_errors[index] += 1
+    families: dict[str, int] = defaultdict(int)
+    for step in steps:
+        families[step["family"]] += 1
+    failed = [s for s in steps if s.get("status") not in (None, "ok")]
     return {
+        "activity": {"bucket": bucket, "steps": per_steps, "errors": per_errors},
+        "clock": {"start": rel(_ts(started_at)) if started_at else 0.0,
+                  "deadline": rel(_ts(deadline)) if deadline else None,
+                  "source": deadline_source if deadline else None},
+        "verdicts": sorted(({"t": rel(v["at"]), "id": v["id"], "outcome": v["outcome"],
+                             "claim": claims.get(f"h:{v['id']}"), "findings": v["findings"]}
+                            for v in verdicts), key=lambda v: v["t"]),
+        "failures": [{"t": rel(s["at"]), "tool": s["name"], "status": s["status"],
+                      "target": target(s)} for s in failed[-MAX_FAILURES:]],
+        "families": dict(families),
         "schema": "nidavellir.run-tree.v1",
         "started_at": datetime.fromtimestamp(t0).isoformat() if t0 else None,
         "duration": rel(end), "live": live, "truncated": truncated, "actors": actors,

@@ -116,3 +116,13 @@ def test_background_work_that_wraps_other_routes_stays_on_the_trunk():
     assert routes["H-MAINT"]["episodes"] == [] and routes["H-MAINT"]["background"] is True
     assert len(routes["H-A"]["episodes"]) == 1 and len(routes["H-B"]["episodes"]) == 1
     assert tree["trunk"]["steps"] == 10
+
+
+def test_activity_buckets_count_steps_and_errors():
+    tree = run_tree.build(run(), findings=[], tested=[], started_at=T0,
+                          now=T0 + timedelta(minutes=90), live=False)
+    activity = tree["activity"]
+    assert activity["bucket"] == 60
+    assert sum(activity["steps"]) == tree["totals"]["steps"]
+    assert sum(activity["errors"]) == tree["totals"]["errors"] == 1
+    assert activity["steps"][30] == 0  # the quiet stretch between cycles

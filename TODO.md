@@ -463,7 +463,13 @@ Order: data model first, then views.
   - The tree has the whole page, with a sticky toolbar: search with per-route matches, filters, replay, density.
   - What you open slides in from the right: a route, a cycle or the trunk, with Summary / Steps (loaded on open, with input and output) / Errors.
   - The page polls every 10 s while live.
-  - Browser check: `scripts/ux27-browser-check.cjs`.
+  - Replaced on the page by UX-28; its browser check by UX-28's.
+- [x] **UX-28 — The timeline as a serpent (#97).**
+  - Arena menu → Timeline draws the run against its time budget (start → budget deadline, else the lease expiry). The serpent grows clockwise from its tail as time is spent and bites its tail when the budget runs out.
+  - Findings (gems coloured by severity, hollow for a duplicate) and failed calls sprout outside the body; hypothesis verdicts inside (a donut where several sit together); agent cycles are bands across the scales. Nearby events share one mark with a count.
+  - The side panel is the run in numbers: time and step budget, failed calls, verdict, severity and tool shares, steps per interval, the findings. A mark opens what it groups; a finding opens its report (the UX-24/25 Report view) in a wider panel.
+  - Replay regrows the serpent; Preview the end draws it as if the budget ended now. It replaces UX-27's tree.
+  - Browser check: `scripts/ux28-browser-check.cjs`.
 - [ ] **UX-21 — Benchmark lobby and live match (future, #78).** Game-like screens for every evaluation run:
   - a "Waiting for an agent to join" lobby: harness and agent cards from the reported client identity and the registered build; operators mark each side Ready, then start;
   - a live match: one actions-over-time chart for both sides with findings marked, observability (tokens, model calls, errors, budget) and a live classification scoreboard;
