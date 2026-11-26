@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getJson, postJson } from "../api";
+import { postJson } from "../api";
 import type { ArenaData, EvidenceData, Span } from "../types";
 import { formatObserved, getJsonSafe } from "../ui";
 import "./live-view.css";
-import { WorldTree } from "./world-tree";
+import { useArenaSpans } from "./use-spans";
 
 // OBS-05: the agent live view, the main screen of an active arena. Spans arrive
 // on the arena's push stream (OBS-04); history loads once. The list is
@@ -80,9 +80,8 @@ export function AgentLiveView({
   onStop: () => void;
 }) {
   const id = encodeURIComponent(arena.id);
-  const [spans, setSpans] = useState<Span[]>([]);
-  const [loadError, setLoadError] = useState("");
-  const [loaded, setLoaded] = useState(false);
+  // UX-26: the Live view is the step log; the world tree has its own page.
+  const { spans, loadError, loaded } = useArenaSpans(arena.id, feed);
   const [bindings, setBindings] = useState<Binding[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
   const [follow, setFollow] = useState(true);
@@ -99,50 +98,7 @@ export function AgentLiveView({
   // OBS-08: a finished run replays step by step.
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(600);
-  // UX-22: the world tree is the main view; the list holds every step.
-  const [view, setView] = useState<"timeline" | "list">("timeline");
   const list = useRef<HTMLDivElement>(null);
-
-  const merge = useCallback((incoming: Span[]) => {
-    if (!incoming.length) return;
-    setSpans((current) => {
-      const last = current.length ? current[current.length - 1].id : 0;
-      // Stream frames are ordered; anything not newer is already known.
-      const fresh = incoming.filter((span) => span.id > last);
-      if (fresh.length === incoming.length && !current.length) return incoming;
-      if (!fresh.length) {
-        const known = new Set(current.map((span) => span.id));
-        const late = incoming.filter((span) => !known.has(span.id));
-        return late.length
-          ? [...current, ...late].sort((a, b) => a.id - b.id)
-          : current;
-      }
-      return [...current, ...fresh];
-    });
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    getJson<{ spans: Span[] }>(`/api/console/arenas/${id}/spans?limit=5000`)
-      .then((data) => {
-        if (!cancelled) merge(data.spans);
-      })
-      .catch((reason: unknown) => {
-        if (!cancelled)
-          setLoadError(
-            reason instanceof Error
-              ? reason.message
-              : "Span timeline unavailable",
-          );
-      })
-      .finally(() => {
-        if (!cancelled) setLoaded(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [id, merge]);
-  useEffect(() => feed.subscribe(merge), [feed, merge]);
 
   const loadBindings = useCallback(() => {
     void getJsonSafe<{ bindings: Binding[] }>(
@@ -410,31 +366,19 @@ export function AgentLiveView({
         )}
       </header>
 
-      {view === "list" && (
-        <Waterfall
-          spans={visible}
-          selected={selected}
-          onSelect={(span) => select(visible.indexOf(span))}
-        />
-      )}
+      <Waterfall
+        spans={visible}
+        selected={selected}
+        onSelect={(span) => select(visible.indexOf(span))}
+      />
 
       <div className="live-filters" role="group" aria-label="Filter spans">
-        <div className="seg live-views" role="group" aria-label="View">
-          <button
-            type="button"
-            aria-pressed={view === "timeline"}
-            onClick={() => setView("timeline")}
-          >
-            Timeline
-          </button>
-          <button
-            type="button"
-            aria-pressed={view === "list"}
-            onClick={() => setView("list")}
-          >
-            List
-          </button>
-        </div>
+        <a
+          className="button button-outline live-to-tree"
+          href={`/console/arena/${id}?tab=timeline`}
+        >
+          Open the timeline
+        </a>
         <label>
           Kind
           <select
@@ -500,16 +444,7 @@ export function AgentLiveView({
       </div>
 
       <div className="live-body">
-        {view === "timeline" ? (
-          <WorldTree
-            spans={visible}
-            total={visible.length}
-            selectedId={selected}
-            onSelect={(span) => select(visible.indexOf(span))}
-            onKey={onKey}
-            live={active}
-          />
-        ) : (
+        {
           <div className="live-list-frame">
             <div className="live-row live-row-head" aria-hidden="true">
               <span>Time</span>
@@ -586,7 +521,7 @@ export function AgentLiveView({
               )}
             </div>
           </div>
-        )}
+        }
         <Inspector arena={arena} span={current} signals={signals} />
       </div>
     </div>
@@ -731,7 +666,7 @@ function Waterfall({
   );
 }
 
-function Inspector({
+export function Inspector({
   arena,
   span,
   signals,

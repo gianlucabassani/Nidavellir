@@ -438,7 +438,7 @@ Order: data model first, then views.
   - Steps are leaves coloured by family; failures are red. A branch ends in fruit (finding), withers (refuted) or keeps a bud (open).
   - Self-reported gateway calls fold into the enforced call they duplicate; the List view keeps every span.
   - Route chips focus one branch. Replay grows the tree; scrub and Back to live as before.
-  - Browser check: `scripts/ux22-browser-check.cjs`.
+  - Its browser check was replaced by UX-26's.
 - [x] **UX-23 — Bare fields in the Forge theme (#85).** Text inputs without a component class (the arena Live search, ledger filters) take the field geometry of the selects beside them instead of the browser's inset box. Asserted in `scripts/ux16-browser-check.cjs`.
 - [x] **UX-24 — Findings as reports you can send (#87).**
   - An open finding has a Report view next to the Review. It opens on Review while the finding awaits a decision.
@@ -446,6 +446,12 @@ Order: data model first, then views.
   - The operator writes what only a person can state (`POST /arenas/{id}/findings/{fid}/writeup`, append-only `finding_writeup`, hidden from agents, never scored).
   - A readiness list names every gap; Copy report (Markdown), Copy CVE request (the public form's fields) and a .md download.
   - Browser check: `scripts/ux24-browser-check.cjs`.
+- [x] **UX-26 — The timeline on its own page (#93).**
+  - Arena menu → Timeline: the world tree fills the page. Whole run (default) fits the run into view; Detail spreads it.
+  - The tree grows from its roots on open, and new steps sprout.
+  - The routes are a full-height panel: filters, cards with outcome, claim and activity; hover lights a branch, click focuses it. The step inspector sits below.
+  - The Live view keeps only the step log.
+  - Browser check: `scripts/ux26-browser-check.cjs`.
 - [ ] **UX-21 — Benchmark lobby and live match (future, #78).** Game-like screens for every evaluation run:
   - a "Waiting for an agent to join" lobby: harness and agent cards from the reported client identity and the registered build; operators mark each side Ready, then start;
   - a live match: one actions-over-time chart for both sides with findings marked, observability (tokens, model calls, errors, budget) and a live classification scoreboard;

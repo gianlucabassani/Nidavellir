@@ -117,6 +117,10 @@ export function ArenaRail({ arena, tab }: { arena: ArenaData; tab: string }) {
             item={{ label: "Live", href: href("live"), icon: "pulse" }}
             current={tab === "live"}
           />
+          <RailLink
+            item={{ label: "Timeline", href: href("timeline"), icon: "tree" }}
+            current={tab === "timeline"}
+          />
         </div>
         {categories.map((category) => (
           <div

@@ -1,0 +1,205 @@
+/* UX-26: the Timeline page. */
+.tl {
+  display: grid;
+  gap: var(--s4);
+  min-width: 0;
+}
+.tl-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--s4);
+}
+.tl-head h2 {
+  margin: 2px 0 4px;
+  font: 600 var(--t-head) var(--f-sans);
+}
+.tl-head p {
+  max-width: 70ch;
+  margin: 0;
+}
+.tl-stats {
+  display: flex;
+  gap: var(--s5);
+  margin: 0;
+}
+.tl-stats dt {
+  color: var(--muted);
+  font: 500 var(--t-micro) var(--f-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.tl-stats dd {
+  margin: 2px 0 0;
+  color: var(--ink);
+  font: 600 var(--t-head) var(--f-sans);
+}
+.tl-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  gap: var(--s4);
+  height: calc(100vh - var(--top) - 200px);
+  min-height: 640px;
+}
+.tl-canvas {
+  min-width: 0;
+  min-height: 0;
+}
+.tl-wait {
+  padding: var(--s6);
+  border: 1px dashed var(--line);
+}
+.tl-side {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: var(--s2);
+  min-height: 0;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.tl-side-head {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3) var(--s3) 0;
+}
+.tl-side-head h3 {
+  margin: 0;
+}
+.tl-side-head .seg {
+  justify-self: start;
+}
+.tl-all {
+  justify-self: start;
+  margin-left: var(--s3);
+}
+.tl-routes {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  margin: 0;
+  padding: 0 var(--s3) var(--s2);
+  overflow: auto;
+  list-style: none;
+}
+.tl-route {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-soft);
+  border-left: 3px solid var(--yg-branch, var(--line-strong));
+  background: var(--surface);
+  color: var(--ink-2);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+.tl-route:hover,
+.tl-route:focus-visible {
+  background: var(--inset);
+}
+.tl-route[aria-pressed="true"] {
+  border-color: var(--gold-deep);
+  background: var(--gold-wash);
+}
+:root[data-theme="night"] .tl-route[aria-pressed="true"] {
+  background: #e4b96522;
+}
+.tl-route.finding {
+  border-left-color: var(--gold);
+}
+.tl-route.refuted,
+.tl-route.done {
+  border-left-color: var(--line-strong);
+}
+.tl-route.open {
+  border-left-color: var(--ok);
+}
+.tl-route-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tl-route-top b {
+  overflow: hidden;
+  color: var(--ink);
+  font: 600 var(--t-ui) var(--f-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tl-route-top i {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+.tl-route.finding .tl-route-top i {
+  background: var(--gold);
+  box-shadow: 0 0 6px var(--gold);
+}
+.tl-route.open .tl-route-top i {
+  background: var(--ok);
+}
+.tl-outcome {
+  margin-left: auto;
+  color: var(--muted);
+  font: 500 var(--t-micro) var(--f-mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.tl-outcome.finding {
+  color: var(--gold-deep);
+}
+:root[data-theme="night"] .tl-outcome.finding {
+  color: var(--gold);
+}
+.tl-outcome.open {
+  color: var(--ok);
+}
+.tl-claim {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: var(--t-meta);
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.tl-claim.find {
+  color: var(--gold-deep);
+}
+:root[data-theme="night"] .tl-claim.find {
+  color: var(--gold);
+}
+.tl-meta {
+  color: var(--muted);
+  font: 400 var(--t-micro) var(--f-mono);
+}
+.tl-none {
+  padding: var(--s3) 0;
+  font-size: var(--t-meta);
+}
+.tl-inspect {
+  max-height: 38vh;
+  overflow: auto;
+  border-top: 1px solid var(--line-soft);
+}
+.tl-inspect .live-inspector {
+  border: 0;
+}
+@media (max-width: 1100px) {
+  .tl-body {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .tl-canvas {
+    height: 70vh;
+    min-height: 480px;
+  }
+  .tl-routes {
+    max-height: 50vh;
+  }
+}
