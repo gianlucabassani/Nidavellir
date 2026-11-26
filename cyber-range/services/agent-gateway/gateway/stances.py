@@ -49,6 +49,8 @@ LIFECYCLE_TOOLS = frozenset(
 STANCE_TOOLS: dict[Stance, frozenset[str]] = {
     Stance.attacker: frozenset(
         {"get_topology", "list_targets", "run_command", "report_finding",
+         # UX-25: the reporter writes the finding up.
+         "get_finding_writeup", "update_finding_writeup",
          "workspace_status", "workspace_diff", "workspace_patch_artifact",
          "upload_file", "download_file", "browser_visit",
          "http_request", "list_http_transactions", "get_http_transaction",

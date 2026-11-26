@@ -54,7 +54,7 @@ orchestrator re-checks the stance's capability on every call (defence in depth).
 
 | Stance | Purpose | Stance tools |
 |---|---|---|
-| **attacker** | offensive testing from the foothold | `get_topology`, `list_targets`, `run_command`, `submit_poc`, `poc_status`, `poc_result`, `cancel_poc`, `browser_visit`, `http_request`, `list_http_transactions`, `get_http_transaction`, `replay_http_transaction`, `upload_file`, `download_file`, `workspace_status`, `workspace_diff`, `workspace_patch_artifact`, `report_finding` |
+| **attacker** | offensive testing from the foothold | `get_topology`, `list_targets`, `run_command`, `submit_poc`, `poc_status`, `poc_result`, `cancel_poc`, `browser_visit`, `http_request`, `list_http_transactions`, `get_http_transaction`, `replay_http_transaction`, `upload_file`, `download_file`, `workspace_status`, `workspace_diff`, `workspace_patch_artifact`, `report_finding`, `get_finding_writeup`, `update_finding_writeup` |
 | **defender** | detection over the event feed | `get_topology`, `query_events` |
 | **mitm** | in-path traffic observation | `get_topology`, `observe_traffic` |
 | **configurator** | bring a software-under-test up before the engagement | `get_setup_brief`, `workspace_status`, `workspace_diff`, `workspace_patch_artifact`, `propose_setup_step`, `await_setup_step`, `run_setup_step`, `upload_file`, `finish_setup`, `extend_arena` |
@@ -152,6 +152,18 @@ deterministically. The acknowledgement is deliberately neutral: it never reveals
 whether the finding matched the hidden manifest or whether verification passed, so an
 agent-under-test cannot enumerate the ground truth. See
 [`API.md`](./API.md) for the request shape and the operator verify/score endpoints.
+
+**The agent writes the finding up.** Pass `writeup` with `report_finding`, then
+complete it with `update_finding_writeup(arena_id, finding_id, patch)` until
+`get_finding_writeup(arena_id, finding_id)` shows no gaps. The write-up is the
+report a vendor or a CVE request takes as is: summary, impact, description,
+remediation, affected assets, CWEs, reproduction steps that cite their evidence
+digests, references, and the CVE fields (product, versions, attack and impact
+type, CVSS). Write Markdown with one paragraph per line and a language on every
+code fence, copy requests and output from recorded evidence, and never put
+credentials in prose. Sections an operator wrote are theirs; patches to them are
+refused. Writing prose never verifies a finding, and `get_finding_writeup` does
+not disclose verification outcomes.
 
 ## Guardrails
 

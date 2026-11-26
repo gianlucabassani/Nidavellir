@@ -1096,28 +1096,37 @@ first-class evidence. The manifest is operator-only and never shown to an agent.
     "evidence_digest": "sha256:0123..." }
   → { "verified": true, "finding_id": "7097421dd9fc", "verdict": "confirmed" }
   ```
-- `POST /arenas/{instance_id}/findings/{finding_id}/writeup` — the operator's
-  **report write-up** for a finding (UX-24): what only a person can state before
-  the finding is sent as a report or CVE request. Every field is optional; the
-  whole write-up is sent each time, recorded as an append-only `finding_writeup`
-  event, and the newest wins. Fields: `severity` (one of five levels), `cwe`
-  (`CWE-<n>`), `summary`, `impact`, `description`, `remediation`, `vendor`,
-  `product`, `affected_versions`, `fixed_versions`, `component`, `attack_type`
-  (`remote`/`adjacent`/`local`/`physical`), `impact_type` (`code_execution`,
-  `information_disclosure`, `denial_of_service`, `privilege_escalation`, `other`),
-  `cvss_vector` (CVSS 3.x), `discoverer`, `references` (up to 10 `https://` URLs
-  with optional titles). Unknown fields → 422. It never changes the finding,
-  matching, validation or scoring, and no agent stance can read it. Works after
-  teardown. **operator/admin only**; unknown arena or finding → 404.
-  ```json
-  { "impact": "A workplace author runs code as the CMS user.",
-    "product": "Example CMS", "affected_versions": "22.0",
-    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H" }
-  → { "finding_id": "7097421dd9fc", "sections": { ... }, "updated_by": "admin" }
-  ```
+- **Write-ups (UX-25).** A finding carries a structured write-up, schema
+  `nidavellir.finding-writeup.v1`, written by the **reporting agent**: `summary`
+  (usable as the CVE description), `impact` (two or three lines), `description`,
+  `remediation`, `affected_assets` [{kind, value}], `cwes` [{id, name}],
+  `reproduction` {prerequisites, auth_role, steps [{action, expected, evidence
+  [digests of this arena's HTTP transactions or artifacts]}], cleanup},
+  `references` [{url, title}] (https, public hosts), `http_exception` {reason},
+  `severity`, `vendor`, `product`, `affected_versions`, `fixed_versions`,
+  `attack_type`, `impact_type`, `cvss_vector`, `discoverer`.
+  - `POST /arenas/{id}/findings` takes it as `writeup`.
+  - `POST /arenas/{instance_id}/findings/{finding_id}/writeup` with `{"patch":
+    {section: value}}` (null clears) patches it; append-only `finding_writeup`
+    events, newest wins. Allowed for operators and for the bound agent that
+    reported the finding (others 403). A section an operator saves becomes the
+    operator's; the agent's patch to it → 409 `operator_owned` (the operator
+    clearing it hands it back).
+  - `GET` on the same path returns `{schema, sections, origin, updated,
+    readiness}`. The readiness checklist names every gap: metadata (assets,
+    CWEs, severity), product and versions, summary, impact (≤3 lines),
+    description, remediation, reproduction (prerequisites, auth role, steps),
+    evidence linked to the steps (an HTTP exchange, or `http_exception` with an
+    artifact), at least three references incl. an OWASP/PortSwigger/CWE page, no
+    credentials in prose, Markdown house style (one paragraph per line, a language
+    on every code fence); CVSS optional. The agent's view leaves out technical
+    verification (outcomes stay undisclosed); the operator's includes it.
+  - Shapes are checked on write (422 lists every problem; cited digests must
+    resolve in the arena); completeness never blocks storing. Prose never
+    verifies, matches or scores a finding.
   The console assembles the report (`GET /api/console/arenas/<id>/findings/<fid>/report`,
-  `.../report.md`) from the finding, the hypothesis it tested, its causality and
-  evidence, plus this write-up, and lists every gap before it is ready to send.
+  `.../report.md`) from this write-up, falling back to the record (hypothesis,
+  PoC, causality, evidence) for empty sections.
 - `GET /arenas/{instance_id}/findings/{finding_id}/review` — retained
   **operator/admin-only** control-and-evidence projection (`nidavellir/evidence-review/v1`).
   Includes the linked actor request/response (header values withheld), prerequisite

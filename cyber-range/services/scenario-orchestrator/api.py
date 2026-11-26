@@ -7143,6 +7143,10 @@ class FindingRequest(BaseModel):
     # R3: trace / fixed-build control / toggle, each citing an immutable digest.
     # In a research-mode arena all three are needed before it can be confirmed.
     causality: research_integrity.Causality | None = None
+    # UX-25: the reporter's structured write-up (writeup.py, schema
+    # nidavellir.finding-writeup.v1). Shape-checked here; completeness is the
+    # readiness checklist's job. Prose never verifies or scores a finding.
+    writeup: dict | None = None
 
     @field_validator("variant_of")
     @classmethod
@@ -7234,6 +7238,8 @@ def _record_finding(instance_id, record, req: "FindingRequest", *, actor: str,
             "replay_of": tx_manifest.get("replay_of"),
         })
 
+    draft = _validated_writeup(instance_id, req.writeup) if req.writeup else None
+
     research_key = None
     if req.variant_of:
         referenced = _find_finding_event(req.variant_of)
@@ -7289,6 +7295,8 @@ def _record_finding(instance_id, record, req: "FindingRequest", *, actor: str,
     }
     if req.causality is not None:
         payload["causality"] = req.causality.model_dump(exclude_none=True)
+    if draft:
+        payload["writeup"] = {k: v for k, v in draft.items() if v is not None}
     if research:
         missing = research_integrity.causality_missing(payload.get("causality"))
         if missing and (validation or {}).get("confirmed") is True:
@@ -7499,70 +7507,98 @@ def verify_finding(
     return {"verified": True, "finding_id": finding_id, "verdict": req.verdict}
 
 
-class WriteupReference(BaseModel):
+def _validated_writeup(instance_id: str, patch) -> dict:
+    """A write-up patch, shape-checked, with every cited digest resolving to an
+    immutable record of this arena; 422 lists every problem at once."""
+    import writeup  # noqa: PLC0415
+
+    try:
+        clean = writeup.validate_patch(patch)
+    except writeup.WriteupError as exc:
+        raise HTTPException(status_code=422, detail={
+            "code": "invalid_writeup", "errors": exc.errors}) from exc
+    unknown = [d for d in writeup.step_digests(clean) if not _evidence_resolves(instance_id, d)]
+    if unknown:
+        raise HTTPException(status_code=422, detail={
+            "code": "invalid_writeup",
+            "errors": [f"reproduction: evidence {d} is not a record of this arena"
+                       for d in unknown]})
+    return clean
+
+
+class WriteupPatchRequest(BaseModel):
+    """UX-25: sections to set (null clears one), see writeup.py."""
+
     model_config = ConfigDict(extra="forbid")
-    url: str = Field(max_length=512, pattern=r"^https://[^\s<>\"']+$")
-    title: str | None = Field(default=None, max_length=200)
+    patch: dict
 
 
-class FindingWriteupRequest(BaseModel):
-    """UX-24: the operator's report sections for one finding.
+def _writeup_finding(instance_id: str, finding_id: str, principal: Principal) -> tuple[dict, str]:
+    if not db.get_deployment(instance_id):
+        raise HTTPException(status_code=404, detail="Arena not found")
+    event = next((e for e in _finding_events(instance_id)
+                  if (e.get("payload") or {}).get("finding_id") == finding_id), None)
+    if event is None:
+        raise HTTPException(status_code=404, detail="Finding not found in this arena")
+    finding = {**(event.get("payload") or {}), "ts": event.get("ts")}
+    if principal.role in OPERATOR_ROLES:
+        return finding, "operator"
+    _require_binding(principal, instance_id, bindings.CAP_EXEC)
+    if finding.get("actor") != principal.name:
+        raise HTTPException(status_code=403, detail="only the agent that reported this "
+                                                    "finding can write it up")
+    return finding, "agent"
 
-    The whole write-up is sent each time; the newest one wins and earlier ones
-    stay in the audit trail. Text is stored as written and shown as text, never
-    as markup. Nothing here changes matching, validation or scoring."""
 
-    model_config = ConfigDict(extra="forbid")
-    # The report's own severity and weakness; the reporter's claim stays on
-    # the finding.
-    severity: Literal["critical", "high", "medium", "low", "info"] | None = None
-    cwe: str | None = Field(default=None, max_length=16, pattern=r"^CWE-\d{1,5}$")
-    summary: str | None = Field(default=None, max_length=2000)
-    impact: str | None = Field(default=None, max_length=4000)
-    description: str | None = Field(default=None, max_length=8000)
-    remediation: str | None = Field(default=None, max_length=4000)
-    vendor: str | None = Field(default=None, max_length=200)
-    product: str | None = Field(default=None, max_length=200)
-    affected_versions: str | None = Field(default=None, max_length=200)
-    fixed_versions: str | None = Field(default=None, max_length=200)
-    component: str | None = Field(default=None, max_length=300)
-    attack_type: Literal["remote", "adjacent", "local", "physical"] | None = None
-    impact_type: Literal["code_execution", "information_disclosure", "denial_of_service",
-                         "privilege_escalation", "other"] | None = None
-    cvss_vector: str | None = Field(
-        default=None, max_length=64,
-        pattern=r"^CVSS:3\.[01]/AV:[NALP]/AC:[LH]/PR:[NLH]/UI:[NR]/S:[UC]/C:[NLH]/I:[NLH]/A:[NLH]$")
-    discoverer: str | None = Field(default=None, max_length=200)
-    references: list[WriteupReference] = Field(default_factory=list, max_length=10)
+def _writeup_view(instance_id: str, finding: dict, role: str) -> dict:
+    import writeup  # noqa: PLC0415
+
+    current = writeup.state(finding, db.list_events(
+        lab_id=instance_id, limit=None, types=("finding_writeup",)))
+    verified = None
+    if role == "operator":
+        verdict = _latest_finding_verdicts(instance_id).get(finding.get("finding_id"))
+        verified = verdict != "refuted" and (
+            verdict == "confirmed" or (finding.get("validation") or {}).get("confirmed") is True)
+    return {**current, "finding_id": finding.get("finding_id"),
+            "readiness": writeup.readiness(
+                finding, current["sections"], verified=verified,
+                resolves=lambda digest: _evidence_resolves(instance_id, digest))}
+
+
+@app.get("/arenas/{instance_id}/findings/{finding_id}/writeup")
+def read_finding_writeup(instance_id: str, finding_id: str,
+                         principal: Principal = Depends(require_principal)):
+    """UX-25: the finding's write-up, who owns each section, and the readiness
+    checklist. Operators, or the bound agent that reported the finding (whose
+    view leaves out the verification check: outcomes stay undisclosed)."""
+    finding, role = _writeup_finding(instance_id, finding_id, principal)
+    return _writeup_view(instance_id, finding, role)
 
 
 @app.post("/arenas/{instance_id}/findings/{finding_id}/writeup")
-def write_finding_report(
-    instance_id: str,
-    finding_id: str,
-    req: FindingWriteupRequest,
-    principal: Principal = Depends(require_principal),
-):
-    """UX-24: record the operator's write-up for a finding (operator/admin).
+def write_finding_writeup(instance_id: str, finding_id: str, req: WriteupPatchRequest,
+                          principal: Principal = Depends(require_principal)):
+    """UX-25: patch the write-up (append-only `finding_writeup` events, newest
+    wins). The reporting agent writes every section; a section an operator
+    saves becomes the operator's and the agent's patch to it is refused (409).
+    Works after teardown. Never changes matching, validation or scoring."""
+    import writeup  # noqa: PLC0415
 
-    Append-only: a `finding_writeup` event per save, newest wins. Agents never
-    see it (not in any stance's visible event types). Works on a destroyed
-    arena too, since reports are written after the run."""
-    _require_operator(principal)
-    if not db.get_deployment(instance_id):
-        raise HTTPException(status_code=404, detail="Arena not found")
-    if not any((e.get("payload") or {}).get("finding_id") == finding_id
-               for e in _finding_events(instance_id)):
-        raise HTTPException(status_code=404, detail="Finding not found in this arena")
-    sections = {key: value for key, value in req.model_dump(mode="json").items()
-                if value not in (None, "", [])}
-    for key, value in list(sections.items()):
-        if isinstance(value, str):
-            sections[key] = value.strip()
+    finding, role = _writeup_finding(instance_id, finding_id, principal)
+    clean = _validated_writeup(instance_id, req.patch)
+    if role == "agent":
+        current = writeup.state(finding, db.list_events(
+            lab_id=instance_id, limit=None, types=("finding_writeup",)))
+        owned = sorted(k for k in clean if current["origin"].get(k) == "operator")
+        if owned:
+            raise HTTPException(status_code=409, detail={
+                "code": "operator_owned", "sections": owned,
+                "message": "an operator wrote these sections; their text wins"})
     db.record_event(instance_id, "finding_writeup",
-                    {"finding_id": finding_id, "sections": sections, "actor": principal.name},
-                    actor=principal.name)
-    return {"finding_id": finding_id, "sections": sections, "updated_by": principal.name}
+                    {"finding_id": finding_id, "patch": clean, "role": role,
+                     "actor": principal.name}, actor=principal.name)
+    return _writeup_view(instance_id, finding, role)
 
 
 def _run_metrics(events: list[dict]) -> dict:

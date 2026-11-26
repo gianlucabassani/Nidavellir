@@ -892,6 +892,7 @@ def report_finding(
     root_cause: dict | None = None,
     causality: dict | None = None,
     severity: str | None = None,
+    writeup: dict | None = None,
 ) -> dict:
     """Report a discovered vulnerability. The engagement goal is to DISCOVER the
     arena's known weaknesses; this records your finding for scoring. Pass the
@@ -909,7 +910,8 @@ def report_finding(
     scoring. The acknowledgement stays deliberately neutral — it won't tell you
     whether you were right, or whether verification passed."""
     _guard(ctx, "report_finding")
-    trace_args = {"title": title[:256], "cwe": cwe, "node": node, "severity": severity}
+    trace_args = {"title": title[:256], "cwe": cwe, "node": node, "severity": severity,
+                  "writeup_sections": sorted(writeup)[:20] if isinstance(writeup, dict) else None}
     try:
         res = ctx.client.report_finding(
             ctx.session.api_key, arena_id, title, cwe=cwe, node=node, evidence=evidence,
@@ -919,11 +921,64 @@ def report_finding(
             **({"root_cause": root_cause} if root_cause else {}),
             **({"causality": causality} if causality else {}),
             **({"severity": severity} if severity else {}),
+            **({"writeup": writeup} if writeup else {}),
         )
     except Exception:
         _trace(ctx, "report_finding", trace_args, ok=False, arena_id=arena_id)
         raise
     _trace(ctx, "report_finding", trace_args, ok=True, arena_id=arena_id)
+    return res
+
+
+# UX-25: how a finding is written up. Shared by the tool descriptions.
+WRITEUP_GUIDE = (
+    "Write the finding up as a report a vendor or a CVE request can take as is "
+    "(schema nidavellir.finding-writeup.v1). Sections: summary (one paragraph usable "
+    "as the CVE description: product, version, attacker, impact, vector), impact (two "
+    "or three lines: attacker capability, affected asset, consequence; no "
+    "reproduction details), description (vulnerable component, trust boundary, root "
+    "cause, file:line or request flow when known), remediation (the concrete change at "
+    "the right layer), affected_assets [{kind: host|url|endpoint|parameter|component|"
+    "file, value}], cwes [{id: 'CWE-639', name}], reproduction {prerequisites, "
+    "auth_role ('unauthenticated' if none), steps [{action, expected, evidence "
+    "[sha256 digests of this arena's HTTP transactions or artifacts]}], cleanup}, "
+    "references [{url, title}] (at least three https pages, one of them an OWASP cheat "
+    "sheet, PortSwigger Web Security Academy or CWE page), http_exception {reason} only "
+    "for an issue no HTTP exchange can prove, severity, vendor, product, "
+    "affected_versions, fixed_versions, attack_type (remote|adjacent|local|physical), "
+    "impact_type (code_execution|information_disclosure|denial_of_service|"
+    "privilege_escalation|other), cvss_vector (CVSS:3.1/...), discoverer. "
+    "Text is Markdown: one paragraph per line, a blank line between paragraphs; "
+    "commands, HTTP and code in fenced blocks with a language (```http ... ```); "
+    "endpoints, parameters and headers in `backticks`; no HTML. Copy requests and "
+    "output from your recorded evidence, never invent them; never put credentials or "
+    "tokens in prose. Every step cites the evidence digest that shows it. Prose never "
+    "verifies a finding; sections an operator wrote are theirs and patches to them are "
+    "refused."
+)
+
+
+def get_finding_writeup(ctx: GatewayContext, arena_id: str, finding_id: str) -> dict:
+    """The write-up of a finding you reported, who owns each section, and the
+    readiness checklist naming every gap."""
+    _guard(ctx, "get_finding_writeup")
+    res = ctx.client.get_finding_writeup(ctx.session.api_key, arena_id, finding_id)
+    _trace(ctx, "get_finding_writeup", {"finding_id": finding_id}, ok=True, arena_id=arena_id)
+    return res
+
+
+def update_finding_writeup(ctx: GatewayContext, arena_id: str, finding_id: str,
+                           patch: dict) -> dict:
+    """Set sections of a finding's write-up; null clears a section."""
+    _guard(ctx, "update_finding_writeup")
+    args = {"finding_id": finding_id,
+            "sections": sorted(patch)[:20] if isinstance(patch, dict) else None}
+    try:
+        res = ctx.client.update_finding_writeup(ctx.session.api_key, arena_id, finding_id, patch)
+    except Exception:
+        _trace(ctx, "update_finding_writeup", args, ok=False, arena_id=arena_id)
+        raise
+    _trace(ctx, "update_finding_writeup", args, ok=True, arena_id=arena_id)
     return res
 
 

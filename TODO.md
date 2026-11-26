@@ -446,6 +446,11 @@ Order: data model first, then views.
   - The operator writes what only a person can state (`POST /arenas/{id}/findings/{fid}/writeup`, append-only `finding_writeup`, hidden from agents, never scored).
   - A readiness list names every gap; Copy report (Markdown), Copy CVE request (the public form's fields) and a .md download.
   - Browser check: `scripts/ux24-browser-check.cjs`.
+- [x] **UX-25 — Findings written up by the agent (#91).** Operator-approved contract change.
+  - `report_finding` takes a structured `writeup` (schema `nidavellir.finding-writeup.v1`). New MCP tools for the attacker stance: `update_finding_writeup` (patch) and `get_finding_writeup` (sections, owners, readiness).
+  - The readiness checklist (`writeup.py`) names every gap and enforces the house style. The agent's view leaves verification out.
+  - Operator sections win: an agent's patch to one is refused.
+  - The console Report view renders the agent's write-up (structured reproduction with cited evidence), with origins Agent / Your text / From the record. The editor patches sections.
 - [ ] **UX-21 — Benchmark lobby and live match (future, #78).** Game-like screens for every evaluation run:
   - a "Waiting for an agent to join" lobby: harness and agent cards from the reported client identity and the registered build; operators mark each side Ready, then start;
   - a live match: one actions-over-time chart for both sides with findings marked, observability (tokens, model calls, errors, budget) and a live classification scoreboard;
