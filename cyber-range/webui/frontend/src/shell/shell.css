@@ -770,11 +770,20 @@
     display: none;
   }
 }
-@media (max-width: 420px) {
+@media (max-width: 520px) {
+  .topbar {
+    gap: 4px;
+    padding: 0 var(--s2);
+  }
   .spaces a {
     padding: 0 var(--s2);
   }
-  .tbtn {
-    padding: 0 var(--s2);
+  .tbtn,
+  .topbar .assistant-launcher {
+    gap: 4px;
+    padding: 0 6px;
+  }
+  .tbtn-idle {
+    display: none;
   }
 }

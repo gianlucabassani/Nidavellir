@@ -37,11 +37,12 @@
   --info-wash: #e4ebf5;
   --idle: #5f656f;
   --idle-wash: #eceae5;
-  --t-http: #3c5f95;
-  --t-exec: #7a5a9e;
-  --t-model: #8a6428;
-  --t-find: #1c735d;
-  --t-other: #6b7280;
+  /* Action families (charts, timeline): validated for colour-vision
+     deficiency in both themes; never used as text colour. */
+  --t-http: #2a78d6;
+  --t-exec: #eb6834;
+  --t-model: #1baf7a;
+  --t-other: #7c8189;
   --sev-critical: #a3404f;
   --sev-high: #b2562a;
   --sev-medium: #8a5a0b;
@@ -111,11 +112,10 @@
   --info-wash: #233252;
   --idle: #9aa0b2;
   --idle-wash: #262c40;
-  --t-http: #9db8e6;
-  --t-exec: #c3a5e6;
-  --t-model: #e6bb68;
-  --t-find: #7fd3b1;
-  --t-other: #9aa0b2;
+  --t-http: #3987e5;
+  --t-exec: #d95926;
+  --t-model: #199e70;
+  --t-other: #8a90a4;
   --sev-critical: #ef9aa9;
   --sev-high: #f2a57c;
   --sev-medium: #efc878;

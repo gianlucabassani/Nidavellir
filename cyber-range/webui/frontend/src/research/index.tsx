@@ -1,8 +1,12 @@
-import { BoardSummary } from "../shared/board";
-import { useState } from "react";
-import type { ArenaData, ResearchData } from "../types";
-import { SegmentMap } from "../topology/SegmentMap";
-import { stationDetail } from "../arena/forge";
+import {
+  useBoard,
+  isIdle,
+  ago,
+  readDismissed,
+  onDismissedChange,
+} from "../shared/board";
+import { useEffect, useState } from "react";
+import type { ResearchData } from "../types";
 import { paths } from "../types";
 import {
   useWorkspaceData,
@@ -13,244 +17,410 @@ import {
   Loading,
   ErrorState,
 } from "../ui";
+import { ActivityChart, Bars, n, type ActivityBucket } from "../design/charts";
+import { Icon } from "../shell/icons";
+import "./overview.css";
 
+type RecentActivity = {
+  bucket_seconds: number;
+  buckets: ActivityBucket[];
+  totals: {
+    actions: number;
+    failed: number;
+    refused: number;
+    by_family: Record<"http" | "exec" | "model" | "other", number>;
+  };
+  by_actor: {
+    actor: string;
+    arena_id: string | null;
+    actions: number;
+    model_calls: number;
+    failed: number;
+    refused: number;
+  }[];
+};
+
+const DECIDED = ["confirmed", "refuted"];
+
+// UX-17: the Research overview answers three questions in order: which agents
+// are connected and what they are doing, what is waiting for me, and how the
+// last hour went. Arenas and host capacity follow.
 export function Research() {
   const { value, error, loading, refresh } = useWorkspaceData<ResearchData>(
     paths.research,
   );
+  const recent = useWorkspaceData<RecentActivity>(
+    "/api/console/activity/recent",
+  );
+  const { board, live, now } = useBoard();
+  const [dismissed, setDismissed] = useState<string[]>(readDismissed);
+  useEffect(() => onDismissedChange(setDismissed), []);
   if (loading && !value) return <Loading />;
   if (error && !value) return <ErrorState message={error} refresh={refresh} />;
   if (!value) return null;
-  const live = value.sessions.filter(
+  const liveArenas = value.sessions.filter(
     (item) =>
       !["destroyed", "failed", "error_destroying"].includes(item.status),
   );
-  const featured = live.find((item) => item.status === "active") || live[0];
+  const deploying = liveArenas.filter(
+    (item) => item.status !== "active",
+  ).length;
+  const stopped = board
+    ? board.arenas.filter((arena) => arena.budget.stopped).length
+    : 0;
+  const waiting = value.review.filter(
+    (finding) => !DECIDED.includes(finding.verdict),
+  );
+  const agentTiles = board
+    ? board.arenas.flatMap((arena) =>
+        arena.agents.map((agent) => ({ agent, arena })),
+      )
+    : [];
+  const idleCount = board
+    ? agentTiles.filter(({ arena }) => isIdle(arena, board, now)).length
+    : 0;
+  const needYou = agentTiles.filter(({ arena }) => arena.budget.stopped).length;
+  const inbox = board
+    ? board.inbox.filter((item) => !dismissed.includes(item.key))
+    : [];
+  const names = new Map(value.sessions.map((item) => [item.id, item.name]));
+  const hour = recent.value;
+  const actors = hour
+    ? hour.by_actor.filter((row) => row.actions + row.model_calls + row.refused)
+    : [];
   return (
     <>
       <PageHead
-        overline="WORKSPACE / RESEARCH"
+        overline="Research"
         title="Research"
-        subtitle="Sessions, proof and decisions in one operating view."
+        subtitle="What is running, what each agent is doing right now, and what is waiting for you."
         observed={value.observed_at}
         action={
           <a className="button button-gold" href="/console/research/new">
-            New research <span aria-hidden="true">↗</span>
+            <Icon name="plus" /> New research
           </a>
         }
         refresh={refresh}
       />
-      <div className="research-grid">
-        <div className="research-col research-col-main">
-          <Panel
-            eyebrow="01 / CURRENT WORK"
-            title="Active session"
-            className="featured"
-            aside={featured && <Status value={featured.status} />}
-          >
-            {featured ? (
-              <>
-                <div className="featured-main featured-main-map">
-                  <div>
-                    <span className="micro-label">PINNED WORKSPACE</span>
-                    <h3>{featured.name}</h3>
-                    <p>{featured.scenario}</p>
-                    <div className="meta-pills">
-                      <span>{featured.provider}</span>
-                      <span>Session {featured.id.slice(0, 8)}</span>
-                    </div>
-                  </div>
-                </div>
-                <FeaturedTopology id={featured.id} />
-                <div className="panel-foot">
-                  <span>
-                    Open the arena for tools, evidence and lifecycle state.
-                  </span>
-                  <a
-                    className="inline-action"
-                    href={`/console/arena/${encodeURIComponent(featured.id)}`}
+      <div className="ov-row ov-main">
+        <section className="panel ov-agents" aria-labelledby="ov-agents-title">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">Agents now</span>
+              <h2 id="ov-agents-title">
+                {board
+                  ? `${agentTiles.length} connected · ${idleCount} idle · ${needYou} need${needYou === 1 ? "s" : ""} you`
+                  : "Loading the live board"}
+              </h2>
+            </div>
+            <span className={`ov-live ${live ? "on" : ""}`}>
+              <span className="dot" /> {live ? "Live" : "Reconnecting"}
+            </span>
+          </div>
+          {board && agentTiles.length ? (
+            <ul className="ov-agent-grid">
+              {agentTiles.slice(0, 6).map(({ agent, arena }) => {
+                const quiet = isIdle(arena, board, now);
+                const state = arena.budget.stopped
+                  ? "wait"
+                  : agent.paused
+                    ? "idle"
+                    : quiet
+                      ? "idle"
+                      : "run";
+                const ratio =
+                  arena.budget.remaining != null && arena.budget.cap
+                    ? 1 - arena.budget.remaining / arena.budget.cap
+                    : null;
+                return (
+                  <li
+                    key={`${arena.id}:${agent.name}`}
+                    className={`ov-agent ${state}`}
                   >
-                    Open workspace ↗
+                    <a
+                      href={`/console/arena/${encodeURIComponent(arena.id)}?tab=live`}
+                    >
+                      <span className="ov-agent-head">
+                        <Icon name="agent" />
+                        <b>{agent.name}</b>
+                        <small>{agent.stance || "any stance"}</small>
+                        <span className="ov-agent-state">
+                          {arena.budget.stopped
+                            ? "Needs you"
+                            : agent.paused
+                              ? "Paused"
+                              : quiet
+                                ? "Idle"
+                                : "Working"}
+                        </span>
+                      </span>
+                      <span className="ov-now">
+                        {arena.last_action
+                          ? `${arena.last_action.name} · ${arena.last_action.status}`
+                          : "No action yet"}
+                      </span>
+                      <span className="ov-agent-foot">
+                        <span>{arena.name}</span>
+                        <span>
+                          {arena.last_action
+                            ? ago(arena.last_action.at, now)
+                            : "—"}
+                        </span>
+                        {ratio != null && (
+                          <span
+                            className={`meter ${ratio >= 0.9 ? "bad" : ratio >= 0.75 ? "warn" : ""}`}
+                            role="img"
+                            aria-label={`${Math.round(ratio * 100)}% of the budget used`}
+                          >
+                            <i style={{ width: `${ratio * 100}%` }} />
+                          </span>
+                        )}
+                      </span>
+                    </a>
+                  </li>
+                );
+              })}
+              {Math.min(agentTiles.length, 6) % 2 === 1 && (
+                <li className="ov-agent ov-connect">
+                  <a href="/console/arenas">
+                    <span className="ov-agent-head">
+                      <Icon name="plus" />
+                      <b>Connect another agent</b>
+                    </span>
+                    <span className="ov-connect-text">
+                      Create a key scoped to one arena and one stance on its
+                      Agent access page.
+                    </span>
                   </a>
-                </div>
-              </>
-            ) : (
+                </li>
+              )}
+            </ul>
+          ) : (
+            <div className="ov-body">
               <Empty
-                title="No live sessions"
-                detail="Start research from a pinned target or challenge."
+                title={board ? "No agent is connected" : "Loading"}
+                detail="Create a key scoped to an arena and one stance on the arena's Agent access page; the agent appears here as soon as it acts."
                 action={
-                  <a className="inline-action" href="/console/research/new">
-                    Create research ↗
+                  <a className="button button-outline" href="/console/arenas">
+                    Choose an arena
                   </a>
                 }
               />
-            )}
-          </Panel>
-          <Panel
-            eyebrow="03 / RECORDS"
-            title="Recent sessions"
-            className="sessions-panel"
-            aside={
-              <a className="subtle-link" href="/console/arenas">
-                View all
-              </a>
-            }
-          >
-            {value.sessions.length ? (
-              <div className="session-table">
-                <div className="table-labels">
-                  <span>SESSION</span>
-                  <span>STATUS</span>
-                  <span>SCENARIO</span>
-                  <span />
-                </div>
-                {value.sessions.slice(0, 6).map((item) => (
+            </div>
+          )}
+          <div className="panel-foot">
+            <span>
+              Pushed live · idle after {board?.idle_minutes ?? 5} min without an
+              action
+            </span>
+            <a className="inline-action" href="/console/board">
+              Agents board
+            </a>
+          </div>
+        </section>
+        <Panel
+          eyebrow="Needs attention"
+          title={
+            inbox.length ? `${inbox.length} waiting for you` : "Nothing waiting"
+          }
+          className="ov-attention"
+        >
+          {inbox.length ? (
+            <ul className="ov-list">
+              {inbox.slice(0, 4).map((item) => (
+                <li key={item.key} className={`kind-${item.kind}`}>
                   <a
-                    key={item.id}
-                    className="session-row"
-                    href={`/console/arena/${encodeURIComponent(item.id)}`}
-                  >
-                    <span className="session-name">
-                      <strong>{item.name}</strong>
-                      <small>{item.id.slice(0, 8)}</small>
-                    </span>
-                    <Status value={item.status} />
-                    <span className="row-scenario">{item.scenario}</span>
-                    <span aria-hidden="true">↗</span>
-                  </a>
-                ))}
-              </div>
-            ) : (
-              <Empty
-                title="No session records"
-                detail="Created and archived research will be listed here."
-              />
-            )}
-          </Panel>
-          <BoardSummary eyebrow="05 / AGENTS" />
-        </div>
-        <div className="research-col research-col-side">
-          <Panel
-            eyebrow="02 / DECISIONS"
-            title="Needs review"
-            className="review-panel"
-            aside={<span className="count">{value.review.length}</span>}
-          >
-            {value.review.length ? (
-              <div className="compact-list">
-                {value.review.slice(0, 3).map((finding, index) => (
-                  <a
-                    key={finding.id || index}
                     href={
-                      finding.arena_known && finding.arena_id
-                        ? `/console/arena/${encodeURIComponent(finding.arena_id)}?tab=findings`
-                        : "/console/activity?section=findings"
+                      item.arena_id
+                        ? `/console/arena/${encodeURIComponent(item.arena_id)}?tab=live`
+                        : item.evaluation_id
+                          ? `/console/evaluations/${encodeURIComponent(item.evaluation_id)}`
+                          : "/console/board"
                     }
-                    className="compact-row"
                   >
-                    <span>
-                      <strong>{finding.title}</strong>
-                      <small>
-                        {finding.arena_name} ·{" "}
-                        {finding.verdict.replaceAll("_", " ")}
-                      </small>
-                    </span>
-                    <b aria-hidden="true">↗</b>
+                    <b>{item.text}</b>
+                    <small>
+                      {item.arena_name || item.arena_id || "Platform"} ·{" "}
+                      {ago(item.at, now)}
+                    </small>
                   </a>
-                ))}
-              </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="ov-body">
+              <Empty
+                title="Queue clear"
+                detail="Failed arenas, verdicts, budget exhaustion, stops and finished trials appear here."
+              />
+            </div>
+          )}
+          <div className="panel-foot">
+            <span>Newest first</span>
+            <a className="inline-action" href="/console/board">
+              {inbox.length > 4 ? `Show all ${inbox.length}` : "Agents board"}
+            </a>
+          </div>
+        </Panel>
+      </div>
+      <div className="ov-row ov-kpis">
+        <Kpi
+          label="Live arenas"
+          value={n(liveArenas.length)}
+          hint={`${deploying} launching · ${stopped} stopped`}
+        />
+        <Kpi
+          label="Actions, last hour"
+          value={hour ? n(hour.totals.actions) : "—"}
+          hint={
+            hour
+              ? `${n(hour.totals.failed)} failed · ${n(hour.totals.refused)} refused`
+              : recent.error || "Loading"
+          }
+        />
+        <Kpi
+          label="Findings awaiting a verdict"
+          value={n(waiting.length)}
+          hint={`${value.review.length} recent findings`}
+        />
+        <Kpi
+          label="Model calls, last hour"
+          value={hour ? n(hour.totals.by_family.model) : "—"}
+          hint="Counted from recorded model spans"
+        />
+      </div>
+      <div className="ov-row ov-main">
+        <Panel
+          eyebrow="Activity, last hour"
+          title={
+            hour && hour.totals.actions
+              ? `${n(hour.totals.actions)} actions across ${new Set(actors.map((row) => row.arena_id)).size} arena${new Set(actors.map((row) => row.arena_id)).size === 1 ? "" : "s"}`
+              : "No actions in the last hour"
+          }
+        >
+          <div className="ov-body">
+            {hour ? (
+              <ActivityChart
+                buckets={hour.buckets}
+                bucketSeconds={hour.bucket_seconds}
+                caption="Actions per interval in the last hour, by kind"
+              />
             ) : (
               <Empty
-                title="Review queue clear"
-                detail="Findings that need an operator verdict will appear here."
+                title={recent.error ? "Activity unavailable" : "Loading"}
+                detail={recent.error || "Reading the last hour of spans."}
               />
             )}
-            <div className="panel-foot">
-              <a
-                className="inline-action"
-                href="/console/activity?section=findings"
-              >
-                View all findings ↗
-              </a>
+          </div>
+        </Panel>
+        <Panel eyebrow="By agent, last hour" title="Who did the work">
+          <div className="ov-body">
+            {actors.length ? (
+              <Bars
+                rows={actors.slice(0, 6).map((row) => ({
+                  key: `${row.actor}:${row.arena_id}`,
+                  label: row.actor,
+                  sub: row.arena_id
+                    ? names.get(row.arena_id) || row.arena_id
+                    : "platform",
+                  value: row.actions + row.model_calls,
+                  failed: row.failed,
+                  note: row.refused ? `${row.refused} refused` : undefined,
+                }))}
+              />
+            ) : (
+              <Empty
+                title="No one acted in the last hour"
+                detail="Tool calls and model calls by every agent and operator are counted here."
+              />
+            )}
+          </div>
+          <div className="panel-foot">
+            <span>Tool and model calls; failures are the red end</span>
+          </div>
+        </Panel>
+      </div>
+      <div className="ov-row ov-main">
+        <Panel
+          eyebrow="Arenas"
+          title="Running and recent"
+          aside={
+            <a className="inline-action" href="/console/arenas">
+              All arenas
+            </a>
+          }
+        >
+          {value.sessions.length ? (
+            <div className="ov-table-wrap">
+              <table className="ov-table">
+                <thead>
+                  <tr>
+                    <th>Arena</th>
+                    <th>State</th>
+                    <th>Scenario</th>
+                    <th>Provider</th>
+                    <th className="r">Stations</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {value.sessions.slice(0, 6).map((item) => (
+                    <tr key={item.id}>
+                      <td>
+                        <a
+                          href={`/console/arena/${encodeURIComponent(item.id)}`}
+                        >
+                          <b>{item.name}</b>
+                          <small className="mono">{item.id.slice(0, 12)}</small>
+                        </a>
+                      </td>
+                      <td>
+                        <Status value={item.status} />
+                      </td>
+                      <td>{item.scenario}</td>
+                      <td className="mono">{item.provider}</td>
+                      <td className="r mono">{item.nodes.length}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </Panel>
-          <Panel
-            eyebrow="04 / EVIDENCE"
-            title="Proof desk"
-            className="evidence-panel"
-          >
-            <div className="resource-links">
-              <a href="/console/activity?section=evidence">
-                <strong>Evidence library</strong>
-                <small>Artifacts and provenance</small>
-                <span>↗</span>
-              </a>
-              <a href="/console/activity?section=audit">
-                <strong>Audit trace</strong>
-                <small>Attributed events</small>
-                <span>↗</span>
-              </a>
-              <a href="/console/research/review">
-                <strong>Source review</strong>
-                <small>Frozen candidate inventories</small>
-                <span>↗</span>
-              </a>
-              <a href="/console/research/campaigns">
-                <strong>Campaigns</strong>
-                <small>Findings across versions, to disclosure</small>
-                <span>↗</span>
-              </a>
-              <a href="/console/library/targets">
-                <strong>Target library</strong>
-                <small>Source and pinned identities</small>
-                <span>↗</span>
-              </a>
+          ) : (
+            <div className="ov-body">
+              <Empty
+                title="No arenas yet"
+                detail="Launch one in Cyber Range or start research from a pinned target."
+                action={
+                  <a
+                    className="button button-outline"
+                    href="/console/arenas/new"
+                  >
+                    New arena
+                  </a>
+                }
+              />
             </div>
-          </Panel>
-          <Capacity />
-        </div>
+          )}
+        </Panel>
+        <Capacity />
       </div>
     </>
   );
 }
 
-// The same declared-topology map the Arena page draws, from the arena
-// projection, so the overview and the workspace never disagree.
-function FeaturedTopology({ id }: { id: string }) {
-  const { value, error } = useWorkspaceData<ArenaData>(
-    `/api/console/arenas/${encodeURIComponent(id)}`,
-  );
-  const [selected, setSelected] = useState<string | undefined>();
-  if (error)
-    return (
-      <p className="featured-topology-note">
-        Topology unavailable here; open the workspace to inspect it.
-      </p>
-    );
-  if (!value)
-    return <p className="featured-topology-note">Loading topology…</p>;
-  const current =
-    selected ||
-    value.nodes.find((node) => !node.foothold)?.name ||
-    value.nodes[0]?.name;
+function Kpi({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+}) {
   return (
-    <div className="featured-topology forge-workbench">
-      <div className="forge-canvas">
-        <SegmentMap
-          compact
-          nodes={value.nodes.map((item) => ({
-            name: item.name,
-            kind: item.foothold ? "foothold" : "target",
-            detail: stationDetail(item),
-            state: item.state,
-          }))}
-          segments={value.topology?.segments || []}
-          unsegmented={value.topology?.unsegmented || []}
-          unavailable={!value.topology}
-          selected={current}
-          onSelect={setSelected}
-        />
-      </div>
+    <div className="panel ov-kpi">
+      <span className="eyebrow">{label}</span>
+      <strong>{value}</strong>
+      <small>{hint}</small>
     </div>
   );
 }
@@ -299,7 +469,7 @@ function Capacity() {
   const { value, error } = useWorkspaceData<Usage>("/api/system-usage");
   return (
     <Panel
-      eyebrow="06 / CAPACITY"
+      eyebrow="Capacity"
       title="Host & arenas"
       className="research-capacity"
     >

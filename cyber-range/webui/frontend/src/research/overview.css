@@ -1,0 +1,280 @@
+/* UX-17: Research overview. Rows of equal-height cards. */
+.ov-row {
+  display: grid;
+  gap: var(--s4);
+  align-items: stretch;
+  margin-bottom: var(--s4);
+}
+.ov-main {
+  grid-template-columns: minmax(0, 1.7fr) minmax(300px, 1fr);
+}
+.ov-kpis {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.ov-row > .panel {
+  display: flex;
+  flex-direction: column;
+}
+.ov-row > .panel > .panel-foot {
+  margin-top: auto;
+}
+.ov-body {
+  flex: 1;
+  padding: 0 var(--s5) var(--s5);
+}
+
+/* Agents now: the navy fade card. */
+.ov-agents {
+  border-color: var(--bar-line);
+  background: linear-gradient(120deg, var(--bar) 0 40%, var(--bar-2));
+  color: var(--bar-ink);
+}
+.ov-agents::after {
+  inset: 0;
+  width: auto;
+  height: auto;
+  opacity: 0.55;
+  background:
+    repeating-linear-gradient(45deg, transparent 0 13px, #ffffff0b 13px 14px),
+    repeating-linear-gradient(-45deg, transparent 0 13px, #ffffff0b 13px 14px);
+  -webkit-mask-image: linear-gradient(90deg, transparent 35%, #000);
+  mask-image: linear-gradient(90deg, transparent 35%, #000);
+}
+.ov-agents > * {
+  position: relative;
+  z-index: 1;
+}
+.ov-agents .eyebrow,
+.ov-agents .panel-foot {
+  color: var(--bar-muted);
+}
+.ov-agents .panel-foot {
+  border-top-color: var(--bar-line);
+}
+.ov-agents .inline-action {
+  color: var(--gold);
+}
+.ov-agents .empty strong {
+  color: var(--bar-ink);
+}
+.ov-agents .empty p {
+  color: var(--bar-muted);
+}
+.ov-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--bar-muted);
+  font: 500 var(--t-micro) var(--f-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.ov-live .dot {
+  color: var(--idle);
+}
+.ov-live.on {
+  color: var(--gold);
+}
+.ov-live.on .dot {
+  color: var(--gold);
+}
+.ov-agent-grid {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ov-agent {
+  border-top: 1px solid var(--bar-line);
+  border-left: 2px solid var(--bar-line);
+}
+.ov-agent:nth-child(even) {
+  border-left-color: var(--bar-line);
+}
+.ov-agent.run {
+  border-left-color: var(--gold);
+}
+.ov-agent.wait {
+  border-left-color: var(--warn);
+}
+.ov-agent a {
+  display: grid;
+  align-content: center;
+  gap: var(--s3);
+  height: 100%;
+  padding: var(--s4) var(--s5);
+  color: var(--bar-ink);
+}
+.ov-agent a:hover {
+  background: #ffffff08;
+  text-decoration: none;
+}
+.ov-agent-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+.ov-agent-head .icon {
+  color: var(--gold);
+}
+.ov-agent-head small {
+  color: var(--bar-muted);
+  font: 400 var(--t-micro) var(--f-mono);
+}
+.ov-agent-state {
+  margin-left: auto;
+  padding: 2px 6px;
+  border: 1px solid var(--bar-line);
+  color: var(--bar-muted);
+  font: 500 var(--t-micro) / 1.3 var(--f-mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.ov-agent.run .ov-agent-state {
+  border-color: var(--gold);
+  background: var(--gold);
+  color: var(--gold-ink);
+}
+.ov-agent.wait .ov-agent-state {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.ov-now {
+  overflow: hidden;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--bar-line);
+  background: #0003;
+  font: 400 var(--t-meta) var(--f-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ov-agent-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  color: var(--bar-muted);
+  font-size: var(--t-meta);
+}
+.ov-agent-foot .meter {
+  flex: 1;
+  min-width: 40px;
+}
+
+.ov-connect a {
+  color: var(--bar-muted);
+}
+.ov-connect b {
+  color: var(--bar-ink);
+  font-weight: 500;
+}
+.ov-connect-text {
+  font-size: var(--t-meta);
+}
+
+/* Needs attention */
+.ov-list {
+  display: grid;
+  flex: 1;
+  grid-auto-rows: 1fr;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ov-list li {
+  border-top: 1px solid var(--line-soft);
+  border-left: 2px solid var(--line);
+}
+.ov-list li.kind-arena_failed,
+.ov-list li.kind-budget_exhausted,
+.ov-list li.kind-stop {
+  border-left-color: var(--warn);
+}
+.ov-list li.kind-verdict {
+  border-left-color: var(--info);
+}
+.ov-list a {
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  height: 100%;
+  padding: var(--s3) var(--s5);
+  color: var(--ink);
+}
+.ov-list a:hover {
+  background: var(--inset);
+  text-decoration: none;
+}
+.ov-list b {
+  font-weight: 500;
+}
+.ov-list small {
+  color: var(--muted);
+  font-size: var(--t-meta);
+}
+
+/* KPIs */
+.ov-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  min-height: 116px;
+  padding: var(--s4) var(--s5);
+}
+.ov-kpi strong {
+  font: 600 26px / 1 var(--f-sans);
+  letter-spacing: -0.02em;
+}
+.ov-kpi small {
+  margin-top: auto;
+  color: var(--muted);
+  font-size: var(--t-meta);
+}
+
+/* Arenas table */
+.ov-table-wrap {
+  overflow-x: auto;
+}
+.ov-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-ui);
+}
+.ov-table th,
+.ov-table td {
+  padding: var(--s2) var(--s5);
+  border-top: 1px solid var(--line-soft);
+  text-align: left;
+  white-space: nowrap;
+}
+.ov-table thead th {
+  background: var(--inset);
+}
+.ov-table .r {
+  text-align: right;
+}
+.ov-table td a {
+  display: grid;
+  color: var(--ink);
+}
+.ov-table td a small {
+  color: var(--muted);
+  font-size: var(--t-micro);
+}
+
+@media (max-width: 1100px) {
+  .ov-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ov-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .ov-agent-grid,
+  .ov-kpis {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

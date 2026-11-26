@@ -71,6 +71,7 @@ import validation_evidence
 import evidence_review
 import actions
 import otlp
+import activity
 import board
 import spans
 import streams
@@ -3393,6 +3394,60 @@ def list_arena_spans(
     rows = db.list_spans(arena_id=instance_id, after_id=after_id, limit=limit,
                          visibility=spans.visible_to(principal.role))
     return {"spans": rows, "next_after_id": rows[-1]["id"] if rows else after_id}
+
+
+def _as_datetime(value):
+    if isinstance(value, datetime) or value is None:
+        return value
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
+def _recent_step(row: dict) -> dict:
+    preview = row.get("input_preview") or ""
+    return {"name": row["name"], "kind": row["kind"], "actor": row["actor"],
+            "status": row["status"], "started_at": row["started_at"],
+            "duration_ms": row["duration_ms"],
+            "preview": preview[:160] or None}
+
+
+@app.get("/arenas/{instance_id}/activity")
+def arena_activity(instance_id: str, buckets: int = Query(default=24, ge=4, le=96),
+                   principal: Principal = Depends(require_principal)):
+    """UX-17: the arena's actions folded into time buckets by family, with
+    failures, refusals, submitted findings and budget spend, totals by family
+    and actor, tool-time statistics and the newest steps. Operator-only: it
+    covers operator-visibility spans."""
+    _require_operator(principal)
+    record = db.get_deployment(instance_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Arena not found")
+    now = db_now()
+    start = _as_datetime(record.get("created_at")) or now
+    if record.get("status") in ("destroyed", "failed"):
+        end = (_as_datetime(db.last_span_end(instance_id))
+               or _as_datetime(record.get("updated_at")) or now)
+    else:
+        end = now
+    summary = activity.summarize(db.activity_rows(arena_id=instance_id),
+                                 start=start, end=max(end, start), max_buckets=buckets)
+    summary["recent"] = [_recent_step(row) for row in db.recent_action_spans(instance_id)]
+    return summary
+
+
+@app.get("/activity/recent")
+def recent_activity(minutes: int = Query(default=60, ge=5, le=1440),
+                    buckets: int = Query(default=12, ge=4, le=96),
+                    principal: Principal = Depends(require_principal)):
+    """UX-17: every arena's actions over the last ``minutes``, by family and by
+    actor. Operator-only."""
+    _require_operator(principal)
+    end = db_now()
+    start = end - timedelta(minutes=minutes)
+    return activity.summarize(db.activity_rows(since=start), start=start, end=end,
+                              max_buckets=buckets)
 
 
 def _board_snapshot() -> dict:
