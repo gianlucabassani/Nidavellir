@@ -439,6 +439,7 @@ Order: data model first, then views.
   - Self-reported gateway calls fold into the enforced call they duplicate; the List view keeps every span.
   - Route chips focus one branch. Replay grows the tree; scrub and Back to live as before.
   - Browser check: `scripts/ux22-browser-check.cjs`.
+- [x] **UX-23 — Bare fields in the Forge theme (#85).** Text inputs without a component class (the arena Live search, ledger filters) take the field geometry of the selects beside them instead of the browser's inset box. Asserted in `scripts/ux16-browser-check.cjs`.
 - [x] **UX-24 — Findings as reports you can send (#87).**
   - An open finding has a Report view next to the Review. It opens on Review while the finding awaits a decision.
   - The console assembles the report (summary, impact, description, prerequisites, steps to reproduce, proof, remediation, references, plus product, versions, component, attack and impact type, CVSS) from the finding, the hypothesis it tested, its causality and evidence. Each section says where its text came from.

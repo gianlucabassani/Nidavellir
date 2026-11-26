@@ -105,6 +105,22 @@ const PAGES = [
     await page.waitForURL(/tab=http/);
     assert.equal(await page.locator('#rail-arena .rail-link[aria-current="page"]').innerText(), 'HTTP');
     checks.push('arena menu links switch the tool in place');
+
+    // UX-23: a bare text field (the Live search) matches the selects beside it.
+    await page.locator('#rail-arena .rail-link', {hasText: 'Live'}).click();
+    await page.waitForURL(/tab=live/);
+    const fields = await page.evaluate(() => {
+      const box = selector => {
+        const element = document.querySelector(selector);
+        const style = getComputedStyle(element);
+        return {height: Math.round(element.getBoundingClientRect().height),
+          bottom: Math.round(element.getBoundingClientRect().bottom),
+          border: `${style.borderTopWidth} ${style.borderTopStyle}`, left: style.paddingLeft};
+      };
+      return {select: box('.live-filters select'), search: box('.live-search input')};
+    });
+    assert.deepEqual(fields.search, fields.select, 'Live search field matches the selects');
+    checks.push('the Live search field has the same height, border, padding and baseline as the selects');
     await page.setViewportSize({width: 1440, height: 900});
 
     // Account menu and theme live at the sidebar foot.
