@@ -2832,3 +2832,67 @@ def test_console_search_short_query_skips_the_api_and_long_ones_are_encoded(clie
     assert calls == []
     assert client.get("/api/console/search?q=admin users&x=1").status_code == 200
     assert calls == ["/search?q=admin+users"]
+
+
+def test_ux17_dashboard_projections_require_login(client):
+    for path in ("/api/console/arenas/arena-1/activity", "/api/console/activity/recent"):
+        response = client.get(path)
+        assert response.status_code in (302, 401), path
+    assert client.post("/api/console/arenas/arena-1/extend",
+                       json={"seconds": 1800}).status_code in (302, 400, 401)
+
+
+def test_ux17_activity_projections_relay_the_service(client, monkeypatch):
+    import app as webui_module
+
+    assert _login(client).status_code == 302
+    calls = []
+
+    def fake_get(path, timeout=10):
+        calls.append(path)
+        if "missing" in path:
+            return {"error": "Arena not found"}, 404
+        return {"bucket_seconds": 30, "buckets": [], "recent": []}, 200
+
+    monkeypatch.setattr(webui_module, "_api_get_status", fake_get)
+    assert client.get("/api/console/arenas/arena-1/activity").get_json()["bucket_seconds"] == 30
+    assert calls[-1] == "/arenas/arena-1/activity"
+    assert client.get("/api/console/arenas/missing/activity").status_code == 404
+    assert client.get("/api/console/activity/recent").status_code == 200
+    assert calls[-1] == "/activity/recent?minutes=60&buckets=12"
+    monkeypatch.setattr(webui_module, "_api_get_status",
+                        lambda path, timeout=10: ({"error": "down"}, 502))
+    assert client.get("/api/console/activity/recent").status_code == 503
+
+
+def test_ux17_extend_forwards_only_fixed_choices_with_csrf(client, monkeypatch):
+    import app as webui_module
+
+    token = _csrf_token(client)
+    assert _login(client).status_code == 302
+    headers = {"X-CSRFToken": token}
+    calls = []
+    monkeypatch.setattr(webui_module, "_api_post", lambda path, body: (
+        calls.append((path, body)) or {"arena_id": "arena-1", "replayed": False}, 200))
+    path = "/api/console/arenas/arena-1/extend"
+    assert client.post(path, json={"seconds": 1800}).status_code == 400  # no CSRF token
+    for bad in ({"seconds": 60}, {"seconds": "1800"}, {"seconds": 86400}, [], None):
+        assert client.post(path, json=bad, headers=headers).status_code == 422
+    assert not calls
+    assert client.post(path, json={"seconds": 3600}, headers=headers).status_code == 200
+    target, body = calls[-1]
+    assert target == "/arenas/arena-1/extend"
+    assert body["seconds"] == 3600 and len(body["idempotency_key"]) == 32
+
+
+def test_api_error_reads_coded_refusals():
+    import app as webui_module
+
+    class Resp:
+        status_code = 423
+
+        @staticmethod
+        def json():
+            return {"detail": {"code": "stop_active", "message": "Research is stopped"}}
+
+    assert webui_module._api_error(Resp()) == "Research is stopped"

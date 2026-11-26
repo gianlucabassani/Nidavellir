@@ -1794,6 +1794,35 @@ class Database:
         with self._session() as session:
             return [self._span_dict(row) for row in session.scalars(query).all()]
 
+    def activity_rows(self, *, arena_id=None, since=None, kinds=("tool", "model")):
+        """UX-17: the columns an activity summary needs, for an arena or for
+        every arena since ``since``. Operator material: callers gate access."""
+        query = select(Span.kind, Span.name, Span.status, Span.actor, Span.arena_id,
+                       Span.started_at, Span.duration_ms, Span.attrs
+                       ).where(Span.kind.in_(tuple(kinds)))
+        if arena_id is not None:
+            query = query.where(Span.arena_id == arena_id)
+        if since is not None:
+            query = query.where(Span.started_at >= since)
+        with self._session() as session:
+            return [tuple(row) for row in session.execute(query.order_by(Span.id)).all()]
+
+    def recent_action_spans(self, arena_id, *, limit=8, kinds=("tool", "model")):
+        """UX-17: the newest action spans of an arena, newest first."""
+        query = (select(Span).where(Span.arena_id == arena_id, Span.kind.in_(tuple(kinds)))
+                 .order_by(Span.started_at.desc(), Span.id.desc())
+                 .limit(max(1, min(int(limit), 50))))
+        with self._session() as session:
+            return [self._span_dict(row) for row in session.scalars(query).all()]
+
+    def last_span_end(self, arena_id):
+        """When the arena's last recorded span ended (or started), or None."""
+        with self._session() as session:
+            row = session.execute(
+                select(func.max(func.coalesce(Span.ended_at, Span.started_at)))
+                .where(Span.arena_id == arena_id)).scalar()
+            return row
+
     @staticmethod
     def _span_dict(row) -> dict:
         try:

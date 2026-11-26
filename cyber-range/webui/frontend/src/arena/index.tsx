@@ -1,16 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ForwardsWorkbench, ScoreWorkbench } from "./record";
 import type { ArenaData } from "../types";
-import {
-  useWorkspaceData,
-  Status,
-  formatObserved,
-  PageHead,
-  Loading,
-  ErrorState,
-  ErrorBoundary,
-  BackLink,
-} from "../ui";
+import { useWorkspaceData, Loading, ErrorState, ErrorBoundary } from "../ui";
 import { PocWorkbench } from "./poc";
 import { FindingsWorkbench } from "./findings";
 import { HttpWorkbench } from "./http";
@@ -22,7 +13,9 @@ import { useArenaLive } from "./live";
 import { Infrastructure } from "./infrastructure";
 import { BrowserWorkbench } from "./browser";
 import { TransferWorkbench } from "./transfer";
-import { ForgeOverview } from "./forge";
+import { ArenaDashboard } from "./dashboard";
+import { ArenaHeader } from "./header";
+import "./forge.css";
 import { ArenaRail, categories } from "./navigation";
 import { usePaletteActions } from "../shared/palette";
 import { navigate } from "../router";
@@ -192,65 +185,19 @@ export function ArenaWorkspace({ id }: { id: string }) {
   if (loading && !value) return <Loading />;
   if (error && !value) return <ErrorState message={error} refresh={refresh} />;
   if (!value) return null;
-  const legacy = `/arena/${encodeURIComponent(id)}`;
-  const readOnly = value.state === "destroyed";
   // OBS-05: an active arena opens on the agent live view.
   const tab = activeTab || (value.state === "active" ? "live" : "forge");
   return (
     <>
-      <div className="arena-return">
-        <BackLink href="/console?workspace=research" label="Research" />
-        <span>/</span>
-        <span>{value.name}</span>
-      </div>
-      <PageHead
-        overline={`RESEARCH / ARENA ${value.id}`}
-        title={value.name}
-        subtitle={`${value.scenario} · ${value.simulation_mode ? "mock simulation" : value.provider} · ${readOnly ? "retained record" : "live workspace"}`}
-        observed={value.observed_at}
-        action={
-          <a
-            className="subtle-link"
-            href={legacy}
-            title="Open the retained legacy arena view"
-          >
-            Legacy arena page ↗
-          </a>
-        }
-        refresh={refresh}
+      <ArenaHeader
+        arena={value}
+        liveState={liveState}
+        onAction={(action) => {
+          setGateError("");
+          setConfirmAction(action);
+        }}
+        onChanged={refresh}
       />
-      <div className="arena-context">
-        <div>
-          <small>STATE</small>
-          <Status value={value.state} />
-        </div>
-        <div>
-          <small>ACCESS GATE</small>
-          <strong>{value.budget.gate || "Unknown"}</strong>
-        </div>
-        <div>
-          <small>ACTIONS LEFT</small>
-          <strong>
-            {value.budget.remaining == null
-              ? "Unavailable"
-              : `${value.budget.remaining} of ${value.budget.cap ?? "?"}`}
-          </strong>
-        </div>
-        <div>
-          <small>EXPIRES</small>
-          <strong>
-            {value.expires_at ? formatObserved(value.expires_at) : "Not set"}
-          </strong>
-        </div>
-      </div>
-      <div className="arena-live-status" role="status">
-        <span className={`live-dot ${liveState}`} aria-hidden="true" />
-        {liveState === "live"
-          ? "Live updates"
-          : liveState === "reconnecting"
-            ? "Reconnecting · periodic refresh"
-            : "Archived snapshot"}
-      </div>
       {gateMessage && (
         <p className="gate-message" role="status">
           {gateMessage}
@@ -301,13 +248,7 @@ export function ArenaWorkspace({ id }: { id: string }) {
             ) : tab === "forwards" ? (
               <ForwardsWorkbench arena={value} />
             ) : (
-              <ForgeOverview
-                arena={value}
-                onAction={(action) => {
-                  setGateError("");
-                  setConfirmAction(action);
-                }}
-              />
+              <ArenaDashboard arena={value} />
             )}
           </ErrorBoundary>
         </div>

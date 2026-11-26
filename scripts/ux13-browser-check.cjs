@@ -118,7 +118,8 @@ const SHOTS = process.env.NV_UX13_SHOTS || '';
     // Text search reaches findings.
     await page.keyboard.press('Control+k');
     await page.keyboard.type('guests');
-    await palette.getByRole('option', {name: /Admin user list readable by guests/}).waitFor();
+    // The seeded arena's finding (a reused stack may hold other arenas with it).
+    await palette.getByRole('option', {name: new RegExp(`Admin user list readable by guests.*${config.arena}`)}).waitFor();
     await page.keyboard.press('Escape');
     checks.push('Text search finds the finding by a word in its title');
 

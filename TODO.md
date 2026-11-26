@@ -394,11 +394,20 @@ Order: data model first, then views.
   workspaces, search, agents and attention drawers, and Copilot. A sidebar per workspace
   that becomes the arena menu, with its foot pinned. The Library dropdown is gone; Planned
   features are visible but marked. Browser check: `scripts/ux16-browser-check.cjs`.
-- [ ] **UX-17 — Research overview and arena dashboard.** Aligned overview (agents now,
-  needs attention, KPIs, last-hour activity by kind and by agent). The arena overview
-  becomes a dashboard: a one-line status, activity per interval, budget burn with an
-  expiry projection, outcomes, tools used, findings, the stations as built, and recent
-  activity.
+- [x] **UX-17 — Research overview and arena dashboard.**
+  - Endpoints: `GET /arenas/{id}/activity` and `GET /activity/recent` (operator-only) fold spans into buckets by family, with failures, refusals, findings, budget spend, totals per actor, tool time and newest steps.
+  - Arena overview is now a dashboard:
+    - a header card with Extend time (new BFF proxy), Stop/Resume and Reset/Destroy;
+    - a status sentence;
+    - activity, budget burn with a labelled projection, outcomes and findings;
+    - the stations as built, with their tools;
+    - recent steps, monitor signals and lifecycle events.
+  - Research overview:
+    - Agents now and Needs attention at equal height;
+    - KPIs, last-hour activity by kind and by agent;
+    - arenas and capacity.
+  - Charts use a CVD-validated palette, with a tooltip on focus and a table view.
+  - Browser check: `scripts/ux17-browser-check.cjs`.
 - [ ] **UX-18 — Findings you can open in place.** Severity tiles filter the list. Each
   finding expands to the claim, reproduction steps, the validator's view, its evidence
   and the verdict actions, across arenas and per arena.

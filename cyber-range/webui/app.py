@@ -105,6 +105,8 @@ def _api_error(resp):
             msg = e.get("msg", "invalid")
             parts.append(f"{field}: {msg}" if field else msg)
         detail = "; ".join(parts)
+    if isinstance(detail, dict):  # refusals with a stable code: {"code", "message"}
+        detail = detail.get("message") or detail.get("code")
     return detail or f"HTTP {resp.status_code}"
 
 
@@ -1588,6 +1590,41 @@ def console_research_gate(instance_id):
         return jsonify({"error": "Reason must be at most 500 characters"}), 422
     result, status = _api_post(f"/arenas/{instance_id}/{body['action']}", {
         "reason": reason.strip(), "idempotency_key": uuid.uuid4().hex,
+    })
+    return jsonify(result), status
+
+
+# UX-17: dashboard projections (operator-only at the orchestrator).
+@app.route("/api/console/arenas/<instance_id>/activity")
+def console_arena_activity(instance_id):
+    data, status = _api_get_status(
+        f"/arenas/{quote(instance_id, safe='')}/activity", timeout=15)
+    if status != 200:
+        return jsonify({"error": (data or {}).get("error") or "Activity unavailable"}), (
+            status if status in (403, 404) else 503)
+    return jsonify(data)
+
+
+@app.route("/api/console/activity/recent")
+def console_recent_activity():
+    data, status = _api_get_status("/activity/recent?minutes=60&buckets=12", timeout=15)
+    if status != 200:
+        return jsonify({"error": "Recent activity unavailable"}), 503
+    return jsonify(data)
+
+
+_EXTEND_CHOICES = (1800, 3600, 7200)
+
+
+@app.route("/api/console/arenas/<instance_id>/extend", methods=["POST"])
+def console_arena_extend(instance_id):
+    """UX-17: move the arena's time box forward (F1 extend) by a fixed choice."""
+    body = request.get_json(silent=True)
+    seconds = body.get("seconds") if isinstance(body, dict) else None
+    if seconds not in _EXTEND_CHOICES:
+        return jsonify({"error": "Choose 30 minutes, 1 hour or 2 hours"}), 422
+    result, status = _api_post(f"/arenas/{quote(instance_id, safe='')}/extend", {
+        "seconds": seconds, "idempotency_key": uuid.uuid4().hex,
     })
     return jsonify(result), status
 

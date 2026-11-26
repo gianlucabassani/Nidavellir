@@ -161,7 +161,9 @@ export function Shell({
                   agent{agents.length === 1 ? "" : "s"}
                 </span>
               </span>
-              {idle > 0 && <span className="tbtn-count">{idle} idle</span>}
+              {idle > 0 && (
+                <span className="tbtn-count tbtn-idle">{idle} idle</span>
+              )}
             </button>
             {/* The co-pilot launcher portals here (shared/assistant.tsx). */}
             <div id="assistant-slot" className="assistant-slot" />
