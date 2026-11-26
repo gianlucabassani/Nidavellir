@@ -21,6 +21,7 @@ import { usePaletteActions } from "../shared/palette";
 import { navigate } from "../router";
 import { LaunchProgress } from "./progress";
 import { AgentLiveView, type SpanFeed } from "./live-view";
+import { TimelinePage } from "./timeline-page";
 import type { Span } from "../types";
 
 export function ArenaWorkspace({ id }: { id: string }) {
@@ -172,6 +173,12 @@ export function ArenaWorkspace({ id }: { id: string }) {
       label: "Open agent live view",
       run: () => navigate(`/console/arena/${encodeURIComponent(id)}?tab=live`),
     },
+    {
+      id: "tab:timeline",
+      label: "Open the timeline (world tree)",
+      run: () =>
+        navigate(`/console/arena/${encodeURIComponent(id)}?tab=timeline`),
+    },
     ...categories.flatMap((category) =>
       category.items.map((item) => ({
         id: `tab:${item.tab}`,
@@ -223,6 +230,8 @@ export function ArenaWorkspace({ id }: { id: string }) {
                   setConfirmAction("stop");
                 }}
               />
+            ) : tab === "timeline" ? (
+              <TimelinePage arena={value} feed={spanFeed} />
             ) : tab === "browser" ? (
               <BrowserWorkbench arena={value} />
             ) : tab === "transfer" ? (

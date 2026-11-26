@@ -266,7 +266,13 @@ export function routesOf(spans: Span[]) {
   };
 }
 
-function layoutOf(spans: Span[], width: number, liveNow: number | null) {
+function layoutOf(
+  spans: Span[],
+  width: number,
+  liveNow: number | null,
+  k = 1,
+  ky = k,
+) {
   const { drawn, twinOf, keyOf, routes, actors } = routesOf(spans);
   const t0 = parse(drawn[0]?.started_at);
   const at = (span: Span) => (parse(span.started_at) - t0) / 1000;
@@ -289,11 +295,12 @@ function layoutOf(spans: Span[], width: number, liveNow: number | null) {
     if (s === 0) continue;
     for (const [a, e] of ends) if (a <= prev && e > reach) reach = e;
     if (s - prev >= FOLD_SECONDS && s - reach >= FOLD_SECONDS) {
-      const u0 = u + clamp((reach - prev) * 1, 8, 24);
+      const fold = 64 * clamp(ky, 0.5, 1);
+      const u0 = u + clamp((reach - prev) * ky, 8 * ky, 24 * ky);
       anchors.push([reach, u0]);
-      gaps.push({ a: reach, b: s, u0, u1: u0 + 64 });
-      u = u0 + 64;
-    } else u += clamp((s - prev) * 1, 5, 32);
+      gaps.push({ a: reach, b: s, u0, u1: u0 + fold });
+      u = u0 + fold;
+    } else u += clamp((s - prev) * ky, 5 * ky, 32 * ky);
     anchors.push([s, u]);
     prev = s;
   }
@@ -324,11 +331,9 @@ function layoutOf(spans: Span[], width: number, liveNow: number | null) {
   // Lanes: a branch takes the first free column on its side; a column frees
   // when its branch has finished growing. Two or more actors split the sides.
   const cx = Math.round(width / 2) + (width < 520 ? 14 : 0);
-  const maxCols = clamp(
-    Math.floor((width / 2 - TRUNK_GAP - 110) / LANE) + 1,
-    1,
-    5,
-  );
+  const lane = LANE * k;
+  const gapX = TRUNK_GAP * k;
+  const maxCols = clamp(Math.floor((width / 2 - gapX - 120) / lane) + 1, 1, 6);
   const busy: Record<number, number[]> = { [-1]: [], [1]: [] };
   const sorted = [...routes].sort((a, b) => a.start - b.start);
   let lastSide = 1;
@@ -369,10 +374,10 @@ function layoutOf(spans: Span[], width: number, liveNow: number | null) {
       route.side = side;
       route.col = col;
     }
-    route.x = cx + route.side * (TRUNK_GAP + route.col * LANE);
+    route.x = cx + route.side * (gapX + route.col * lane);
     route.birth = birth;
     route.tip = Math.min(tip, birth - 10);
-    route.rise = clamp(Math.abs(route.x - cx) * 1.25, 56, 150);
+    route.rise = clamp(Math.abs(route.x - cx) * 1.25, 56 * k, 170 * k);
   }
   // A branch leaves the trunk at an angle and bends upward into its lane.
   const branchX = (route: Route, y: number) => {
@@ -424,6 +429,10 @@ export function WorldTree({
   onSelect,
   onKey,
   live,
+  focus: focusProp,
+  onFocus,
+  hot = null,
+  intro = false,
 }: {
   spans: Span[];
   total: number;
@@ -431,6 +440,13 @@ export function WorldTree({
   onSelect: (span: Span) => void;
   onKey: (event: KeyboardEvent) => void;
   live: boolean;
+  /** UX-26: the focused route, controlled by the Timeline page. */
+  focus?: string | null;
+  onFocus?: (key: string | null) => void;
+  /** A route hovered in the routes panel. */
+  hot?: string | null;
+  /** Grow the tree from its roots when it first appears. */
+  intro?: boolean;
 }) {
   const wrap = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -441,28 +457,76 @@ export function WorldTree({
     x: number;
     y: number;
   } | null>(null);
-  const [focus, setFocus] = useState<string | null>(null);
+  const [localFocus, setLocalFocus] = useState<string | null>(null);
+  const focus = focusProp !== undefined ? focusProp : localFocus;
+  const setFocus = onFocus || setLocalFocus;
   const [play, setPlay] = useState<{ y: number; on: boolean } | null>(null);
   const [speed, setSpeed] = useState(1);
+  // The intro growth runs at its own rate so it lasts about two seconds.
+  const [introRate, setIntroRate] = useState<number | null>(null);
+  const seen = useRef<number | null>(null);
+  const k = 1.4;
+  // UX-26: "whole run" fits the run into the visible height; "detail" spreads it.
+  const [zoom, setZoom] = useState<"fit" | "detail">("fit");
+  const [viewH, setViewH] = useState(640);
   const shown = spans.length > TREE_LIMIT ? spans.slice(-TREE_LIMIT) : spans;
   useEffect(() => {
     const element = wrap.current;
     if (!element) return;
     const observer = new ResizeObserver(() =>
-      setWidth(Math.max(320, Math.min(1080, element.clientWidth))),
+      setWidth(Math.max(320, Math.min(1600, element.clientWidth))),
     );
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
   useEffect(() => {
+    const element = scroller.current;
+    if (!element) return;
+    const observer = new ResizeObserver(() =>
+      setViewH(Math.max(320, element.clientHeight)),
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  });
+  useEffect(() => {
     if (!live) return;
     const timer = window.setInterval(() => setNow(Date.now()), 5000);
     return () => window.clearInterval(timer);
   }, [live]);
-  const g: Layout | null = useMemo(
-    () => (shown.length ? layoutOf(shown, width, live ? now : null) : null),
-    [shown, width, live, now],
-  );
+  const g: Layout | null = useMemo(() => {
+    if (!shown.length) return null;
+    const liveAt = live ? now : null;
+    if (zoom === "detail") return layoutOf(shown, width, liveAt, k);
+    const full = layoutOf(shown, width, liveAt, k, 1);
+    const room = Math.max(240, viewH - CROWN - ROOTS - 8);
+    let ky = clamp(room / Math.max(1, full.base - full.yNow), 0.08, k);
+    // Folds and margins do not scale linearly: correct once.
+    const first = layoutOf(shown, width, liveAt, k, ky);
+    const over = (first.base - first.yNow) / room;
+    if (over <= 1) return first;
+    ky = clamp(ky / over - 0.002, 0.04, k);
+    return layoutOf(shown, width, liveAt, k, ky);
+  }, [shown, width, live, now, zoom, viewH]);
+  // The first time the tree appears it grows from its roots; steps that
+  // arrive afterwards sprout with an animation.
+  useEffect(() => {
+    if (!g || seen.current != null) return;
+    seen.current = Math.max(...shown.map((span) => span.id));
+    if (!intro) return;
+    const start = g.base + 20;
+    setIntroRate(Math.max(1, (start - g.yNow) / 120 / 2.2));
+    setPlay({ y: start, on: true });
+  }, [g, intro, shown]);
+  // Focusing a route scrolls its branch into the middle of the view.
+  useEffect(() => {
+    if (!focus || !g || !scroller.current) return;
+    const route = g.routes.find((item) => item.key === focus);
+    if (!route) return;
+    scroller.current.scrollTo({
+      top: (route.tip + route.birth) / 2 - scroller.current.clientHeight / 2,
+      behavior: "smooth",
+    });
+  }, [focus, g]);
   // The crown is the newest moment: stay at the top while not replaying.
   useEffect(() => {
     if (!play && scroller.current) scroller.current.scrollTop = 0;
@@ -490,16 +554,21 @@ export function WorldTree({
       last = ts;
       setPlay((current) => {
         if (!current?.on) return current;
-        const y = Math.max(g.yNow, current.y - (dt / 1000) * 120 * speed);
+        const rate = introRate ?? speed;
+        const y = Math.max(g.yNow, current.y - (dt / 1000) * 120 * rate);
         if (scroller.current)
           scroller.current.scrollTop = y - scroller.current.clientHeight * 0.4;
+        if (y <= g.yNow && introRate != null) {
+          setIntroRate(null);
+          return null;
+        }
         return y <= g.yNow ? { y: g.yNow, on: false } : { y, on: true };
       });
       frame = requestAnimationFrame(step);
     };
     frame = requestAnimationFrame(step);
     return () => cancelAnimationFrame(frame);
-  }, [play?.on, g, speed]);
+  }, [play?.on, g, speed, introRate]);
 
   if (!g)
     return (
@@ -536,7 +605,7 @@ export function WorldTree({
   // The trunk tapers from the roots to the crown, with a gentle sway.
   const trunkTop = g.yNow - 18;
   const half = (y: number) =>
-    3 + 5.5 * clamp((y - trunkTop) / Math.max(1, g.base - trunkTop), 0, 1);
+    (3 + 6 * clamp((y - trunkTop) / Math.max(1, g.base - trunkTop), 0, 1)) * k;
   const sway = (y: number) => Math.sin(y / 140) * 1.6;
   const edge = (side: number) => {
     const points: string[] = [];
@@ -564,7 +633,8 @@ export function WorldTree({
       const dx = g.branchX(route, y - 2) - x;
       const len = Math.hypot(dx, 2);
       const w =
-        (route.outcome === "finding" ? 2.1 : 1.6) *
+        (route.outcome === "finding" ? 2.4 : 1.8) *
+          k *
           (1 - 0.6 * clamp((route.birth - y) / span, 0, 1)) +
         0.4;
       const nx = (2 / len) * w;
@@ -610,7 +680,7 @@ export function WorldTree({
     });
   const replayStart = g.base + 20;
   return (
-    <div className="world-tree" ref={wrap}>
+    <div className="world-tree page" ref={wrap}>
       <div className="yg-bar">
         <button
           type="button"
@@ -645,6 +715,22 @@ export function WorldTree({
         <span className="yg-clock">
           {clock(g.t0 + Math.max(0, g.T(playY)) * 1000)}
         </span>
+        <div className="seg" role="group" aria-label="Zoom">
+          <button
+            type="button"
+            aria-pressed={zoom === "fit"}
+            onClick={() => setZoom("fit")}
+          >
+            Whole run
+          </button>
+          <button
+            type="button"
+            aria-pressed={zoom === "detail"}
+            onClick={() => setZoom("detail")}
+          >
+            Detail
+          </button>
+        </div>
         <div className="seg" role="group" aria-label="Replay speed">
           {[1, 2, 4].map((value) => (
             <button
@@ -672,38 +758,6 @@ export function WorldTree({
           </span>
         )}
       </div>
-      {g.routes.length > 0 && (
-        <div className="yg-routes" role="group" aria-label="Routes">
-          <span className="yg-routes-title">Routes</span>
-          {[...g.routes]
-            .sort((a, b) => b.start - a.start)
-            .map((route) => (
-              <button
-                key={route.key}
-                type="button"
-                className={`yg-chip ${route.outcome}`}
-                aria-pressed={focus === route.key}
-                title={route.claim ?? undefined}
-                onClick={() => setFocus(focus === route.key ? null : route.key)}
-              >
-                <i aria-hidden="true" />
-                <b>{cut(route.name, 26)}</b>
-                <span>
-                  {OUTCOME_TEXT[route.outcome]} · {route.steps.length}
-                </span>
-              </button>
-            ))}
-          {focus && (
-            <button
-              type="button"
-              className="inline-action"
-              onClick={() => setFocus(null)}
-            >
-              Show every route
-            </button>
-          )}
-        </div>
-      )}
       <div
         className="yg-scroll"
         ref={scroller}
@@ -805,7 +859,7 @@ export function WorldTree({
             {g.routes.map((route) => (
               <path
                 key={route.key}
-                className={`yg-branch ${route.outcome} ${dim(route) ? "dim" : ""} ${focus === route.key ? "on" : ""}`}
+                className={`yg-branch ${route.outcome} ${dim(route) ? "dim" : ""} ${focus === route.key ? "on" : ""} ${hot === route.key ? "hot" : ""}`}
                 d={branchPath(route)}
               />
             ))}
@@ -818,7 +872,8 @@ export function WorldTree({
             const fam = family(span);
             const colour = failed ? "var(--bad)" : `var(--t-${fam})`;
             const selected = span.id === shownId;
-            const cls = `yg-ev ${selected ? "sel" : ""} ${future(y0) ? "fut" : ""} ${dim(route) ? "dim" : ""}`;
+            const fresh = seen.current != null && span.id > seen.current;
+            const cls = `yg-ev ${selected ? "sel" : ""} ${future(y0) ? "fut" : ""} ${dim(route) ? "dim" : ""} ${fresh ? "fresh" : ""} ${route && hot === route.key ? "hot" : ""}`;
             const events = {
               onPointerEnter: (event: ReactPointerEvent) =>
                 setHover({ span, x: event.clientX, y: event.clientY }),
@@ -895,11 +950,12 @@ export function WorldTree({
             // Leaves: alternate sides of the branch, longer for longer steps.
             const order = route.steps.indexOf(span);
             const side = order % 2 === 0 ? -1 : 1;
-            const len = clamp(
-              6 + Math.log2(1 + (span.duration_ms ?? 0) / 400) * 1.8,
-              6,
-              13,
-            );
+            const len =
+              clamp(
+                6 + Math.log2(1 + (span.duration_ms ?? 0) / 400) * 1.8,
+                6,
+                13,
+              ) * k;
             const x = g.branchX(route, y0);
             const lean =
               (Math.atan2(g.branchX(route, y0 - 2) - x, 2) * 180) / Math.PI;
@@ -918,7 +974,7 @@ export function WorldTree({
                   cx={x + side * (len / 2 + 1.5)}
                   cy={y0}
                   rx={len / 2 + 0.5}
-                  ry={2.3}
+                  ry={2.3 * k}
                   fill={colour}
                   transform={`rotate(${angle} ${x} ${y0})`}
                 />
@@ -965,7 +1021,7 @@ export function WorldTree({
             return (
               <g
                 key={`t${route.key}`}
-                className={`yg-tip ${route.outcome} ${hidden ? "fut" : ""} ${dim(route) ? "dim" : ""}`}
+                className={`yg-tip ${route.outcome} ${hidden ? "fut" : ""} ${dim(route) ? "dim" : ""} ${hot === route.key ? "hot" : ""}`}
               >
                 {route.outcome === "finding" ? (
                   <g
