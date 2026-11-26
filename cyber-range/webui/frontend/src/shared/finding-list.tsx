@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { FindingRecord, Severity } from "../types";
 import { Empty, Status, formatObserved } from "../ui";
 import { Icon } from "../shell/icons";
+import { FindingReportView } from "./finding-report";
 import "./finding-list.css";
 
 export const SEVERITIES: { key: Severity | "none"; label: string }[] = [
@@ -68,6 +69,9 @@ export function FindingList({
   const wanted = new URLSearchParams(window.location.search).get("finding");
   const [severity, setSeverity] = useState<string>("");
   const [state, setState] = useState<StateFilter>("all");
+  // UX-24: an open row shows the report or the review. A finding still
+  // awaiting your decision opens on the review; a decided one on the report.
+  const [tabs, setTabs] = useState<Record<string, "report" | "review">>({});
   const [open, setOpen] = useState<Set<string>>(
     () =>
       new Set(
@@ -90,6 +94,8 @@ export function FindingList({
     );
   }, [wanted]);
   const awaiting = findings.filter((finding) => !finding.manual_verdict);
+  const tabOf = (key: string, finding: FindingRecord) =>
+    tabs[key] || (finding.manual_verdict ? "report" : "review");
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
     for (const finding of findings)
@@ -219,118 +225,144 @@ export function FindingList({
                 </button>
                 {isOpen && (
                   <div className="fl-body" id={`finding-body-${finding.id}`}>
-                    <div className="fl-cols">
-                      <div className="fl-main">
-                        <section>
-                          <h3 className="label">What the reporter claims</h3>
-                          <p>
-                            {finding.evidence || (
-                              <span className="muted">
-                                No description was given.
-                              </span>
-                            )}
-                          </p>
-                        </section>
-                        <section>
-                          <h3 className="label">How to reproduce</h3>
-                          {finding.poc ? (
-                            <pre className="fl-poc">{finding.poc}</pre>
-                          ) : (
-                            <p className="muted">
-                              No reproduction steps were given.
-                            </p>
-                          )}
-                        </section>
-                        <section>
-                          <h3 className="label">What the validator saw</h3>
-                          <p>
-                            <Status value={finding.validator_verdict} />{" "}
-                            {finding.validation_reason
-                              ? finding.validation_reason.replaceAll("_", " ")
-                              : "No independent conclusion recorded."}
-                          </p>
-                          {body?.(finding)}
-                        </section>
+                    {aid && (
+                      <div
+                        className="seg fl-tabs"
+                        role="group"
+                        aria-label="Finding view"
+                      >
+                        {(["report", "review"] as const).map((tab) => (
+                          <button
+                            key={tab}
+                            type="button"
+                            aria-pressed={tabOf(key, finding) === tab}
+                            onClick={() =>
+                              setTabs((current) => ({ ...current, [key]: tab }))
+                            }
+                          >
+                            {tab === "report" ? "Report" : "Review"}
+                          </button>
+                        ))}
                       </div>
-                      <div className="fl-side">
-                        <dl className="fl-kv">
-                          <div>
-                            <dt>Severity</dt>
-                            <dd>
-                              {finding.severity
-                                ? `${SEVERITIES.find((item) => item.key === finding.severity)?.label} (reporter's rating)`
-                                : "Not rated"}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt>Weakness</dt>
-                            <dd>{finding.cwe || "Not stated"}</dd>
-                          </div>
-                          <div>
-                            <dt>Station</dt>
-                            <dd>{finding.node || "Not stated"}</dd>
-                          </div>
-                          <div>
-                            <dt>Reported by</dt>
-                            <dd>{finding.source}</dd>
-                          </div>
-                          {showArena && (
+                    )}
+                    {aid && tabOf(key, finding) === "report" ? (
+                      <FindingReportView arenaId={aid} findingId={finding.id} />
+                    ) : (
+                      <div className="fl-cols">
+                        <div className="fl-main">
+                          <section>
+                            <h3 className="label">What the reporter claims</h3>
+                            <p>
+                              {finding.evidence || (
+                                <span className="muted">
+                                  No description was given.
+                                </span>
+                              )}
+                            </p>
+                          </section>
+                          <section>
+                            <h3 className="label">How to reproduce</h3>
+                            {finding.poc ? (
+                              <pre className="fl-poc">{finding.poc}</pre>
+                            ) : (
+                              <p className="muted">
+                                No reproduction steps were given.
+                              </p>
+                            )}
+                          </section>
+                          <section>
+                            <h3 className="label">What the validator saw</h3>
+                            <p>
+                              <Status value={finding.validator_verdict} />{" "}
+                              {finding.validation_reason
+                                ? finding.validation_reason.replaceAll("_", " ")
+                                : "No independent conclusion recorded."}
+                            </p>
+                            {body?.(finding)}
+                          </section>
+                        </div>
+                        <div className="fl-side">
+                          <dl className="fl-kv">
                             <div>
-                              <dt>Arena</dt>
+                              <dt>Severity</dt>
                               <dd>
-                                {finding.arena_known && finding.arena_id ? (
-                                  <a
-                                    href={`/console/arena/${encodeURIComponent(finding.arena_id)}`}
-                                  >
-                                    {finding.arena_name}
-                                  </a>
-                                ) : (
-                                  `${finding.arena_name || "Unknown"} (record removed)`
-                                )}
+                                {finding.severity
+                                  ? `${SEVERITIES.find((item) => item.key === finding.severity)?.label} (reporter's rating)`
+                                  : "Not rated"}
                               </dd>
                             </div>
-                          )}
-                        </dl>
-                        <section>
-                          <h3 className="label">Evidence</h3>
-                          {evidence ? (
-                            <ul className="fl-evidence">
-                              {finding.transactions.map((transaction) => (
-                                <li key={transaction.digest}>
-                                  <Icon name="swap" size={14} />
-                                  {aid ? (
+                            <div>
+                              <dt>Weakness</dt>
+                              <dd>{finding.cwe || "Not stated"}</dd>
+                            </div>
+                            <div>
+                              <dt>Station</dt>
+                              <dd>{finding.node || "Not stated"}</dd>
+                            </div>
+                            <div>
+                              <dt>Reported by</dt>
+                              <dd>{finding.source}</dd>
+                            </div>
+                            {showArena && (
+                              <div>
+                                <dt>Arena</dt>
+                                <dd>
+                                  {finding.arena_known && finding.arena_id ? (
                                     <a
-                                      href={`/console/arena/${encodeURIComponent(aid)}?tab=http&digest=${encodeURIComponent(transaction.digest)}`}
+                                      href={`/console/arena/${encodeURIComponent(finding.arena_id)}`}
                                     >
-                                      {transaction.method} {transaction.path} →{" "}
-                                      {transaction.status}
+                                      {finding.arena_name}
                                     </a>
                                   ) : (
-                                    <span>
-                                      {transaction.method} {transaction.path}
-                                    </span>
+                                    `${finding.arena_name || "Unknown"} (record removed)`
                                   )}
-                                  <small>{transaction.digest.slice(-12)}</small>
-                                </li>
-                              ))}
-                              {finding.artifacts.map((artifact) => (
-                                <li key={artifact.digest}>
-                                  <Icon name="file" size={14} />
-                                  <a
-                                    href={`/api/arenas/${encodeURIComponent(aid)}/evidence-artifacts/${encodeURIComponent(artifact.digest)}`}
-                                  >
-                                    Artifact · {artifact.bytes} bytes
-                                  </a>
-                                  <small>{artifact.digest.slice(-12)}</small>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="muted">No evidence attached.</p>
-                          )}
-                        </section>
+                                </dd>
+                              </div>
+                            )}
+                          </dl>
+                          <section>
+                            <h3 className="label">Evidence</h3>
+                            {evidence ? (
+                              <ul className="fl-evidence">
+                                {finding.transactions.map((transaction) => (
+                                  <li key={transaction.digest}>
+                                    <Icon name="swap" size={14} />
+                                    {aid ? (
+                                      <a
+                                        href={`/console/arena/${encodeURIComponent(aid)}?tab=http&digest=${encodeURIComponent(transaction.digest)}`}
+                                      >
+                                        {transaction.method} {transaction.path}{" "}
+                                        → {transaction.status}
+                                      </a>
+                                    ) : (
+                                      <span>
+                                        {transaction.method} {transaction.path}
+                                      </span>
+                                    )}
+                                    <small>
+                                      {transaction.digest.slice(-12)}
+                                    </small>
+                                  </li>
+                                ))}
+                                {finding.artifacts.map((artifact) => (
+                                  <li key={artifact.digest}>
+                                    <Icon name="file" size={14} />
+                                    <a
+                                      href={`/api/arenas/${encodeURIComponent(aid)}/evidence-artifacts/${encodeURIComponent(artifact.digest)}`}
+                                    >
+                                      Artifact · {artifact.bytes} bytes
+                                    </a>
+                                    <small>{artifact.digest.slice(-12)}</small>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="muted">No evidence attached.</p>
+                            )}
+                          </section>
+                        </div>
                       </div>
-                    </div>
+                    )}
                     <div className="fl-foot">
                       {actions?.(finding)}
                       <span className="fl-sp" />

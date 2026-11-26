@@ -7499,6 +7499,72 @@ def verify_finding(
     return {"verified": True, "finding_id": finding_id, "verdict": req.verdict}
 
 
+class WriteupReference(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    url: str = Field(max_length=512, pattern=r"^https://[^\s<>\"']+$")
+    title: str | None = Field(default=None, max_length=200)
+
+
+class FindingWriteupRequest(BaseModel):
+    """UX-24: the operator's report sections for one finding.
+
+    The whole write-up is sent each time; the newest one wins and earlier ones
+    stay in the audit trail. Text is stored as written and shown as text, never
+    as markup. Nothing here changes matching, validation or scoring."""
+
+    model_config = ConfigDict(extra="forbid")
+    # The report's own severity and weakness; the reporter's claim stays on
+    # the finding.
+    severity: Literal["critical", "high", "medium", "low", "info"] | None = None
+    cwe: str | None = Field(default=None, max_length=16, pattern=r"^CWE-\d{1,5}$")
+    summary: str | None = Field(default=None, max_length=2000)
+    impact: str | None = Field(default=None, max_length=4000)
+    description: str | None = Field(default=None, max_length=8000)
+    remediation: str | None = Field(default=None, max_length=4000)
+    vendor: str | None = Field(default=None, max_length=200)
+    product: str | None = Field(default=None, max_length=200)
+    affected_versions: str | None = Field(default=None, max_length=200)
+    fixed_versions: str | None = Field(default=None, max_length=200)
+    component: str | None = Field(default=None, max_length=300)
+    attack_type: Literal["remote", "adjacent", "local", "physical"] | None = None
+    impact_type: Literal["code_execution", "information_disclosure", "denial_of_service",
+                         "privilege_escalation", "other"] | None = None
+    cvss_vector: str | None = Field(
+        default=None, max_length=64,
+        pattern=r"^CVSS:3\.[01]/AV:[NALP]/AC:[LH]/PR:[NLH]/UI:[NR]/S:[UC]/C:[NLH]/I:[NLH]/A:[NLH]$")
+    discoverer: str | None = Field(default=None, max_length=200)
+    references: list[WriteupReference] = Field(default_factory=list, max_length=10)
+
+
+@app.post("/arenas/{instance_id}/findings/{finding_id}/writeup")
+def write_finding_report(
+    instance_id: str,
+    finding_id: str,
+    req: FindingWriteupRequest,
+    principal: Principal = Depends(require_principal),
+):
+    """UX-24: record the operator's write-up for a finding (operator/admin).
+
+    Append-only: a `finding_writeup` event per save, newest wins. Agents never
+    see it (not in any stance's visible event types). Works on a destroyed
+    arena too, since reports are written after the run."""
+    _require_operator(principal)
+    if not db.get_deployment(instance_id):
+        raise HTTPException(status_code=404, detail="Arena not found")
+    if not any((e.get("payload") or {}).get("finding_id") == finding_id
+               for e in _finding_events(instance_id)):
+        raise HTTPException(status_code=404, detail="Finding not found in this arena")
+    sections = {key: value for key, value in req.model_dump(mode="json").items()
+                if value not in (None, "", [])}
+    for key, value in list(sections.items()):
+        if isinstance(value, str):
+            sections[key] = value.strip()
+    db.record_event(instance_id, "finding_writeup",
+                    {"finding_id": finding_id, "sections": sections, "actor": principal.name},
+                    actor=principal.name)
+    return {"finding_id": finding_id, "sections": sections, "updated_by": principal.name}
+
+
 def _run_metrics(events: list[dict]) -> dict:
     """Derive per-run activity from the arena's event stream (ADR-0009): agent
     steps and wall-clock. Token/cost land here if the agent announced them."""
