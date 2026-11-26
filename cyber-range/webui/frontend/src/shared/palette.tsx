@@ -76,6 +76,7 @@ const NAVIGATION: { label: string; href: string }[] = [
   { label: "Scenario library", href: "/console/scenarios" },
   { label: "New research", href: "/console/research/new" },
   { label: "Campaigns", href: "/console/research/campaigns" },
+  { label: "Findings", href: "/console/findings" },
   { label: "Evidence", href: "/console/activity?section=evidence" },
   { label: "Activity", href: "/console/activity?section=audit" },
   { label: "Targets", href: "/console/library/targets" },

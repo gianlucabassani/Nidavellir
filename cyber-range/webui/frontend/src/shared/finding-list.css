@@ -1,0 +1,341 @@
+/* UX-18: findings you open in place. Severity colours mark the reporter's
+   rating only; they always travel with the level's name. */
+.sev-critical {
+  --sev: var(--sev-critical);
+}
+.sev-high {
+  --sev: var(--sev-high);
+}
+.sev-medium {
+  --sev: var(--sev-medium);
+}
+.sev-low {
+  --sev: var(--sev-low);
+}
+.sev-info,
+.sev-none {
+  --sev: var(--idle);
+}
+.sev,
+.sev-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--sev);
+  font: 500 var(--t-micro) / 1 var(--f-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.sev::before,
+.sev-label::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  flex: none;
+  background: var(--sev);
+  transform: rotate(45deg);
+}
+.sev-none .sev::before,
+.sev.sev-none::before,
+.fl-tile.sev-none .sev-label::before {
+  background: transparent;
+  outline: 1px solid var(--sev);
+}
+
+.fl {
+  display: grid;
+  gap: var(--s3);
+}
+.fl-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--s3);
+}
+.fl-tile {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-top: 2px solid var(--sev);
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+}
+.fl-tile:hover {
+  background: var(--inset);
+}
+.fl-tile[aria-pressed="true"] {
+  border-color: var(--gold-deep);
+  border-top-color: var(--sev);
+  background: var(--gold-wash);
+}
+.fl-tile b {
+  font: 500 var(--t-head) / 1 var(--f-mono);
+}
+.fl-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2) var(--s4);
+  padding: 0 var(--s1);
+  color: var(--muted);
+  font-size: var(--t-meta);
+}
+.fl-list {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fl-row {
+  position: relative;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--sev);
+  background: var(--surface);
+}
+.fl-row::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 0;
+  width: 24px;
+  height: 2px;
+  background: var(--gold);
+}
+.fl-sum {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  width: 100%;
+  min-height: 60px;
+  padding: var(--s3) var(--s5);
+  border: 0;
+  background: none;
+  color: var(--ink);
+  text-align: left;
+}
+.fl-sum:hover {
+  background: var(--inset);
+}
+.fl-sum > .sev {
+  min-width: 84px;
+}
+.fl-title {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+.fl-title b {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fl-title small {
+  overflow: hidden;
+  color: var(--muted);
+  font: 400 var(--t-micro) var(--f-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fl-vd {
+  display: grid;
+  gap: 3px;
+  justify-items: start;
+  min-width: 112px;
+}
+.fl-vd small {
+  color: var(--muted);
+  font-size: var(--t-micro);
+}
+.fl-ev {
+  color: var(--muted);
+  font: 400 var(--t-meta) var(--f-mono);
+  white-space: nowrap;
+}
+.fl-sum > .icon {
+  flex: none;
+  color: var(--muted);
+  transition: transform 0.18s;
+}
+.fl-row.open .fl-sum {
+  border-bottom: 1px solid var(--line-soft);
+}
+.fl-row.open .fl-sum > .icon {
+  transform: rotate(90deg);
+}
+.fl-body {
+  animation: fl-in 0.18s ease-out;
+}
+@keyframes fl-in {
+  from {
+    opacity: 0;
+  }
+}
+.fl-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: var(--s6);
+  padding: var(--s5);
+}
+.fl-main,
+.fl-side {
+  display: grid;
+  align-content: start;
+  gap: var(--s4);
+}
+.fl-main section,
+.fl-side section {
+  display: grid;
+  gap: 6px;
+}
+.fl-main h3,
+.fl-side h3 {
+  margin: 0;
+}
+.fl-main p {
+  max-width: 72ch;
+  margin: 0;
+  color: var(--ink-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.fl-poc {
+  max-height: 260px;
+  margin: 0;
+  overflow: auto;
+  padding: var(--s3);
+  border: 1px solid var(--line-soft);
+  background: var(--inset);
+  font: 400 var(--t-meta) / 1.6 var(--f-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.fl-kv {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  font-size: var(--t-ui);
+}
+.fl-kv > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+.fl-kv dt {
+  color: var(--muted);
+}
+.fl-kv dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.fl-evidence {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line-soft);
+  list-style: none;
+}
+.fl-evidence li {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  font: 400 var(--t-meta) var(--f-mono);
+}
+.fl-evidence li + li {
+  border-top: 1px solid var(--line-soft);
+}
+.fl-evidence a,
+.fl-evidence span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fl-evidence small {
+  color: var(--muted);
+}
+.fl-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s3) var(--s5);
+  border-top: 1px solid var(--line-soft);
+  font-size: var(--t-meta);
+}
+.fl-sp {
+  flex: 1;
+}
+.fl .muted {
+  color: var(--muted);
+}
+.fl .finding-review {
+  margin-top: var(--s2);
+}
+@media (max-width: 1000px) {
+  .fl-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fl-ev {
+    display: none;
+  }
+}
+@media (max-width: 640px) {
+  .fl-sum {
+    flex-wrap: wrap;
+    gap: var(--s2) var(--s3);
+    padding: var(--s3);
+  }
+  .fl-title {
+    flex-basis: 100%;
+    order: -1;
+  }
+  .fl-vd {
+    min-width: 0;
+  }
+  .fl-cols,
+  .fl-foot {
+    padding: var(--s3);
+  }
+}
+
+/* Arena Findings tab: the list, then the record form folded below it. */
+.findings-body {
+  padding: 0 var(--s5) var(--s5);
+}
+.finding-record {
+  margin-top: var(--s4);
+}
+.finding-record > summary {
+  display: grid;
+  gap: 2px;
+  padding: var(--s4) var(--s5);
+  cursor: pointer;
+  list-style: none;
+}
+.finding-record > summary::-webkit-details-marker {
+  display: none;
+}
+.finding-record > summary b {
+  font: 600 var(--t-title) var(--f-sans);
+}
+.finding-record > summary small {
+  color: var(--muted);
+  font-size: var(--t-meta);
+}
+.finding-record[open] > summary {
+  border-bottom: 1px solid var(--line-soft);
+}
+.finding-record .finding-form {
+  padding: var(--s4) var(--s5) var(--s5);
+}

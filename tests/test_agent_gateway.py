@@ -140,8 +140,9 @@ class _FakeRestClient:
     def report_finding(self, api_key, arena_id, title, cwe=None, node=None, evidence=None,
                        path=None, param=None, payload=None, oast_token=None, poc=None,
                        evidence_artifact_digests=None, transaction_digests=None,
-                       variant_of=None):
+                       variant_of=None, severity=None):
         self.calls.append(("report_finding", api_key, arena_id, title, cwe, node))
+        self.last_severity = severity
         self.last_finding = {"title": title, "cwe": cwe, "node": node, "evidence": evidence,
                              "path": path, "param": param, "payload": payload,
                              "oast_token": oast_token, "poc": poc,

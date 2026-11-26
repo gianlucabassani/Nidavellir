@@ -323,7 +323,8 @@ class RestClient:
                        transaction_digests: list[str] | None = None,
                        variant_of: str | None = None,
                        root_cause: dict | None = None,
-                       causality: dict | None = None) -> dict:
+                       causality: dict | None = None,
+                       severity: str | None = None) -> dict:
         body: dict = {"title": title}
         # Only send set fields; path/param/payload/oast_token are the optional
         # verification inputs that let the orchestrator ACTIVELY confirm a finding;
@@ -331,7 +332,7 @@ class RestClient:
         for key, val in (("cwe", cwe), ("node", node), ("evidence", evidence),
                          ("path", path), ("param", param), ("payload", payload),
                          ("oast_token", oast_token), ("poc", poc),
-                         ("variant_of", variant_of)):
+                         ("variant_of", variant_of), ("severity", severity)):
             if val:
                 body[key] = val
         if evidence_artifact_digests:

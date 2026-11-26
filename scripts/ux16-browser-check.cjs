@@ -14,7 +14,7 @@ const SHOTS = process.env.NV_UX16_SHOTS || '';
 
 const PAGES = [
   '/console?workspace=research', '/console/research/new', '/console/arenas', '/console/board',
-  '/console/activity?section=findings', '/console/activity?section=evidence',
+  '/console/findings', '/console/activity?section=evidence',
   '/console/research/campaigns', '/console/research/review',
   '/console?workspace=benchmark', '/console/evaluations/new', '/console/evaluations',
   '/console/benchmark/registry', '/console/library/agents',
@@ -53,7 +53,7 @@ const PAGES = [
       checks.push(`${PAGES.length} pages render in the shell (${theme}), none scrolls sideways at 1440 px`);
     }
     await page.evaluate(() => localStorage.setItem('nidavellir-theme', 'day'));
-    for (const [path, label] of [['/console/board', 'Agents board'], ['/console/evaluations/new', 'New comparison'],
+    for (const [path, label] of [['/console/findings', 'Findings'], ['/console/board', 'Agents board'], ['/console/evaluations/new', 'New comparison'],
       ['/console/scenarios', 'Scenarios'], ['/console/activity?section=evidence', 'Evidence']]) {
       await page.goto(WEB + path);
       const current = page.locator('.rail-nav [aria-current="page"]');

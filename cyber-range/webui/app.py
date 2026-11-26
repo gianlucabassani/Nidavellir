@@ -773,6 +773,7 @@ def overview():
 @app.route("/console/benchmark/registry")
 @app.route("/console/activity")
 @app.route("/console/board")
+@app.route("/console/findings")
 @app.route("/console/library/targets")
 @app.route("/console/library/agents")
 @app.route("/console/settings")
@@ -1298,18 +1299,31 @@ def console_arena_setup(instance_id):
     })
 
 
-@app.route("/api/console/arenas/<instance_id>/findings")
-def console_arena_findings(instance_id):
-    data, ok = _api_get(f"/deployments/{instance_id}/events?limit=200")
-    if not ok or not isinstance(data, dict):
-        return jsonify({"error": "Finding records unavailable"}), 503
-    findings = _findings(instance_id, events=data.get("events") or [])
-    return jsonify({"findings": [{
+_SEVERITIES = ("critical", "high", "medium", "low", "info")
+
+
+def _validator_verdict(item):
+    """The independent validation alone, without the operator's decision."""
+    validation = item.get("validation") or {}
+    if validation.get("verdict") == "infrastructure_failure":
+        return "infrastructure_failure"
+    confirmed = validation.get("confirmed")
+    return "confirmed" if confirmed is True else "refuted" if confirmed is False else "inconclusive"
+
+
+def _finding_row(item):
+    """One finding as the console lists it (UX-18): the reporter's claim, the
+    independent verdict and the operator's decision kept apart."""
+    severity = item.get("severity")
+    return {
         "id": item.get("finding_id"), "title": item.get("title"),
+        "severity": severity if severity in _SEVERITIES else None,
         "cwe": item.get("cwe"), "node": item.get("node"),
         "evidence": item.get("evidence"), "poc": item.get("poc"),
         "source": "operator" if item.get("manual") else "agent",
+        "at": item.get("ts"),
         "verdict": _finding_verdict(item),
+        "validator_verdict": _validator_verdict(item),
         "manual_verdict": (item.get("manual_validation") or {}).get("verdict"),
         "validation_reason": (item.get("validation") or {}).get("reason_code"),
         "artifacts": [{"digest": artifact.get("digest"), "bytes": artifact.get("bytes")}
@@ -1318,7 +1332,36 @@ def console_arena_findings(instance_id):
                           "method": transaction.get("method"), "path": transaction.get("path"),
                           "status": transaction.get("status")}
                          for transaction in item.get("http_transactions") or []],
-    } for item in findings]})
+    }
+
+
+@app.route("/api/console/arenas/<instance_id>/findings")
+def console_arena_findings(instance_id):
+    data, ok = _api_get(f"/deployments/{instance_id}/events?limit=200")
+    if not ok or not isinstance(data, dict):
+        return jsonify({"error": "Finding records unavailable"}), 503
+    findings = _findings(instance_id, events=data.get("events") or [])
+    return jsonify({"findings": [_finding_row(item) for item in findings]})
+
+
+@app.route("/api/console/findings")
+def console_findings():
+    """UX-18: findings across every arena, newest first, in the arena row shape
+    plus the arena they belong to."""
+    deployments, ok = _deployments()
+    if not ok:
+        return jsonify({"error": "Orchestrator unavailable"}), 503
+    names = {key: record.get("user_id") or key for key, record in deployments.items()}
+    states = {key: record.get("status") for key, record in deployments.items()}
+    rows = []
+    for item in _all_findings(limit=200, names=names):
+        row = _finding_row(item)
+        row.update({"arena_id": item.get("arena_id"), "arena_name": item.get("arena_name"),
+                    "arena_known": item.get("arena_known"),
+                    "arena_state": states.get(item.get("arena_id"))})
+        rows.append(row)
+    return jsonify({"findings": rows,
+                    "observed_at": datetime.now().astimezone().isoformat()})
 
 
 # UX-06: what an operator can attach as evidence, so forms offer a picker
@@ -3714,6 +3757,7 @@ def manual_finding_proxy(instance_id):
     payload = {
         "title": (body.get("title") or "").strip(),
         "cwe": (body.get("cwe") or "").strip() or None,
+        "severity": (str(body.get("severity") or "").strip().lower() or None),
         "node": (body.get("node") or "").strip() or None,
         "evidence": (body.get("evidence") or "").strip() or None,
         "poc": (body.get("poc") or "").strip() or None,

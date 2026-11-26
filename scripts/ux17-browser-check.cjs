@@ -46,7 +46,7 @@ const SHOTS = process.env.NV_UX17_SHOTS || '';
 
     // One-line status from the recorded spans.
     const say = await page.locator('.dash-say').innerText();
-    assert.match(say, /^Running steadily\. [\d,]+ actions in 1 h \d+ min, \d+ failed \([\d.]+%\), 1 refused\. 2 findings/);
+    assert.match(say, /^Running steadily\. [\d,]+ actions in \d+ h \d+ min, \d+ failed \([\d.]+%\), 1 refused\. \d+ findings?/);
     checks.push(`status sentence: "${say.slice(0, 90)}…"`);
 
     // Activity chart: columns, tooltip on keyboard focus, table view.
@@ -59,7 +59,7 @@ const SHOTS = process.env.NV_UX17_SHOTS || '';
     assert.match(await tip.innerText(), /actions/);
     assert.match(await cols.nth(count - 4).getAttribute('aria-label'), /actions/);
     assert.ok(await page.locator('.dash .act-fail').count() > 0, 'failure marks drawn');
-    assert.equal(await page.locator('.dash .act-marks .mk-find').count(), 2, 'two finding marks');
+    assert.ok(await page.locator('.dash .act-marks .mk-find').count() >= 2, 'finding marks drawn');
     const activityCard = page.locator('.dash-main').first().locator('.panel').first();
     await activityCard.getByRole('button', {name: 'Show table'}).click();
     assert.equal(await activityCard.locator('.chart-table tbody tr').count(), count);

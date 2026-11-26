@@ -31,6 +31,7 @@ import { Settings } from "./shared/settings";
 import { ResearchAssistant } from "./shared/assistant";
 import { AllArenas, AllEvaluations } from "./shared/lists";
 import { AgentsBoard } from "./shared/board";
+import { FindingsPage } from "./research/findings";
 import { installRouter } from "./router";
 import { Shell } from "./shell/Shell";
 
@@ -80,6 +81,7 @@ function App() {
     window.location.pathname === "/console/benchmark/registry";
   const activity = window.location.pathname === "/console/activity";
   const boardPage = window.location.pathname === "/console/board";
+  const findingsPage = window.location.pathname === "/console/findings";
   const agentsLibrary = window.location.pathname === "/console/library/agents";
   const targetsLibrary =
     window.location.pathname === "/console/library/targets";
@@ -183,6 +185,8 @@ function App() {
           <ArenaWorkspace key={arenaId} id={arenaId} />
         ) : boardPage ? (
           <AgentsBoard />
+        ) : findingsPage ? (
+          <FindingsPage />
         ) : allArenas ? (
           <AllArenas />
         ) : allEvaluations ? (
