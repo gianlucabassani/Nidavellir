@@ -38,6 +38,19 @@ The current console exposes arena stop in the workspace and system stop under
 Settings. Operator MCP tools expose the same stop controls; all stances can
 read their bound arena budget.
 
+Operators can `GET /system/operations` (UX-14): one read-only snapshot with
+dependency readiness (database, Redis, worker heartbeat when required, Docker),
+the Celery queue depth, the worker heartbeat age, running confined PoC jobs,
+labelled Docker resources grouped by arena, store sizes, the migration revision
+against head, and the newest entry of `NIDAVELLIR_BACKUP_DIR` when it is
+mounted. Each Docker group is classified against this installation's records:
+`live`, `leftover` (the arena was destroyed), `failed`, or `unknown` (no record
+here: it may belong to another installation sharing the Docker host).
+`POST /system/operations/reclaim/{lab_id}` reclaims a `leftover` (the
+docker-local provider's label-scoped destroy, in the worker) or a `failed` arena
+(the normal destroy task); `live` and `unknown` → 409. Both are operator/admin
+only and are recorded as `orphan_reclaim_requested` / `orphan_reclaimed` events.
+
 **Time-box extension (F1).** `POST /arenas/{id}/extend` `{"seconds": 300–86400,
 "idempotency_key"?}` moves the reaper TTL (`expires_at`) and the budget deadline
 forward together, from now or from the current deadline while it is still in the

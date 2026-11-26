@@ -99,6 +99,7 @@ from providers import (
 from scenario_spec import ScenarioSpec, normalize_cwe, normalized_nodes, topology_view
 from states import IllegalTransition, LabStatus
 from tasks import (OPEN_EGRESS_ACK_EVENT, capture_source_review, deploy_lab, destroy_lab,
+                   reclaim_orphan,
                    enqueue_evaluation, is_open_egress, reset_arena, run_forward_stream,
                    run_poc_job)
 from config import validate_config
@@ -4628,6 +4629,85 @@ def resume_arena(instance_id: str, req: StopRequest,
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"epoch": epoch, "status": db.budget_status(instance_id)}
+
+
+@app.get("/system/operations")
+def system_operations(principal: Principal = Depends(require_principal)):
+    """UX-14 (FR-19): the platform's health in one read-only snapshot
+    (operator/admin). See operations.py for what each part means."""
+    _require_operator(principal)
+    import operations  # noqa: PLC0415
+    import readiness  # noqa: PLC0415
+
+    mock = os.getenv("MOCK_MODE", "false").lower() == "true"
+    ready_ok, checks = readiness.check_readiness(
+        db.ping, readiness.redis_client,
+        require_worker=readiness.heartbeat_required(resolve_provider_name(None), mock))
+    try:
+        client = readiness.redis_client()
+        queues = {"celery": int(client.llen("celery"))}
+        worker = operations.heartbeat(client)
+    except Exception as exc:  # noqa: BLE001
+        queues, worker = {}, {"alive": False, "reason": f"unavailable ({type(exc).__name__})"}
+    records = {record["id"]: record for record in db.list_deployments()}
+    try:
+        from providers.docker_local import DockerLocalProvider  # noqa: PLC0415
+
+        docker_client = DockerLocalProvider().client
+        docker_client.ping()
+        checks["docker"] = "ok"
+        inventory = operations.docker_inventory(docker_client, records)
+    except Exception as exc:  # noqa: BLE001
+        checks["docker"] = f"unavailable ({type(exc).__name__})"
+        inventory = {"available": False, "reason": checks["docker"], "arenas": []}
+    helpers = [{"id": job["id"], "arena_id": job.get("arena_id"), "state": job.get("state"),
+                "created_at": job.get("created_at"), "deadline": job.get("deadline")}
+               for job in db.list_active_poc_jobs()]
+    engine = db._engine
+    return {
+        "observed_at": db_now().isoformat(),
+        "ready": ready_ok,
+        "dependencies": checks,
+        "queues": queues,
+        "worker": worker,
+        "helpers": helpers,
+        "arenas": {"live": sum(1 for r in records.values() if r.get("status") in operations.LIVE),
+                   "known": len(records)},
+        "docker": inventory,
+        "stores": ([{"name": "Database", "bytes": operations.database_size(engine),
+                     "present": True, "dialect": engine.dialect.name}]
+                   + [{"name": name, **operations.dir_usage(path)}
+                      for name, path in operations.stores()]),
+        "migration": operations.migration(engine),
+        "backup": operations.backup(),
+        "mock_mode": mock,
+    }
+
+
+@app.post("/system/operations/reclaim/{lab_id}")
+def system_reclaim_orphan(lab_id: str, principal: Principal = Depends(require_principal)):
+    """UX-14: reclaim the Docker resources of one arena this installation
+    destroyed (or that failed). Resources of arenas it does not know are never
+    reclaimed here: they may belong to another installation on the same host."""
+    _require_operator(principal)
+    import operations  # noqa: PLC0415
+
+    if not re.fullmatch(r"[A-Za-z0-9-]{1,64}", lab_id):
+        raise HTTPException(status_code=422, detail="invalid arena id")
+    record = db.get_deployment(lab_id)
+    state, path = operations.classify(lab_id, record)
+    if path is None:
+        raise HTTPException(status_code=409, detail={
+            "code": f"not_reclaimable_{state}",
+            "message": ("this arena is live; destroy it instead" if state == "live" else
+                        "this installation does not know this arena; it may belong to "
+                        "another installation sharing the Docker host")})
+    db.record_event(lab_id, "orphan_reclaim_requested", {"path": path}, actor=principal.name)
+    if path == "destroy_lab":
+        destroy_lab.delay(lab_id)
+    else:
+        reclaim_orphan.delay(lab_id, actor=principal.name)
+    return {"accepted": True, "lab_id": lab_id, "path": path}
 
 
 @app.get("/system/emergency-stop")

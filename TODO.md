@@ -446,7 +446,11 @@ Order: data model first, then views.
   - a result screen.
 
   It needs harness identity captured at connect, plus a ready/start step in the trial lifecycle; the latter is a contract change, so it gets its own decision.
-- [ ] **UX-14 — Operations page (FR-19).**
+- [x] **UX-14 — Operations page (FR-19, #89).** `/console/operations` (operators), refreshed every 15 s:
+  - readiness of each dependency, worker heartbeat, task-queue depth, running confined PoC jobs, store sizes, migration revision against head, last backup (`NIDAVELLIR_BACKUP_DIR` when mounted);
+  - labelled Docker resources grouped by arena and classified against this installation's records: live, left after teardown, failed, or not known here.
+  - Reclaim works only for leftovers of destroyed or failed arenas (the provider's label-scoped destroy, or the normal destroy task). Arenas this installation does not know may belong to another installation on the same Docker host, so they are refused.
+  - API: `GET /system/operations`, `POST /system/operations/reclaim/{lab_id}`. Browser check: `scripts/ux14-browser-check.cjs` (a stopped worker shows on the next refresh; a hand-made orphan is reclaimed).
 - [ ] **UX-15 — Workflow simulation suite.** Scripted browser walkthroughs of the ideal
   human scenarios (launch → connect agent → watch → intervene → confirm finding →
   teardown → review; set up and read a paired evaluation), with click counts and time

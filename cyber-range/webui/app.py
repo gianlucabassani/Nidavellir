@@ -802,6 +802,7 @@ def overview():
 @app.route("/console/library/agents")
 @app.route("/console/settings")
 @app.route("/console/profile")
+@app.route("/console/operations")
 @app.route("/console/evaluations")
 @app.route("/console/evaluations/new")
 @app.route("/console/evaluations/<evaluation_id>")
@@ -1366,6 +1367,19 @@ def console_arena_findings(instance_id):
         return jsonify({"error": "Finding records unavailable"}), 503
     findings = _findings(instance_id, events=events)
     return jsonify({"findings": [_finding_row(item) for item in findings]})
+
+
+@app.route("/api/console/operations")
+def console_operations():
+    """UX-14: the orchestrator's operations snapshot, relayed as is."""
+    data, status = _api_get_status("/system/operations", timeout=20)
+    return jsonify(data), status
+
+
+@app.route("/api/console/operations/reclaim/<lab_id>", methods=["POST"])
+def console_operations_reclaim(lab_id):
+    data, status = _api_post(f"/system/operations/reclaim/{quote(lab_id, safe='')}")
+    return jsonify(data), status
 
 
 @app.route("/api/console/findings")

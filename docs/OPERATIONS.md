@@ -172,6 +172,23 @@ Live state, audit events, agent actions, findings, and monitor signals stream ov
 SSE. A destroyed arena stays open as a read-only record: no live actions, but its
 findings, evidence, score, and trace remain reviewable.
 
+## Operations page (UX-14)
+
+**Cyber Range → Operations** (`/console/operations`, operators) shows, refreshed
+every 15 seconds: whether the platform is ready, the worker heartbeat, the task
+queue depth, running confined PoC jobs, each dependency, the database migration
+revision, store sizes, and the labelled Docker resources of every arena.
+
+- A stopped worker shows as **No heartbeat** once its beat expires (three
+  missed beats, 45 s by default).
+- **Reclaim** removes what a destroyed (or failed) arena left behind. Resources
+  of an arena this installation has no record of are listed as *Not known here*
+  and never reclaimed from the page: on a shared Docker host they may be another
+  installation's live arena. Remove those from the installation that owns them.
+- **Last backup**: backups are taken on the host (`scripts/backup.sh`). To show
+  the latest one, mount the backup directory read-only into the orchestrator and
+  set `NIDAVELLIR_BACKUP_DIR` to that path.
+
 ## Source review checkout (UI-R4)
 
 Source review reads one Git checkout that the operator provisions; no service clones,

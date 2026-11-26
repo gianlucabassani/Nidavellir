@@ -19,6 +19,7 @@ const PAGES = [
   '/console?workspace=benchmark', '/console/evaluations/new', '/console/evaluations',
   '/console/benchmark/registry', '/console/library/agents',
   '/console?workspace=range', '/console/arenas/new', '/console/library/targets', '/console/scenarios',
+  '/console/operations',
   '/console/profile', '/console/settings', '/console/activity?section=audit',
 ];
 
@@ -62,13 +63,12 @@ const PAGES = [
     }
     checks.push('the sidebar marks exactly one current item per page');
 
-    // Planned items are visible, not links, and say why.
+    // UX-14: Operations is a real page now, linked from the Cyber Range sidebar.
     await page.goto(`${WEB}/console?workspace=range`);
-    const planned = page.locator('.rail-link.off', {hasText: 'Operations'});
-    assert.equal(await planned.getAttribute('aria-disabled'), 'true');
-    assert.equal(await planned.evaluate(el => el.tagName), 'SPAN');
-    assert.match(await planned.getAttribute('title'), /Planned/);
-    checks.push('Operations is shown as Planned with its reason, not as a link');
+    const operations = page.locator('.rail-nav a.rail-link', {hasText: 'Operations'});
+    assert.equal(await operations.getAttribute('href'), '/console/operations');
+    assert.equal(await page.locator('.rail-link.off', {hasText: 'Operations'}).count(), 0);
+    checks.push('Operations is a link in the Cyber Range sidebar, no longer Planned');
 
     // The logo returns home from anywhere.
     await page.goto(`${WEB}/console/benchmark/registry`);

@@ -32,6 +32,7 @@ import { CopilotPanel } from "./shared/copilot";
 import { AllArenas, AllEvaluations } from "./shared/lists";
 import { AgentsBoard } from "./shared/board";
 import { FindingsPage } from "./research/findings";
+import { OperationsPage } from "./platform/operations";
 import { installRouter } from "./router";
 import { Shell } from "./shell/Shell";
 
@@ -82,6 +83,7 @@ function App() {
   const activity = window.location.pathname === "/console/activity";
   const boardPage = window.location.pathname === "/console/board";
   const findingsPage = window.location.pathname === "/console/findings";
+  const operationsPage = window.location.pathname === "/console/operations";
   const agentsLibrary = window.location.pathname === "/console/library/agents";
   const targetsLibrary =
     window.location.pathname === "/console/library/targets";
@@ -187,6 +189,8 @@ function App() {
           <AgentsBoard />
         ) : findingsPage ? (
           <FindingsPage />
+        ) : operationsPage ? (
+          <OperationsPage />
         ) : allArenas ? (
           <AllArenas />
         ) : allEvaluations ? (
