@@ -3,6 +3,7 @@ import { getJson, postJson } from "../api";
 import type { ArenaData, EvidenceData, Span } from "../types";
 import { formatObserved, getJsonSafe } from "../ui";
 import "./live-view.css";
+import { ForgeLine } from "./forge-line";
 
 // OBS-05: the agent live view, the main screen of an active arena. Spans arrive
 // on the arena's push stream (OBS-04); history loads once. The list is
@@ -98,6 +99,8 @@ export function AgentLiveView({
   // OBS-08: a finished run replays step by step.
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(600);
+  // UX-19: the forge line is the main view; the list holds every step.
+  const [view, setView] = useState<"timeline" | "list">("timeline");
   const list = useRef<HTMLDivElement>(null);
 
   const merge = useCallback((incoming: Span[]) => {
@@ -407,13 +410,31 @@ export function AgentLiveView({
         )}
       </header>
 
-      <Waterfall
-        spans={visible}
-        selected={selected}
-        onSelect={(span) => select(visible.indexOf(span))}
-      />
+      {view === "list" && (
+        <Waterfall
+          spans={visible}
+          selected={selected}
+          onSelect={(span) => select(visible.indexOf(span))}
+        />
+      )}
 
       <div className="live-filters" role="group" aria-label="Filter spans">
+        <div className="seg live-views" role="group" aria-label="View">
+          <button
+            type="button"
+            aria-pressed={view === "timeline"}
+            onClick={() => setView("timeline")}
+          >
+            Timeline
+          </button>
+          <button
+            type="button"
+            aria-pressed={view === "list"}
+            onClick={() => setView("list")}
+          >
+            List
+          </button>
+        </div>
         <label>
           Kind
           <select
@@ -479,80 +500,93 @@ export function AgentLiveView({
       </div>
 
       <div className="live-body">
-        <div className="live-list-frame">
-          <div className="live-row live-row-head" aria-hidden="true">
-            <span>Time</span>
-            <span>Tool</span>
-            <span>Status</span>
-            <span>Duration</span>
-            <span>Actor</span>
-          </div>
-          <div
-            ref={list}
-            className="live-list"
-            role="listbox"
-            tabIndex={0}
-            aria-label={`Span timeline, ${visible.length} spans`}
-            aria-activedescendant={current ? `span-${current.id}` : undefined}
-            onKeyDown={onKey}
-            onScroll={(event) => {
-              const element = event.currentTarget;
-              setScrollTop(element.scrollTop);
-              const atBottom =
-                element.scrollHeight -
-                  element.scrollTop -
-                  element.clientHeight <
-                ROW;
-              if (!atBottom && follow) setFollow(false);
-            }}
-          >
-            <div style={{ height: visible.length * ROW, position: "relative" }}>
-              {visible.slice(start, end).map((span, offset) => (
-                <div
-                  key={span.id}
-                  id={`span-${span.id}`}
-                  role="option"
-                  aria-selected={span.id === selected}
-                  className={`live-row live-status-${span.status} ${span.id === selected ? "selected" : ""}`}
-                  style={{ top: (start + offset) * ROW }}
-                  onClick={() => select(start + offset)}
-                >
-                  <span>
-                    {new Date(time(span.started_at)).toLocaleTimeString()}
-                  </span>
-                  <span>
-                    <i
-                      className={`live-kind live-kind-${span.kind}`}
-                      aria-hidden="true"
-                    />
-                    {span.name}
-                    {span.visibility === "operator" && (
-                      <em className="live-tag">operator</em>
-                    )}
-                    {findingFor(span) && (
-                      <em className="live-tag live-tag-finding">
-                        finding · {findingFor(span)!.verdict}
-                      </em>
-                    )}
-                  </span>
-                  <span className="live-status">
-                    {span.status.replace("_", " ")}
-                  </span>
-                  <span>{ms(span.duration_ms)}</span>
-                  <span>{span.actor}</span>
-                </div>
-              ))}
+        {view === "timeline" ? (
+          <ForgeLine
+            spans={visible}
+            total={visible.length}
+            selectedId={selected}
+            onSelect={(span) => select(visible.indexOf(span))}
+            onKey={onKey}
+            live={active}
+          />
+        ) : (
+          <div className="live-list-frame">
+            <div className="live-row live-row-head" aria-hidden="true">
+              <span>Time</span>
+              <span>Tool</span>
+              <span>Status</span>
+              <span>Duration</span>
+              <span>Actor</span>
             </div>
-            {!visible.length && (
-              <p className="live-empty">
-                {loadError ||
-                  (loaded
-                    ? "No spans yet. Actions by agents and operators appear here as they happen."
-                    : "Loading the timeline…")}
-              </p>
-            )}
+            <div
+              ref={list}
+              className="live-list"
+              role="listbox"
+              tabIndex={0}
+              aria-label={`Span timeline, ${visible.length} spans`}
+              aria-activedescendant={current ? `span-${current.id}` : undefined}
+              onKeyDown={onKey}
+              onScroll={(event) => {
+                const element = event.currentTarget;
+                setScrollTop(element.scrollTop);
+                const atBottom =
+                  element.scrollHeight -
+                    element.scrollTop -
+                    element.clientHeight <
+                  ROW;
+                if (!atBottom && follow) setFollow(false);
+              }}
+            >
+              <div
+                style={{ height: visible.length * ROW, position: "relative" }}
+              >
+                {visible.slice(start, end).map((span, offset) => (
+                  <div
+                    key={span.id}
+                    id={`span-${span.id}`}
+                    role="option"
+                    aria-selected={span.id === selected}
+                    className={`live-row live-status-${span.status} ${span.id === selected ? "selected" : ""}`}
+                    style={{ top: (start + offset) * ROW }}
+                    onClick={() => select(start + offset)}
+                  >
+                    <span>
+                      {new Date(time(span.started_at)).toLocaleTimeString()}
+                    </span>
+                    <span>
+                      <i
+                        className={`live-kind live-kind-${span.kind}`}
+                        aria-hidden="true"
+                      />
+                      {span.name}
+                      {span.visibility === "operator" && (
+                        <em className="live-tag">operator</em>
+                      )}
+                      {findingFor(span) && (
+                        <em className="live-tag live-tag-finding">
+                          finding · {findingFor(span)!.verdict}
+                        </em>
+                      )}
+                    </span>
+                    <span className="live-status">
+                      {span.status.replace("_", " ")}
+                    </span>
+                    <span>{ms(span.duration_ms)}</span>
+                    <span>{span.actor}</span>
+                  </div>
+                ))}
+              </div>
+              {!visible.length && (
+                <p className="live-empty">
+                  {loadError ||
+                    (loaded
+                      ? "No spans yet. Actions by agents and operators appear here as they happen."
+                      : "Loading the timeline…")}
+                </p>
+              )}
+            </div>
           </div>
-        </div>
+        )}
         <Inspector arena={arena} span={current} signals={signals} />
       </div>
     </div>

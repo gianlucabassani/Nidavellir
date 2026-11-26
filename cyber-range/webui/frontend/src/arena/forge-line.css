@@ -1,0 +1,299 @@
+/* UX-19: the forge line. Marks carry family colour; text uses text tokens. */
+.forge-line {
+  --fg-ground: var(--inset);
+  display: grid;
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.fg-line-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--line-soft);
+}
+.fg-line-bar input[type="range"] {
+  flex: 1;
+  min-width: 120px;
+  accent-color: var(--gold-deep);
+}
+.fg-clock {
+  min-width: 64px;
+  font: 400 var(--t-meta) var(--f-mono);
+}
+.fg-cap {
+  width: 100%;
+  color: var(--muted);
+  font-size: var(--t-meta);
+}
+.fg-line-scroll {
+  max-height: 720px;
+  overflow: auto;
+  background: var(--fg-ground);
+  outline: none;
+}
+.fg-line-scroll:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--gold);
+}
+.fg-svg {
+  display: block;
+  margin: 0 auto;
+  user-select: none;
+}
+.fg-svg text {
+  fill: var(--muted);
+  font: 400 11px var(--f-mono);
+}
+.fg-svg .h1 {
+  fill: var(--ink);
+  font: 600 13px var(--f-sans);
+}
+.fg-tick text {
+  fill: var(--faint);
+}
+.fg-tick line {
+  stroke: var(--line-strong);
+}
+.fg-gap {
+  fill: var(--faint) !important;
+  font: 400 12px var(--f-sans) !important;
+  paint-order: stroke;
+  stroke: var(--fg-ground);
+  stroke-width: 8px;
+}
+.fg-start {
+  fill: var(--muted);
+}
+.fg-ring {
+  fill: none;
+  stroke: var(--gold-deep);
+  stroke-width: 2;
+}
+.fg-spine {
+  stroke: url(#fg-spine);
+  stroke-width: 8;
+  stroke-linecap: round;
+  filter: url(#fg-glow);
+}
+.fg-spine.fold {
+  stroke: var(--gold);
+  stroke-width: 3;
+  stroke-dasharray: 1 7;
+  opacity: 0.7;
+  filter: none;
+}
+.fg-strand {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.fg-strand.fold {
+  stroke-width: 2;
+  stroke-dasharray: 1 6;
+  opacity: 0.7;
+}
+.fg-strand.idle {
+  stroke-width: 1.5;
+  stroke-dasharray: 2 5;
+  opacity: 0.6;
+}
+.fg-ev,
+.fg-label {
+  cursor: pointer;
+  transition: opacity 0.25s;
+}
+.fg-ev.fut,
+.fg-label.fut {
+  opacity: 0;
+  pointer-events: none;
+}
+.fg-thread {
+  fill: none;
+  stroke-width: 1.2;
+  opacity: 0.55;
+}
+.fg-thread.watch {
+  stroke-dasharray: 2 3;
+}
+.fg-ev:hover .fg-thread,
+.fg-ev.sel .fg-thread {
+  stroke-width: 2;
+  opacity: 1;
+}
+.fg-touch {
+  stroke: var(--fg-ground);
+  stroke-width: 1.2;
+}
+.fg-model {
+  fill: var(--fg-ground);
+  stroke-width: 1.6;
+}
+.fg-ev:hover .fg-pill,
+.fg-ev.sel .fg-pill {
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+.fg-ev.sel .fg-model {
+  stroke-width: 3;
+}
+.fg-knot {
+  fill: var(--bad);
+  stroke: var(--fg-ground);
+  stroke-width: 2;
+}
+.fg-fruit {
+  fill: var(--gold);
+}
+.fg-fruit-core {
+  fill: var(--bar);
+}
+.fg-running {
+  fill: var(--gold);
+  animation: fg-pulse 1.6s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes fg-pulse {
+  50% {
+    transform: scale(1.7);
+  }
+}
+.fg-label path {
+  fill: none;
+  stroke: var(--line);
+  stroke-dasharray: 2 3;
+}
+.fg-label text {
+  fill: var(--ink-2);
+}
+.fg-label:hover text,
+.fg-label.sel text {
+  fill: var(--ink);
+  font-weight: 600;
+}
+.fg-label.err text {
+  fill: var(--bad);
+}
+.fg-label.find text {
+  fill: var(--gold-deep);
+  font: 600 12px var(--f-sans);
+}
+.fg-now .dot {
+  fill: var(--gold);
+}
+.fg-now .halo {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: fg-halo 2s ease-out infinite;
+}
+@keyframes fg-halo {
+  from {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+.fg-now text {
+  fill: var(--gold-deep);
+  font-weight: 500;
+}
+.fg-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s4);
+  padding: var(--s3) var(--s4);
+  border-top: 1px solid var(--line-soft);
+  color: var(--muted);
+  font-size: var(--t-meta);
+}
+.fg-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.fg-legend .sp {
+  display: inline-block;
+}
+.sp.spine {
+  width: 4px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--gold);
+}
+.sp.strand {
+  width: 3px;
+  height: 14px;
+  background: var(--line-strong);
+}
+.sp.pill {
+  width: 7px;
+  height: 14px;
+  border-radius: 4px;
+}
+.sp.ring {
+  width: 9px;
+  height: 9px;
+  border: 1.6px solid var(--t-model);
+  border-radius: 50%;
+}
+.sp.knot {
+  width: 8px;
+  height: 8px;
+  background: var(--bad);
+  transform: rotate(45deg);
+}
+.sp.fruit {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 6px var(--gold);
+}
+.fg-legend-note {
+  color: var(--faint);
+}
+.fg-tip {
+  position: fixed;
+  z-index: 60;
+  display: grid;
+  gap: 4px;
+  width: 280px;
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line-strong);
+  background: var(--raised);
+  box-shadow: var(--pop-shadow);
+  color: var(--ink-2);
+  font-size: var(--t-meta);
+  pointer-events: none;
+}
+.fg-tip b {
+  color: var(--ink);
+  font: 600 var(--t-ui) var(--f-mono);
+}
+.fg-tip small {
+  color: var(--muted);
+}
+.fg-line-empty {
+  padding: var(--s6);
+  border: 1px dashed var(--line);
+  color: var(--muted);
+}
+@media (prefers-reduced-motion: reduce) {
+  .fg-running,
+  .fg-now .halo {
+    animation: none;
+  }
+}
+.live-views {
+  align-self: end;
+}
