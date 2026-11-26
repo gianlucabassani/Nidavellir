@@ -432,6 +432,7 @@ Order: data model first, then views.
   - The panel: Nidavellir design, docked under the top bar, resizable, open across navigation, with the model connection form inside.
   - The agent inbox is marked Planned.
   - Browser check: `scripts/ux20-browser-check.cjs`, against a stub model.
+- [x] **UX-23 — Bare fields in the Forge theme (#85).** Text inputs without a component class (the arena Live search, ledger filters) take the field geometry of the selects beside them instead of the browser's inset box. Asserted in `scripts/ux16-browser-check.cjs`.
 - [ ] **UX-21 — Benchmark lobby and live match (future, #78).** Game-like screens for every evaluation run:
   - a "Waiting for an agent to join" lobby: harness and agent cards from the reported client identity and the registered build; operators mark each side Ready, then start;
   - a live match: one actions-over-time chart for both sides with findings marked, observability (tokens, model calls, errors, budget) and a live classification scoreboard;
