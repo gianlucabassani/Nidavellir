@@ -318,12 +318,36 @@ def _score(instance_id):
     return data
 
 
+# The orchestrator's per-request event cap (EVENTS_MAX_LIMIT).
+FINDING_WINDOW = 500
+
+
+def _arena_typed_events(instance_id, *types):
+    """The arena's events of the given types, each read with the type filter in
+    the query, so the run's own activity (budget, probes, HTTP records) never
+    pushes them out of the window. Returns (events, ok)."""
+    base = f"/deployments/{quote(instance_id, safe='')}/events?limit={FINDING_WINDOW}&type="
+    events, ok = [], True
+    for kind in types:
+        data, fetched = _api_get(base + kind)
+        if not fetched or not isinstance(data, dict):
+            ok = False
+            continue
+        events.extend(data.get("events") or [])
+    return events, ok
+
+
+def _arena_finding_events(instance_id):
+    return _arena_typed_events(instance_id, "finding_verification", "finding")
+
+
 def _findings(instance_id, events=None):
     """The arena's reported findings (operator view — includes the manifest match
     and independent verdict). Adds the latest manual verdict separately. Newest
-    first. Fetches untyped so `finding` + `finding_verification` come together."""
+    first. `finding` and `finding_verification` are read by type (#81): an
+    untyped "latest N" window loses early findings in a busy research run."""
     if events is None:
-        events = _events(instance_id, limit=200)
+        events, _ = _arena_finding_events(instance_id)
     verdicts = {}
     for e in events:  # newest-first → first seen per finding wins
         if e.get("type") == "finding_verification":
@@ -1337,10 +1361,10 @@ def _finding_row(item):
 
 @app.route("/api/console/arenas/<instance_id>/findings")
 def console_arena_findings(instance_id):
-    data, ok = _api_get(f"/deployments/{instance_id}/events?limit=200")
-    if not ok or not isinstance(data, dict):
+    events, ok = _arena_finding_events(instance_id)
+    if not ok:
         return jsonify({"error": "Finding records unavailable"}), 503
-    findings = _findings(instance_id, events=data.get("events") or [])
+    findings = _findings(instance_id, events=events)
     return jsonify({"findings": [_finding_row(item) for item in findings]})
 
 
@@ -1573,10 +1597,10 @@ def console_archive_clear():
 
 @app.route("/api/console/arenas/<instance_id>/evidence")
 def console_arena_evidence(instance_id):
-    data, ok = _api_get(f"/deployments/{instance_id}/events?limit=200")
-    if not ok or not isinstance(data, dict):
+    events, ok = _arena_typed_events(
+        instance_id, "finding_verification", "finding", "monitor_signal")
+    if not ok:
         return jsonify({"error": "Evidence records unavailable"}), 503
-    events = data.get("events") or []
     findings = _findings(instance_id, events=events)
     artifacts = []
     validations = []
@@ -2004,7 +2028,12 @@ def console_activity():
         return jsonify({"error": "Activity records unavailable"}), 503
     deployments, deployments_ok = _deployments()
     names = {key: item.get("user_id") or key for key, item in deployments.items()}
-    events = data.get("events") or []
+    audit_events = data.get("events") or []
+    # Findings, verdicts and signals by type (#81); the audit list stays the
+    # latest window on purpose.
+    events = (_events(limit=200, type="finding_verification")
+              + _events(limit=200, type="finding")
+              + _events(limit=200, type="monitor_signal"))
     verdicts = {}
     for event in events:
         if event.get("type") == "finding_verification":
@@ -2042,7 +2071,7 @@ def console_activity():
               "arena_id": event.get("lab_id"),
               "arena_name": names.get(event.get("lab_id"), (event.get("lab_id") or "")[:8]),
               "arena_known": bool(deployments_ok and event.get("lab_id") in names)}
-             for event in events]
+             for event in audit_events]
     return jsonify({"findings": findings, "artifacts": artifacts,
                     "signals": signals, "audit": audit,
                     "observed_at": datetime.now().astimezone().isoformat()})
