@@ -112,7 +112,9 @@ def _api_error(resp):
             parts.append(f"{field}: {msg}" if field else msg)
         detail = "; ".join(parts)
     if isinstance(detail, dict):  # refusals with a stable code: {"code", "message"}
-        detail = detail.get("message") or detail.get("code")
+        errors = detail.get("errors")
+        detail = ("; ".join(str(e) for e in errors[:8]) if isinstance(errors, list) and errors
+                  else detail.get("message") or detail.get("code"))
     return detail or f"HTTP {resp.status_code}"
 
 
@@ -1389,7 +1391,7 @@ def console_operations_reclaim(lab_id):
 def _finding_report(instance_id, finding_id):
     """UX-24: the report for one finding, or (error, status)."""
     events, ok = _arena_typed_events(
-        instance_id, "finding_verification", "finding", "finding_writeup", "hypothesis_tested")
+        instance_id, "finding_verification", "finding", "hypothesis_tested")
     if not ok:
         return None, ({"error": "Finding records unavailable"}, 503)
 
@@ -1404,7 +1406,10 @@ def _finding_report(instance_id, finding_id):
     if finding is None:
         return None, ({"error": "Finding not found in this arena"}, 404)
     verification = first("finding_verification", lambda p: p.get("finding_id") == finding_id)
-    writeup = first("finding_writeup", lambda p: p.get("finding_id") == finding_id)
+    view, view_status = _api_get_status(
+        f"/arenas/{quote(instance_id, safe='')}/findings/{quote(finding_id, safe='')}/writeup")
+    if view_status != 200:
+        view = {}
     tested = first("hypothesis_tested",
                    lambda p: finding_id in (p.get("finding_ids") or []))
     contract = None
@@ -1419,7 +1424,7 @@ def _finding_report(instance_id, finding_id):
     arena = {"id": instance_id, "name": record.get("user_id") or instance_id[:8],
              "scenario": (status or {}).get("scenario") or record.get("scenario")}
     report = finding_report.build(
-        finding, writeup=writeup, hypothesis=contract, tested=tested, arena=arena,
+        finding, view=view, hypothesis=contract, tested=tested, arena=arena,
         validator=_validator_verdict(finding),
         operator=(verification or {}).get("verdict"))
     return report, None
@@ -1447,8 +1452,8 @@ def console_finding_report_markdown(instance_id, finding_id):
 @app.route("/api/console/arenas/<instance_id>/findings/<finding_id>/writeup", methods=["POST"])
 def console_finding_writeup(instance_id, finding_id):
     body = request.get_json(silent=True)
-    if not isinstance(body, dict):
-        return jsonify({"error": "Send the write-up as a JSON object"}), 422
+    if not isinstance(body, dict) or not isinstance(body.get("patch"), dict):
+        return jsonify({"error": "Send {\"patch\": {section: value}}"}), 422
     data, code = _api_post(
         f"/arenas/{quote(instance_id, safe='')}/findings/{quote(finding_id, safe='')}/writeup",
         body)

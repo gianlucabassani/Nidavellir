@@ -654,12 +654,23 @@ export type Span = {
   visibility: "agent" | "operator";
   trial_id?: string | null;
 };
-/** UX-24: where a report section's text came from. */
-export type ReportOrigin = "operator" | "derived" | "missing";
+/** UX-24/25: where a report section's text came from. */
+export type ReportOrigin = "agent" | "operator" | "derived" | "missing";
 export type ReportFact = {
   value: string | null;
   origin: ReportOrigin;
   source?: string;
+};
+export type ReproStep = {
+  action: string;
+  expected?: string;
+  evidence: { digest: string; label: string }[];
+};
+export type Reproduction = {
+  prerequisites?: string;
+  auth_role?: string;
+  steps: ReproStep[];
+  cleanup?: string;
 };
 export type ReportSection = {
   key: string;
@@ -670,37 +681,43 @@ export type ReportSection = {
   items?: string[];
   code?: string;
   links?: { url: string; title?: string }[];
+  reproduction?: Reproduction;
 };
 export type WriteupReference = { url: string; title?: string };
+export type WriteupAsset = { kind: string; value: string; note?: string };
+export type WriteupCwe = { id: string; name: string };
+/** The structured write-up (schema nidavellir.finding-writeup.v1). */
 export type Writeup = Partial<{
-  severity: Severity;
-  cwe: string;
   summary: string;
   impact: string;
   description: string;
   remediation: string;
+  affected_assets: WriteupAsset[];
+  cwes: WriteupCwe[];
+  reproduction: {
+    prerequisites?: string;
+    auth_role?: string;
+    steps?: { action: string; expected?: string; evidence: string[] }[];
+    cleanup?: string;
+  };
+  references: WriteupReference[];
+  http_exception: { reason: string };
+  severity: Severity;
   vendor: string;
   product: string;
   affected_versions: string;
   fixed_versions: string;
-  component: string;
   attack_type: string;
   impact_type: string;
   cvss_vector: string;
   discoverer: string;
-  references: WriteupReference[];
 }>;
 export type FindingReport = {
   id: string;
   title: string;
-  cwe: { id: string; name: string; url: string } | null;
   facts: Record<string, ReportFact>;
   sections: ReportSection[];
-  verdict: {
-    validator: string | null;
-    operator: string | null;
-    verified: boolean;
-  };
+  verdict: { validator: string | null; operator: string | null };
   readiness: {
     ready: boolean;
     missing: string[];
@@ -709,12 +726,13 @@ export type FindingReport = {
       label: string;
       ok: boolean;
       blocking: boolean;
-      message: string | null;
+      messages: string[];
     }[];
   };
   writeup: Writeup;
-  updated_by: string | null;
-  updated_at: string | null;
+  origin: Record<string, "agent" | "operator">;
+  updated: { by: string | null; role: string; at: string | null } | null;
+  evidence_options: { digest: string; label: string; what: string }[];
   markdown: string;
   cve_request: string;
 };

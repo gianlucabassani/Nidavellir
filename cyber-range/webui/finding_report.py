@@ -1,153 +1,142 @@
-"""UX-24: a finding as a report you can send.
+"""UX-24/25: a finding as a report you can send.
 
-Builds one report from what the platform already holds (the finding, its
-hypothesis contract and test note, root cause, causality and evidence) plus
-the operator's write-up (impact, remediation, affected product and the rest).
-Each section says where its text came from: the operator, the record
-(derived), or nowhere yet (missing). A readiness checklist names every gap.
-The report renders as Markdown and as a CVE request in the fields of the
-public request form. Pure functions: no I/O, no markup in, text out.
+The reporting agent writes the report (the structured write-up, schema
+nidavellir.finding-writeup.v1, owned and checked by the orchestrator); an
+operator can take any section over. Where a section is still empty, the
+report falls back to what the platform recorded (the hypothesis the finding
+tested, its PoC, causality and evidence) and says so. Each section carries
+its origin: agent, operator, derived (from the record) or missing.
+
+Renders as Markdown and as a CVE request in the public request form's
+fields. Pure functions: no I/O, text in, text out.
 """
 from __future__ import annotations
 
 import re
 
-# Common weaknesses: name and the CVE form's impact type.
-CWES = {
-    "CWE-20": ("Improper Input Validation", "other"),
-    "CWE-22": ("Path Traversal", "information_disclosure"),
-    "CWE-77": ("Command Injection", "code_execution"),
-    "CWE-78": ("OS Command Injection", "code_execution"),
-    "CWE-79": ("Cross-site Scripting", "other"),
-    "CWE-89": ("SQL Injection", "information_disclosure"),
-    "CWE-94": ("Code Injection", "code_execution"),
-    "CWE-200": ("Exposure of Sensitive Information", "information_disclosure"),
-    "CWE-209": ("Information Exposure Through an Error Message", "information_disclosure"),
-    "CWE-269": ("Improper Privilege Management", "privilege_escalation"),
-    "CWE-284": ("Improper Access Control", "privilege_escalation"),
-    "CWE-285": ("Improper Authorization", "privilege_escalation"),
-    "CWE-287": ("Improper Authentication", "privilege_escalation"),
-    "CWE-306": ("Missing Authentication for Critical Function", "privilege_escalation"),
-    "CWE-352": ("Cross-Site Request Forgery", "other"),
-    "CWE-400": ("Uncontrolled Resource Consumption", "denial_of_service"),
-    "CWE-434": ("Unrestricted Upload of File with Dangerous Type", "code_execution"),
-    "CWE-502": ("Deserialization of Untrusted Data", "code_execution"),
-    "CWE-601": ("Open Redirect", "other"),
-    "CWE-611": ("XML External Entity Reference", "information_disclosure"),
-    "CWE-639": ("Authorization Bypass Through User-Controlled Key", "privilege_escalation"),
-    "CWE-668": ("Exposure of Resource to Wrong Sphere", "information_disclosure"),
-    "CWE-798": ("Use of Hard-coded Credentials", "privilege_escalation"),
-    "CWE-862": ("Missing Authorization", "privilege_escalation"),
-    "CWE-863": ("Incorrect Authorization", "privilege_escalation"),
-    "CWE-918": ("Server-Side Request Forgery", "information_disclosure"),
-    "CWE-1321": ("Prototype Pollution", "code_execution"),
+CWE_NAMES = {
+    "CWE-20": "Improper Input Validation", "CWE-22": "Path Traversal",
+    "CWE-77": "Command Injection", "CWE-78": "OS Command Injection",
+    "CWE-79": "Cross-site Scripting", "CWE-89": "SQL Injection", "CWE-94": "Code Injection",
+    "CWE-200": "Exposure of Sensitive Information", "CWE-269": "Improper Privilege Management",
+    "CWE-284": "Improper Access Control", "CWE-285": "Improper Authorization",
+    "CWE-287": "Improper Authentication", "CWE-306": "Missing Authentication for Critical Function",
+    "CWE-352": "Cross-Site Request Forgery", "CWE-400": "Uncontrolled Resource Consumption",
+    "CWE-434": "Unrestricted Upload of File with Dangerous Type",
+    "CWE-502": "Deserialization of Untrusted Data", "CWE-601": "Open Redirect",
+    "CWE-611": "XML External Entity Reference",
+    "CWE-639": "Authorization Bypass Through User-Controlled Key",
+    "CWE-668": "Exposure of Resource to Wrong Sphere", "CWE-798": "Use of Hard-coded Credentials",
+    "CWE-862": "Missing Authorization", "CWE-863": "Incorrect Authorization",
+    "CWE-918": "Server-Side Request Forgery", "CWE-1321": "Prototype Pollution",
 }
-SEVERITIES = ("critical", "high", "medium", "low", "info")
 ATTACK_TYPES = {"remote": "Remote", "adjacent": "Adjacent network", "local": "Local",
                 "physical": "Physical"}
 IMPACT_TYPES = {"code_execution": "Code execution",
                 "information_disclosure": "Information disclosure",
                 "denial_of_service": "Denial of service",
                 "privilege_escalation": "Escalation of privileges", "other": "Other"}
+SEVERITIES = ("critical", "high", "medium", "low", "info")
 CAUSALITY = (("trace", "Trace"), ("fixed_build_control", "Control"), ("toggle", "Toggle"))
+TEXT_KEYS = ("summary", "impact", "description", "remediation")
 
 
 def _text(value) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
-def _cwe(value) -> dict | None:
-    match = re.search(r"CWE-(\d{1,5})", value or "", re.IGNORECASE)
-    if not match:
-        return None
-    cwe_id = f"CWE-{match.group(1)}"
-    name = CWES.get(cwe_id, ("", ""))[0]
-    return {"id": cwe_id, "name": name,
-            "url": f"https://cwe.mitre.org/data/definitions/{match.group(1)}.html"}
+def _cwe_url(cwe_id: str) -> str:
+    return f"https://cwe.mitre.org/data/definitions/{cwe_id.split('-')[1]}.html"
 
 
-def _verified(validator: str | None, operator: str | None) -> bool:
-    if operator == "refuted":
-        return False
-    return validator == "confirmed" or operator == "confirmed"
+def _cwe_label(c: dict) -> str:
+    return f"{c['id']}: {c['name']}" if c.get("name") and c["name"] != c["id"] else c["id"]
 
 
-def build(finding: dict, *, writeup: dict | None = None, hypothesis: dict | None = None,
+def build(finding: dict, *, view: dict | None = None, hypothesis: dict | None = None,
           tested: dict | None = None, arena: dict | None = None,
           validator: str | None = None, operator: str | None = None) -> dict:
     """The report for one finding.
 
-    finding: the stored finding payload; writeup: the newest operator write-up
-    event payload; hypothesis: the registered contract the finding tested;
-    tested: the hypothesis test record naming this finding; arena: {id, name,
-    scenario}; validator/operator: the two verdicts, kept apart."""
-    w = (writeup or {}).get("sections") or {}
+    view: the orchestrator's write-up view {sections, origin, readiness,
+    updated}; hypothesis: the registered contract the finding tested; tested:
+    the hypothesis test record naming it; arena: {id, name, scenario}."""
+    view = view or {}
+    w = view.get("sections") or {}
+    owner = view.get("origin") or {}
     contract = hypothesis or {}
     arena = arena or {}
     transactions = [t for t in finding.get("http_transactions") or [] if isinstance(t, dict)]
     artifacts = [a for a in finding.get("evidence_artifacts") or [] if isinstance(a, dict)]
     causality = finding.get("causality") if isinstance(finding.get("causality"), dict) else {}
-    cwe = _cwe(w.get("cwe") or finding.get("cwe"))
-    severity = w.get("severity") or (finding.get("severity")
-                                     if finding.get("severity") in SEVERITIES else None)
-    verified = _verified(validator, operator)
+    labels: dict[str, str] = {}
+    for item in transactions + artifacts:
+        if item.get("digest"):
+            labels.setdefault(item["digest"], f"E{len(labels) + 1}")
+    for step in (w.get("reproduction") or {}).get("steps") or []:
+        for digest in step.get("evidence") or []:
+            labels.setdefault(digest, f"E{len(labels) + 1}")
 
-    def fact(key, derived=None, source=""):
-        if _text(w.get(key)):
-            return {"value": _text(w[key]), "origin": "operator"}
-        if derived:
-            return {"value": derived, "origin": "derived", "source": source}
+    def owned(key):
+        return owner.get(key, "agent")
+
+    cwes = w.get("cwes") or []
+    if not cwes and finding.get("cwe"):
+        cid = str(finding["cwe"]).upper()
+        cwes = [{"id": cid, "name": CWE_NAMES.get(cid, "")}]
+    reporter_severity = finding.get("severity") if finding.get("severity") in SEVERITIES else None
+
+    def fact(key, value, derived_value=None, source=""):
+        if value:
+            return {"value": value, "origin": owned(key)}
+        if derived_value:
+            return {"value": derived_value, "origin": "derived", "source": source}
         return {"value": None, "origin": "missing"}
 
     component = " · ".join(x for x in (_text(finding.get("path")), _text(finding.get("param"))) if x)
+    assets = w.get("affected_assets") or []
     facts = {
-        "severity": ({"value": severity, "origin": "operator" if w.get("severity") else "derived",
-                      "source": "the reporter's rating"} if severity
-                     else {"value": None, "origin": "missing"}),
-        "cwe": ({"value": cwe["id"], "origin": "operator" if w.get("cwe") else "derived",
-                 "source": "the finding"} if cwe else {"value": None, "origin": "missing"}),
-        "vendor": fact("vendor"),
-        "product": fact("product", _text(arena.get("scenario")), "the arena's scenario"),
-        "affected_versions": fact("affected_versions"),
-        "fixed_versions": fact("fixed_versions"),
-        "component": fact("component", component, "the finding's path and parameter"),
-        "station": {"value": finding.get("node"), "origin": "derived" if finding.get("node") else "missing"},
-        "attack_type": fact("attack_type", "remote" if transactions else None,
-                            "the evidence is HTTP traffic"),
-        "impact_type": fact("impact_type", CWES.get((cwe or {}).get("id", ""), ("", ""))[1] or None,
-                            "the weakness"),
-        "cvss_vector": fact("cvss_vector"),
-        "discoverer": fact("discoverer", _text(finding.get("actor")) or None, "the reporting agent"),
+        "severity": fact("severity", w.get("severity"), reporter_severity,
+                         "the reporter's rating"),
+        "cwe": fact("cwes", ", ".join(_cwe_label(c) for c in w.get("cwes") or []),
+                    ", ".join(_cwe_label(c) for c in cwes), "the finding"),
+        "affected_assets": fact("affected_assets",
+                                "; ".join(f"{a['kind']}: {a['value']}" for a in assets),
+                                f"component: {component}" if component else None,
+                                "the finding's path and parameter"),
+        "vendor": fact("vendor", w.get("vendor")),
+        "product": fact("product", w.get("product"), _text(arena.get("scenario")),
+                        "the arena's scenario"),
+        "affected_versions": fact("affected_versions", w.get("affected_versions")),
+        "fixed_versions": fact("fixed_versions", w.get("fixed_versions")),
+        "attack_type": fact("attack_type", w.get("attack_type"),
+                            "remote" if transactions else None, "the evidence is HTTP traffic"),
+        "impact_type": fact("impact_type", w.get("impact_type")),
+        "cvss_vector": fact("cvss_vector", w.get("cvss_vector")),
+        "discoverer": fact("discoverer", w.get("discoverer"), _text(finding.get("actor")),
+                           "the reporting agent"),
+        "station": {"value": finding.get("node"),
+                    "origin": "derived" if finding.get("node") else "missing"},
     }
 
-    sections = []
+    sections: list[dict] = []
 
-    def section(key, title, *, operator_text=None, derived=None, source="", items=None,
-                code=None):
-        entry = {"key": key, "title": title}
-        if _text(operator_text):
-            entry.update(origin="operator", text=_text(operator_text))
-        elif derived or items or code:
-            entry.update(origin="derived", source=source)
-            if derived:
-                entry["text"] = derived
-            if items:
-                entry["items"] = items
-            if code:
-                entry["code"] = code
+    def text_section(key, title, derived_text="", source=""):
+        if w.get(key):
+            sections.append({"key": key, "title": title, "origin": owned(key), "text": w[key]})
+        elif derived_text:
+            sections.append({"key": key, "title": title, "origin": "derived", "source": source,
+                             "text": derived_text})
         else:
-            entry["origin"] = "missing"
-        sections.append(entry)
+            sections.append({"key": key, "title": title, "origin": "missing"})
 
-    product = facts["product"]["value"]
-    versions = facts["affected_versions"]["value"]
-    where = " ".join(x for x in (product, versions) if x)
+    where = " ".join(x for x in (facts["product"]["value"], facts["affected_versions"]["value"])
+                     if x)
     summary = _text(finding.get("title"))
     if summary and where:
         summary = f"{summary.rstrip('.')} ({where})."
-    section("summary", "Summary", operator_text=w.get("summary"), derived=summary,
-            source="the finding title and affected product")
-    section("impact", "Impact", operator_text=w.get("impact"))
+    text_section("summary", "Summary", summary, "the finding title and affected product")
+    text_section("impact", "Impact")
 
     parts = []
     if _text(contract.get("invariant")):
@@ -156,28 +145,36 @@ def build(finding: dict, *, writeup: dict | None = None, hypothesis: dict | None
     if _text(source_sink.get("source")) or _text(source_sink.get("sink")):
         parts.append(f"Source: {_text(source_sink.get('source')) or 'not stated'}. "
                      f"Sink: {_text(source_sink.get('sink')) or 'not stated'}.")
-    normalised = ((finding.get("root_cause") or {}).get("normalised") or {}) \
-        if isinstance(finding.get("root_cause"), dict) else {}
-    if not parts and normalised:
-        parts.extend(f"{label}: {normalised[key]}" for key, label in (
-            ("invariant", "Invariant"), ("source", "Source"), ("sink", "Sink"),
-            ("missing_check", "Missing check")) if normalised.get(key))
     if _text((causality.get("trace") or {}).get("summary")):
         parts.append(f"Observed: {_text(causality['trace']['summary'])}")
     if not parts and _text(finding.get("evidence")):
         parts.append(_text(finding["evidence"]))
-    section("description", "Description", operator_text=w.get("description"),
-            derived="\n\n".join(parts), source="the hypothesis, root cause and trace")
+    text_section("description", "Description", "\n\n".join(parts), "the hypothesis and trace")
 
-    preconditions = [_text(p) for p in contract.get("preconditions") or [] if _text(p)]
-    section("prerequisites", "Prerequisites", items=preconditions,
-            source="the hypothesis preconditions")
-    section("steps", "Steps to reproduce", code=_text(finding.get("poc")),
-            source="the reporter's proof of concept")
+    rep = w.get("reproduction") or {}
+    if rep:
+        steps = [{**step, "evidence": [{"digest": d, "label": labels.get(d, "E?")}
+                                       for d in step.get("evidence") or []]}
+                 for step in rep.get("steps") or []]
+        sections.append({"key": "reproduction", "title": "Reproduction steps",
+                         "origin": owned("reproduction"), "reproduction": {**rep, "steps": steps}})
+    else:
+        preconditions = [_text(p) for p in contract.get("preconditions") or [] if _text(p)]
+        poc = _text(finding.get("poc"))
+        entry = {"key": "reproduction", "title": "Reproduction steps"}
+        if preconditions or poc:
+            entry.update(origin="derived",
+                         source="the hypothesis preconditions and the reporter's PoC")
+            if preconditions:
+                entry["reproduction"] = {"prerequisites": "; ".join(preconditions), "steps": []}
+            if poc:
+                entry["code"] = poc
+        else:
+            entry["origin"] = "missing"
+        sections.append(entry)
 
-    proof = []
-    proof.append("Independent validator: " + (validator or "no conclusion").replace("_", " "))
-    proof.append("Operator decision: " + (operator or "not decided yet"))
+    proof = ["Independent validator: " + (validator or "no conclusion").replace("_", " "),
+             "Operator decision: " + (operator or "not decided yet")]
     for key, label in CAUSALITY:
         claim = causality.get(key) or {}
         if _text(claim.get("summary")):
@@ -186,58 +183,40 @@ def build(finding: dict, *, writeup: dict | None = None, hypothesis: dict | None
         proof.append(f"Hypothesis {tested.get('hypothesis_id', '')} {tested.get('outcome', '')}: "
                      f"{_text(tested['note'])}")
     for t in transactions:
-        proof.append(f"HTTP {t.get('method', '')} {t.get('path', '')} -> {t.get('status', '')} "
-                     f"({t.get('digest', '')})")
+        proof.append(f"{labels.get(t.get('digest'), 'E?')} HTTP {t.get('method', '')} "
+                     f"{t.get('path', '')} -> {t.get('status', '')} ({t.get('digest', '')})")
     for a in artifacts:
-        proof.append(f"Artifact {a.get('bytes', '?')} bytes ({a.get('digest', '')})")
-    section("proof", "Proof", items=proof, source="validation, causality and evidence records")
-    section("remediation", "Remediation", operator_text=w.get("remediation"))
+        proof.append(f"{labels.get(a.get('digest'), 'E?')} artifact {a.get('bytes', '?')} bytes "
+                     f"({a.get('digest', '')})")
+    if (w.get("http_exception") or {}).get("reason"):
+        proof.append(f"No HTTP exchange: {w['http_exception']['reason']}")
+    sections.append({"key": "evidence", "title": "Evidence", "origin": "derived",
+                     "source": "validation, causality and evidence records", "items": proof})
+    text_section("remediation", "Remediation")
 
-    references = [{"url": cwe["url"], "title": f"{cwe['id']}: {cwe['name'] or 'weakness'}"}] if cwe else []
-    references += [r for r in w.get("references") or [] if isinstance(r, dict) and r.get("url")]
+    refs = list(w.get("references") or [])
+    for c in cwes:
+        if c.get("id") and not any(r.get("url") == _cwe_url(c["id"]) for r in refs):
+            refs.append({"url": _cwe_url(c["id"]), "title": f"{c['id']}: {c.get('name') or 'weakness'}"})
     sections.append({"key": "references", "title": "References",
-                     "origin": "operator" if w.get("references") else "derived" if references else "missing",
-                     "items": [f"{r.get('title') or r['url']}: {r['url']}" for r in references],
-                     "links": references})
+                     "origin": owned("references") if w.get("references")
+                     else "derived" if refs else "missing", "links": refs})
 
-    by_key = {s["key"]: s for s in sections}
-    has_proof = bool(transactions or artifacts or any(causality.get(k) for k, _ in CAUSALITY))
-    checks = [
-        ("severity", "Severity is set", bool(severity), True,
-         "Set a severity (the reporter's rating is a claim until you confirm it)."),
-        ("cwe", "Weakness (CWE) is named", bool(cwe), True, "Name the CWE."),
-        ("product", "Affected product and version are stated",
-         facts["product"]["origin"] == "operator" and bool(versions), True,
-         "Write the product and affected versions; the arena's scenario name is only a hint."),
-        ("impact", "Impact is written", by_key["impact"]["origin"] == "operator", True,
-         "Write the impact: attacker capability, affected asset, consequence."),
-        ("description", "Description is present", by_key["description"]["origin"] != "missing", True,
-         "Describe the vulnerable component and the root cause."),
-        ("steps", "Steps to reproduce are present", by_key["steps"]["origin"] != "missing", True,
-         "The finding has no proof of concept."),
-        ("proof", "Evidence is attached", has_proof, True,
-         "Attach an HTTP transaction, an artifact or a causality claim."),
-        ("remediation", "Remediation is written", by_key["remediation"]["origin"] == "operator", True,
-         "Write the fix: what to check, where, against which policy."),
-        ("verified", "Technically verified", verified, True,
-         "Confirm the finding (or wait for the validator) before you send it."),
-        ("cvss", "CVSS vector", bool(facts["cvss_vector"]["value"]), False,
-         "Optional: add a CVSS 3.1 vector."),
-    ]
-    readiness = [{"id": i, "label": label, "ok": ok, "blocking": blocking,
-                  "message": None if ok else message}
-                 for i, label, ok, blocking, message in checks]
     report = {
         "id": finding.get("finding_id"), "title": _text(finding.get("title")) or "Untitled finding",
-        "cwe": cwe, "facts": facts, "sections": sections,
-        "verdict": {"validator": validator, "operator": operator, "verified": verified},
+        "facts": facts, "sections": sections,
+        "verdict": {"validator": validator, "operator": operator},
         "reported_at": finding.get("ts"), "reported_by": finding.get("actor"),
         "arena": {"id": arena.get("id"), "name": arena.get("name")},
-        "readiness": {"ready": all(c["ok"] for c in readiness if c["blocking"]),
-                      "missing": [c["id"] for c in readiness if c["blocking"] and not c["ok"]],
-                      "checks": readiness},
-        "writeup": w, "updated_by": (writeup or {}).get("actor"),
-        "updated_at": (writeup or {}).get("ts"),
+        "readiness": view.get("readiness") or {"ready": False, "missing": [], "checks": []},
+        "writeup": w, "origin": owner, "updated": view.get("updated"),
+        "evidence_options": [
+            {"digest": t["digest"], "label": labels.get(t["digest"], "E?"),
+             "what": f"HTTP {t.get('method', '')} {t.get('path', '')} -> {t.get('status', '')}"}
+            for t in transactions if t.get("digest")] + [
+            {"digest": a["digest"], "label": labels.get(a["digest"], "E?"),
+             "what": f"artifact {a.get('bytes', '?')} bytes"}
+            for a in artifacts if a.get("digest")],
     }
     report["markdown"] = markdown(report)
     report["cve_request"] = cve_request(report)
@@ -248,34 +227,25 @@ def _cell(value) -> str:
     return str(value or "Not stated").replace("|", "\\|").replace("\n", " ")
 
 
-def _fence(code: str) -> str:
+def _fence(code: str, language: str = "text") -> str:
     longest = max((len(m) for m in re.findall(r"`{3,}", code)), default=2)
     ticks = "`" * max(3, longest + 1)
-    return f"{ticks}text\n{code}\n{ticks}"
+    return f"{ticks}{language}\n{code}\n{ticks}"
 
 
 def markdown(report: dict) -> str:
     f = report["facts"]
-    cwe = report.get("cwe") or {}
     severity = (f["severity"]["value"] or "not rated").capitalize()
     if f["cvss_vector"]["value"]:
         severity += f" ({f['cvss_vector']['value']})"
-    verdict = report["verdict"]
-    rows = [
-        ("Report ID", report.get("id")),
-        ("Severity", severity),
-        ("Weakness", f"{cwe['id']}: {cwe['name']}" if cwe.get("name") else cwe.get("id")),
-        ("Vendor", f["vendor"]["value"]),
-        ("Product", f["product"]["value"]),
-        ("Affected versions", f["affected_versions"]["value"]),
-        ("Fixed versions", f["fixed_versions"]["value"]),
-        ("Component", f["component"]["value"]),
-        ("Attack type", ATTACK_TYPES.get(f["attack_type"]["value"] or "", None)),
-        ("Impact type", IMPACT_TYPES.get(f["impact_type"]["value"] or "", None)),
-        ("Discovered by", f["discoverer"]["value"]),
-        ("Reported", report.get("reported_at")),
-        ("Verification", "verified" if verdict["verified"] else "not verified"),
-    ]
+    rows = [("Report ID", report.get("id")), ("Severity", severity),
+            ("Weakness", f["cwe"]["value"]), ("Affected assets", f["affected_assets"]["value"]),
+            ("Vendor", f["vendor"]["value"]), ("Product", f["product"]["value"]),
+            ("Affected versions", f["affected_versions"]["value"]),
+            ("Fixed versions", f["fixed_versions"]["value"]),
+            ("Attack type", ATTACK_TYPES.get(f["attack_type"]["value"] or "")),
+            ("Impact type", IMPACT_TYPES.get(f["impact_type"]["value"] or "")),
+            ("Discovered by", f["discoverer"]["value"]), ("Reported", report.get("reported_at"))]
     out = [f"# {report['title']}", "", "| Field | Value |", "|---|---|"]
     out += [f"| {k} | {_cell(v)} |" for k, v in rows]
     for s in report["sections"]:
@@ -285,6 +255,19 @@ def markdown(report: dict) -> str:
             continue
         if s.get("text"):
             out.append(s["text"])
+        rep = s.get("reproduction")
+        if rep:
+            if rep.get("prerequisites"):
+                out.append(f"- Prerequisites: {rep['prerequisites']}")
+            if rep.get("auth_role"):
+                out.append(f"- Authentication role: {rep['auth_role']}")
+            for i, step in enumerate(rep.get("steps") or [], 1):
+                cites = ", ".join(e["label"] for e in step.get("evidence") or [])
+                out.append(f"{i}. {step['action']}" + (f" (evidence {cites})" if cites else ""))
+                if step.get("expected"):
+                    out.append(f"   - Expected: {step['expected']}")
+            if rep.get("cleanup"):
+                out.append(f"- Cleanup: {rep['cleanup']}")
         if s.get("code"):
             out.append(_fence(s["code"]))
         if s["key"] == "references":
@@ -298,21 +281,21 @@ def cve_request(report: dict) -> str:
     """The report in the fields of the public CVE request form."""
     f = report["facts"]
     sections = {s["key"]: s for s in report["sections"]}
-    cwe = report.get("cwe") or {}
-    impact = f["impact_type"]["value"]
-    steps = sections["steps"].get("code") or ""
-    vector = next((line.strip() for line in steps.splitlines() if line.strip()), "")
+    rep = sections["reproduction"].get("reproduction") or {}
+    vector = next((step["action"].splitlines()[0] for step in rep.get("steps") or []), "") \
+        or next((line.strip() for line in (sections["reproduction"].get("code") or "").splitlines()
+                 if line.strip()), "")
     refs = [r["url"] for r in sections["references"].get("links") or []]
     fields = [
         ("Suggested description", sections["summary"].get("text")),
-        ("Vulnerability type", " / ".join(x for x in (cwe.get("id"), cwe.get("name")) if x) or None),
+        ("Vulnerability type", f["cwe"]["value"]),
         ("Vendor of the product", f["vendor"]["value"]),
         ("Affected product code base",
          " ".join(x for x in (f["product"]["value"], f["affected_versions"]["value"]) if x) or None),
         ("Fixed versions", f["fixed_versions"]["value"]),
-        ("Affected component", f["component"]["value"]),
-        ("Attack type", ATTACK_TYPES.get(f["attack_type"]["value"] or "", None)),
-        ("Impact", IMPACT_TYPES.get(impact or "", None)),
+        ("Affected component", f["affected_assets"]["value"]),
+        ("Attack type", ATTACK_TYPES.get(f["attack_type"]["value"] or "")),
+        ("Impact", IMPACT_TYPES.get(f["impact_type"]["value"] or "")),
         ("CVSS", f["cvss_vector"]["value"]),
         ("Attack vectors", vector or None),
         ("Impact details", sections["impact"].get("text")),

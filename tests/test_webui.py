@@ -3052,15 +3052,13 @@ def test_ux20_copilot_turn_relays_the_stream_and_strips_unknown_fields(client, m
 
 
 def test_ux24_report_routes_assemble_and_save_the_writeup(client, monkeypatch):
-    """UX-24: the report reads findings, verdicts, write-ups and hypothesis
-    records by type, links the hypothesis through finding_ids, and the write-up
-    form posts through the orchestrator (CSRF required) then returns the report."""
+    """UX-24/25: the report reads findings, verdicts and hypothesis records by
+    type, the write-up view from the orchestrator (sections, owners,
+    readiness), links the hypothesis through finding_ids, and the editor posts
+    a {patch} through the orchestrator (CSRF required)."""
     import app as webui
 
     events = [
-        {"type": "finding_writeup", "ts": "2026-11-26 12:00:00", "lab_id": "a1",
-         "payload": {"finding_id": "f1", "actor": "admin",
-                     "sections": {"impact": "Runs code", "product": "CMS"}}},
         {"type": "hypothesis_tested", "ts": "2026-11-26 10:53:00", "lab_id": "a1",
          "payload": {"hypothesis_id": "H-1", "outcome": "supported", "note": "worked",
                      "finding_ids": ["f1"]}},
@@ -3082,17 +3080,21 @@ def test_ux24_report_routes_assemble_and_save_the_writeup(client, monkeypatch):
             return {"a1": {"user_id": "cms arena", "status": "active"}}, True
         return events_get(path, timeout)
 
+    view = {"sections": {"impact": "Runs code"}, "origin": {"impact": "agent"},
+            "readiness": {"ready": False, "missing": ["remediation is missing"], "checks": []}}
     monkeypatch.setattr(webui, "_api_get", fake_get)
+    monkeypatch.setattr(webui, "_api_get_status", lambda path, timeout=10: (
+        (view, 200) if path == "/arenas/a1/findings/f1/writeup" else ({"error": "x"}, 404)))
     token = _csrf_token(client)
     assert _login(client).status_code == 302
     report = client.get("/api/console/arenas/a1/findings/f1/report").get_json()
     sections = {s["key"]: s for s in report["sections"]}
-    assert sections["impact"] == {"key": "impact", "title": "Impact", "origin": "operator",
+    assert sections["impact"] == {"key": "impact", "title": "Impact", "origin": "agent",
                                   "text": "Runs code"}
     assert "Never execute exports." in sections["description"]["text"]
-    assert sections["prerequisites"]["items"] == ["author"]
+    assert sections["reproduction"]["reproduction"]["prerequisites"] == "author"
     assert report["arena"] == {"id": "a1", "name": "cms arena"}
-    assert "remediation" in report["readiness"]["missing"]
+    assert report["readiness"]["missing"] == ["remediation is missing"]
     md = client.get("/api/console/arenas/a1/findings/f1/report.md")
     assert md.mimetype == "text/markdown" and b"## Impact\n\nRuns code" in md.data
     assert "attachment" in md.headers["Content-Disposition"]
@@ -3102,8 +3104,10 @@ def test_ux24_report_routes_assemble_and_save_the_writeup(client, monkeypatch):
     monkeypatch.setattr(webui, "_api_post", lambda path, body: (sent.append((path, body))
                                                                 or {"finding_id": "f1"}, 200))
     assert client.post("/api/console/arenas/a1/findings/f1/writeup",
-                       json={"impact": "x"}).status_code == 400  # no CSRF token
-    r = client.post("/api/console/arenas/a1/findings/f1/writeup", json={"remediation": "Fix"},
-                    headers={"X-CSRFToken": token})
+                       json={"patch": {"impact": "x"}}).status_code == 400  # no CSRF token
+    assert client.post("/api/console/arenas/a1/findings/f1/writeup", json={"impact": "x"},
+                       headers={"X-CSRFToken": token}).status_code == 422
+    r = client.post("/api/console/arenas/a1/findings/f1/writeup",
+                    json={"patch": {"remediation": "Fix"}}, headers={"X-CSRFToken": token})
     assert r.status_code == 200 and r.get_json()["id"] == "f1"
-    assert sent == [("/arenas/a1/findings/f1/writeup", {"remediation": "Fix"})]
+    assert sent == [("/arenas/a1/findings/f1/writeup", {"patch": {"remediation": "Fix"}})]
