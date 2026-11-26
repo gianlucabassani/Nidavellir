@@ -1,89 +1,161 @@
-/* UX-13: command palette. */
+/* UX-13 command palette, UX-16 window: it opens at the top centre, just under
+   the top bar, as one search field over grouped results. */
 .palette {
-  width: min(640px, calc(100vw - 32px));
-  max-height: min(70vh, 560px);
-  margin: 12vh auto auto;
+  width: min(680px, calc(100vw - 24px));
+  max-height: min(72vh, 600px);
+  margin: calc(var(--top) + var(--braid) + 20px) auto auto;
   padding: 0;
-  border: 1px solid var(--line);
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-top: 2px solid var(--gold);
   background: var(--surface);
   color: var(--ink);
-  box-shadow: 0 24px 60px #0004;
+  box-shadow: 0 24px 64px #0005;
 }
 .palette[open] {
   display: flex;
   flex-direction: column;
+  animation: palette-in 0.14s ease-out;
+}
+@keyframes palette-in {
+  from {
+    transform: translateY(-8px);
+    opacity: 0;
+  }
 }
 .palette::backdrop {
-  background: #0006;
+  background: #0b0f1a66;
+  backdrop-filter: blur(2px);
 }
-.palette-input {
-  width: 100%;
-  padding: 16px 18px;
-  border: 0;
+.palette-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: 0 var(--s4);
   border-bottom: 1px solid var(--line);
+  color: var(--muted);
+}
+.palette-head .palette-input {
+  flex: 1;
+  min-width: 0;
+  height: 52px;
+  padding: 0;
+  border: 0;
   background: transparent;
   color: var(--ink);
-  font-size: 16px;
+  font: 400 var(--t-head) / 1 var(--f-sans);
 }
-.palette-input:focus {
+.palette-head .palette-input:focus {
   outline: none;
-  box-shadow: inset 0 -2px 0 var(--gold);
+}
+.palette-esc,
+.palette-foot kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  background: var(--inset);
+  color: var(--muted);
+  font: 500 var(--t-micro) / 1.4 var(--f-mono);
 }
 .palette-status {
   min-height: 0;
-  padding: 0 18px;
+  padding: 0 var(--s4);
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--t-meta);
 }
 .palette-status:not(:empty) {
-  padding: 6px 18px;
+  padding: 6px var(--s4);
+  border-bottom: 1px solid var(--line-soft);
 }
 .palette-list {
   flex: 1;
   margin: 0;
-  padding: 4px 0;
+  padding: var(--s1) 0 var(--s2);
   overflow: auto;
   list-style: none;
 }
 .palette-group {
-  padding: 8px 18px 4px;
-  color: var(--subtle);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.12em;
+  padding: var(--s3) var(--s4) var(--s1);
+  color: var(--muted);
+  font: 500 var(--t-micro) / 1.3 var(--f-mono);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 .palette-item {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 18px;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 36px;
+  margin: 0 var(--s2);
+  padding: 0 var(--s3);
   cursor: pointer;
 }
-.palette-item span {
+.palette-item > .icon {
+  flex: none;
+  color: var(--muted);
+}
+.palette-label {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .palette-item small {
   flex-shrink: 0;
-  max-width: 45%;
+  max-width: 40%;
   overflow: hidden;
   color: var(--muted);
+  font: 400 var(--t-meta) var(--f-mono);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.palette-enter {
+  display: inline-grid;
+  visibility: hidden;
+  color: var(--muted);
+}
 .palette-item.active {
-  background: var(--accent-soft);
-  box-shadow: inset 3px 0 0 var(--gold);
+  background: var(--gold-wash);
+  box-shadow: inset 2px 0 0 var(--gold-deep);
+}
+.palette-item.active > .icon {
+  color: var(--gold-deep);
+}
+.palette-item.active .palette-enter {
+  visibility: visible;
 }
 .palette-empty {
-  padding: 14px 18px;
+  padding: var(--s4);
   color: var(--muted);
 }
 .palette-foot {
-  padding: 8px 18px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s4);
+  padding: var(--s2) var(--s4);
   border-top: 1px solid var(--line-soft);
-  color: var(--subtle);
-  font-size: 11px;
+  background: var(--inset);
+  color: var(--muted);
+  font-size: var(--t-meta);
+}
+.palette-foot span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.palette-tip {
+  margin-left: auto;
+}
+.palette-tip code {
+  font-size: var(--t-micro);
+}
+@media (max-width: 600px) {
+  .palette {
+    margin-top: calc(var(--top) + var(--braid) + 8px);
+  }
+  .palette-tip {
+    display: none;
+  }
 }

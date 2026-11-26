@@ -145,6 +145,18 @@ export function readDismissed(): string[] {
 // UX-16: the top bar's attention count follows dismissals made on the board.
 const DISMISSED_EVENT = "nv:board-dismissed";
 
+/** Dismiss inbox items in this browser; every open view follows. */
+export function dismissInbox(keys: string[]): string[] {
+  const next = [...new Set([...readDismissed(), ...keys])].slice(-500);
+  try {
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify(next));
+  } catch {
+    /* storage may be unavailable */
+  }
+  window.dispatchEvent(new Event(DISMISSED_EVENT));
+  return next;
+}
+
 export function onDismissedChange(listener: (keys: string[]) => void) {
   const handler = () => listener(readDismissed());
   window.addEventListener(DISMISSED_EVENT, handler);
@@ -277,16 +289,8 @@ function ArenaRows({
 function Inbox({ board, now }: { board: Board; now: number }) {
   const [dismissed, setDismissed] = useState<string[]>(readDismissed);
   const items = board.inbox.filter((item) => !dismissed.includes(item.key));
-  function dismiss(keys: string[]) {
-    const next = [...new Set([...dismissed, ...keys])].slice(-500);
-    setDismissed(next);
-    try {
-      localStorage.setItem(DISMISSED_KEY, JSON.stringify(next));
-    } catch {
-      /* storage may be unavailable */
-    }
-    window.dispatchEvent(new Event(DISMISSED_EVENT));
-  }
+  useEffect(() => onDismissedChange(setDismissed), []);
+  const dismiss = (keys: string[]) => setDismissed(dismissInbox(keys));
   return (
     <Panel
       eyebrow="ATTENTION"

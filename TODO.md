@@ -441,9 +441,8 @@ Order: data model first, then views.
   format spec and verifier, OTLP export guide, agent quickstarts, docs by audience.
   FR-39 (first held-out challenge) is NV-15.
 
-Source for FR-numbered items: Fable review 2026-11-16 (archived at
-`AgentData/nidavellir/archive/pre-consolidation-20261117/fable/FABLE_REVIEW.md`, outside
-the repo); acceptance lines there apply unless amended here. Its line numbers and baseline
+Source for FR-numbered items: Fable review 2026-11-16 (archived outside the repo);
+acceptance lines there apply unless amended here. Its line numbers and baseline
 commit are stale; locate code by symbol.
 
 ## Next — research usability

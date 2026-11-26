@@ -4894,8 +4894,7 @@ summary:focus-visible {
   opacity: 0.6;
   cursor: not-allowed;
 }
-.profile, .forge-trace, .forge-lifecycle-menu))
-  > summary {
+:where(details:not(.profile, .forge-trace, .forge-lifecycle-menu)) > summary {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -4904,11 +4903,11 @@ summary:focus-visible {
   color: var(--accent);
   font-weight: 600;
 }
-.profile, .forge-trace, .forge-lifecycle-menu))
+:where(details:not(.profile, .forge-trace, .forge-lifecycle-menu))
   > summary::-webkit-details-marker {
   display: none;
 }
-.profile, .forge-trace, .forge-lifecycle-menu))
+:where(details:not(.profile, .forge-trace, .forge-lifecycle-menu))
   > summary::before {
   content: "";
   width: 0;
@@ -4918,11 +4917,7 @@ summary:focus-visible {
   border-left: 6px solid currentColor;
   transition: transform 120ms ease-out;
 }
-.profile,
-        .forge-trace,
-        .forge-lifecycle-menu
-      )
-  )
+:where(details[open]:not(.profile, .forge-trace, .forge-lifecycle-menu))
   > summary::before {
   transform: rotate(90deg);
 }

@@ -1,8 +1,9 @@
 // UX-16 browser check: the Forge shell. Every workspace page and an arena
 // render inside the new shell in both themes; the sidebar foot stays visible
-// while its menu scrolls; the logo goes home; the agents and attention
-// drawers open from live board data; nothing scrolls sideways at desktop or
-// phone width. Runs against a mock stack with one seeded active arena.
+// while its menu scrolls; the logo goes home; the agents drawer and the
+// attention dropdown open from live board data; search opens as a window at
+// the top centre and moves by keyboard; nothing scrolls sideways at desktop
+// or phone width. Runs against a mock stack with one seeded active arena.
 // NV_UX16_CONFIG: {"arena"} (an active arena id).
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -132,10 +133,58 @@ const PAGES = [
     await shot('drawer-agents');
     await page.keyboard.press('Escape');
     assert.equal(await drawer.count(), 0);
-    await page.locator('.topbar button[aria-label^="Needs attention"]').click();
-    await page.getByRole('dialog').getByText('Needs attention').waitFor();
+    checks.push('the agents drawer opens from the live board and closes with Escape');
+
+    // Attention drops down from the bell, top right; dismissing updates the count.
+    const bell = page.locator('.topbar button[aria-label^="Needs attention"]');
+    await bell.click();
+    const menu2 = page.getByRole('region', {name: 'Needs attention'});
+    await menu2.waitFor();
+    const geo = await page.evaluate(() => {
+      const b = document.querySelector('.bell > button').getBoundingClientRect();
+      const m = document.querySelector('.bell-menu').getBoundingClientRect();
+      return {bellRight: b.right, menuRight: m.right, menuTop: m.top, bellBottom: b.bottom, vw: innerWidth};
+    });
+    assert.ok(Math.abs(geo.menuRight - geo.bellRight) < 2, 'dropdown aligned to the bell');
+    assert.ok(geo.menuTop > geo.bellBottom && geo.menuTop < geo.bellBottom + 20, 'dropdown opens under the bell');
+    assert.ok(geo.menuRight > geo.vw - 40, 'dropdown sits at the top right');
+    await shot('attention-dropdown');
+    const before = await menu2.locator('.bell-item').count();
+    if (before > 0) {
+      await menu2.locator('.bell-item .icon-button').first().click();
+      await page.waitForFunction(n => document.querySelectorAll('.bell-item').length === n - 1, before);
+      const label = await bell.getAttribute('aria-label');
+      assert.equal(label, `Needs attention: ${before - 1}`);
+    }
     await page.keyboard.press('Escape');
-    checks.push('agents and attention drawers open from the live board and close with Escape');
+    assert.equal(await menu2.count(), 0);
+    assert.equal(await page.evaluate(() => document.activeElement.closest('.bell') !== null), true, 'focus returns to the bell');
+    await bell.click();
+    await menu2.waitFor();
+    await page.mouse.click(700, 500);
+    assert.equal(await menu2.count(), 0, 'outside click closes the dropdown');
+    checks.push(`attention drops down under the bell at the top right; dismissing updates the count (${before} → ${Math.max(0, before - 1)}); Escape and outside click close it`);
+
+    // Search: a window at the top centre; recent pages when empty; keyboard moves.
+    await page.goto(`${WEB}/console/scenarios`);
+    await page.goto(`${WEB}/console?workspace=benchmark`);
+    await page.locator('.topbar').waitFor();
+    await page.keyboard.press('Control+k');
+    const palette = page.getByRole('dialog', {name: 'Command palette'});
+    await palette.waitFor();
+    const box = await palette.boundingBox();
+    const vw = page.viewportSize().width;
+    assert.ok(Math.abs(box.x + box.width / 2 - vw / 2) < 2, 'search window is centred');
+    assert.ok(box.y > 56 && box.y < 110, `search window opens just under the top bar (top ${Math.round(box.y)})`);
+    await palette.locator('.palette-group', {hasText: 'Recent'}).waitFor();
+    await palette.getByRole('option', {name: /Scenario library/}).waitFor();
+    await shot('search-window');
+    await page.keyboard.type('all eval');
+    await palette.getByRole('option', {name: /All evaluations/}).waitFor();
+    await page.keyboard.press('Enter');
+    await page.waitForURL(/\/console\/evaluations$/);
+    assert.equal(await palette.isVisible(), false);
+    checks.push('Ctrl+K opens search as a centred window under the top bar, lists recent pages, and "all eval" + Enter jumps with 0 clicks');
 
     // Phone width: no sideways scroll; the sidebar is an overlay from the menu button.
     await page.setViewportSize({width: 390, height: 844});

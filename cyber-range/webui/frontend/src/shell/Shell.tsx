@@ -13,6 +13,7 @@ import type { Theme } from "../types";
 import { Rune } from "../ui";
 import {
   ago,
+  dismissInbox,
   isIdle,
   onDismissedChange,
   readDismissed,
@@ -23,7 +24,7 @@ import { Icon } from "./icons";
 import { NAV, WORKSPACES, arenaIdOf, workspaceOf, type NavItem } from "./nav";
 import "./shell.css";
 
-type Drawer = "agents" | "attention" | null;
+type Drawer = "agents" | null;
 
 function csrfToken() {
   return (
@@ -164,21 +165,12 @@ export function Shell({
             </button>
             {/* The co-pilot launcher portals here (shared/assistant.tsx). */}
             <div id="assistant-slot" className="assistant-slot" />
-            <button
-              type="button"
-              className="tbtn"
-              aria-haspopup="dialog"
-              aria-expanded={drawer === "attention"}
-              aria-label={`Needs attention: ${attention.length}`}
-              onClick={() =>
-                setDrawer(drawer === "attention" ? null : "attention")
-              }
-            >
-              <Icon name="bell" />
-              {attention.length > 0 && (
-                <span className="tbtn-count">{attention.length}</span>
-              )}
-            </button>
+            <AttentionMenu
+              items={attention}
+              loading={!board}
+              now={now}
+              location={location}
+            />
           </div>
         </header>
         <div className="braid" aria-hidden="true" />
@@ -217,10 +209,8 @@ export function Shell({
             onClick={() => setDrawer(null)}
             aria-hidden="true"
           />
-          <ShellDrawer
-            kind={drawer}
+          <AgentsDrawer
             board={board}
-            attention={attention}
             now={now}
             onClose={() => setDrawer(null)}
           />
@@ -412,23 +402,145 @@ const KIND_LABEL: Record<string, string> = {
   trial_finished: "Trial finished",
 };
 
-function ShellDrawer({
-  kind,
+function inboxHref(item: Board["inbox"][number]) {
+  return item.arena_id
+    ? `/console/arena/${encodeURIComponent(item.arena_id)}?tab=live`
+    : item.evaluation_id
+      ? `/console/evaluations/${encodeURIComponent(item.evaluation_id)}`
+      : "/console/board";
+}
+
+// The bell opens a panel that drops down from the top right, under the bell.
+function AttentionMenu({
+  items,
+  loading,
+  now,
+  location,
+}: {
+  items: Board["inbox"];
+  loading: boolean;
+  now: number;
+  location: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  useEffect(() => setOpen(false), [location]);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (event: MouseEvent) => {
+      if (!wrap.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      button.current?.focus();
+    };
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+  return (
+    <div className="bell" ref={wrap}>
+      <button
+        ref={button}
+        type="button"
+        className="tbtn"
+        aria-haspopup="true"
+        aria-expanded={open}
+        aria-controls="attention-menu"
+        aria-label={`Needs attention: ${items.length}`}
+        onClick={() => setOpen(!open)}
+      >
+        <Icon name="bell" />
+        {items.length > 0 && <span className="tbtn-count">{items.length}</span>}
+      </button>
+      {open && (
+        <section
+          id="attention-menu"
+          className="bell-menu"
+          aria-label="Needs attention"
+        >
+          <header className="bell-head">
+            <div>
+              <div className="label">Needs attention</div>
+              <h2>
+                {loading
+                  ? "Loading…"
+                  : items.length
+                    ? `${items.length} waiting for you`
+                    : "Nothing waiting"}
+              </h2>
+            </div>
+            {items.length > 1 && (
+              <button
+                type="button"
+                className="bell-clear"
+                onClick={() => dismissInbox(items.map((item) => item.key))}
+              >
+                Dismiss all
+              </button>
+            )}
+          </header>
+          {items.length ? (
+            <ul className="bell-list">
+              {items.map((item) => (
+                <li key={item.key} className={`bell-item kind-${item.kind}`}>
+                  <a href={inboxHref(item)}>
+                    <span className="label">
+                      {KIND_LABEL[item.kind] || item.kind.replaceAll("_", " ")}
+                    </span>
+                    <b>{item.text}</b>
+                    <small>
+                      {item.arena_name || item.arena_id || "Platform"} ·{" "}
+                      {ago(item.at, now)}
+                    </small>
+                  </a>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={`Dismiss: ${item.text}`}
+                    title="Dismiss"
+                    onClick={() => dismissInbox([item.key])}
+                  >
+                    <Icon name="x" size={13} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="bell-empty">
+              {loading
+                ? "Fetching the live board."
+                : "Failed arenas, verdicts, budget exhaustion, stops and finished trials appear here."}
+            </p>
+          )}
+          <footer className="bell-foot">
+            <span>Newest first · dismissals stay in this browser</span>
+            <a href="/console/board">Agents board</a>
+          </footer>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function AgentsDrawer({
   board,
-  attention,
   now,
   onClose,
 }: {
-  kind: "agents" | "attention";
   board: Board | null;
-  attention: Board["inbox"];
   now: number;
   onClose: () => void;
 }) {
   const panel = useRef<HTMLElement>(null);
   useEffect(() => {
     panel.current?.focus();
-  }, [kind]);
+  }, []);
   const arenas = board
     ? board.arenas.filter((arena) => arena.agents.length)
     : [];
@@ -443,15 +555,9 @@ function ShellDrawer({
     >
       <div className="drawer-head">
         <div>
-          <div className="label">
-            {kind === "agents" ? "Connected now" : "Needs attention"}
-          </div>
+          <div className="label">Connected now</div>
           <h2 id="shell-drawer-title">
-            {kind === "agents"
-              ? `${arenas.reduce((n, a) => n + a.agents.length, 0)} agents in ${arenas.length} arenas`
-              : attention.length
-                ? `${attention.length} waiting for you`
-                : "Nothing waiting"}
+            {`${arenas.reduce((n, a) => n + a.agents.length, 0)} agents in ${arenas.length} arenas`}
           </h2>
         </div>
         <button
@@ -466,87 +572,56 @@ function ShellDrawer({
       <div className="drawer-body">
         {!board ? (
           <p className="drawer-empty">Loading live board…</p>
-        ) : kind === "agents" ? (
-          arenas.length ? (
-            arenas.map((arena) => {
-              const quiet = isIdle(arena, board, now);
-              return (
-                <a
-                  key={arena.id}
-                  className={`drawer-agent ${arena.budget.stopped ? "wait" : quiet ? "idle" : "run"}`}
-                  href={`/console/arena/${encodeURIComponent(arena.id)}?tab=live`}
-                >
-                  <span className="drawer-agent-head">
-                    <Icon name="agent" />
-                    <b>{arena.agents.map((agent) => agent.name).join(", ")}</b>
-                    <span className="drawer-state">
-                      {arena.budget.stopped
-                        ? "Needs you"
-                        : arena.agents.every((agent) => agent.paused)
-                          ? "Paused"
-                          : quiet
-                            ? `Idle > ${board.idle_minutes} min`
-                            : "Working"}
-                    </span>
-                  </span>
-                  <span className="drawer-now">
-                    {arena.last_action
-                      ? `${arena.last_action.name} · ${arena.last_action.status}`
-                      : "No action yet"}
-                  </span>
-                  <span className="drawer-meta">
-                    <span>{arena.name}</span>
-                    <span>
-                      {arena.last_action ? ago(arena.last_action.at, now) : "—"}
-                    </span>
-                    <span>
-                      {arena.budget.remaining == null
-                        ? "Budget unavailable"
-                        : `${arena.budget.remaining} of ${arena.budget.cap} left`}
-                    </span>
-                  </span>
-                </a>
-              );
-            })
-          ) : (
-            <p className="drawer-empty">
-              No agent is connected. Create a scoped key on an arena&apos;s
-              Agent access page.
-            </p>
-          )
-        ) : attention.length ? (
-          attention.map((item) => {
-            const href = item.arena_id
-              ? `/console/arena/${encodeURIComponent(item.arena_id)}?tab=live`
-              : item.evaluation_id
-                ? `/console/evaluations/${encodeURIComponent(item.evaluation_id)}`
-                : "/console/board";
+        ) : arenas.length ? (
+          arenas.map((arena) => {
+            const quiet = isIdle(arena, board, now);
             return (
               <a
-                key={item.key}
-                className={`drawer-item kind-${item.kind}`}
-                href={href}
+                key={arena.id}
+                className={`drawer-agent ${arena.budget.stopped ? "wait" : quiet ? "idle" : "run"}`}
+                href={`/console/arena/${encodeURIComponent(arena.id)}?tab=live`}
               >
-                <span className="label">
-                  {KIND_LABEL[item.kind] || item.kind}
+                <span className="drawer-agent-head">
+                  <Icon name="agent" />
+                  <b>{arena.agents.map((agent) => agent.name).join(", ")}</b>
+                  <span className="drawer-state">
+                    {arena.budget.stopped
+                      ? "Needs you"
+                      : arena.agents.every((agent) => agent.paused)
+                        ? "Paused"
+                        : quiet
+                          ? `Idle > ${board.idle_minutes} min`
+                          : "Working"}
+                  </span>
                 </span>
-                <b>{item.text}</b>
-                <small>
-                  {item.arena_name || item.arena_id || "Platform"} ·{" "}
-                  {ago(item.at, now)}
-                </small>
+                <span className="drawer-now">
+                  {arena.last_action
+                    ? `${arena.last_action.name} · ${arena.last_action.status}`
+                    : "No action yet"}
+                </span>
+                <span className="drawer-meta">
+                  <span>{arena.name}</span>
+                  <span>
+                    {arena.last_action ? ago(arena.last_action.at, now) : "—"}
+                  </span>
+                  <span>
+                    {arena.budget.remaining == null
+                      ? "Budget unavailable"
+                      : `${arena.budget.remaining} of ${arena.budget.cap} left`}
+                  </span>
+                </span>
               </a>
             );
           })
         ) : (
           <p className="drawer-empty">
-            Failed arenas, verdicts, budget exhaustion, stops and finished
-            trials appear here.
+            No agent is connected. Create a scoped key on an arena&apos;s Agent
+            access page.
           </p>
         )}
       </div>
       <div className="drawer-foot">
-        <span>{kind === "agents" ? "Pushed live" : "Newest first"}</span>
+        <span>Pushed live</span>
         <a href="/console/board">Open the agents board</a>
       </div>
     </aside>
