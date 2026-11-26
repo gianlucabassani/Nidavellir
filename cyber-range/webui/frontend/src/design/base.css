@@ -254,6 +254,25 @@ textarea {
   color: var(--ink);
   font-size: var(--t-ui);
 }
+/* UX-23: field geometry for text inputs without a component class, so a bare
+   input (the Live search, ledger filters) matches the selects beside it
+   instead of the browser's inset box. :where() keeps it at zero specificity:
+   any component rule still wins. */
+:where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+      [type="file"]
+    ):not([type="color"]),
+  textarea
+) {
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 7px 10px;
+  border-width: 1px;
+  border-style: solid;
+}
+:where(textarea) {
+  line-height: 1.45;
+}
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
 select:focus,
 textarea:focus {

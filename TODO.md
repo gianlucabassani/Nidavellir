@@ -439,6 +439,7 @@ Order: data model first, then views.
   - Self-reported gateway calls fold into the enforced call they duplicate; the List view keeps every span.
   - Route chips focus one branch. Replay grows the tree; scrub and Back to live as before.
   - Browser check: `scripts/ux22-browser-check.cjs`.
+- [x] **UX-23 — Bare fields in the Forge theme (#85).** Text inputs without a component class (the arena Live search, ledger filters) take the field geometry of the selects beside them instead of the browser's inset box. Asserted in `scripts/ux16-browser-check.cjs`.
 - [ ] **UX-21 — Benchmark lobby and live match (future, #78).** Game-like screens for every evaluation run:
   - a "Waiting for an agent to join" lobby: harness and agent cards from the reported client identity and the registered build; operators mark each side Ready, then start;
   - a live match: one actions-over-time chart for both sides with findings marked, observability (tokens, model calls, errors, budget) and a live classification scoreboard;
