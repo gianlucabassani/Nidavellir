@@ -415,9 +415,15 @@ Order: data model first, then views.
   - Severity tiles and a decision filter narrow the list; `?finding=<id>` opens a row on arrival.
   - Findings take an optional reporter `severity` (critical, high, medium, low or info): the API, the MCP tool and the operator form all accept it. It is shown as a claim and never scored.
   - Browser check: `scripts/ux18-browser-check.cjs`.
-- [ ] **UX-19 — Live timeline, the forge line.** The target spine with one strand per
-  agent, warped time with folded silences, failure knots and finding marks, replay with
-  a scrubber and speed, filters by kind, agent and text, and a pinned step pane.
+- [x] **UX-19 — Live timeline, the forge line.**
+  - The arena Live view opens on a timeline:
+    - the target spine, with one strand per actor;
+    - warped time, with silences folded;
+    - pills by family and duration, model rings, failure knots, finding marks on the spine, and threads for steps that touched the target.
+  - Replay: a scrubber, 1×/2×/4× speed and Back to live.
+  - Hover previews a step; a click or the arrow keys select it into the inspector.
+  - The List view keeps every step, plus the waterfall.
+  - Browser check: `scripts/ux19-browser-check.cjs`.
 - [ ] **UX-20 — Copilot side panel.** Docked right under the top bar, resizable, stays
   open while navigating. New chat, opt-in page context, streaming answers from the
   operator's own model connection. Anything the backend does not support yet (stored
