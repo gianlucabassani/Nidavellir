@@ -244,6 +244,36 @@ class ModelConnection(Base):
     updated_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
+class CopilotChat(Base):
+    """One operator's copilot conversation (ADR-0020). Owner-scoped: only the
+    operator who started it can read, continue or delete it."""
+
+    __tablename__ = "copilot_chats"
+    __table_args__ = (Index("ix_copilot_chats_owner_updated", "owner", "updated_at"),)
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    owner: Mapped[str] = mapped_column(Text, nullable=False)  # Principal.name
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class CopilotMessage(Base):
+    """A message in a copilot chat: the operator's text, a lookup the server
+    ran, the model's answer, or a proposal waiting for the operator (ADR-0020).
+    ``data`` is JSON text (lookup name/args, proposal and its state)."""
+
+    __tablename__ = "copilot_messages"
+    __table_args__ = (Index("ix_copilot_messages_chat_id", "chat_id", "id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    chat_id: Mapped[str] = mapped_column(Text, nullable=False)
+    role: Mapped[str] = mapped_column(Text, nullable=False)  # user|lookup|assistant|proposal
+    text: Mapped[str | None] = mapped_column(Text)
+    data: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
 class Event(Base):
     """Append-only audit stream: lab state transitions and admin actions.
 

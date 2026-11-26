@@ -28,7 +28,7 @@ import { AgentsLibrary } from "./shared/agents";
 import { TargetsLibrary } from "./shared/targets";
 import { Profile } from "./shared/profile";
 import { Settings } from "./shared/settings";
-import { ResearchAssistant } from "./shared/assistant";
+import { CopilotPanel } from "./shared/copilot";
 import { AllArenas, AllEvaluations } from "./shared/lists";
 import { AgentsBoard } from "./shared/board";
 import { FindingsPage } from "./research/findings";
@@ -235,7 +235,7 @@ function App() {
           <Range />
         )}
       </ErrorBoundary>
-      <ResearchAssistant arenaId={arenaId} />
+      <CopilotPanel />
     </Shell>
   );
 }

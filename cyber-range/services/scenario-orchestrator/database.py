@@ -32,7 +32,8 @@ import otlp
 import streams
 from model_headers import extra_headers_digest, normalize_extra_headers
 from models import (
-    AgentBuild, ApiKey, Base, BudgetAccount, BudgetAction, BudgetControl, BudgetGate, Deployment,
+    AgentBuild, ApiKey, Base, BudgetAccount, BudgetAction, BudgetControl, BudgetGate,
+    CopilotChat, CopilotMessage, Deployment,
     EvalChallenge, EvalRun, EvalSuite, EvalTrial, Evaluation, Event,
     ForwardLease, LifecycleRecipe, ModelConnection, PocJob,
     ResetOperation, Span,
@@ -1822,6 +1823,114 @@ class Database:
                 select(func.max(func.coalesce(Span.ended_at, Span.started_at)))
                 .where(Span.arena_id == arena_id)).scalar()
             return row
+
+    # --- Copilot chats (ADR-0020): owner-scoped; callers pass the principal name.
+    COPILOT_MESSAGE_LIMIT = 200
+
+    @staticmethod
+    def _copilot_message(row) -> dict:
+        try:
+            data = json.loads(row.data) if row.data else None
+        except ValueError:
+            data = None
+        return {"id": row.id, "role": row.role, "text": row.text, "data": data,
+                "created_at": _stringify(row.created_at)}
+
+    def copilot_create_chat(self, owner: str, title: str) -> dict:
+        now = db_now()
+        chat = CopilotChat(id=uuid.uuid4().hex[:16], owner=owner,
+                           title=(title or "New chat")[:120], created_at=now, updated_at=now)
+        with self._session() as session:
+            session.add(chat)
+            session.commit()
+            return {"id": chat.id, "title": chat.title,
+                    "created_at": _stringify(now), "updated_at": _stringify(now)}
+
+    def copilot_list_chats(self, owner: str, limit: int = 50) -> list[dict]:
+        with self._session() as session:
+            rows = session.scalars(select(CopilotChat).where(CopilotChat.owner == owner)
+                                   .order_by(CopilotChat.updated_at.desc())
+                                   .limit(max(1, min(limit, 200)))).all()
+            return [{"id": r.id, "title": r.title, "created_at": _stringify(r.created_at),
+                     "updated_at": _stringify(r.updated_at)} for r in rows]
+
+    def copilot_get_chat(self, owner: str, chat_id: str) -> dict | None:
+        """The chat and its messages, or None when it is not this owner's."""
+        with self._session() as session:
+            chat = session.get(CopilotChat, chat_id)
+            if chat is None or chat.owner != owner:
+                return None
+            messages = session.scalars(select(CopilotMessage)
+                                       .where(CopilotMessage.chat_id == chat_id)
+                                       .order_by(CopilotMessage.id)).all()
+            return {"id": chat.id, "title": chat.title,
+                    "created_at": _stringify(chat.created_at),
+                    "updated_at": _stringify(chat.updated_at),
+                    "messages": [self._copilot_message(m) for m in messages]}
+
+    def copilot_add_message(self, owner: str, chat_id: str, role: str,
+                            text: str | None = None, data: dict | None = None) -> dict | None:
+        """Append a message to the owner's chat; None when the chat is not
+        theirs or is full."""
+        with self._session() as session:
+            chat = session.get(CopilotChat, chat_id)
+            if chat is None or chat.owner != owner:
+                return None
+            count = session.scalar(select(func.count()).select_from(CopilotMessage)
+                                   .where(CopilotMessage.chat_id == chat_id))
+            if count >= self.COPILOT_MESSAGE_LIMIT:
+                return None
+            now = db_now()
+            row = CopilotMessage(chat_id=chat_id, role=role,
+                                 text=(text or "")[:20000] if text is not None else None,
+                                 data=json.dumps(data, default=str) if data is not None else None,
+                                 created_at=now)
+            session.add(row)
+            chat.updated_at = now
+            session.commit()
+            return self._copilot_message(row)
+
+    def copilot_rename_chat(self, owner: str, chat_id: str, title: str) -> bool:
+        with self._session() as session:
+            chat = session.get(CopilotChat, chat_id)
+            if chat is None or chat.owner != owner:
+                return False
+            chat.title = (title or "New chat")[:120]
+            session.commit()
+            return True
+
+    def copilot_delete_chat(self, owner: str, chat_id: str) -> bool:
+        with self._session() as session:
+            chat = session.get(CopilotChat, chat_id)
+            if chat is None or chat.owner != owner:
+                return False
+            session.execute(CopilotMessage.__table__.delete()
+                            .where(CopilotMessage.chat_id == chat_id))
+            session.delete(chat)
+            session.commit()
+            return True
+
+    def copilot_decide_proposal(self, owner: str, message_id: int, state: str,
+                                detail: str | None = None) -> dict | None:
+        """Move a pending proposal to applied, denied or failed (once). None when
+        it is not the owner's, not a proposal, or no longer pending."""
+        if state not in ("applied", "denied", "failed"):
+            return None
+        with self._session() as session:
+            row = session.get(CopilotMessage, message_id)
+            if row is None or row.role != "proposal":
+                return None
+            chat = session.get(CopilotChat, row.chat_id)
+            if chat is None or chat.owner != owner:
+                return None
+            data = json.loads(row.data or "{}")
+            if data.get("state") != "pending":
+                return None
+            data.update({"state": state, "detail": (detail or "")[:300] or None,
+                         "decided_at": _stringify(db_now())})
+            row.data = json.dumps(data, default=str)
+            session.commit()
+            return self._copilot_message(row)
 
     @staticmethod
     def _span_dict(row) -> dict:

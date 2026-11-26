@@ -424,10 +424,20 @@ Order: data model first, then views.
   - Hover previews a step; a click or the arrow keys select it into the inspector.
   - The List view keeps every step, plus the waterfall.
   - Browser check: `scripts/ux19-browser-check.cjs`.
-- [ ] **UX-20 — Copilot side panel.** Docked right under the top bar, resizable, stays
-  open while navigating. New chat, opt-in page context, streaming answers from the
-  operator's own model connection. Anything the backend does not support yet (stored
-  chat history, read tools, proposals) is marked Planned.
+- [x] **UX-20 — Copilot side panel (ADR-0020).**
+  - Chats are stored per operator: history, new chat, delete.
+  - A plan pass picks up to three read-only lookups from an allow-list (arena summary or activity, findings, agents board, search). They show as "Looked up" chips and reach the answer as untrusted data.
+  - An answer may end with one allow-listed proposal (extend, stop or resume research). It renders as a card whose Apply calls the console's own endpoint under the operator's session.
+  - Page context is an opt-in chip.
+  - The panel: Nidavellir design, docked under the top bar, resizable, open across navigation, with the model connection form inside.
+  - The agent inbox is marked Planned.
+  - Browser check: `scripts/ux20-browser-check.cjs`, against a stub model.
+- [ ] **UX-21 — Benchmark lobby and live match (future, #78).** Game-like screens for every evaluation run:
+  - a "Waiting for an agent to join" lobby: harness and agent cards from the reported client identity and the registered build; operators mark each side Ready, then start;
+  - a live match: one actions-over-time chart for both sides with findings marked, observability (tokens, model calls, errors, budget) and a live classification scoreboard;
+  - a result screen.
+
+  It needs harness identity captured at connect, plus a ready/start step in the trial lifecycle; the latter is a contract change, so it gets its own decision.
 - [ ] **UX-14 — Operations page (FR-19).**
 - [ ] **UX-15 — Workflow simulation suite.** Scripted browser walkthroughs of the ideal
   human scenarios (launch → connect agent → watch → intervene → confirm finding →

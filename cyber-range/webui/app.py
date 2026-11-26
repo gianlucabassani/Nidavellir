@@ -3152,6 +3152,83 @@ def copilot():
     return Response(stream_with_context(generate()), mimetype="text/plain; charset=utf-8")
 
 
+# UX-20 (ADR-0020): copilot chats. The orchestrator owns storage, lookups and
+# proposal validation; the console relays. Applying a proposal goes through the
+# console's existing endpoints from the operator's own session, never here.
+@app.route("/api/console/copilot/chats", methods=["GET"])
+def console_copilot_chats():
+    data, status = _api_get_status("/copilot/chats")
+    return jsonify(data), status
+
+
+@app.route("/api/console/copilot/chats", methods=["POST"])
+def console_copilot_chat_create():
+    result, status = _api_post("/copilot/chats", {})
+    return jsonify(result), status
+
+
+@app.route("/api/console/copilot/chats/<chat_id>", methods=["GET"])
+def console_copilot_chat(chat_id):
+    data, status = _api_get_status(f"/copilot/chats/{quote(chat_id, safe='')}")
+    return jsonify(data), status
+
+
+@app.route("/api/console/copilot/chats/<chat_id>", methods=["DELETE"])
+def console_copilot_chat_delete(chat_id):
+    try:
+        resp = requests.delete(f"{API_URL}/copilot/chats/{quote(chat_id, safe='')}",
+                               headers=API_HEADERS, timeout=10)
+    except requests.RequestException:
+        return jsonify({"error": "orchestrator unreachable"}), 502
+    if resp.status_code != 200:
+        return jsonify({"error": _api_error(resp)}), resp.status_code
+    return jsonify(resp.json())
+
+
+@app.route("/api/console/copilot/chats/<chat_id>/turn", methods=["POST"])
+def console_copilot_turn(chat_id):
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict) or not isinstance(body.get("text"), str):
+        return jsonify({"error": "Write a message"}), 422
+    payload = {"text": body["text"]}
+    page = body.get("page")
+    if isinstance(page, dict) and isinstance(page.get("label"), str):
+        payload["page"] = {"label": page["label"][:200],
+                           "arena_id": page.get("arena_id") if isinstance(
+                               page.get("arena_id"), str) else None}
+
+    def generate():
+        try:
+            with requests.post(f"{API_URL}/copilot/chats/{quote(chat_id, safe='')}/turn",
+                               json=payload, headers=API_HEADERS, stream=True,
+                               timeout=(10, 180)) as r:
+                if r.status_code != 200:
+                    yield (json.dumps({"type": "error", "message": _api_error(r)}) + "\n").encode()
+                    return
+                for chunk in r.iter_content(chunk_size=None):
+                    if chunk:
+                        yield chunk
+        except requests.RequestException:
+            yield (json.dumps({"type": "error",
+                               "message": "orchestrator unreachable"}) + "\n").encode()
+
+    return Response(stream_with_context(generate()), mimetype="application/x-ndjson",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.route("/api/console/copilot/proposals/<int:message_id>/decision", methods=["POST"])
+def console_copilot_decision(message_id):
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict) or body.get("state") not in ("applied", "denied", "failed"):
+        return jsonify({"error": "Choose applied, denied or failed"}), 422
+    detail = body.get("detail")
+    result, status = _api_post(f"/copilot/proposals/{message_id}/decision", {
+        "state": body["state"],
+        **({"detail": detail[:300]} if isinstance(detail, str) and detail else {}),
+    })
+    return jsonify(result), status
+
+
 @app.route("/api/setup/<instance_id>", methods=["GET"])
 def setup_status_proxy(instance_id):
     """Configurator setup-session status for the arena-detail panel."""

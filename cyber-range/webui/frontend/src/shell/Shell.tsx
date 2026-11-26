@@ -165,7 +165,7 @@ export function Shell({
                 <span className="tbtn-count tbtn-idle">{idle} idle</span>
               )}
             </button>
-            {/* The co-pilot launcher portals here (shared/assistant.tsx). */}
+            {/* The co-pilot launcher portals here (shared/copilot.tsx). */}
             <div id="assistant-slot" className="assistant-slot" />
             <AttentionMenu
               items={attention}
