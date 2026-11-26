@@ -3,6 +3,7 @@ import hmac
 import json
 import os
 import re
+import sys
 import threading
 import time
 import uuid
@@ -25,7 +26,10 @@ from flask import (
 )
 from flask_wtf import CSRFProtect
 
-import finding_report
+# Sibling modules resolve however app.py is loaded (gunicorn --chdir, tests,
+# or the release smoke importing it by path).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import finding_report  # noqa: E402
 
 app = Flask(__name__)
 CONSOLE_SIMULATION_MODE = os.getenv("MOCK_MODE", "false").lower() in ("1", "true", "yes")
