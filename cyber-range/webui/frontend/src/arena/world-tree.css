@@ -1,0 +1,460 @@
+/* UX-22: the world tree. Leaves carry family colour; text uses text tokens. */
+.world-tree {
+  --yg-ground: var(--inset);
+  --yg-bark: #b48a45;
+  --yg-bark-edge: #7d5a22;
+  --yg-well: #e4b96533;
+  --yg-branch: #8e7a5c;
+  --yg-branch-done: #a8997f;
+  --yg-gold: var(--gold-deep);
+  display: grid;
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+:root[data-theme="night"] .world-tree {
+  --yg-ground: #11162a;
+  --yg-bark: #e4b965;
+  --yg-bark-edge: #8a6a33;
+  --yg-well: #e4b96540;
+  --yg-branch: #b39a72;
+  --yg-branch-done: #5d6177;
+  --yg-gold: var(--gold);
+}
+.yg-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--line-soft);
+}
+.yg-bar input[type="range"] {
+  flex: 1;
+  min-width: 120px;
+  accent-color: var(--gold-deep);
+}
+.yg-clock {
+  min-width: 64px;
+  font: 400 var(--t-meta) var(--f-mono);
+}
+.yg-cap {
+  width: 100%;
+  color: var(--muted);
+  font-size: var(--t-meta);
+}
+.yg-routes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s4);
+  border-bottom: 1px solid var(--line-soft);
+  max-height: 96px;
+  overflow: auto;
+}
+.yg-routes-title {
+  color: var(--muted);
+  font: 600 var(--t-micro) var(--f-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.yg-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 2px 9px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font: 400 var(--t-meta) var(--f-sans);
+  cursor: pointer;
+}
+.yg-chip b {
+  color: var(--ink);
+  font: 500 var(--t-meta) var(--f-mono);
+}
+.yg-chip span {
+  color: var(--muted);
+}
+.yg-chip i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--yg-branch);
+}
+.yg-chip.finding i {
+  background: var(--gold);
+  box-shadow: 0 0 5px var(--gold);
+}
+.yg-chip.refuted i {
+  background: transparent;
+  border: 1.5px solid var(--yg-branch-done);
+}
+.yg-chip.open i {
+  background: var(--ok);
+}
+.yg-chip[aria-pressed="true"] {
+  border-color: var(--gold-deep);
+  background: var(--gold-wash);
+}
+:root[data-theme="night"] .yg-chip[aria-pressed="true"] {
+  background: #e4b96522;
+}
+.yg-chip:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+.yg-scroll {
+  max-height: 720px;
+  overflow: auto;
+  background:
+    radial-gradient(
+      ellipse 60% 40% at 50% 100%,
+      var(--yg-well),
+      transparent 70%
+    ),
+    var(--yg-ground);
+  outline: none;
+}
+.yg-scroll:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--gold);
+}
+.yg-svg {
+  display: block;
+  margin: 0 auto;
+  user-select: none;
+}
+.yg-svg text {
+  fill: var(--muted);
+  font: 400 11px var(--f-mono);
+}
+.yg-tick line {
+  stroke: var(--line-soft);
+  stroke-dasharray: 1 5;
+}
+:root[data-theme="night"] .yg-tick line {
+  stroke: #262d45;
+}
+.yg-tick text {
+  fill: var(--faint);
+}
+.yg-roots path {
+  fill: none;
+  stroke: var(--yg-bark-edge);
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+.yg-start {
+  fill: var(--muted) !important;
+  font: 500 12px var(--f-sans) !important;
+}
+.yg-gap ellipse {
+  fill: none;
+  stroke: var(--yg-bark-edge);
+  stroke-width: 1.4;
+}
+.yg-gap text {
+  fill: var(--faint) !important;
+  font: 400 12px var(--f-sans) !important;
+  paint-order: stroke;
+  stroke: var(--yg-ground);
+  stroke-width: 6px;
+}
+.yg-trunk {
+  stroke: var(--yg-bark-edge);
+  stroke-width: 0.8;
+}
+.yg-grain {
+  fill: none;
+  stroke: var(--yg-ground);
+  stroke-width: 0.9;
+  opacity: 0.35;
+}
+.yg-branch {
+  fill: var(--yg-branch);
+  stroke: none;
+  transition: opacity 0.2s;
+}
+.yg-branch.finding {
+  fill: var(--yg-bark);
+}
+.yg-branch.refuted,
+.yg-branch.done {
+  fill: var(--yg-branch-done);
+}
+.yg-branch.on {
+  stroke: var(--gold);
+  stroke-width: 1;
+}
+.yg-branch.dim,
+.yg-ev.dim,
+.yg-tip.dim {
+  opacity: 0.16;
+}
+.yg-ev {
+  cursor: pointer;
+  transition: opacity 0.25s;
+}
+.yg-ev.fut,
+.yg-tip.fut {
+  opacity: 0;
+  pointer-events: none;
+}
+.yg-leaf {
+  stroke: var(--yg-ground);
+  stroke-width: 0.8;
+}
+.yg-ev:hover .yg-leaf {
+  stroke: var(--ink);
+  stroke-width: 1.2;
+}
+.yg-ring {
+  fill: var(--yg-ground);
+  stroke-width: 1.6;
+}
+.yg-notch {
+  fill: var(--bad);
+  stroke: var(--yg-ground);
+  stroke-width: 1.4;
+}
+.yg-sel {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.6;
+}
+.yg-sprout path {
+  fill: var(--yg-ground);
+  stroke: var(--yg-bark);
+  stroke-width: 1.6;
+}
+.yg-fruit {
+  fill: var(--gold);
+  stroke: var(--yg-bark-edge);
+  stroke-width: 1;
+}
+.yg-fruit-core {
+  fill: var(--bar);
+}
+.yg-ev.sel .yg-fruit {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+.yg-wither {
+  fill: none;
+  stroke: var(--yg-branch-done);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.yg-bud {
+  fill: var(--yg-ground);
+  stroke: var(--ok);
+  stroke-width: 2;
+}
+.yg-bud.live {
+  animation: yg-pulse 2s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.yg-running {
+  fill: var(--gold);
+  animation: yg-pulse 1.6s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes yg-pulse {
+  50% {
+    transform: scale(1.6);
+  }
+}
+.yg-label {
+  cursor: pointer;
+}
+.yg-label text {
+  fill: var(--ink-2);
+  font: 400 11.5px var(--f-sans);
+  paint-order: stroke;
+  stroke: var(--yg-ground);
+  stroke-width: 5px;
+  stroke-linejoin: round;
+}
+.yg-label text.h {
+  fill: var(--ink);
+  font: 600 12px var(--f-mono);
+}
+.yg-label .o {
+  font: 500 11px var(--f-sans);
+  fill: var(--muted);
+}
+.yg-label .o.finding {
+  fill: var(--yg-gold);
+  font-weight: 600;
+}
+.yg-label .o.open {
+  fill: var(--ok);
+}
+.yg-label:hover text.h {
+  text-decoration: underline;
+}
+.yg-tip.finding .yg-label text:not(.h) {
+  fill: var(--yg-gold);
+}
+.yg-now line {
+  stroke: var(--gold);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  opacity: 0.7;
+}
+.yg-now .dot {
+  fill: var(--gold);
+}
+.yg-now .halo {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: yg-halo 2s ease-out infinite;
+}
+@keyframes yg-halo {
+  from {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+.yg-now text {
+  fill: var(--yg-gold) !important;
+  font-weight: 500;
+}
+.yg-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s4);
+  padding: var(--s3) var(--s4);
+  border-top: 1px solid var(--line-soft);
+  color: var(--muted);
+  font-size: var(--t-meta);
+}
+.yg-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.yg-legend .sp {
+  display: inline-block;
+}
+.sp.trunk {
+  width: 7px;
+  height: 14px;
+  border-radius: 3px 3px 1px 1px;
+  background: linear-gradient(
+    90deg,
+    var(--yg-bark-edge),
+    var(--yg-bark),
+    var(--yg-bark-edge)
+  );
+}
+.sp.branch {
+  width: 14px;
+  height: 10px;
+  border-left: 2.5px solid var(--yg-branch);
+  border-bottom: 2.5px solid var(--yg-branch);
+  border-bottom-left-radius: 8px;
+}
+.sp.leaf {
+  width: 10px;
+  height: 5px;
+  border-radius: 50%;
+  transform: rotate(-30deg);
+}
+.sp.leaf.fam-http {
+  background: var(--t-http);
+}
+.sp.leaf.fam-exec {
+  background: var(--t-exec);
+}
+.sp.leaf.fam-model {
+  background: var(--t-model);
+}
+.sp.leaf.fam-other {
+  background: var(--t-other);
+}
+.sp.leaf.fam-bad {
+  background: var(--bad);
+}
+.sp.fruit {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 6px var(--gold);
+}
+.sp.wither {
+  width: 10px;
+  height: 10px;
+  background:
+    linear-gradient(
+      45deg,
+      transparent 42%,
+      var(--yg-branch-done) 42% 58%,
+      transparent 58%
+    ),
+    linear-gradient(
+      -45deg,
+      transparent 42%,
+      var(--yg-branch-done) 42% 58%,
+      transparent 58%
+    );
+}
+.sp.bud {
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--ok);
+  border-radius: 50%;
+}
+.yg-legend-note {
+  color: var(--faint);
+}
+.yg-tip-pop {
+  position: fixed;
+  z-index: 60;
+  display: grid;
+  gap: 4px;
+  width: 280px;
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line-strong);
+  background: var(--raised);
+  box-shadow: var(--pop-shadow);
+  color: var(--ink-2);
+  font-size: var(--t-meta);
+  pointer-events: none;
+}
+.yg-tip-pop b {
+  color: var(--ink);
+  font: 600 var(--t-ui) var(--f-mono);
+}
+.yg-tip-pop small {
+  color: var(--muted);
+}
+.yg-empty {
+  padding: var(--s6);
+  border: 1px dashed var(--line);
+  color: var(--muted);
+}
+@media (prefers-reduced-motion: reduce) {
+  .yg-running,
+  .yg-bud.live,
+  .yg-now .halo {
+    animation: none;
+  }
+}
+.live-views {
+  align-self: end;
+}

@@ -3,7 +3,7 @@ import { getJson, postJson } from "../api";
 import type { ArenaData, EvidenceData, Span } from "../types";
 import { formatObserved, getJsonSafe } from "../ui";
 import "./live-view.css";
-import { ForgeLine } from "./forge-line";
+import { WorldTree } from "./world-tree";
 
 // OBS-05: the agent live view, the main screen of an active arena. Spans arrive
 // on the arena's push stream (OBS-04); history loads once. The list is
@@ -99,7 +99,7 @@ export function AgentLiveView({
   // OBS-08: a finished run replays step by step.
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(600);
-  // UX-19: the forge line is the main view; the list holds every step.
+  // UX-22: the world tree is the main view; the list holds every step.
   const [view, setView] = useState<"timeline" | "list">("timeline");
   const list = useRef<HTMLDivElement>(null);
 
@@ -501,7 +501,7 @@ export function AgentLiveView({
 
       <div className="live-body">
         {view === "timeline" ? (
-          <ForgeLine
+          <WorldTree
             spans={visible}
             total={visible.length}
             selectedId={selected}

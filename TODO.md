@@ -415,7 +415,7 @@ Order: data model first, then views.
   - Severity tiles and a decision filter narrow the list; `?finding=<id>` opens a row on arrival.
   - Findings take an optional reporter `severity` (critical, high, medium, low or info): the API, the MCP tool and the operator form all accept it. It is shown as a claim and never scored.
   - Browser check: `scripts/ux18-browser-check.cjs`.
-- [x] **UX-19 — Live timeline, the forge line.**
+- [x] **UX-19 — Live timeline, the forge line** (replaced by UX-22).
   - The arena Live view opens on a timeline:
     - the target spine, with one strand per actor;
     - warped time, with silences folded;
@@ -423,7 +423,7 @@ Order: data model first, then views.
   - Replay: a scrubber, 1×/2×/4× speed and Back to live.
   - Hover previews a step; a click or the arrow keys select it into the inspector.
   - The List view keeps every step, plus the waterfall.
-  - Browser check: `scripts/ux19-browser-check.cjs`.
+  - Its browser check was replaced by UX-22's.
 - [x] **UX-20 — Copilot side panel (ADR-0020).**
   - Chats are stored per operator: history, new chat, delete.
   - A plan pass picks up to three read-only lookups from an allow-list (arena summary or activity, findings, agents board, search). They show as "Looked up" chips and reach the answer as untrusted data.
@@ -432,6 +432,13 @@ Order: data model first, then views.
   - The panel: Nidavellir design, docked under the top bar, resizable, open across navigation, with the model connection form inside.
   - The agent inbox is marked Planned.
   - Browser check: `scripts/ux20-browser-check.cjs`, against a stub model.
+- [x] **UX-22 — Live timeline as a world tree (#83).**
+  - The run grows upward from its roots (the start) to the crown (now).
+  - The trunk is the agent's own steps. Each route it pursues is a branch: a declared hypothesis, or else an HTTP path prefix with at least three steps.
+  - Steps are leaves coloured by family; failures are red. A branch ends in fruit (finding), withers (refuted) or keeps a bud (open).
+  - Self-reported gateway calls fold into the enforced call they duplicate; the List view keeps every span.
+  - Route chips focus one branch. Replay grows the tree; scrub and Back to live as before.
+  - Browser check: `scripts/ux22-browser-check.cjs`.
 - [ ] **UX-21 — Benchmark lobby and live match (future, #78).** Game-like screens for every evaluation run:
   - a "Waiting for an agent to join" lobby: harness and agent cards from the reported client identity and the registered build; operators mark each side Ready, then start;
   - a live match: one actions-over-time chart for both sides with findings marked, observability (tokens, model calls, errors, budget) and a live classification scoreboard;
