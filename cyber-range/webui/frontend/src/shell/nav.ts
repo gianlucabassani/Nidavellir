@@ -61,9 +61,11 @@ export const NAV: Record<Workspace, NavGroup[]> = {
       items: [
         {
           label: "Findings",
-          href: "/console/activity?section=findings",
+          href: "/console/findings",
           icon: "flag",
-          match: activitySection("findings"),
+          match: (path, params) =>
+            path === "/console/findings" ||
+            activitySection("findings")(path, params),
         },
         {
           label: "Evidence",

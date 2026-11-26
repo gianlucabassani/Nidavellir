@@ -5,13 +5,13 @@ import { EvidencePicker, useEvidenceCandidates } from "./evidence-picker";
 import type { ArenaData, FindingRecord, FindingReview } from "../types";
 import {
   useWorkspaceData,
-  Status,
   Panel,
   Empty,
   Loading,
   ErrorState,
   DisabledReason,
 } from "../ui";
+import { FindingList, SEVERITIES } from "../shared/finding-list";
 
 export function FindingsWorkbench({ arena }: { arena: ArenaData }) {
   const id = encodeURIComponent(arena.id);
@@ -89,6 +89,7 @@ export function FindingsWorkbench({ arena }: { arena: ArenaData }) {
       await post(`/api/arenas/${id}/findings/manual`, {
         title: String(fields.get("title") || "").trim(),
         cwe: String(fields.get("cwe") || "").trim(),
+        severity: String(fields.get("severity") || "") || null,
         node: String(fields.get("node") || "").trim(),
         evidence: String(fields.get("evidence") || "").trim(),
         poc: String(fields.get("poc") || "").trim(),
@@ -142,222 +143,197 @@ export function FindingsWorkbench({ arena }: { arena: ArenaData }) {
     }
   }
   const editable = arena.state === "active";
+  const findings = value?.findings || [];
   return (
     <>
-      <div className="findings-grid">
-        <Panel eyebrow="01 / REPORT" title="Record an observation">
-          {editable ? (
-            <form className="finding-form" onSubmit={create}>
-              <p>
-                Record the observed effect and a reproducible proof. A report
-                alone does not establish a confirmed vulnerability.
-              </p>
-              <label>
-                Finding title
-                <input
-                  name="title"
-                  required
-                  maxLength={256}
-                  placeholder="Cross-account record access"
-                />
-              </label>
-              <div className="finding-pair">
-                <label>
-                  CWE
-                  <input name="cwe" maxLength={32} placeholder="CWE-639" />
-                </label>
-                <label>
-                  Node
-                  <input
-                    name="node"
-                    maxLength={64}
-                    placeholder="grant-service"
-                  />
-                </label>
-              </div>
-              <label>
-                Observed evidence
-                <textarea
-                  name="evidence"
-                  maxLength={4096}
-                  rows={4}
-                  placeholder="What changed, which identity was used, and what was returned"
-                />
-              </label>
-              <label>
-                Reproduction steps
-                <textarea
-                  name="poc"
-                  maxLength={8192}
-                  rows={5}
-                  spellCheck={false}
-                  placeholder="Request, command or numbered steps"
-                />
-              </label>
-              <EvidencePicker
-                label="Evidence artifacts"
-                candidates={candidates.value}
-                kinds={["artifact"]}
-                multiple
-                value={artifacts}
-                onChange={setArtifacts}
-              />
-              <EvidencePicker
-                label="HTTP transactions"
-                candidates={candidates.value}
-                kinds={["transaction"]}
-                multiple
-                value={transactions}
-                onChange={setTransactions}
-              />
-              <div className="poc-submit">
-                <span>
-                  Attached digests must exist in this arena. The service
-                  validates them before recording.
-                </span>
-                <button className="button button-gold" disabled={pending}>
-                  {pending ? "Recording…" : "Record finding ↗"}
-                </button>
-              </div>
-            </form>
-          ) : (
-            <Empty
-              title="Retained finding record"
-              detail="This arena is archived and its findings remain readable."
-            />
-          )}
-        </Panel>
-        <Panel
-          eyebrow="02 / REVIEW"
-          title="Findings"
-          aside={
-            <button className="subtle-link" type="button" onClick={refresh}>
-              Refresh ↻
-            </button>
-          }
-        >
-          {message && (
-            <p className="poc-message" role="status">
-              {message}
-            </p>
-          )}
+      {message && (
+        <p className="poc-message" role="status">
+          {message}
+        </p>
+      )}
+      <Panel
+        eyebrow="Record"
+        title={
+          findings.length
+            ? `${findings.length} finding${findings.length === 1 ? "" : "s"} in this arena`
+            : "Findings in this arena"
+        }
+        aside={
+          <button className="inline-action" type="button" onClick={refresh}>
+            Refresh
+          </button>
+        }
+      >
+        <div className="findings-body">
           {loading && !value ? (
             <Loading />
           ) : error && !value ? (
             <ErrorState message={error} refresh={refresh} />
-          ) : value?.findings.length ? (
-            <div className="finding-list">
-              {value.findings.map((finding) => (
-                <article className="finding-card" key={finding.id}>
-                  <div className="finding-title">
-                    <div>
-                      <strong>{finding.title}</strong>
-                      <small>
-                        {finding.source} · {finding.node || "node unspecified"}{" "}
-                        · {finding.cwe || "CWE unspecified"}
-                      </small>
-                    </div>
-                    <Status
-                      value={
-                        finding.manual_verdict
-                          ? finding.verdict
-                          : reviews[finding.id]?.verdict ||
-                            (["refuted", "confirmed"].includes(finding.verdict)
-                              ? "review_required"
-                              : finding.verdict)
-                      }
-                    />
-                  </div>
-                  {finding.evidence && <p>{finding.evidence}</p>}
-                  {finding.poc && (
-                    <details>
-                      <summary>Reproduction steps</summary>
-                      <pre>{finding.poc}</pre>
-                    </details>
-                  )}
-                  <ControlEvidenceReview
-                    arenaId={arena.id}
-                    findingId={finding.id}
-                    onReview={onReview}
-                  />
-                  {finding.validation_reason && (
-                    <small>
-                      Independent validation: {finding.validation_reason}
-                    </small>
-                  )}
-                  {finding.manual_verdict && (
-                    <small>Operator verdict: {finding.manual_verdict}</small>
-                  )}
-                  {finding.artifacts.map((artifact) => (
-                    <a
-                      key={artifact.digest}
-                      href={`/api/arenas/${id}/evidence-artifacts/${encodeURIComponent(artifact.digest)}`}
-                    >
-                      Artifact {artifact.digest.slice(-12)} · {artifact.bytes}{" "}
-                      bytes ↗
-                    </a>
-                  ))}
-                  {finding.transactions.map((transaction) => (
-                    <a
-                      key={transaction.digest}
-                      href={`/console/arena/${id}?tab=http&digest=${encodeURIComponent(transaction.digest)}`}
-                    >
-                      {transaction.method} {transaction.path} →{" "}
-                      {transaction.status} · {transaction.digest.slice(-12)} ↗
-                    </a>
-                  ))}
-                  {editable && (
-                    <div className="finding-actions">
-                      <button
-                        className="button button-outline"
-                        type="button"
-                        onClick={() => {
-                          setSelected({ finding, verdict: "confirmed" });
-                          setDigest(
-                            finding.artifacts[0]?.digest ||
-                              finding.transactions[0]?.digest ||
-                              "",
-                          );
-                        }}
-                      >
-                        Confirm with evidence
-                      </button>
-                      <button
-                        className="button button-outline"
-                        type="button"
-                        onClick={() => {
-                          setSelected({ finding, verdict: "refuted" });
-                          setDigest("");
-                        }}
-                        disabled={!reviews[finding.id]?.refutation_allowed}
-                        aria-describedby={
-                          reviews[finding.id]?.refutation_allowed
-                            ? undefined
-                            : `refute-why-${finding.id}`
-                        }
-                      >
-                        Refute
-                      </button>
-                      {!reviews[finding.id]?.refutation_allowed && (
-                        <DisabledReason id={`refute-why-${finding.id}`}>
-                          Refuting needs the control and evidence review below
-                          to allow it: open the review and run its control
-                          first.
-                        </DisabledReason>
-                      )}
-                    </div>
-                  )}
-                </article>
-              ))}
-            </div>
           ) : (
-            <Empty
-              title="No findings recorded"
-              detail="Agent and operator reports will appear here with their proof and review state."
+            <FindingList
+              findings={findings}
+              arenaId={arena.id}
+              body={(finding) => (
+                <ControlEvidenceReview
+                  arenaId={arena.id}
+                  findingId={finding.id}
+                  onReview={onReview}
+                />
+              )}
+              actions={(finding) =>
+                editable ? (
+                  <>
+                    <button
+                      className="button button-gold"
+                      type="button"
+                      onClick={() => {
+                        setSelected({ finding, verdict: "confirmed" });
+                        setDigest(
+                          finding.artifacts[0]?.digest ||
+                            finding.transactions[0]?.digest ||
+                            "",
+                        );
+                      }}
+                    >
+                      Confirm with evidence
+                    </button>
+                    <button
+                      className="button button-outline"
+                      type="button"
+                      onClick={() => {
+                        setSelected({ finding, verdict: "refuted" });
+                        setDigest("");
+                      }}
+                      disabled={!reviews[finding.id]?.refutation_allowed}
+                      aria-describedby={
+                        reviews[finding.id]?.refutation_allowed
+                          ? undefined
+                          : `refute-why-${finding.id}`
+                      }
+                    >
+                      Refute
+                    </button>
+                    {!reviews[finding.id]?.refutation_allowed && (
+                      <DisabledReason id={`refute-why-${finding.id}`}>
+                        Refuting needs the control and evidence review above to
+                        allow it: open the review and run its control first.
+                      </DisabledReason>
+                    )}
+                  </>
+                ) : (
+                  <span className="muted">
+                    Archived arena: decisions are read-only.
+                  </span>
+                )
+              }
+              empty={
+                <Empty
+                  title="No findings recorded"
+                  detail="Agent and operator reports appear here with their proof and review state."
+                />
+              }
             />
           )}
-        </Panel>
-      </div>
+        </div>
+      </Panel>
+      {editable ? (
+        <details className="panel finding-record" open={!findings.length}>
+          <summary>
+            <span className="eyebrow">Report</span>
+            <b>Record a finding yourself</b>
+            <small>
+              A report alone does not establish a confirmed vulnerability.
+            </small>
+          </summary>
+          <form className="finding-form" onSubmit={create}>
+            <p>
+              Record the observed effect and a reproducible proof. A report
+              alone does not establish a confirmed vulnerability.
+            </p>
+            <label>
+              Finding title
+              <input
+                name="title"
+                required
+                maxLength={256}
+                placeholder="Cross-account record access"
+              />
+            </label>
+            <div className="finding-pair">
+              <label>
+                Severity
+                <select name="severity" defaultValue="">
+                  <option value="">Not rated</option>
+                  {SEVERITIES.filter((item) => item.key !== "none").map(
+                    (item) => (
+                      <option key={item.key} value={item.key}>
+                        {item.label}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+              <label>
+                CWE
+                <input name="cwe" maxLength={32} placeholder="CWE-639" />
+              </label>
+              <label>
+                Node
+                <input name="node" maxLength={64} placeholder="grant-service" />
+              </label>
+            </div>
+            <label>
+              Observed evidence
+              <textarea
+                name="evidence"
+                maxLength={4096}
+                rows={4}
+                placeholder="What changed, which identity was used, and what was returned"
+              />
+            </label>
+            <label>
+              Reproduction steps
+              <textarea
+                name="poc"
+                maxLength={8192}
+                rows={5}
+                spellCheck={false}
+                placeholder="Request, command or numbered steps"
+              />
+            </label>
+            <EvidencePicker
+              label="Evidence artifacts"
+              candidates={candidates.value}
+              kinds={["artifact"]}
+              multiple
+              value={artifacts}
+              onChange={setArtifacts}
+            />
+            <EvidencePicker
+              label="HTTP transactions"
+              candidates={candidates.value}
+              kinds={["transaction"]}
+              multiple
+              value={transactions}
+              onChange={setTransactions}
+            />
+            <div className="poc-submit">
+              <span>
+                Attached digests must exist in this arena. The service validates
+                them before recording.
+              </span>
+              <button className="button button-gold" disabled={pending}>
+                {pending ? "Recording…" : "Record finding ↗"}
+              </button>
+            </div>
+          </form>
+        </details>
+      ) : (
+        <Empty
+          title="Retained finding record"
+          detail="This arena is archived and its findings remain readable."
+        />
+      )}
       <dialog
         ref={dialog}
         className="gate-dialog"

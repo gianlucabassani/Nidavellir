@@ -205,9 +205,18 @@ export type PocJob = {
     artifacts?: { path: string; bytes: number; sha256: string }[];
   };
 };
+export type Severity = "critical" | "high" | "medium" | "low" | "info";
 export type FindingRecord = {
   id: string;
   title: string;
+  /** The reporter's own rating (UX-18): a claim, never used for scoring. */
+  severity: Severity | null;
+  at: string | null;
+  validator_verdict: string;
+  arena_id?: string | null;
+  arena_name?: string | null;
+  arena_known?: boolean;
+  arena_state?: string | null;
   cwe: string | null;
   node: string | null;
   evidence: string | null;

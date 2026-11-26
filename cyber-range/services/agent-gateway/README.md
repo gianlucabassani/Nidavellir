@@ -34,7 +34,7 @@ gateway is the integration surface (scope boundary in `VISION.md`).
 | `run_command(arena_id, command, node?, timeout?)` | `POST /arenas/{id}/exec` | shell on the **foothold only**; budget-charged; audited + traced |
 | `browser_visit(arena_id, node, path?, params?, wait_ms?)` | `POST /arenas/{id}/browser/visit` | bounded JavaScript rendering on an arena target; no arbitrary URLs; budget-charged |
 | `upload_file` / `download_file` | `POST /arenas/{id}/files/*` | bounded foothold transfer under a fixed root; chunked + hashed |
-| `report_finding(arena_id, title, cwe?, node?, evidence?)` | `POST /arenas/{id}/findings` | report a discovered vulnerability; scored by CWE+node vs the hidden manifest; neutral ack (no oracle) |
+| `report_finding(arena_id, title, cwe?, node?, evidence?, severity?)` | `POST /arenas/{id}/findings` | report a discovered vulnerability; scored by CWE+node vs the hidden manifest; `severity` is the reporter's own rating and never scored; neutral ack (no oracle) |
 
 **Defender stance** (`NIDAVELLIR_STANCE=defender`):
 

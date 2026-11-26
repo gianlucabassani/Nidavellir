@@ -6802,9 +6802,15 @@ def reveal_vulnerabilities(
     return {"scenario": scenario_id, "vulnerabilities": manifest}
 
 
+FINDING_SEVERITIES = ("critical", "high", "medium", "low", "info")
+
+
 class FindingRequest(BaseModel):
     title: str = Field(min_length=1, max_length=256)
     cwe: str | None = Field(default=None, max_length=32)
+    # UX-18: the reporter's own severity assessment. A claim, like the title:
+    # it never influences matching, validation or scoring.
+    severity: Literal["critical", "high", "medium", "low", "info"] | None = None
     node: str | None = Field(default=None, max_length=64)
     evidence: str | None = Field(default=None, max_length=4096)
     # A reproducible proof-of-concept a human can run to verify the finding — a
@@ -6961,6 +6967,7 @@ def _record_finding(instance_id, record, req: "FindingRequest", *, actor: str,
     payload = {
             "finding_id": finding_id,
             "title": req.title[:256],
+            "severity": req.severity,
             "cwe": normalize_cwe(req.cwe),
             "node": req.node,
             "evidence": (req.evidence or "")[:4096],

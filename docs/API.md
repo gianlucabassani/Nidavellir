@@ -1036,6 +1036,9 @@ first-class evidence. The manifest is operator-only and never shown to an agent.
   versioned four-way verdict with the pinned recipe/target identity, action,
   effect and control digests, reason code and timestamp. Probe failures earn no
   credit. The operator can review each immutable observation after teardown.
+  An optional **`severity`** (`critical`, `high`, `medium`, `low` or `info`) records
+  the reporter's own assessment. The console shows it as a claim; it never affects
+  matching, validation or scoring. Any other value is rejected with `422`.
   An optional **`variant_of`** (a 12-hex finding id from any arena) links this
   report to a reference finding; both share a `research_key` and can be read as
   one affected-versus-fixed group. An unknown id is rejected with `422`.

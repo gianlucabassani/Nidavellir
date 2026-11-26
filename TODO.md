@@ -408,9 +408,13 @@ Order: data model first, then views.
     - arenas and capacity.
   - Charts use a CVD-validated palette, with a tooltip on focus and a table view.
   - Browser check: `scripts/ux17-browser-check.cjs`.
-- [ ] **UX-18 — Findings you can open in place.** Severity tiles filter the list. Each
-  finding expands to the claim, reproduction steps, the validator's view, its evidence
-  and the verdict actions, across arenas and per arena.
+- [x] **UX-18 — Findings you can open in place.**
+  - `/console/findings` (across arenas) and each arena's Findings tab show one list of rows that open in place:
+    - a closed row: severity, title, origin, the validator's verdict and your decision kept apart, evidence count;
+    - an open row: the claim, reproduction, the validator's view and review, facts, evidence, actions.
+  - Severity tiles and a decision filter narrow the list; `?finding=<id>` opens a row on arrival.
+  - Findings take an optional reporter `severity` (critical, high, medium, low or info): the API, the MCP tool and the operator form all accept it. It is shown as a claim and never scored.
+  - Browser check: `scripts/ux18-browser-check.cjs`.
 - [ ] **UX-19 — Live timeline, the forge line.** The target spine with one strand per
   agent, warped time with folded silences, failure knots and finding marks, replay with
   a scrubber and speed, filters by kind, agent and text, and a pinned step pane.

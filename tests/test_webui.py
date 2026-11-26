@@ -2896,3 +2896,52 @@ def test_api_error_reads_coded_refusals():
             return {"detail": {"code": "stop_active", "message": "Research is stopped"}}
 
     assert webui_module._api_error(Resp()) == "Research is stopped"
+
+
+def test_ux18_console_rows_carry_severity_time_and_arena(client, monkeypatch):
+    import app as webui
+
+    events = [
+        {"type": "finding_verification", "ts": "2026-11-26 10:05:00",
+         "payload": {"finding_id": "f1", "verdict": "confirmed", "actor": "admin"}},
+        {"type": "finding", "ts": "2026-11-26 10:00:00", "lab_id": "a1",
+         "payload": {"finding_id": "f1", "title": "IDOR", "severity": "high",
+                     "validation": {"confirmed": None, "reason_code": "no_probe"}}},
+        {"type": "finding", "ts": "2026-11-26 09:00:00", "lab_id": "a1",
+         "payload": {"finding_id": "f2", "title": "Odd", "severity": "BOGUS"}},
+    ]
+    monkeypatch.setattr(webui, "_api_get", lambda path, timeout=5: ({"events": events}, True))
+    assert _login(client).status_code == 302
+    c = client
+    rows = c.get("/api/console/arenas/a1/findings").get_json()["findings"]
+    assert rows[0]["severity"] == "high" and rows[0]["at"] == "2026-11-26 10:00:00"
+    assert rows[0]["manual_verdict"] == "confirmed"
+    assert rows[0]["validator_verdict"] == "inconclusive"  # the operator's decision is separate
+    assert rows[0]["validation_reason"] == "no_probe"
+    assert rows[1]["severity"] is None  # unknown values never reach the console
+
+    monkeypatch.setattr(webui, "_deployments",
+                        lambda: ({"a1": {"user_id": "juice", "status": "active"}}, True))
+    monkeypatch.setattr(webui, "_events", lambda *a, **k: [
+        e for e in events if not k.get("type") or e["type"] == k["type"]])
+    cross = c.get("/api/console/findings").get_json()["findings"]
+    assert cross[0]["arena_name"] == "juice" and cross[0]["arena_state"] == "active"
+    assert cross[0]["severity"] == "high"
+
+
+def test_ux18_manual_form_proxy_passes_severity(client, monkeypatch):
+    import app as webui
+
+    captured = {}
+    monkeypatch.setattr(webui, "_api_post", lambda path, payload: (
+        captured.update(payload=payload) or {"recorded": True}, 200))
+    token = _csrf_token(client)
+    assert _login(client).status_code == 302
+    c = client
+    r = c.post("/api/arenas/a1/findings/manual", json={"title": "x", "severity": "High"},
+               headers={"X-CSRFToken": token})
+    assert r.status_code == 200
+    assert captured["payload"]["severity"] == "high"
+    c.post("/api/arenas/a1/findings/manual", json={"title": "y"},
+           headers={"X-CSRFToken": token})
+    assert captured["payload"]["severity"] is None
