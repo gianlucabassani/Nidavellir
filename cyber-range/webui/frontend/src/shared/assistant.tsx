@@ -1,4 +1,5 @@
 import { DisabledReason } from "../ui";
+import { Icon } from "../shell/icons";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { getJson, jsonRequest } from "../api";
@@ -245,12 +246,12 @@ export function ResearchAssistant({ arenaId }: { arenaId: string | null }) {
       aria-expanded={open}
       aria-controls="research-assistant"
       onClick={() => (open ? close() : setOpen(true))}
-      aria-label="Research assistant"
+      aria-label="Copilot"
       aria-describedby="assistant-model-state"
-      title={`Research assistant: ${modelState}`}
+      title={`Copilot: ${modelState}`}
     >
-      <span aria-hidden="true">✧</span>
-      <span className="assistant-launcher-label">Research assistant</span>
+      <Icon name="sparkles" />
+      <span className="assistant-launcher-label">Copilot</span>
       <i
         className={`assistant-dot ${
           connection?.configured
@@ -273,22 +274,18 @@ export function ResearchAssistant({ arenaId }: { arenaId: string | null }) {
         <aside
           id="research-assistant"
           className="research-assistant"
-          aria-label="Research assistant"
+          aria-label="Copilot"
         >
           <header>
             <div>
-              <strong>Research assistant</strong>
+              <strong>Copilot</strong>
               <small>
                 {arenaId
                   ? `Arena ${arenaId.slice(0, 8)} · advisory support`
                   : "General research support"}
               </small>
             </div>
-            <button
-              type="button"
-              aria-label="Close research assistant"
-              onClick={close}
-            >
+            <button type="button" aria-label="Close copilot" onClick={close}>
               ×
             </button>
           </header>
@@ -443,7 +440,7 @@ export function ResearchAssistant({ arenaId }: { arenaId: string | null }) {
               value={input}
               onChange={(event) => setInput(event.target.value)}
               placeholder="Ask about your research…"
-              aria-label="Message to research assistant"
+              aria-label="Message to the copilot"
               onKeyDown={(event) => {
                 if (
                   event.key === "Enter" &&

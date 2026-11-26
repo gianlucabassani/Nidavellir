@@ -23,7 +23,7 @@ import { Infrastructure } from "./infrastructure";
 import { BrowserWorkbench } from "./browser";
 import { TransferWorkbench } from "./transfer";
 import { ForgeOverview } from "./forge";
-import { ArenaNavigation, categories } from "./navigation";
+import { ArenaRail, categories } from "./navigation";
 import { usePaletteActions } from "../shared/palette";
 import { navigate } from "../router";
 import { LaunchProgress } from "./progress";
@@ -262,9 +262,9 @@ export function ArenaWorkspace({ id }: { id: string }) {
           )}
         </p>
       )}
+      <ArenaRail arena={value} tab={tab} />
       <LaunchProgress arena={value} />
       <div className="arena-layout forge-layout">
-        <ArenaNavigation id={id} tab={tab} />
         <div className="arena-workspace-body">
           <ErrorBoundary key={tab} label="This tool">
             {tab === "live" ? (

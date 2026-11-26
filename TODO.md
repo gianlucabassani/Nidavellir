@@ -389,6 +389,26 @@ Order: data model first, then views.
 - [x] **UX-13 — Tools of the job (FR-18):** node log tail, operator shell over exec (each
   command a span), HTTP tool as panes with real ledger rows and coloured diff, global
   search incl. digest prefix, command palette (Ctrl/Cmd-K).
+- [x] **UX-16 — Forge design system and console shell (ADR-0019).** Tokens, Geist fonts
+  (vendored, OFL), shared primitives. One shell: a top bar with the home logo, the three
+  workspaces, search, agents and attention drawers, and Copilot. A sidebar per workspace
+  that becomes the arena menu, with its foot pinned. The Library dropdown is gone; Planned
+  features are visible but marked. Browser check: `scripts/ux16-browser-check.cjs`.
+- [ ] **UX-17 — Research overview and arena dashboard.** Aligned overview (agents now,
+  needs attention, KPIs, last-hour activity by kind and by agent). The arena overview
+  becomes a dashboard: a one-line status, activity per interval, budget burn with an
+  expiry projection, outcomes, tools used, findings, the stations as built, and recent
+  activity.
+- [ ] **UX-18 — Findings you can open in place.** Severity tiles filter the list. Each
+  finding expands to the claim, reproduction steps, the validator's view, its evidence
+  and the verdict actions, across arenas and per arena.
+- [ ] **UX-19 — Live timeline, the forge line.** The target spine with one strand per
+  agent, warped time with folded silences, failure knots and finding marks, replay with
+  a scrubber and speed, filters by kind, agent and text, and a pinned step pane.
+- [ ] **UX-20 — Copilot side panel.** Docked right under the top bar, resizable, stays
+  open while navigating. New chat, opt-in page context, streaming answers from the
+  operator's own model connection. Anything the backend does not support yet (stored
+  chat history, read tools, proposals) is marked Planned.
 - [ ] **UX-14 — Operations page (FR-19).**
 - [ ] **UX-15 — Workflow simulation suite.** Scripted browser walkthroughs of the ideal
   human scenarios (launch → connect agent → watch → intervene → confirm finding →

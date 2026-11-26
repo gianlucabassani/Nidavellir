@@ -1,6 +1,6 @@
 # ADR-0017: React rendering for the operator console
 
-- **Status:** Accepted — default cutover approved 2026-10-07; verification follow-ups open
+- **Status:** Accepted — default cutover approved 2026-10-07; verification follow-ups open. Visual-system paragraph superseded by ADR-0019 (2026-11-26)
 - **Date:** 2026-09-27
 - **Deciders:** Nidavellir operator
 - **Supersedes:** ADR-0012 section 5's Flask/Jinja rendering and no-build-tool choice only

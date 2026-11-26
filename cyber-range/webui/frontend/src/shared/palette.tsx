@@ -377,17 +377,3 @@ export function CommandPalette() {
     </dialog>
   );
 }
-
-export function PaletteButton() {
-  const mac = /Mac|iPhone|iPad/.test(navigator.platform);
-  return (
-    <button
-      type="button"
-      className="palette-trigger"
-      onClick={() => window.dispatchEvent(new Event("nv:palette"))}
-      aria-keyshortcuts={mac ? "Meta+K" : "Control+K"}
-    >
-      Search <kbd>{mac ? "⌘K" : "Ctrl K"}</kbd>
-    </button>
-  );
-}

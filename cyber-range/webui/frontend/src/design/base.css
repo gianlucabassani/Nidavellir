@@ -1,0 +1,301 @@
+/* UX-16 (ADR-0019): base elements and the shared primitives every page uses.
+   Loaded after the legacy stylesheet so pages not yet ported take the Forge
+   look through the classes they already use (panel, button, status, eyebrow). */
+html {
+  min-width: 320px;
+  background: var(--page);
+}
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font: 400 var(--t-ui) / 1.5 var(--f-sans);
+  -webkit-font-smoothing: antialiased;
+  font-optical-sizing: auto;
+}
+:root {
+  font-family: var(--f-sans);
+}
+code,
+kbd,
+pre,
+samp,
+.mono {
+  font-family: var(--f-mono);
+}
+.num,
+time,
+table {
+  font-variant-numeric: tabular-nums;
+}
+button:focus-visible,
+a:focus-visible,
+summary:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
+
+/* Label: the one small-caps voice for section names and field captions. */
+.eyebrow,
+.label {
+  color: var(--muted);
+  font: 500 var(--t-micro) / 1.3 var(--f-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Page header */
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s4);
+  margin: 0 0 var(--s6);
+}
+.page-head h1 {
+  margin: 6px 0 0;
+  font: 600 var(--t-display) / 1.1 var(--f-sans);
+  letter-spacing: -0.02em;
+}
+.page-head h1:focus {
+  outline: none;
+}
+.page-head p {
+  max-width: 72ch;
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: var(--t-body);
+}
+.observed {
+  margin-top: var(--s3);
+  color: var(--muted);
+  font-size: var(--t-meta);
+}
+.observed button {
+  color: var(--gold-deep);
+  font-size: var(--t-meta);
+  font-weight: 500;
+}
+
+/* Card: hairline border, gold tick, cut corner. No shadow. */
+.panel,
+.card {
+  position: relative;
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: none;
+}
+.panel::before,
+.card::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 28px;
+  height: 2px;
+  background: var(--gold);
+}
+.panel::after,
+.card::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 11px;
+  height: 11px;
+  pointer-events: none;
+  background: linear-gradient(
+    225deg,
+    var(--page) 0 calc(50% - 0.6px),
+    var(--line) calc(50% - 0.6px) calc(50% + 0.6px),
+    transparent calc(50% + 0.6px)
+  );
+}
+.panel:hover {
+  border-color: var(--line);
+}
+.panel-head {
+  align-items: center;
+  gap: var(--s3);
+  margin: 0;
+  padding: var(--s4) var(--s5) var(--s3);
+  border-bottom: 0;
+}
+.panel-head h2 {
+  margin: 2px 0 0;
+  font: 600 var(--t-title) / 1.3 var(--f-sans);
+  letter-spacing: 0;
+}
+.panel-foot {
+  margin: 0;
+  padding: var(--s3) var(--s5);
+  border-top: 1px solid var(--line-soft);
+  color: var(--muted);
+  font-size: var(--t-meta);
+}
+.form-error {
+  margin: 0 var(--s5) var(--s4);
+  padding: var(--s3) var(--s4);
+  border: 1px solid color-mix(in srgb, var(--bad) 40%, transparent);
+  background: var(--bad-wash);
+  color: var(--ink);
+  font-size: var(--t-ui);
+}
+
+/* Buttons: 32 px, one gold primary per view. */
+.button {
+  min-height: 32px;
+  gap: var(--s2);
+  padding: 0 var(--s3);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: 500 var(--t-ui) / 1 var(--f-sans);
+  box-shadow: none;
+  transform: none;
+}
+.button:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  text-decoration: none;
+  transform: none;
+}
+.button:active:not(:disabled) {
+  transform: none;
+}
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.button-gold {
+  border-color: var(--gold);
+  background: var(--gold);
+  color: var(--gold-ink);
+  box-shadow: none;
+}
+.button-gold:hover:not(:disabled) {
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 88%, #fff);
+}
+.button-gold::after {
+  display: none;
+}
+.button-outline {
+  background: var(--surface);
+}
+.button-danger {
+  border-color: color-mix(in srgb, var(--bad) 45%, transparent);
+  background: var(--bad-wash);
+  color: var(--bad);
+}
+.inline-action,
+.subtle-link {
+  color: var(--gold-deep);
+  font-size: var(--t-ui);
+  font-weight: 500;
+}
+
+/* Status badge: icon dot + label, colour from the state family. */
+.status {
+  gap: 5px;
+  height: 20px;
+  padding: 0 6px;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  background: var(--idle-wash);
+  color: var(--idle);
+  font: 500 var(--t-micro) / 1 var(--f-mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.status-success {
+  background: var(--ok-wash);
+  color: var(--ok);
+}
+.status-danger {
+  background: var(--bad-wash);
+  color: var(--bad);
+}
+.status-warning {
+  background: var(--warn-wash);
+  color: var(--warn);
+}
+.status-muted {
+  color: var(--idle);
+}
+.tiny-tag {
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font: 500 var(--t-micro) / 1.3 var(--f-mono);
+  letter-spacing: 0.05em;
+}
+
+/* Fields */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+select,
+textarea {
+  border-color: var(--line);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--t-ui);
+}
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
+select:focus,
+textarea:focus {
+  border-color: var(--gold-deep);
+}
+::placeholder {
+  color: var(--faint);
+}
+
+/* Tables */
+th {
+  color: var(--muted);
+  font: 500 var(--t-micro) / 1.3 var(--f-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Empty state */
+.empty strong {
+  font-size: var(--t-title);
+  font-weight: 600;
+}
+.empty p {
+  color: var(--muted);
+}
+
+/* Feature state marks (ADR-0019): Preview works with limits; Planned is
+   visible but not usable, with the reason next to it. */
+.feature-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 5px;
+  border: 1px dashed var(--line-strong);
+  color: var(--muted);
+  font: 500 10px / 1 var(--f-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.feature-tag.preview {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--info) 45%, transparent);
+  background: var(--info-wash);
+  color: var(--info);
+}
