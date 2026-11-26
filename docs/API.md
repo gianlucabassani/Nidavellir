@@ -861,6 +861,31 @@ over HTTP).
   recent activity, benchmark progress). **Advise-only** (no tools), operator-only,
   `text/plain` chunked stream. `409` if no model is connected.
 
+### Copilot chats (ADR-0020)
+
+All operator-only and owned by the calling principal; agent keys get `403`.
+
+- `GET /copilot/chats` lists the caller's chats, most recent first.
+- `POST /copilot/chats` `{title?}` creates one.
+- `GET /copilot/chats/{id}` returns a chat with its messages; another owner's chat answers `404`.
+- `DELETE /copilot/chats/{id}` deletes a chat and its messages.
+- `POST /copilot/chats/{id}/turn` `{text, page?: {label, arena_id?}}` streams one
+  turn as NDJSON (`application/x-ndjson`). Event types:
+  - `lookup` `{name, args, ok}`: a read-only lookup the server ran;
+  - `delta` `{text}`: part of the answer;
+  - `done` `{id, text, proposal?, notice?}`;
+  - `error` `{message}`.
+
+  How a turn runs:
+  - **Plan pass:** the model picks up to three lookups from the allow-list `arena_summary`, `arena_activity`, `findings`, `agents_board`, `search`. Unknown names and arguments are dropped.
+  - **Answer pass:** lookup results are passed as bounded, untrusted data blocks.
+  - **Proposal:** a trailing fenced `nv-proposal` object (`extend_arena` with seconds 1800, 3600 or 7200; `stop_research`; `resume_research`; known arenas only) is stored as a pending proposal. Anything else becomes a `notice`.
+
+  `409` when no model is connected or the chat is full (200 messages).
+- `POST /copilot/proposals/{message_id}/decision` `{state: applied|denied|failed, detail?}`
+  records what happened after the operator applied or denied the proposal through
+  the console's own endpoint. This route performs no action. A proposal moves out of `pending` once; otherwise `409`.
+
 ### SUT arena wizard
 
 `POST /arenas/sut` (operator-only) provisions a software-under-test arena from a

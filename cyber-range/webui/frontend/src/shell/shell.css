@@ -146,7 +146,7 @@
 .rail-toggle {
   display: none;
 }
-/* The co-pilot launcher (shared/assistant.tsx) takes the top-bar button look. */
+/* The co-pilot launcher (shared/copilot.tsx) takes the top-bar button look. */
 .topbar .assistant-slot {
   display: flex;
 }

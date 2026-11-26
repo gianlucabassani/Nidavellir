@@ -39,6 +39,7 @@ contributors understand the reasoning instead of re-litigating it.
 | [0017](0017-react-operator-console-rendering.md) | React rendering for the operator console | Accepted — default cutover approved 2026-10-07; verification follow-ups open |
 | [0018](0018-span-model.md) | Span model for agent and operator actions | Accepted |
 | [0019](0019-forge-design-system.md) | Forge design system and console shell | Accepted (supersedes ADR-0017 visual paragraph) |
+| [0020](0020-copilot-chats-lookups-proposals.md) | Copilot chats, read-only lookups and confirmed proposals | Accepted |
 
 > **Product framing:** the 2026-06-13 pivot established the bring-your-own-agent
 > arena. The 2026-08-10 reorganization (ADR-0012) makes the GUI-driven

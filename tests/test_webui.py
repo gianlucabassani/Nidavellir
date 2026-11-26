@@ -2945,3 +2945,64 @@ def test_ux18_manual_form_proxy_passes_severity(client, monkeypatch):
     c.post("/api/arenas/a1/findings/manual", json={"title": "y"},
            headers={"X-CSRFToken": token})
     assert captured["payload"]["severity"] is None
+
+
+def test_ux20_copilot_routes_require_login_and_csrf(client, monkeypatch):
+    for path in ("/api/console/copilot/chats", "/api/console/copilot/chats/c1"):
+        assert client.get(path).status_code in (302, 401), path
+    import app as webui
+
+    token = _csrf_token(client)
+    assert _login(client).status_code == 302
+    calls = []
+    monkeypatch.setattr(webui, "_api_post", lambda path, body: (
+        calls.append((path, body)) or {"ok": True}, 200))
+    decision = "/api/console/copilot/proposals/7/decision"
+    assert client.post(decision, json={"state": "applied"}).status_code == 400  # no CSRF
+    headers = {"X-CSRFToken": token}
+    for bad in ({"state": "approved"}, {}, [], None):
+        assert client.post(decision, json=bad, headers=headers).status_code == 422
+    assert not calls
+    assert client.post(decision, json={"state": "failed", "detail": "x" * 400},
+                       headers=headers).status_code == 200
+    path, body = calls[-1]
+    assert path == "/copilot/proposals/7/decision"
+    assert body["state"] == "failed" and len(body["detail"]) == 300
+    assert client.post("/api/console/copilot/chats/c1/turn", json={"text": 5},
+                       headers=headers).status_code == 422
+
+
+def test_ux20_copilot_turn_relays_the_stream_and_strips_unknown_fields(client, monkeypatch):
+    import app as webui
+
+    token = _csrf_token(client)
+    assert _login(client).status_code == 302
+    sent = {}
+
+    class Stream:
+        status_code = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def iter_content(self, chunk_size=None):
+            yield b'{"type": "delta", "text": "hi"}\n'
+            yield b'{"type": "done", "id": 3, "text": "hi"}\n'
+
+    def fake_post(url, json=None, headers=None, stream=False, timeout=None):
+        sent.update(url=url, json=json, stream=stream)
+        return Stream()
+
+    monkeypatch.setattr(webui.requests, "post", fake_post)
+    r = client.post("/api/console/copilot/chats/c1/turn",
+                    json={"text": "hello", "page": {"label": "Arena x", "arena_id": "a1",
+                                                    "secret": "nope"}, "extra": 1},
+                    headers={"X-CSRFToken": token})
+    assert r.status_code == 200 and r.mimetype == "application/x-ndjson"
+    lines = [line for line in r.get_data(as_text=True).splitlines() if line]
+    assert len(lines) == 2 and '"done"' in lines[1]
+    assert sent["url"].endswith("/copilot/chats/c1/turn") and sent["stream"] is True
+    assert sent["json"] == {"text": "hello", "page": {"label": "Arena x", "arena_id": "a1"}}

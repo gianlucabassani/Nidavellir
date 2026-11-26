@@ -73,6 +73,7 @@ import actions
 import otlp
 import activity
 import board
+import copilot
 import spans
 import streams
 from redaction import redact
@@ -5122,6 +5123,227 @@ def agent_chat(req: ChatRequest, principal: Principal = Depends(require_principa
         )
 
     return StreamingResponse(gen(), media_type="text/plain; charset=utf-8")
+
+
+# --- Copilot chats, lookups and proposals (ADR-0020, UX-20) -----------------
+# Stored per operator. Each turn: a plan pass picks allow-listed read-only
+# lookups; the server runs them with operator permissions and passes the results
+# to the answer pass as untrusted data; a trailing proposal is validated and
+# stored as pending. Nothing here executes an action: the operator applies a
+# proposal from the console with their own session.
+
+class CopilotChatCreate(BaseModel):
+    model_config = {"extra": "forbid"}
+    title: str | None = Field(default=None, max_length=120)
+
+
+class CopilotPage(BaseModel):
+    model_config = {"extra": "forbid"}
+    label: str = Field(min_length=1, max_length=200)
+    arena_id: str | None = Field(default=None, max_length=64)
+
+
+class CopilotTurn(BaseModel):
+    model_config = {"extra": "forbid"}
+    text: str = Field(min_length=1, max_length=4000)
+    page: CopilotPage | None = None
+
+
+class CopilotDecision(BaseModel):
+    model_config = {"extra": "forbid"}
+    state: Literal["applied", "denied", "failed"]
+    detail: str | None = Field(default=None, max_length=300)
+
+
+def _copilot_arenas() -> dict[str, str]:
+    """Arena id -> name, live first then newest, for the plan pass."""
+    rows = db.list_deployments() or []
+    live = [r for r in rows if r.get("status") not in ("destroyed", "failed")]
+    gone = [r for r in rows if r.get("status") in ("destroyed", "failed")]
+    ordered = sorted(live, key=lambda r: str(r.get("created_at") or ""), reverse=True) + \
+        sorted(gone, key=lambda r: str(r.get("created_at") or ""), reverse=True)
+    return {r["id"]: (r.get("user_id") or r["id"]) for r in ordered[:60]}
+
+
+def _copilot_findings(arena_id: str | None) -> list[dict]:
+    events = db.list_events(lab_id=arena_id, limit=200, types=("finding",)) if arena_id \
+        else db.list_events(limit=200, types=("finding",))
+    verdicts: dict[str, str] = {}
+    for event in db.list_events(lab_id=arena_id, limit=400, types=("finding_verification",)) \
+            if arena_id else db.list_events(limit=400, types=("finding_verification",)):
+        payload = event.get("payload") or {}
+        verdicts.setdefault(payload.get("finding_id"), payload.get("verdict"))
+    out = []
+    for event in events[:30]:
+        p = event.get("payload") or {}
+        validation = p.get("validation") or {}
+        out.append({"id": p.get("finding_id"), "arena_id": event.get("lab_id"),
+                    "title": p.get("title"), "severity": p.get("severity"),
+                    "cwe": p.get("cwe"), "node": p.get("node"),
+                    "validator": ("confirmed" if validation.get("confirmed") is True else
+                                  "refuted" if validation.get("confirmed") is False else
+                                  "inconclusive"),
+                    "operator_decision": verdicts.get(p.get("finding_id")),
+                    "at": event.get("ts")})
+    return out
+
+
+def _copilot_lookup(name: str, args: dict):
+    """Run one allow-listed, read-only lookup. Operator material: the caller
+    has already checked the operator role."""
+    if name == "arena_summary":
+        record = db.get_deployment(args["arena_id"]) or {}
+        budget = db.budget_status(args["arena_id"]) or {}
+        return {"id": args["arena_id"], "name": record.get("user_id"),
+                "state": record.get("status"), "scenario": record.get("scenario"),
+                "provider": record.get("provider"), "created_at": record.get("created_at"),
+                "expires_at": record.get("expires_at"),
+                "budget": budget.get("policy"), "gate": budget.get("arena"),
+                "findings": len(db.list_events(lab_id=args["arena_id"], limit=200,
+                                               types=("finding",)))}
+    if name == "arena_activity":
+        summary = arena_activity(args["arena_id"], buckets=12, principal=_COPILOT_PRINCIPAL)
+        summary.pop("buckets", None)
+        return summary
+    if name == "findings":
+        return _copilot_findings(args.get("arena_id"))
+    if name == "agents_board":
+        snapshot = _board_snapshot()
+        return {"arenas": snapshot.get("arenas", [])[:12],
+                "inbox": snapshot.get("inbox", [])[:10]}
+    if name == "search":
+        import search  # noqa: PLC0415
+        with db._session() as session:
+            return search.search(session, args["q"])
+    raise ValueError(f"unknown lookup {name!r}")
+
+
+class _OperatorView:
+    """The role the copilot's lookups read with (the caller is an operator)."""
+    role = "operator"
+    name = "copilot"
+
+
+_COPILOT_PRINCIPAL = _OperatorView()
+
+
+def _copilot_chat_or_404(principal: Principal, chat_id: str) -> dict:
+    chat = db.copilot_get_chat(principal.name, chat_id)
+    if chat is None:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    return chat
+
+
+@app.get("/copilot/chats")
+def list_copilot_chats(principal: Principal = Depends(require_principal)):
+    _require_operator(principal)
+    return {"chats": db.copilot_list_chats(principal.name)}
+
+
+@app.post("/copilot/chats", status_code=201)
+def create_copilot_chat(req: CopilotChatCreate,
+                        principal: Principal = Depends(require_principal)):
+    _require_operator(principal)
+    return db.copilot_create_chat(principal.name, req.title or "New chat")
+
+
+@app.get("/copilot/chats/{chat_id}")
+def get_copilot_chat(chat_id: str, principal: Principal = Depends(require_principal)):
+    _require_operator(principal)
+    return _copilot_chat_or_404(principal, chat_id)
+
+
+@app.delete("/copilot/chats/{chat_id}")
+def delete_copilot_chat(chat_id: str, principal: Principal = Depends(require_principal)):
+    _require_operator(principal)
+    if not db.copilot_delete_chat(principal.name, chat_id):
+        raise HTTPException(status_code=404, detail="Chat not found")
+    return {"deleted": True}
+
+
+def _ndjson(event: dict) -> bytes:
+    return (json.dumps(event, default=str) + "\n").encode()
+
+
+@app.post("/copilot/chats/{chat_id}/turn")
+def copilot_turn(chat_id: str, req: CopilotTurn,
+                 principal: Principal = Depends(require_principal)):
+    """Stream one copilot turn as NDJSON events: ``lookup``, ``delta``,
+    ``proposal``, ``notice``, ``done`` (or ``error``)."""
+    _require_operator(principal)
+    chat = _copilot_chat_or_404(principal, chat_id)
+    cred = db.get_decrypted_model_credential(principal.name)
+    if not cred:
+        raise HTTPException(status_code=409, detail="no model connected — connect one first")
+    page = req.page.model_dump() if req.page else None
+    user = db.copilot_add_message(principal.name, chat_id, "user", req.text,
+                                  {"page": page} if page else None)
+    if user is None:
+        raise HTTPException(status_code=409, detail="This chat is full. Start a new chat.")
+    if chat["title"] == "New chat":
+        db.copilot_rename_chat(principal.name, chat_id, copilot.title_for(req.text))
+    history = [{"role": m["role"], "content": m["text"] or ""}
+               for m in chat["messages"] if m["role"] in ("user", "assistant") and m["text"]][-20:]
+    history.append({"role": "user", "content": req.text})
+    arenas = _copilot_arenas()
+    model_args = {"base_url": cred.get("base_url")}
+
+    def gen():
+        blocks = []
+        plan_text = model_chat.complete_chat(
+            cred["provider"], cred["model"], cred["api_key"],
+            copilot.plan_system(arenas, page), [{"role": "user", "content": req.text}],
+            max_tokens=300, json_mode=True, **model_args)
+        lookups = [] if plan_text.lstrip().startswith(model_chat.ERROR_SENTINEL) else \
+            copilot.parse_plan(plan_text, set(arenas))
+        for lookup in lookups:
+            try:
+                result = _copilot_lookup(lookup["name"], lookup["args"])
+                ok = True
+            except Exception:  # noqa: BLE001 - a failed lookup is reported, not fatal
+                logger.warning("copilot lookup %s failed", lookup["name"], exc_info=True)
+                result, ok = {"error": "lookup failed"}, False
+            blocks.append(copilot.data_block(lookup["name"], lookup["args"], result))
+            stored = db.copilot_add_message(principal.name, chat_id, "lookup", None,
+                                            {**lookup, "ok": ok})
+            yield _ndjson({"type": "lookup", "name": lookup["name"], "args": lookup["args"],
+                           "ok": ok, "id": stored and stored["id"]})
+        reply = ""
+        for chunk in model_chat.stream_chat(
+                cred["provider"], cred["model"], cred["api_key"],
+                copilot.answer_system(blocks, page), history, **model_args):
+            reply += chunk
+            if len(reply) > 60000:
+                break
+            yield _ndjson({"type": "delta", "text": chunk})
+        if not reply.strip() or reply.lstrip().startswith(model_chat.ERROR_SENTINEL):
+            yield _ndjson({"type": "error",
+                           "message": reply.strip() or "The model returned an empty reply."})
+            return
+        visible, proposal, problem = copilot.extract_proposal(reply, set(arenas))
+        answer = db.copilot_add_message(principal.name, chat_id, "assistant", visible)
+        event = {"type": "done", "id": answer and answer["id"], "text": visible}
+        if proposal:
+            stored = db.copilot_add_message(principal.name, chat_id, "proposal", None,
+                                            {"proposal": proposal, "state": "pending"})
+            event["proposal"] = {"id": stored and stored["id"], **proposal, "state": "pending"}
+        if problem:
+            event["notice"] = problem
+        yield _ndjson(event)
+
+    return StreamingResponse(gen(), media_type="application/x-ndjson")
+
+
+@app.post("/copilot/proposals/{message_id}/decision")
+def decide_copilot_proposal(message_id: int, req: CopilotDecision,
+                            principal: Principal = Depends(require_principal)):
+    """Record what happened to a proposal. The action itself was (or was not)
+    performed by the operator through its own console endpoint."""
+    _require_operator(principal)
+    message = db.copilot_decide_proposal(principal.name, message_id, req.state, req.detail)
+    if message is None:
+        raise HTTPException(status_code=409, detail="No pending proposal with that id")
+    return message
 
 
 # --- Configurator setup phase (SUT arenas, ADR-0007 / P2-10 increment 1) -----
