@@ -446,6 +446,11 @@ Order: data model first, then views.
   - The operator writes what only a person can state (`POST /arenas/{id}/findings/{fid}/writeup`, append-only `finding_writeup`, hidden from agents, never scored).
   - A readiness list names every gap; Copy report (Markdown), Copy CVE request (the public form's fields) and a .md download.
   - Browser check: `scripts/ux24-browser-check.cjs`.
+- [x] **UX-25 — Findings written up by the agent (#91).** Operator-approved contract change.
+  - `report_finding` takes a structured `writeup` (schema `nidavellir.finding-writeup.v1`). New MCP tools for the attacker stance: `update_finding_writeup` (patch) and `get_finding_writeup` (sections, owners, readiness).
+  - The readiness checklist (`writeup.py`) names every gap and enforces the house style. The agent's view leaves verification out.
+  - Operator sections win: an agent's patch to one is refused.
+  - The console Report view renders the agent's write-up (structured reproduction with cited evidence), with origins Agent / Your text / From the record. The editor patches sections.
 - [x] **UX-26 — The timeline on its own page (#93).**
   - Arena menu → Timeline: the world tree fills the page. Whole run (default) fits the run into view; Detail spreads it.
   - The tree grows from its roots on open, and new steps sprout.

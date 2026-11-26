@@ -92,7 +92,10 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
             "the structured verification inputs (path, param, payload, oast_token) "
             "when you have them, and ALWAYS include a `poc`: a short, reproducible "
             "proof a human can run to verify it (a curl/HTTP request, a shell "
-            "command, or numbered steps, with the observed result)."
+            "command, or numbered steps, with the observed result). Pass the "
+            "`writeup` too, and complete it with update_finding_writeup until "
+            "get_finding_writeup shows no gaps: the finding has to be a report "
+            "a human can send as is."
         ),
     )
 
@@ -397,7 +400,8 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
                            variant_of: str | None = None,
                            root_cause: dict | None = None,
                            causality: dict | None = None,
-                           severity: str | None = None) -> dict:
+                           severity: str | None = None,
+                           writeup: dict | None = None) -> dict:
             """Report a discovered vulnerability (the engagement goal). Include the
             `cwe` (e.g. 'CWE-89') and `node` so it can be scored. To have the finding
             PROVEN (not just claimed), also pass the verification inputs: `path` +
@@ -414,7 +418,9 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
             build} and toggle {control}, each with a summary and the
             evidence_digest (+ arena_id when it lives in another arena).
             Optionally rate `severity`: critical, high, medium, low or info (your
-            assessment, shown to the operator; it never affects scoring)."""
+            assessment, shown to the operator; it never affects scoring).
+            Pass `writeup`, the structured report (see update_finding_writeup
+            for its sections and rules); complete it there afterwards."""
             return tools.report_finding(
                 ctx(), arena_id=arena_id, title=title, cwe=cwe, node=node,
                 evidence=evidence, path=path, param=param, payload=payload,
@@ -422,7 +428,23 @@ def build_server(cfg: GatewayConfig | None = None, context: GatewayContext | Non
                 evidence_artifact_digests=evidence_artifact_digests,
                 transaction_digests=transaction_digests, variant_of=variant_of,
                 root_cause=root_cause, causality=causality, severity=severity,
+                writeup=writeup,
             )
+
+        @mcp.tool(description=(
+            "Read the write-up of a finding you reported: its sections, who owns each "
+            "(agent or operator) and the readiness checklist that names every gap "
+            "before it can be sent as a report."))
+        def get_finding_writeup(arena_id: str, finding_id: str) -> dict:
+            return tools.get_finding_writeup(ctx(), arena_id=arena_id, finding_id=finding_id)
+
+        @mcp.tool(description=(
+            "Set sections of the write-up of a finding you reported. `patch` maps "
+            "section -> value; null clears a section. Returns the write-up and its "
+            "readiness checklist. " + tools.WRITEUP_GUIDE))
+        def update_finding_writeup(arena_id: str, finding_id: str, patch: dict) -> dict:
+            return tools.update_finding_writeup(ctx(), arena_id=arena_id,
+                                                finding_id=finding_id, patch=patch)
 
         @mcp.tool()
         def dedup_lookup(arena_id: str, root_cause: dict) -> dict:

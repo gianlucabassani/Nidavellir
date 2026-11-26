@@ -1,6 +1,7 @@
-// UX-24 browser check: a finding as a report you can send. Against a mock
-// stack with one research arena holding a report-shaped finding (hypothesis
-// contract and test note, PoC, causality, HTTP evidence) and a bare one.
+// UX-24/25 browser check: a finding as a report you can send, written by the
+// agent. Against a mock stack with one arena holding an agent-written finding
+// (write-up without product, versions and remediation; one HTTP transaction
+// cited by a step) and a bare one.
 // NV_UX24_CONFIG: {"arena", "rich", "bare"}.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -36,48 +37,53 @@ const SHOTS = process.env.NV_UX24_SHOTS || '';
     await report.locator('.fr-section').first().waitFor();
     const titles = await report.locator('.fr-section h3').allTextContents();
     assert.deepEqual(titles.map(t => t.trim().toLowerCase()), ['summary', 'impact', 'description',
-      'prerequisites', 'steps to reproduce', 'proof', 'remediation', 'references']);
+      'reproduction steps', 'evidence', 'remediation', 'references']);
     const section = key => report.locator('.fr-section').filter({has: page.getByRole('heading', {name: key, exact: true})});
-    assert.match(await section('Description').innerText(), /Static export must never write/);
-    assert.match(await section('Prerequisites').innerText(), /WORKPLACE_USER/);
-    assert.match(await section('Proof').innerText(), /Hypothesis H-F1 supported/);
-    assert.equal(await section('Impact').locator('.fr-origin.missing').count(), 1);
-    assert.match(await report.locator('.fr-ready').innerText(), /4 gaps before sending/);
-    await shot('report-gaps');
-    checks.push('the report assembles description, prerequisites and proof from the hypothesis and evidence; 4 gaps are named');
+    assert.equal(await section('Impact').locator('.fr-origin.agent').count(), 1);
+    assert.match(await section('Description').innerText(), /CmsStaticExportManager/);
+    assert.equal(await section('Description').locator('code').first().innerText(), 'CmsStaticExportManager');
+    const repro = section('Reproduction steps');
+    assert.match(await repro.innerText(), /workplace author/);
+    assert.equal(await repro.locator('.fr-steps > li').count(), 2);
+    assert.equal(await repro.locator('.fr-cites span').first().innerText(), 'E1');
+    assert.match(await section('Evidence').innerText(), /E1 HTTP GET \/export/);
+    assert.equal(await section('Remediation').locator('.fr-origin.missing').count(), 1);
+    assert.match(await report.locator('.fr-ready').innerText(), /3 gaps before sending/);
+    assert.match(await report.locator('.fr-checks').innerText(), /remediation is missing/);
+    await shot('report-agent');
+    checks.push('the agent-written report renders: agent origins, inline code, structured steps citing E1; 3 gaps named by the orchestrator');
 
-    // Write what only the operator can say; the gaps close except verification.
+    // The operator takes sections over; only technical verification remains.
     await report.getByRole('button', {name: 'Edit write-up'}).click();
     const form = report.getByRole('form', {name: 'Edit write-up'});
     await form.getByLabel('Product', {exact: true}).fill('Example CMS');
     await form.getByLabel('Affected versions', {exact: true}).fill('22.0');
     await form.getByLabel('Vendor', {exact: true}).fill('Example Vendor');
-    await form.getByLabel('CVSS 3.1 vector', {exact: true}).fill('CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H');
-    await form.getByRole('textbox', {name: /^Impact /}).fill('A workplace author runs code as the CMS service user.');
-    await form.getByRole('textbox', {name: /^Remediation /}).fill('Refuse every JSP-mapped extension in the static export.');
-    await form.getByRole('button', {name: 'Add reference'}).click();
-    await form.getByLabel('Reference 1 URL').fill('https://example.org/advisory');
-    await form.getByLabel('Reference 1 title').fill('Vendor advisory');
+    await form.getByRole('textbox', {name: /^Remediation /}).fill('Refuse every extension the container maps to its JSP servlet when exporting.');
     await form.getByRole('button', {name: 'Save write-up'}).click();
     await report.locator('.fr-editor').waitFor({state: 'detached'});
     assert.match(await report.locator('.fr-ready').innerText(), /1 gap before sending/);
-    assert.equal(await section('Impact').locator('.fr-origin.operator').count(), 1);
-    assert.match(await report.locator('.fr-meta').innerText(), /Write-up by \S+/);
-    checks.push('saving the write-up fills impact, remediation, product and versions; only technical verification remains');
+    assert.equal(await section('Remediation').locator('.fr-origin.operator').count(), 1);
+    assert.equal(await section('Impact').locator('.fr-origin.agent').count(), 1);
+    assert.match(await report.locator('.fr-meta').innerText(), /Last written by \S+ \(operator\)/);
+    checks.push('saving in the editor makes those sections the operator\'s; the agent\'s stay; only verification remains');
 
     // Copy as Markdown and as a CVE request; download the .md file.
     await report.getByRole('button', {name: 'Copy report'}).click();
     await report.getByText('Report copied as Markdown').waitFor();
     const md = await clipboard();
     assert.ok(md.startsWith('# Static export runs an uploaded .jspf'), md.slice(0, 80));
-    for (const part of ['| Product | Example CMS |', '## Impact\n\nA workplace author', '## Steps to reproduce',
-      '- [Vendor advisory](https://example.org/advisory)', '| Severity | High (CVSS:3.1/'])
+    for (const part of ['| Product | Example CMS |', '## Remediation\n\nRefuse every extension',
+      '2. Publish it, then request `/export/sites/default/x.jspf` twice. (evidence E1)',
+      '- Authentication role: workplace author', '| Severity | High (CVSS:3.1/',
+      '- [OWASP File Upload Cheat Sheet](https://cheatsheetseries.owasp.org/'])
       assert.ok(md.includes(part), part);
     await report.getByRole('button', {name: 'Copy CVE request'}).click();
     await report.getByText('CVE request copied').waitFor();
     const cve = await clipboard();
     assert.ok(cve.includes('[Affected product code base]\nExample CMS 22.0'));
     assert.ok(cve.includes('[Impact]\nCode execution'));
+    assert.ok(cve.includes('[Suggested description]\nThe static export of OpenCms 22.0'));
     const download = page.waitForEvent('download');
     await report.getByRole('link', {name: '.md'}).click();
     assert.match((await download).suggestedFilename(), new RegExp(`finding-${config.rich}\\.md`));
@@ -89,7 +95,7 @@ const SHOTS = process.env.NV_UX24_SHOTS || '';
     const bare = page.locator(`#finding-${config.bare}`);
     await bare.getByRole('group', {name: 'Finding view'}).getByRole('button', {name: 'Report'}).click();
     await bare.locator('.fr-section').first().waitFor();
-    assert.ok(await bare.locator('.fr-section.missing').count() >= 4);
+    assert.ok(await bare.locator('.fr-section.missing').count() >= 3);
     assert.match(await bare.locator('.fr-ready').innerText(), /gaps before sending/);
     checks.push('a bare finding shows its missing sections and gaps, nothing invented');
 

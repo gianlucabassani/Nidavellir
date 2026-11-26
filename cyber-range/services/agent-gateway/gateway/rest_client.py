@@ -324,7 +324,8 @@ class RestClient:
                        variant_of: str | None = None,
                        root_cause: dict | None = None,
                        causality: dict | None = None,
-                       severity: str | None = None) -> dict:
+                       severity: str | None = None,
+                       writeup: dict | None = None) -> dict:
         body: dict = {"title": title}
         # Only send set fields; path/param/payload/oast_token are the optional
         # verification inputs that let the orchestrator ACTIVELY confirm a finding;
@@ -343,7 +344,17 @@ class RestClient:
             body["root_cause"] = root_cause
         if causality:
             body["causality"] = causality
+        if writeup:
+            body["writeup"] = writeup
         return self._request("POST", f"/arenas/{arena_id}/findings", api_key, json=body)
+
+    def get_finding_writeup(self, api_key: str, arena_id: str, finding_id: str) -> dict:
+        return self._request("GET", f"/arenas/{arena_id}/findings/{finding_id}/writeup", api_key)
+
+    def update_finding_writeup(self, api_key: str, arena_id: str, finding_id: str,
+                               patch: dict) -> dict:
+        return self._request("POST", f"/arenas/{arena_id}/findings/{finding_id}/writeup",
+                             api_key, json={"patch": patch})
 
     def record_sweep(self, api_key: str, arena_id: str, sweep: dict) -> dict:
         return self._request("POST", f"/arenas/{arena_id}/sweeps", api_key, json=sweep)
