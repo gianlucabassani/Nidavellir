@@ -3453,22 +3453,30 @@ def _run_tree_context(instance_id: str, principal: Principal):
 @app.get("/arenas/{instance_id}/run-tree")
 def arena_run_tree(instance_id: str, q: str | None = Query(default=None, max_length=200),
                    principal: Principal = Depends(require_principal)):
-    """UX-27: the run as a tree, aggregated here so the console draws the
-    shape of the run instead of one mark per span: the agent's cycles, the
-    routes it pursued (split into episodes), failed calls, findings. `q`
-    counts matches per route in step targets and inputs. Operator-only."""
+    """UX-27/28: the run folded here so the console draws its shape instead
+    of one mark per span: the agent's cycles, routes, verdicts, failed calls,
+    findings, and the time budget it runs against (`clock`). `q` counts
+    matches per route in step targets and inputs. Operator-only."""
     import run_tree  # noqa: PLC0415
 
     record = _run_tree_context(instance_id, principal)
     rows = db.run_tree_rows(instance_id, limit=RUN_TREE_ROWS)
     findings = [{**(e.get("payload") or {}), "ts": e.get("ts")}
                 for e in reversed(_finding_events(instance_id))]
-    tested = [e.get("payload") or {} for e in db.list_events(
+    tested = [{**(e.get("payload") or {}), "ts": e.get("ts")} for e in db.list_events(
         lab_id=instance_id, limit=None, types=("hypothesis_tested",))]
     live = record.get("status") in ("pending", "deploying", "active")
+    policy = (db.budget_status(instance_id) or {}).get("policy") or {}
+    deadline, source = _as_datetime(policy.get("deadline")), "budget"
+    lease = _as_datetime(record.get("expires_at"))
+    if not deadline or (lease and lease < deadline):
+        deadline, source = lease, "lease"
     tree = run_tree.build(rows, findings=findings, tested=tested,
                           started_at=record.get("created_at"), now=db_now(), live=live,
-                          truncated=len(rows) >= RUN_TREE_ROWS)
+                          truncated=len(rows) >= RUN_TREE_ROWS,
+                          deadline=deadline, deadline_source=source if deadline else None)
+    tree["budget"] = ({"cap": policy.get("action_cap"), "spent": policy.get("spent")}
+                      if policy.get("action_cap") is not None else None)
     if q and q.strip():
         tree["search"] = run_tree.search(rows, q.strip())
     return tree

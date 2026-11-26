@@ -49,6 +49,14 @@ trunk); failed calls; findings linked to their route; totals. Self-reported
 gateway calls fold into the enforced call they duplicate. `q` adds per-route
 match counts over step targets and inputs. `GET /arenas/{id}/run-tree/steps?
 route=<key>|trunk` returns one route's steps with input and output previews.
+UX-28 adds what the Timeline's serpent draws: `clock` (the arena's start and
+the end of its time budget in run seconds; the deadline is the budget
+policy's, or the lease expiry when sooner, with `source` naming which, and
+null when neither exists), `verdicts` (each hypothesis marked tested, with
+outcome, claim and linked findings), `failures` (every failed or refused
+call, newest 500), `families` (steps per tool family), `activity` (steps and
+errors per bucket of 1 min to 1 h), `budget` (step cap and spent) and, on each
+finding, `relation`/`related` from deduplication.
 
 Operators can `GET /system/operations` (UX-14): one read-only snapshot with
 dependency readiness (database, Redis, worker heartbeat when required, Docker),
