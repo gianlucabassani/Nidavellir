@@ -25,6 +25,8 @@ from flask import (
 )
 from flask_wtf import CSRFProtect
 
+import finding_report
+
 app = Flask(__name__)
 CONSOLE_SIMULATION_MODE = os.getenv("MOCK_MODE", "false").lower() in ("1", "true", "yes")
 # The Royal Command console (/console) is the default UI; set
@@ -1366,6 +1368,80 @@ def console_arena_findings(instance_id):
         return jsonify({"error": "Finding records unavailable"}), 503
     findings = _findings(instance_id, events=events)
     return jsonify({"findings": [_finding_row(item) for item in findings]})
+
+
+def _finding_report(instance_id, finding_id):
+    """UX-24: the report for one finding, or (error, status)."""
+    events, ok = _arena_typed_events(
+        instance_id, "finding_verification", "finding", "finding_writeup", "hypothesis_tested")
+    if not ok:
+        return None, ({"error": "Finding records unavailable"}, 503)
+
+    def first(kind, match):
+        for event in events:  # newest first within each type
+            payload = event.get("payload") or {}
+            if event.get("type") == kind and match(payload):
+                return {**payload, "ts": event.get("ts")}
+        return None
+
+    finding = first("finding", lambda p: p.get("finding_id") == finding_id)
+    if finding is None:
+        return None, ({"error": "Finding not found in this arena"}, 404)
+    verification = first("finding_verification", lambda p: p.get("finding_id") == finding_id)
+    writeup = first("finding_writeup", lambda p: p.get("finding_id") == finding_id)
+    tested = first("hypothesis_tested",
+                   lambda p: finding_id in (p.get("finding_ids") or []))
+    contract = None
+    if tested and tested.get("hypothesis_id"):
+        registered, _ = _arena_typed_events(instance_id, "hypothesis_registered")
+        contract = next(((e.get("payload") or {}).get("contract") for e in registered
+                         if ((e.get("payload") or {}).get("contract") or {}).get("id")
+                         == tested["hypothesis_id"]), None)
+    status, _ = _api_get(f"/status/{quote(instance_id, safe='')}")
+    deployments, _ = _deployments()
+    record = (deployments or {}).get(instance_id) or {}
+    arena = {"id": instance_id, "name": record.get("user_id") or instance_id[:8],
+             "scenario": (status or {}).get("scenario") or record.get("scenario")}
+    report = finding_report.build(
+        finding, writeup=writeup, hypothesis=contract, tested=tested, arena=arena,
+        validator=_validator_verdict(finding),
+        operator=(verification or {}).get("verdict"))
+    return report, None
+
+
+@app.route("/api/console/arenas/<instance_id>/findings/<finding_id>/report")
+def console_finding_report(instance_id, finding_id):
+    report, error = _finding_report(instance_id, finding_id)
+    if error:
+        return jsonify(error[0]), error[1]
+    return jsonify(report)
+
+
+@app.route("/api/console/arenas/<instance_id>/findings/<finding_id>/report.md")
+def console_finding_report_markdown(instance_id, finding_id):
+    report, error = _finding_report(instance_id, finding_id)
+    if error:
+        return jsonify(error[0]), error[1]
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", finding_id)[:40]
+    return Response(report["markdown"], mimetype="text/markdown", headers={
+        "Content-Disposition": f'attachment; filename="finding-{safe}.md"',
+        "Cache-Control": "no-store"})
+
+
+@app.route("/api/console/arenas/<instance_id>/findings/<finding_id>/writeup", methods=["POST"])
+def console_finding_writeup(instance_id, finding_id):
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Send the write-up as a JSON object"}), 422
+    data, code = _api_post(
+        f"/arenas/{quote(instance_id, safe='')}/findings/{quote(finding_id, safe='')}/writeup",
+        body)
+    if code != 200:
+        return jsonify(data if isinstance(data, dict) else {"error": "Write-up not saved"}), code
+    report, error = _finding_report(instance_id, finding_id)
+    if error:
+        return jsonify(error[0]), error[1]
+    return jsonify(report)
 
 
 @app.route("/api/console/findings")

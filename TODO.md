@@ -439,6 +439,12 @@ Order: data model first, then views.
   - Self-reported gateway calls fold into the enforced call they duplicate; the List view keeps every span.
   - Route chips focus one branch. Replay grows the tree; scrub and Back to live as before.
   - Browser check: `scripts/ux22-browser-check.cjs`.
+- [x] **UX-24 — Findings as reports you can send (#87).**
+  - An open finding has a Report view next to the Review. It opens on Review while the finding awaits a decision.
+  - The console assembles the report (summary, impact, description, prerequisites, steps to reproduce, proof, remediation, references, plus product, versions, component, attack and impact type, CVSS) from the finding, the hypothesis it tested, its causality and evidence. Each section says where its text came from.
+  - The operator writes what only a person can state (`POST /arenas/{id}/findings/{fid}/writeup`, append-only `finding_writeup`, hidden from agents, never scored).
+  - A readiness list names every gap; Copy report (Markdown), Copy CVE request (the public form's fields) and a .md download.
+  - Browser check: `scripts/ux24-browser-check.cjs`.
 - [ ] **UX-21 — Benchmark lobby and live match (future, #78).** Game-like screens for every evaluation run:
   - a "Waiting for an agent to join" lobby: harness and agent cards from the reported client identity and the registered build; operators mark each side Ready, then start;
   - a live match: one actions-over-time chart for both sides with findings marked, observability (tokens, model calls, errors, budget) and a live classification scoreboard;

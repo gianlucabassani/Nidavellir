@@ -654,3 +654,67 @@ export type Span = {
   visibility: "agent" | "operator";
   trial_id?: string | null;
 };
+/** UX-24: where a report section's text came from. */
+export type ReportOrigin = "operator" | "derived" | "missing";
+export type ReportFact = {
+  value: string | null;
+  origin: ReportOrigin;
+  source?: string;
+};
+export type ReportSection = {
+  key: string;
+  title: string;
+  origin: ReportOrigin;
+  source?: string;
+  text?: string;
+  items?: string[];
+  code?: string;
+  links?: { url: string; title?: string }[];
+};
+export type WriteupReference = { url: string; title?: string };
+export type Writeup = Partial<{
+  severity: Severity;
+  cwe: string;
+  summary: string;
+  impact: string;
+  description: string;
+  remediation: string;
+  vendor: string;
+  product: string;
+  affected_versions: string;
+  fixed_versions: string;
+  component: string;
+  attack_type: string;
+  impact_type: string;
+  cvss_vector: string;
+  discoverer: string;
+  references: WriteupReference[];
+}>;
+export type FindingReport = {
+  id: string;
+  title: string;
+  cwe: { id: string; name: string; url: string } | null;
+  facts: Record<string, ReportFact>;
+  sections: ReportSection[];
+  verdict: {
+    validator: string | null;
+    operator: string | null;
+    verified: boolean;
+  };
+  readiness: {
+    ready: boolean;
+    missing: string[];
+    checks: {
+      id: string;
+      label: string;
+      ok: boolean;
+      blocking: boolean;
+      message: string | null;
+    }[];
+  };
+  writeup: Writeup;
+  updated_by: string | null;
+  updated_at: string | null;
+  markdown: string;
+  cve_request: string;
+};
