@@ -882,6 +882,30 @@ def reset_arena(operation_id):
     return {"success": True, **result}
 
 
+@app.task(name="reclaim_orphan", acks_late=True, reject_on_worker_lost=True,
+          soft_time_limit=config.LAB_DESTROY_TIMEOUT_SECONDS,
+          time_limit=config.LAB_DESTROY_TIMEOUT_SECONDS + 30)
+def reclaim_orphan(lab_id, actor="operator"):
+    """UX-14: remove Docker resources left behind by an arena this installation
+    already destroyed. Runs the docker-local provider's own label-scoped
+    destroy, the cleanup the reaper's destroy path ends in. Refuses when the
+    record is no longer destroyed (it was reused or never ours)."""
+    db = Database()
+    record = db.get_deployment(lab_id)
+    if not record or record.get("status") != LabStatus.DESTROYED:
+        return {"success": False, "error": "not a destroyed arena of this installation"}
+    from providers.docker_local import DockerLocalProvider  # noqa: PLC0415
+
+    try:
+        result = DockerLocalProvider().destroy(lab_id)
+    except Exception as exc:  # noqa: BLE001
+        result = {"success": False, "error": f"reclaim crashed: {exc}"}
+    db.record_event(lab_id, "orphan_reclaimed",
+                    {"success": bool(result.get("success")),
+                     "error": (result.get("error") or "")[:500] or None}, actor=actor)
+    return result
+
+
 @app.task(name="reap_labs")
 def reap_labs():
     """Lifecycle reaper (audit #9), ticked by Celery beat.

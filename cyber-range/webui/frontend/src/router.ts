@@ -47,6 +47,7 @@ export function routeLabel(url: URL): string {
     "/console/research/campaigns": "Campaigns",
     "/console/activity": "Activity",
     "/console/findings": "Findings",
+    "/console/operations": "Operations",
     "/console/library/agents": "Agents",
     "/console/library/targets": "Targets",
     "/console/settings": "Settings",

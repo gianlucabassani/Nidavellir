@@ -175,7 +175,6 @@ export const NAV: Record<Workspace, NavGroup[]> = {
           href: "/console/operations",
           icon: "server",
           match: exact("/console/operations"),
-          planned: "Planned (UX-14): service health, queues and retention.",
         },
       ],
     },
