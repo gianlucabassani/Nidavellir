@@ -1,0 +1,17 @@
+/* UX-16 (ADR-0019): Geist Sans and Geist Mono, vendored from the geist@1.9.2
+   package under the SIL Open Font License 1.1 (../assets/fonts/OFL.txt).
+   Self-hosted: the console makes no request to a font CDN. */
+@font-face {
+  font-family: "Geist";
+  src: url("../assets/fonts/Geist-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Mono";
+  src: url("../assets/fonts/GeistMono-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}

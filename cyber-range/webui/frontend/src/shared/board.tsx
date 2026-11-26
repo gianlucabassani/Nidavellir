@@ -63,7 +63,7 @@ function parse(value: string | null | undefined) {
   return Number.isNaN(at) ? 0 : at;
 }
 
-function ago(value: string | null | undefined, now: number) {
+export function ago(value: string | null | undefined, now: number) {
   const at = parse(value);
   if (!at) return "never";
   const s = Math.max(0, Math.round((now - at) / 1000));
@@ -72,53 +72,99 @@ function ago(value: string | null | undefined, now: number) {
   return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m ago`;
 }
 
-export function useBoard() {
-  const [board, setBoard] = useState<Board | null>(null);
-  const [error, setError] = useState("");
-  const [live, setLive] = useState(false);
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    let closed = false;
-    getJson<Board>("/api/console/board")
-      .then((data) => !closed && setBoard((current) => current || data))
-      .catch(
-        (reason: unknown) =>
-          !closed &&
-          setError(
+// UX-16: one board stream per tab, shared by the top bar, the board page and
+// the Research summary. It opens with the first subscriber and closes with
+// the last.
+type BoardState = { board: Board | null; error: string; live: boolean };
+let shared: BoardState = { board: null, error: "", live: false };
+const subscribers = new Set<(state: BoardState) => void>();
+let stream: EventSource | null = null;
+
+function publish(next: Partial<BoardState>) {
+  shared = { ...shared, ...next };
+  subscribers.forEach((listener) => listener(shared));
+}
+
+function openBoard() {
+  getJson<Board>("/api/console/board")
+    .then((data) => {
+      if (stream && !shared.board) publish({ board: data, error: "" });
+    })
+    .catch((reason: unknown) => {
+      if (stream)
+        publish({
+          error:
             reason instanceof Error
               ? reason.message
               : "Agents board unavailable",
-          ),
-      );
-    const stream = new EventSource("/api/console/board/stream");
-    stream.onopen = () => setLive(true);
-    stream.onerror = () => setLive(false);
-    stream.addEventListener("board", (message) => {
-      setBoard(JSON.parse((message as MessageEvent).data));
-      setError("");
+        });
     });
-    const clock = window.setInterval(() => setNow(Date.now()), 15000); // idle clock only
-    return () => {
-      closed = true;
-      stream.close();
-      window.clearInterval(clock);
-    };
-  }, []);
-  return { board, error, live, now };
+  stream = new EventSource("/api/console/board/stream");
+  stream.onopen = () => publish({ live: true });
+  stream.onerror = () => publish({ live: false });
+  stream.addEventListener("board", (message) =>
+    publish({ board: JSON.parse((message as MessageEvent).data), error: "" }),
+  );
 }
 
-function isIdle(arena: BoardArena, board: Board, now: number) {
+export function useBoard() {
+  const [state, setState] = useState<BoardState>(shared);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    subscribers.add(setState);
+    if (!stream) openBoard();
+    else setState(shared);
+    const clock = window.setInterval(() => setNow(Date.now()), 15000); // idle clock only
+    return () => {
+      subscribers.delete(setState);
+      window.clearInterval(clock);
+      if (!subscribers.size && stream) {
+        stream.close();
+        stream = null;
+        shared = { board: null, error: "", live: false };
+      }
+    };
+  }, []);
+  return { ...state, now };
+}
+
+export function isIdle(arena: BoardArena, board: Board, now: number) {
   if (arena.state !== "active" || !arena.agents.length) return false;
   const last = parse(arena.last_action?.at) || 0;
   return !last || now - last > board.idle_minutes * 60000;
 }
 
-function readDismissed(): string[] {
+export function readDismissed(): string[] {
   try {
     return JSON.parse(localStorage.getItem(DISMISSED_KEY) || "[]");
   } catch {
     return [];
   }
+}
+
+// UX-16: the top bar's attention count follows dismissals made on the board.
+const DISMISSED_EVENT = "nv:board-dismissed";
+
+/** Dismiss inbox items in this browser; every open view follows. */
+export function dismissInbox(keys: string[]): string[] {
+  const next = [...new Set([...readDismissed(), ...keys])].slice(-500);
+  try {
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify(next));
+  } catch {
+    /* storage may be unavailable */
+  }
+  window.dispatchEvent(new Event(DISMISSED_EVENT));
+  return next;
+}
+
+export function onDismissedChange(listener: (keys: string[]) => void) {
+  const handler = () => listener(readDismissed());
+  window.addEventListener(DISMISSED_EVENT, handler);
+  window.addEventListener("storage", handler);
+  return () => {
+    window.removeEventListener(DISMISSED_EVENT, handler);
+    window.removeEventListener("storage", handler);
+  };
 }
 
 function ArenaRows({
@@ -243,15 +289,8 @@ function ArenaRows({
 function Inbox({ board, now }: { board: Board; now: number }) {
   const [dismissed, setDismissed] = useState<string[]>(readDismissed);
   const items = board.inbox.filter((item) => !dismissed.includes(item.key));
-  function dismiss(keys: string[]) {
-    const next = [...new Set([...dismissed, ...keys])].slice(-500);
-    setDismissed(next);
-    try {
-      localStorage.setItem(DISMISSED_KEY, JSON.stringify(next));
-    } catch {
-      /* storage may be unavailable */
-    }
-  }
+  useEffect(() => onDismissedChange(setDismissed), []);
+  const dismiss = (keys: string[]) => setDismissed(dismissInbox(keys));
   return (
     <Panel
       eyebrow="ATTENTION"

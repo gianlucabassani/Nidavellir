@@ -326,13 +326,13 @@
   outline: 2px solid #ffdf9c;
   outline-offset: -3px;
 }
-.workspace-main:has(.forge-layout) .page-head {
+.shell-main:has(.forge-layout) .page-head {
   margin-bottom: 12px;
 }
-.workspace-main:has(.forge-layout) .page-head h1 {
+.shell-main:has(.forge-layout) .page-head h1 {
   font-size: 29px;
 }
-.workspace-main:has(.forge-layout) .arena-context {
+.shell-main:has(.forge-layout) .arena-context {
   margin-bottom: 10px;
 }
 @keyframes forge-reveal {
@@ -555,31 +555,31 @@
   padding: 12px 18px;
   font-size: 11px;
 }
-.workspace-main:has(.forge-layout) {
+.shell-main:has(.forge-layout) {
   padding-top: 22px;
 }
-.workspace-main:has(.forge-layout) .arena-return {
+.shell-main:has(.forge-layout) .arena-return {
   margin-bottom: 10px;
   font-size: 11px;
 }
-.workspace-main:has(.forge-layout) .page-head {
+.shell-main:has(.forge-layout) .page-head {
   margin-bottom: 12px;
 }
-.workspace-main:has(.forge-layout) .page-head h1 {
+.shell-main:has(.forge-layout) .page-head h1 {
   font-size: 26px;
 }
-.workspace-main:has(.forge-layout) .page-head p {
+.shell-main:has(.forge-layout) .page-head p {
   font-size: 12px;
 }
-.workspace-main:has(.forge-layout) .observed {
+.shell-main:has(.forge-layout) .observed {
   margin-top: 8px;
   font-size: 10px;
 }
-.workspace-main:has(.forge-layout) .page-head > .button {
+.shell-main:has(.forge-layout) .page-head > .button {
   padding: 9px 12px;
   font-size: 11px;
 }
-.workspace-main:has(.forge-layout) .arena-context {
+.shell-main:has(.forge-layout) .arena-context {
   display: flex;
   flex-wrap: wrap;
   gap: 12px 24px;
@@ -587,7 +587,7 @@
   background: var(--surface);
   margin-bottom: 0;
 }
-.workspace-main:has(.forge-layout) .arena-context > div {
+.shell-main:has(.forge-layout) .arena-context > div {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -595,14 +595,14 @@
   padding: 0;
   background: none;
 }
-.workspace-main:has(.forge-layout) .arena-context small {
+.shell-main:has(.forge-layout) .arena-context small {
   margin: 0;
   font-size: 8px;
 }
-.workspace-main:has(.forge-layout) .arena-context strong {
+.shell-main:has(.forge-layout) .arena-context strong {
   font-size: 11px;
 }
-.workspace-main:has(.forge-layout) .arena-live-status {
+.shell-main:has(.forge-layout) .arena-live-status {
   margin-top: 8px;
   font-size: 10px;
 }
@@ -642,7 +642,7 @@
   .forge-trace summary {
     padding: 12px;
   }
-  .workspace-main:has(.forge-layout) .arena-context {
+  .shell-main:has(.forge-layout) .arena-context {
     gap: 10px 18px;
   }
 }

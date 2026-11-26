@@ -1,80 +1,44 @@
+/* UX-16: the arena menu lives in the shell sidebar; the body is one column. */
 .arena-layout.forge-layout {
-  display: grid;
-  grid-template-columns: 190px minmax(0, 1fr);
-  gap: 10px;
-  align-items: start;
-  margin-top: 12px;
+  display: block;
+  margin-top: var(--s4);
 }
 .arena-workspace-body {
   min-width: 0;
 }
-.arena-tool-list {
-  position: sticky;
-  top: 112px;
-  padding: 8px;
-  border: 1px solid #42516a;
-  background: #152238;
-  color: #d3ddeb;
+.rail-ctx {
+  flex: none;
+  padding: var(--s4) var(--s4) var(--s3);
+  border-bottom: 1px solid var(--line-soft);
 }
-.arena-tool-list a {
+.rail-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: var(--s2);
+  color: var(--muted);
+  font-size: var(--t-meta);
+}
+.rail-back:hover {
+  color: var(--ink);
+}
+.rail-ctx strong {
   display: block;
-  padding: 8px 10px;
-  color: #edf1f8;
-  font-size: 13px;
-  border-left: 3px solid transparent;
+  overflow-wrap: anywhere;
+  font: 600 var(--t-title) / 1.25 var(--f-sans);
 }
-.arena-tool-list a:hover {
-  background: #31415b;
-  text-decoration: none;
+.rail-ctx-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  margin-top: var(--s2);
 }
-.arena-tool-list a:focus-visible {
-  outline: 2px solid #e3bd75;
-  outline-offset: -2px;
-}
-.arena-tool-list a[aria-current="page"] {
-  background: #2a3a53;
-  color: #f6d79c;
-  border-left-color: #d5b06a;
-}
-.arena-tool-overview {
-  font-weight: 600;
-}
-.arena-tool-list section {
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid #354760;
-}
-.arena-tool-list h2 {
-  margin: 0 0 4px;
-  padding: 0 10px;
-  color: #afbed2;
-  font: 600 11px monospace;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.arena-tool-list h2 > span {
-  color: #d5b06a;
-}
-.arena-tool-list ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-@media (max-width: 760px) {
-  .arena-layout.forge-layout {
-    grid-template-columns: 1fr;
-  }
-  .arena-tool-list {
-    position: relative;
-    top: auto;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 4px 10px;
-  }
-  .arena-tool-list section {
-    margin-top: 0;
-    border-top: 0;
-  }
+.rail-ctx-meta {
+  margin-top: var(--s2);
+  color: var(--muted);
+  font: 400 var(--t-micro) / 1.4 var(--f-mono);
+  overflow-wrap: anywhere;
 }
 
 .forge-layout .setup-grid.setup-single {

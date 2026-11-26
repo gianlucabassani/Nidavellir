@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
+import "./design/fonts.css";
+import "./design/tokens.css";
+import "./design/base.css";
 import type { Workspace, Theme } from "./types";
-import { ErrorBoundary, Rune, StaleBanner } from "./ui";
+import { ErrorBoundary, StaleBanner } from "./ui";
 import { Research } from "./research";
 import { NewResearch } from "./research/new";
 import { Campaign, Campaigns } from "./research/campaigns";
@@ -13,7 +16,7 @@ import { BenchmarkRegistry } from "./benchmark/registry";
 import { NewComparison } from "./benchmark/new";
 import { EvaluationDetail } from "./benchmark/detail";
 import { TrialCompare } from "./benchmark/compare";
-import { CommandPalette, PaletteButton } from "./shared/palette";
+import { CommandPalette } from "./shared/palette";
 import { SuiteHistoryPage } from "./benchmark/history";
 import { Range } from "./range";
 import { NewArena } from "./range/new";
@@ -28,7 +31,8 @@ import { Settings } from "./shared/settings";
 import { ResearchAssistant } from "./shared/assistant";
 import { AllArenas, AllEvaluations } from "./shared/lists";
 import { AgentsBoard } from "./shared/board";
-import { installRouter, navigate as routeTo } from "./router";
+import { installRouter } from "./router";
+import { Shell } from "./shell/Shell";
 
 installRouter();
 
@@ -118,57 +122,6 @@ function App() {
     /^\/console\/suites\/([^/]+)\/history$/,
   );
   const suiteHistoryId = suiteMatch ? decodeURIComponent(suiteMatch[1]) : null;
-  const activeWorkspace: Workspace | null =
-    activity || agentsLibrary || targetsLibrary || settingsPage || profilePage
-      ? null
-      : evaluationId ||
-          compareId ||
-          suiteHistoryId ||
-          newComparison ||
-          benchmarkRegistry ||
-          allEvaluations
-        ? "benchmark"
-        : newResearch ||
-            boardPage ||
-            allArenas ||
-            sourceReviews ||
-            sourceReviewId ||
-            campaigns ||
-            campaignId
-          ? "research"
-          : newArena || scenarioLibrary || scenarioImport
-            ? "range"
-            : arenaId
-              ? "research"
-              : workspace;
-  const evidenceActive =
-    activity &&
-    new URLSearchParams(window.location.search).get("section") === "evidence";
-  const sharedTools = [
-    { label: "Agents board", href: "/console/board", active: boardPage },
-    { label: "All arenas", href: "/console/arenas", active: allArenas },
-    {
-      label: "All evaluations",
-      href: "/console/evaluations",
-      active: allEvaluations,
-    },
-    {
-      label: "Targets",
-      href: "/console/library/targets",
-      active: targetsLibrary,
-    },
-    { label: "Agents", href: "/console/library/agents", active: agentsLibrary },
-    {
-      label: "Evidence",
-      href: "/console/activity?section=evidence",
-      active: evidenceActive,
-    },
-    {
-      label: "Activity",
-      href: "/console/activity?section=audit",
-      active: activity && !evidenceActive,
-    },
-  ];
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
@@ -208,196 +161,78 @@ function App() {
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
-  function navigate(next: Workspace) {
-    routeTo(`/console?workspace=${next}`);
-  }
   return (
-    <>
-      <a className="skip-link" href="#main">
-        Skip to content
-      </a>
-      <header className="site-header">
-        <div className="command-bar">
-          <a
-            className="brand"
-            href="/console?workspace=research"
-            onClick={(event) => {
-              event.preventDefault();
-              navigate("research");
-            }}
-          >
-            <span className="brand-mark">
-              <img src="/static/anvil_emblem.png" alt="" />
-            </span>
-            <span>
-              NIDAVELLIR<small>FORGE</small>
-            </span>
-          </a>
-          <nav className="workspace-nav" aria-label="Primary workspaces">
-            {(["research", "benchmark", "range"] as const).map((item) => (
-              <button
-                key={item}
-                type="button"
-                className={activeWorkspace === item ? "active" : ""}
-                onClick={() => navigate(item)}
-                aria-current={activeWorkspace === item ? "page" : undefined}
-                aria-label={
-                  item === "range"
-                    ? "Cyber Range"
-                    : item[0].toUpperCase() + item.slice(1)
-                }
-                title={
-                  item === "range"
-                    ? "Launch and observe isolated arenas"
-                    : item === "benchmark"
-                      ? "Compare pinned agent builds"
-                      : "Investigate targets and retain proof"
-                }
-              >
-                <Rune kind={item} />
-                <span>
-                  {item === "range"
-                    ? "Cyber Range"
-                    : item[0].toUpperCase() + item.slice(1)}
-                </span>
-              </button>
-            ))}
-          </nav>
-          <div className="header-actions">
-            <PaletteButton />
-            <details className="tools-menu">
-              <summary>
-                Library <span aria-hidden="true">⌄</span>
-              </summary>
-              <div>
-                {sharedTools.map((tool) => (
-                  <a
-                    key={tool.label}
-                    href={tool.href}
-                    aria-current={tool.active ? "page" : undefined}
-                  >
-                    {tool.label}
-                  </a>
-                ))}
-              </div>
-            </details>
-            {/* UX-08: the assistant launcher docks here instead of floating over content. */}
-            <div id="assistant-slot" className="assistant-slot" />
-            <button
-              className="theme-toggle"
-              type="button"
-              aria-label={`Switch to ${theme === "day" ? "night" : "day"} theme`}
-              onClick={() => setTheme(theme === "day" ? "night" : "day")}
-            >
-              {theme === "day" ? "◐" : "☼"}
-              <span>{theme === "day" ? "Night" : "Day"}</span>
-            </button>
-            <details className="profile">
-              <summary>
-                <span className="avatar">
-                  {username.slice(0, 2).toUpperCase()}
-                </span>
-                <span className="profile-name">
-                  {username}
-                  <small>Operator</small>
-                </span>
-                <span aria-hidden="true">⌄</span>
-              </summary>
-              <div className="profile-menu">
-                <strong>Account</strong>
-                <a href="/console/profile">Profile</a>
-                <a href="/console/settings">Platform settings</a>
-                <form method="post" action="/logout">
-                  <input
-                    type="hidden"
-                    name="csrf_token"
-                    value={
-                      document.querySelector<HTMLMetaElement>(
-                        'meta[name="csrf-token"]',
-                      )?.content || ""
-                    }
-                  />
-                  <button type="submit">Log out</button>
-                </form>
-              </div>
-            </details>
-          </div>
-        </div>
-      </header>
+    <Shell
+      username={username}
+      theme={theme}
+      setTheme={setTheme}
+      mainRef={heading}
+    >
       <CommandPalette />
-      <main className="workspace-main" id="main" ref={heading}>
-        <StaleBanner />
-        <ErrorBoundary
-          key={
-            // Arena tabs live in ?tab= and keep the workspace mounted.
-            arenaId
-              ? window.location.pathname
-              : window.location.pathname + window.location.search
-          }
-          label="This view"
-        >
-          {arenaId ? (
-            <ArenaWorkspace key={arenaId} id={arenaId} />
-          ) : boardPage ? (
-            <AgentsBoard />
-          ) : allArenas ? (
-            <AllArenas />
-          ) : allEvaluations ? (
-            <AllEvaluations />
-          ) : newResearch ? (
-            <NewResearch />
-          ) : sourceReviews ? (
-            <SourceReviewSessions />
-          ) : sourceReviewId ? (
-            <SourceReviewSession key={sourceReviewId} id={sourceReviewId} />
-          ) : campaigns ? (
-            <Campaigns />
-          ) : campaignId ? (
-            <Campaign key={campaignId} id={campaignId} />
-          ) : newArena ? (
-            <NewArena />
-          ) : scenarioLibrary ? (
-            <ScenarioLibrary />
-          ) : scenarioImport ? (
-            <ScenarioImport />
-          ) : newComparison ? (
-            <NewComparison />
-          ) : benchmarkRegistry ? (
-            <BenchmarkRegistry />
-          ) : activity ? (
-            <Activity />
-          ) : agentsLibrary ? (
-            <AgentsLibrary />
-          ) : targetsLibrary ? (
-            <TargetsLibrary />
-          ) : settingsPage ? (
-            <Settings />
-          ) : profilePage ? (
-            <Profile username={username} theme={theme} setTheme={setTheme} />
-          ) : compareId ? (
-            <TrialCompare
-              key={window.location.search}
-              evaluationId={compareId}
-            />
-          ) : suiteHistoryId ? (
-            <SuiteHistoryPage suiteId={suiteHistoryId} />
-          ) : evaluationId ? (
-            <EvaluationDetail id={evaluationId} />
-          ) : workspace === "research" ? (
-            <Research />
-          ) : workspace === "benchmark" ? (
-            <Benchmark />
-          ) : (
-            <Range />
-          )}
-        </ErrorBoundary>
-      </main>
+      <StaleBanner />
+      <ErrorBoundary
+        key={
+          // Arena tabs live in ?tab= and keep the workspace mounted.
+          arenaId
+            ? window.location.pathname
+            : window.location.pathname + window.location.search
+        }
+        label="This view"
+      >
+        {arenaId ? (
+          <ArenaWorkspace key={arenaId} id={arenaId} />
+        ) : boardPage ? (
+          <AgentsBoard />
+        ) : allArenas ? (
+          <AllArenas />
+        ) : allEvaluations ? (
+          <AllEvaluations />
+        ) : newResearch ? (
+          <NewResearch />
+        ) : sourceReviews ? (
+          <SourceReviewSessions />
+        ) : sourceReviewId ? (
+          <SourceReviewSession key={sourceReviewId} id={sourceReviewId} />
+        ) : campaigns ? (
+          <Campaigns />
+        ) : campaignId ? (
+          <Campaign key={campaignId} id={campaignId} />
+        ) : newArena ? (
+          <NewArena />
+        ) : scenarioLibrary ? (
+          <ScenarioLibrary />
+        ) : scenarioImport ? (
+          <ScenarioImport />
+        ) : newComparison ? (
+          <NewComparison />
+        ) : benchmarkRegistry ? (
+          <BenchmarkRegistry />
+        ) : activity ? (
+          <Activity />
+        ) : agentsLibrary ? (
+          <AgentsLibrary />
+        ) : targetsLibrary ? (
+          <TargetsLibrary />
+        ) : settingsPage ? (
+          <Settings />
+        ) : profilePage ? (
+          <Profile username={username} theme={theme} setTheme={setTheme} />
+        ) : compareId ? (
+          <TrialCompare key={window.location.search} evaluationId={compareId} />
+        ) : suiteHistoryId ? (
+          <SuiteHistoryPage suiteId={suiteHistoryId} />
+        ) : evaluationId ? (
+          <EvaluationDetail id={evaluationId} />
+        ) : workspace === "research" ? (
+          <Research />
+        ) : workspace === "benchmark" ? (
+          <Benchmark />
+        ) : (
+          <Range />
+        )}
+      </ErrorBoundary>
       <ResearchAssistant arenaId={arenaId} />
-      <footer className="site-footer">
-        <span>NIDAVELLIR FORGE / OPERATOR CONSOLE</span>
-        <a href="/?legacy=1">Legacy console</a>
-      </footer>
-    </>
+    </Shell>
   );
 }
 

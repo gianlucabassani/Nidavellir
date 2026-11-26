@@ -6,7 +6,8 @@ import {
   useSyncExternalStore,
 } from "react";
 import { getJson } from "../api";
-import { navigate } from "../router";
+import { navigate, routeLabel } from "../router";
+import { Icon, type IconName } from "../shell/icons";
 import "./palette.css";
 
 // UX-13 (FR-18): command palette (Ctrl/Cmd-K). Navigation, the primary actions
@@ -101,6 +102,55 @@ type SearchResult = {
   }[];
 };
 
+// UX-16: the last pages visited, for an empty search. A per-browser
+// convenience only (ADR-0017 allows UI preferences in local storage).
+const RECENT_KEY = "nidavellir-recent";
+type Visit = { href: string; label: string };
+
+function visitLabel(url: URL) {
+  const arena = url.pathname.match(/^\/console\/arena\/([^/]+)/);
+  if (arena) {
+    const tab = url.searchParams.get("tab");
+    return `Arena ${decodeURIComponent(arena[1])}${tab ? ` · ${tab}` : ""}`;
+  }
+  const section = url.searchParams.get("section");
+  const label = routeLabel(url);
+  return section ? `${label} · ${section}` : label;
+}
+
+function readRecent(): Visit[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+    return Array.isArray(value) ? value.slice(0, 8) : [];
+  } catch {
+    return [];
+  }
+}
+
+function recordVisit() {
+  const url = new URL(window.location.href);
+  const href = url.pathname + url.search;
+  const next = [
+    { href, label: visitLabel(url) },
+    ...readRecent().filter((visit) => visit.href !== href),
+  ].slice(0, 8);
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+  } catch {
+    /* storage may be unavailable */
+  }
+}
+
+const GROUP_ICON: Record<string, IconName> = {
+  "This page": "bolt",
+  Recent: "clock",
+  "Go to": "arrow",
+  Arenas: "box",
+  Findings: "flag",
+  "HTTP transactions": "swap",
+  Spans: "pulse",
+};
+
 type Item = {
   key: string;
   group: string;
@@ -158,11 +208,14 @@ export function CommandPalette() {
       }
     };
     const onOpen = () => show();
+    recordVisit();
     window.addEventListener("keydown", onKey);
     window.addEventListener("nv:palette", onOpen);
+    window.addEventListener("popstate", recordVisit);
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("nv:palette", onOpen);
+      window.removeEventListener("popstate", recordVisit);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -222,6 +275,18 @@ export function CommandPalette() {
             action.run();
           },
         });
+    if (!text) {
+      const here = window.location.pathname + window.location.search;
+      for (const visit of readRecent()
+        .filter((item) => item.href !== here)
+        .slice(0, 5))
+        list.push({
+          key: `recent:${visit.href}`,
+          group: "Recent",
+          label: visit.label,
+          run: go(visit.href),
+        });
+    }
     for (const entry of NAVIGATION)
       if (!text || matches(entry.label, text))
         list.push({
@@ -275,7 +340,7 @@ export function CommandPalette() {
     }
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, results, viewActions]);
+  }, [query, results, viewActions, open]);
 
   useEffect(() => setActive(0), [query, results]);
 
@@ -312,23 +377,27 @@ export function CommandPalette() {
         if (event.target === dialog.current) close();
       }}
     >
-      <input
-        ref={input}
-        className="palette-input"
-        role="combobox"
-        aria-expanded="true"
-        aria-controls="palette-list"
-        aria-activedescendant={
-          items[active] ? `palette-item-${active}` : undefined
-        }
-        aria-label="Search or jump to"
-        placeholder="Jump to, run an action, or search text / sha256:digest…"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        onKeyDown={onKeyDown}
-        autoComplete="off"
-        spellCheck={false}
-      />
+      <div className="palette-head">
+        <Icon name="search" size={17} />
+        <input
+          ref={input}
+          className="palette-input"
+          role="combobox"
+          aria-expanded="true"
+          aria-controls="palette-list"
+          aria-activedescendant={
+            items[active] ? `palette-item-${active}` : undefined
+          }
+          aria-label="Search or jump to"
+          placeholder="Search arenas, findings, requests, or jump to a page…"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={onKeyDown}
+          autoComplete="off"
+          spellCheck={false}
+        />
+        <kbd className="palette-esc">Esc</kbd>
+      </div>
       <div className="palette-status" role="status" aria-live="polite">
         {searching
           ? "Searching…"
@@ -357,8 +426,12 @@ export function CommandPalette() {
                 onMouseMove={() => setActive(index)}
                 onClick={item.run}
               >
-                <span>{item.label}</span>
+                <Icon name={GROUP_ICON[item.group] || "arrow"} size={14} />
+                <span className="palette-label">{item.label}</span>
                 {item.hint && <small>{item.hint}</small>}
+                <span className="palette-enter" aria-hidden="true">
+                  <Icon name="enter" size={13} />
+                </span>
               </div>
             </li>
           );
@@ -372,22 +445,20 @@ export function CommandPalette() {
         )}
       </ul>
       <footer className="palette-foot">
-        ↑↓ move · Enter open · Esc close · Ctrl/⌘ K toggle
+        <span>
+          <kbd>↑</kbd>
+          <kbd>↓</kbd> move
+        </span>
+        <span>
+          <kbd>Enter</kbd> open
+        </span>
+        <span>
+          <kbd>Ctrl/⌘ K</kbd> toggle
+        </span>
+        <span className="palette-tip">
+          Paste a <code>sha256:</code> prefix to find a request or span
+        </span>
       </footer>
     </dialog>
-  );
-}
-
-export function PaletteButton() {
-  const mac = /Mac|iPhone|iPad/.test(navigator.platform);
-  return (
-    <button
-      type="button"
-      className="palette-trigger"
-      onClick={() => window.dispatchEvent(new Event("nv:palette"))}
-      aria-keyshortcuts={mac ? "Meta+K" : "Control+K"}
-    >
-      Search <kbd>{mac ? "⌘K" : "Ctrl K"}</kbd>
-    </button>
   );
 }

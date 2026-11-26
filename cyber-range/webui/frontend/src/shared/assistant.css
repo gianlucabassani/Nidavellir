@@ -239,7 +239,7 @@
   }
 }
 /* UX-08: docked in the header, the launcher is a compact icon at every width;
-   its accessible name and tooltip still say "Research assistant". */
+   its accessible name and tooltip say "Copilot". */
 .assistant-launcher {
   justify-content: center;
   width: 40px;

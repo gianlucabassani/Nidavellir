@@ -1,6 +1,7 @@
 # Nidavellir operator console
 
-Royal Command is the selected React/TypeScript/Vite surface. The built assets
+The console is a React/TypeScript/Vite surface styled with the Forge design
+system (ADR-0019: tokens in `src/design/`, shell in `src/shell/`). The built assets
 are served by Flask at `/console`; `/console/arena/<id>` opens the new arena
 overview with stop/resume for the research gate. `/console/evaluations/new` starts a matched comparison and
 `/console/evaluations/<id>` opens paired results. The default
