@@ -2910,10 +2910,12 @@ def test_ux18_console_rows_carry_severity_time_and_arena(client, monkeypatch):
         {"type": "finding", "ts": "2026-11-26 09:00:00", "lab_id": "a1",
          "payload": {"finding_id": "f2", "title": "Odd", "severity": "BOGUS"}},
     ]
-    monkeypatch.setattr(webui, "_api_get", lambda path, timeout=5: ({"events": events}, True))
+    monkeypatch.setattr(webui, "_api_get", lambda path, timeout=5: ({"events": [
+        e for e in events if path.endswith(f"type={e['type']}")]}, True))
     assert _login(client).status_code == 302
     c = client
     rows = c.get("/api/console/arenas/a1/findings").get_json()["findings"]
+    assert [r["id"] for r in rows] == ["f1", "f2"]
     assert rows[0]["severity"] == "high" and rows[0]["at"] == "2026-11-26 10:00:00"
     assert rows[0]["manual_verdict"] == "confirmed"
     assert rows[0]["validator_verdict"] == "inconclusive"  # the operator's decision is separate
@@ -2927,6 +2929,47 @@ def test_ux18_console_rows_carry_severity_time_and_arena(client, monkeypatch):
     cross = c.get("/api/console/findings").get_json()["findings"]
     assert cross[0]["arena_name"] == "juice" and cross[0]["arena_state"] == "active"
     assert cross[0]["severity"] == "high"
+
+
+def _orchestrator_events(events):
+    """A stand-in for GET .../events: newest first, the type filter applied in
+    the query, then the limit — as the orchestrator does."""
+    from urllib.parse import parse_qs, urlparse
+
+    def get(path, timeout=5):
+        query = parse_qs(urlparse(path).query)
+        kind = (query.get("type") or [None])[0]
+        limit = int((query.get("limit") or ["100"])[0])
+        rows = [e for e in events if kind is None or e["type"] == kind]
+        return {"events": rows[:limit]}, True
+    return get
+
+
+def test_81_early_findings_survive_a_busy_run(client, monkeypatch):
+    """#81: a finding reported early, then buried under hundreds of activity
+    events, is still listed in its arena (findings tab and evidence view)."""
+    import app as webui
+
+    noise = [{"type": "http_request", "ts": "2026-11-26 11:00:00", "lab_id": "a1",
+              "payload": {"path": "/x"}} for _ in range(300)]
+    events = [
+        {"type": "monitor_signal", "ts": "2026-11-26 11:30:00", "lab_id": "a1",
+         "payload": {"kind": "waf", "node": "victim", "severity": "low", "summary": "blocked"}},
+        *noise,
+        {"type": "finding_verification", "ts": "2026-11-26 10:55:00", "lab_id": "a1",
+         "payload": {"finding_id": "early", "verdict": "confirmed", "actor": "admin"}},
+        {"type": "finding", "ts": "2026-11-26 10:52:00", "lab_id": "a1",
+         "payload": {"finding_id": "early", "title": "Authenticated RCE", "severity": "high",
+                     "evidence_artifacts": [{"digest": "sha256:" + "a" * 64, "bytes": 10}]}},
+    ]
+    monkeypatch.setattr(webui, "_api_get", _orchestrator_events(events))
+    assert _login(client).status_code == 302
+    rows = client.get("/api/console/arenas/a1/findings").get_json()["findings"]
+    assert [(r["id"], r["manual_verdict"]) for r in rows] == [("early", "confirmed")]
+    evidence = client.get("/api/console/arenas/a1/evidence").get_json()
+    assert [a["finding_id"] for a in evidence["artifacts"]] == ["early"]
+    assert [s["kind"] for s in evidence["signals"]] == ["waf"]
+    assert [f["finding_id"] for f in webui._findings("a1")] == ["early"]
 
 
 def test_ux18_manual_form_proxy_passes_severity(client, monkeypatch):
