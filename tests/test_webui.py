@@ -3111,3 +3111,17 @@ def test_ux24_report_routes_assemble_and_save_the_writeup(client, monkeypatch):
                     json={"patch": {"remediation": "Fix"}}, headers={"X-CSRFToken": token})
     assert r.status_code == 200 and r.get_json()["id"] == "f1"
     assert sent == [("/arenas/a1/findings/f1/writeup", {"patch": {"remediation": "Fix"}})]
+
+
+def test_ux27_run_tree_routes_relay_with_query(client, monkeypatch):
+    import app as webui
+
+    seen = []
+    monkeypatch.setattr(webui, "_api_get_status", lambda path, timeout=10: (
+        seen.append(path) or {"schema": "nidavellir.run-tree.v1"}, 200))
+    assert client.get("/api/console/arenas/a1/run-tree").status_code in (302, 401)
+    assert _login(client).status_code == 302
+    assert client.get("/api/console/arenas/a1/run-tree?q=a b").get_json()["schema"]
+    assert client.get("/api/console/arenas/a1/run-tree/steps?route=h:H-1").status_code == 200
+    assert client.get("/api/console/arenas/a1/run-tree/steps").status_code == 422
+    assert seen == ["/arenas/a1/run-tree?q=a+b", "/arenas/a1/run-tree/steps?route=h%3AH-1"]

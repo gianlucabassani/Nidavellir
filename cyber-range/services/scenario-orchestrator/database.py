@@ -1795,6 +1795,32 @@ class Database:
         with self._session() as session:
             return [self._span_dict(row) for row in session.scalars(query).all()]
 
+    def run_tree_rows(self, arena_id, *, with_output=False, limit=20000):
+        """UX-27: the columns the run tree folds, oldest first. Operator
+        material: callers gate access. Output previews only when asked."""
+        cols = [Span.id, Span.kind, Span.name, Span.status, Span.actor, Span.started_at,
+                Span.ended_at, Span.duration_ms, Span.error_class, Span.input_preview, Span.attrs]
+        if with_output:
+            cols.append(Span.output_preview)
+        query = (select(*cols).where(Span.arena_id == arena_id)
+                 .where(Span.kind.in_(("tool", "agent", "model")))
+                 .order_by(Span.id.desc()).limit(max(1, int(limit))))
+        with self._session() as session:
+            rows = session.execute(query).all()
+        names = ["id", "kind", "name", "status", "actor", "started_at", "ended_at",
+                 "duration_ms", "error_class", "input_preview", "attrs"]
+        if with_output:
+            names.append("output_preview")
+        out = []
+        for row in reversed(rows):
+            item = dict(zip(names, row))
+            try:
+                item["attrs"] = json.loads(item["attrs"]) if item["attrs"] else {}
+            except ValueError:
+                item["attrs"] = {}
+            out.append(item)
+        return out
+
     def activity_rows(self, *, arena_id=None, since=None, kinds=("tool", "model")):
         """UX-17: the columns an activity summary needs, for an arena or for
         every arena since ``since``. Operator material: callers gate access."""

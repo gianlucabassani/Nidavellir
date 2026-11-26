@@ -1502,6 +1502,28 @@ def console_arena_spans(instance_id):
     return jsonify(data)
 
 
+# UX-27: the run tree (aggregated by the orchestrator) and one route's steps.
+@app.route("/api/console/arenas/<instance_id>/run-tree")
+def console_arena_run_tree(instance_id):
+    query = request.args.get("q", "").strip()[:200]
+    path = f"/arenas/{quote(instance_id, safe='')}/run-tree"
+    if query:
+        path += "?" + urlencode({"q": query})
+    data, status = _api_get_status(path, timeout=20)
+    return jsonify(data), status
+
+
+@app.route("/api/console/arenas/<instance_id>/run-tree/steps")
+def console_arena_run_tree_steps(instance_id):
+    route = request.args.get("route", "")[:80]
+    if not route:
+        return jsonify({"error": "route is required"}), 422
+    data, status = _api_get_status(
+        f"/arenas/{quote(instance_id, safe='')}/run-tree/steps?" + urlencode({"route": route}),
+        timeout=20)
+    return jsonify(data), status
+
+
 # OBS-08: download the run as one OTLP/JSON trace (works after teardown).
 @app.route("/api/console/arenas/<instance_id>/trace/export")
 def console_arena_trace_export(instance_id):
