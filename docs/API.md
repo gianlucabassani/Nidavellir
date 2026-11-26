@@ -1083,6 +1083,28 @@ first-class evidence. The manifest is operator-only and never shown to an agent.
     "evidence_digest": "sha256:0123..." }
   → { "verified": true, "finding_id": "7097421dd9fc", "verdict": "confirmed" }
   ```
+- `POST /arenas/{instance_id}/findings/{finding_id}/writeup` — the operator's
+  **report write-up** for a finding (UX-24): what only a person can state before
+  the finding is sent as a report or CVE request. Every field is optional; the
+  whole write-up is sent each time, recorded as an append-only `finding_writeup`
+  event, and the newest wins. Fields: `severity` (one of five levels), `cwe`
+  (`CWE-<n>`), `summary`, `impact`, `description`, `remediation`, `vendor`,
+  `product`, `affected_versions`, `fixed_versions`, `component`, `attack_type`
+  (`remote`/`adjacent`/`local`/`physical`), `impact_type` (`code_execution`,
+  `information_disclosure`, `denial_of_service`, `privilege_escalation`, `other`),
+  `cvss_vector` (CVSS 3.x), `discoverer`, `references` (up to 10 `https://` URLs
+  with optional titles). Unknown fields → 422. It never changes the finding,
+  matching, validation or scoring, and no agent stance can read it. Works after
+  teardown. **operator/admin only**; unknown arena or finding → 404.
+  ```json
+  { "impact": "A workplace author runs code as the CMS user.",
+    "product": "Example CMS", "affected_versions": "22.0",
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H" }
+  → { "finding_id": "7097421dd9fc", "sections": { ... }, "updated_by": "admin" }
+  ```
+  The console assembles the report (`GET /api/console/arenas/<id>/findings/<fid>/report`,
+  `.../report.md`) from the finding, the hypothesis it tested, its causality and
+  evidence, plus this write-up, and lists every gap before it is ready to send.
 - `GET /arenas/{instance_id}/findings/{finding_id}/review` — retained
   **operator/admin-only** control-and-evidence projection (`nidavellir/evidence-review/v1`).
   Includes the linked actor request/response (header values withheld), prerequisite

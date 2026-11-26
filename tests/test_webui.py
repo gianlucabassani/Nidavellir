@@ -3049,3 +3049,61 @@ def test_ux20_copilot_turn_relays_the_stream_and_strips_unknown_fields(client, m
     assert len(lines) == 2 and '"done"' in lines[1]
     assert sent["url"].endswith("/copilot/chats/c1/turn") and sent["stream"] is True
     assert sent["json"] == {"text": "hello", "page": {"label": "Arena x", "arena_id": "a1"}}
+
+
+def test_ux24_report_routes_assemble_and_save_the_writeup(client, monkeypatch):
+    """UX-24: the report reads findings, verdicts, write-ups and hypothesis
+    records by type, links the hypothesis through finding_ids, and the write-up
+    form posts through the orchestrator (CSRF required) then returns the report."""
+    import app as webui
+
+    events = [
+        {"type": "finding_writeup", "ts": "2026-11-26 12:00:00", "lab_id": "a1",
+         "payload": {"finding_id": "f1", "actor": "admin",
+                     "sections": {"impact": "Runs code", "product": "CMS"}}},
+        {"type": "hypothesis_tested", "ts": "2026-11-26 10:53:00", "lab_id": "a1",
+         "payload": {"hypothesis_id": "H-1", "outcome": "supported", "note": "worked",
+                     "finding_ids": ["f1"]}},
+        {"type": "finding", "ts": "2026-11-26 10:52:00", "lab_id": "a1",
+         "payload": {"finding_id": "f1", "title": "RCE via export", "cwe": "CWE-94",
+                     "poc": "curl x", "validation": {"confirmed": None}}},
+        {"type": "hypothesis_registered", "ts": "2026-11-26 10:40:00", "lab_id": "a1",
+         "payload": {"contract": {"id": "H-1", "invariant": "Never execute exports.",
+                                  "preconditions": ["author"]}}},
+        *[{"type": "http_request", "ts": "2026-11-26 11:00:00", "lab_id": "a1", "payload": {}}
+          for _ in range(300)],
+    ]
+    events_get = _orchestrator_events(events)
+
+    def fake_get(path, timeout=5):
+        if path.startswith("/status/"):
+            return {"scenario": "cms-22"}, True
+        if path == "/deployments":
+            return {"a1": {"user_id": "cms arena", "status": "active"}}, True
+        return events_get(path, timeout)
+
+    monkeypatch.setattr(webui, "_api_get", fake_get)
+    token = _csrf_token(client)
+    assert _login(client).status_code == 302
+    report = client.get("/api/console/arenas/a1/findings/f1/report").get_json()
+    sections = {s["key"]: s for s in report["sections"]}
+    assert sections["impact"] == {"key": "impact", "title": "Impact", "origin": "operator",
+                                  "text": "Runs code"}
+    assert "Never execute exports." in sections["description"]["text"]
+    assert sections["prerequisites"]["items"] == ["author"]
+    assert report["arena"] == {"id": "a1", "name": "cms arena"}
+    assert "remediation" in report["readiness"]["missing"]
+    md = client.get("/api/console/arenas/a1/findings/f1/report.md")
+    assert md.mimetype == "text/markdown" and b"## Impact\n\nRuns code" in md.data
+    assert "attachment" in md.headers["Content-Disposition"]
+    assert client.get("/api/console/arenas/a1/findings/nope/report").status_code == 404
+
+    sent = []
+    monkeypatch.setattr(webui, "_api_post", lambda path, body: (sent.append((path, body))
+                                                                or {"finding_id": "f1"}, 200))
+    assert client.post("/api/console/arenas/a1/findings/f1/writeup",
+                       json={"impact": "x"}).status_code == 400  # no CSRF token
+    r = client.post("/api/console/arenas/a1/findings/f1/writeup", json={"remediation": "Fix"},
+                    headers={"X-CSRFToken": token})
+    assert r.status_code == 200 and r.get_json()["id"] == "f1"
+    assert sent == [("/arenas/a1/findings/f1/writeup", {"remediation": "Fix"})]
